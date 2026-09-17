@@ -1,0 +1,36 @@
+name: DCO
+
+# Every commit on a pull request must carry a Signed-off-by trailer matching its author, per
+# DCO.md. Runs on every repository this workflow ships to, not only after a public release: the
+# sign-off habit starts with the first contributor under the rule, not at publication.
+#
+# tim-actions/get-pr-commits + tim-actions/dco, pinned to SHA (a precedent: BlackRock's
+# advisor-center-agent-skills/.github/workflows/dco.yml). Read before pinning, not just copied:
+# tim-actions/dco's libs/dco.js skips any commit with more than one parent — a merge commit —
+# before it ever checks for a sign-off, and separately skips a commit whose author is a GitHub
+# "Bot". A merge produced by GitHub's own merge button is a real two-parent commit with no
+# Signed-off-by trailer, and this check does not see those at all, so merging never trips it.
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+
+permissions:
+  contents: read
+  pull-requests: read
+
+jobs:
+  dco:
+    runs-on: ubuntu-latest
+    name: DCO
+    steps:
+      - name: Get PR Commits
+        id: get-pr-commits
+        uses: tim-actions/get-pr-commits@198af03565609bb4ed924d1260247b4881f09e7d # v1.3.1
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: DCO Check
+        uses: tim-actions/dco@f2279e6e62d5a7d9115b0cb8e837b777b1b02e21 # v1.1.0
+        with:
+          commits: ${{ steps.get-pr-commits.outputs.commits }}
