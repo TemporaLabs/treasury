@@ -33,7 +33,11 @@ export const erc4626Abi = [
     stateMutability: "nonpayable",
     inputs: [
       { name: "spender", type: "address" },
-      { name: "amount", type: "uint256" },
+      // `value`, not `amount`: these names are now USER-VISIBLE as `UnsignedCall.args`, and an
+      // operator reads them next to a block explorer's own form, which is labelled from the
+      // verified contract's ABI. EIP-20 and OpenZeppelin's implementation both name this `value`.
+      // Encoding is unaffected — a parameter binds by position and type, never by name.
+      { name: "value", type: "uint256" },
     ],
     outputs: [{ type: "bool" }],
   },
