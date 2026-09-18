@@ -31,6 +31,7 @@ import { isAddress, getAddress } from "viem";
 import { isSupportedChainId, makePublicClient, rpcUrlFromEnv, logsRpcUrlFromEnv, rpcSourceForEnv, resolvedRpcSecrets, publicRpcHint, logsFallbackUrlFromEnv } from "../client.js";
 import { defaultVault, depositableVaults, listVaults, loadRegistry, resolveVault } from "../registry.js";
 import { linksFor } from "../links.js";
+import type { VaultEntry } from "../registry-schema.js";
 import { PACKAGE_VERSION } from "../version.js";
 import { preflightDeposit } from "../preflight.js";
 import { getPosition } from "../position.js";
@@ -80,16 +81,35 @@ const text = (v: unknown) => {
 };
 
 /** An unsigned build never leaves this server as a bare array. See contract 1 in the file header. */
-const unsigned = (calls: UnsignedCall[], warning?: string) =>
+/**
+ * 🔴 THE ONE PLACE THE VAULT'S WARNING IS ATTACHED TO A RESPONSE. Every response that can be the
+ * last thing an agent reads before a signer sees calldata goes through here.
+ *
+ * It exists as a chokepoint rather than three tidy literals for a reason worth keeping. The warning
+ * first shipped on `earn_vaults` alone — a DISCOVERY call — while the warning's own text says to
+ * show it before preparing a deposit. A caller who names a vault directly never makes that call, so
+ * the disclosure reached whoever happened to have listed recently and nobody else. The repair added
+ * it to three call sites, and two of those three were then unguarded: deleting the field from them
+ * left the whole suite green.
+ *
+ * A test per call site would only have guarded the sites someone remembered to write a test for,
+ * which is the same defect one level up. So: attach it HERE, and `server.unit.test.ts` asserts this
+ * is the only place in the file that writes a `warning` field. A fourth money-committing tool then
+ * gets the disclosure by going through this helper, and a hand-rolled one is caught by that test
+ * rather than by someone noticing.
+ *
+ * Withdrawals deliberately do NOT call this. The warning is about COMMITTING money, not retrieving
+ * it, and a disclosure repeated where it does not apply is what teaches a reader to skip the one
+ * that does. That absence is asserted too.
+ */
+const commitsMoney = (vault: VaultEntry) => ({ warning: vault.warning });
+
+const unsigned = (calls: UnsignedCall[], vault?: VaultEntry) =>
   text({
     requires_signature: true,
     status: "unsigned",
-    // 🔴 BEFORE `next_step`, deliberately. The vault's own warning names preparing a deposit as the
-    // moment to show it, and it first shipped in `earn_vaults` alone — a DISCOVERY call. A caller
-    // who names a vault directly never makes that call, so the disclosure reached whoever happened
-    // to have listed recently and nobody else. A field the caller must have remembered is not a
-    // disclosure; it has to travel with the thing it is about.
-    ...(warning === undefined ? {} : { warning }),
+    // before `next_step`, so it is not past the field a reader stops at
+    ...(vault === undefined ? {} : commitsMoney(vault)),
     next_step:
       "Hand these calls to a signer IN ORDER, following `signer_rules`. A call carrying `precondition` must not be estimated or sent until that read holds on the RPC the signer sends through. Nothing has been submitted; no funds have moved.",
     signer_rules: SIGNER_RULES,
@@ -194,7 +214,7 @@ export function buildServer(): McpServer {
         const args = amount_usdc === undefined ? { vault, depositor: account, client } : { vault, depositor: account, client, assetsHuman: amount_usdc };
         const verdict = await preflightDeposit(args);
         // spread FIRST so the discriminant cannot be overwritten by a field of the same name
-        return text({ ...verdict, mode: "preflight", account, warning: vault.warning });
+        return text({ ...verdict, mode: "preflight", account, ...commitsMoney(vault) });
       }
       // Health. A partial call (a vault but no account) is answered here too, and says so in
       // STRUCTURE rather than in prose — a note is exactly what a consumer skips, and the risk is
@@ -262,7 +282,7 @@ export function buildServer(): McpServer {
       if (direction === "deposit") {
         return text({
           direction: "deposit" as const,
-          warning: vault.warning,
+          ...commitsMoney(vault),
           ...(await quoteDeposit({ vault, depositor: account, assetsHuman: amount_usdc, client })),
         });
       }
@@ -285,7 +305,7 @@ export function buildServer(): McpServer {
     },
     guarded(async ({ vault: symbol, account, amount_usdc, receiver }) => {
       const vault = supportedVault(symbol);
-      return unsigned(buildDeposit(vault, { assetsHuman: amount_usdc, receiver, account }), vault.warning);
+      return unsigned(buildDeposit(vault, { assetsHuman: amount_usdc, receiver, account }), vault);
     }),
   );
 
