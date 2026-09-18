@@ -6,7 +6,7 @@ on:
     # integrated tree it merges into; without a push trigger on the version branch, a merged branch
     # is only ever verified piecewise, and merging to main becomes CI's first look at the combined
     # content — which makes main the place you find out.
-    branches: [main, 'v[0-9]*']
+    branches: [main, 'v[0-9]*', 'release/v[0-9]*']
   pull_request:
   workflow_dispatch:
     inputs:
@@ -69,15 +69,15 @@ jobs:
         run: |
           if [ -f skills/earn/SKILL.md ]; then echo "present=yes" >> "$GITHUB_OUTPUT"; else echo "present=no" >> "$GITHUB_OUTPUT"; fi
           echo "skill present: $([ -f skills/earn/SKILL.md ] && echo yes || echo no)" >> "$GITHUB_STEP_SUMMARY"
-      - name: the declared version follows the version branch (v0.0.N ⇒ 0.0.N)
+      - name: the declared version follows the version branch (release/v0.1.0 ⇒ 0.1.0)
         # The convention was set by hand; this holds it. A PR into vX.Y.Z, or a push to it,
         # fails if package.json declares anything else.
         # main and feature branches are not checked — the version belongs to the cycle, not the PR.
         env:
           TARGET: ${{ github.base_ref || github.ref_name }}
         run: |
-          case "$TARGET" in v[0-9]*.[0-9]*.[0-9]*) ;; *) echo "not a version branch ($TARGET) — skipped"; exit 0 ;; esac
-          want="${TARGET#v}"
+          case "$TARGET" in release/v[0-9]*.[0-9]*.[0-9]*|v[0-9]*.[0-9]*.[0-9]*) ;; *) echo "not a version branch ($TARGET) — skipped"; exit 0 ;; esac
+          want="${TARGET#release/}"; want="${want#v}"
           fail=0
           for f in package.json; do
             got=$(node -e 'const j=require(process.argv[1]); const v=j.version; process.stdout.write(String(v))' "./$f")
