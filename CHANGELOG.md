@@ -20,6 +20,10 @@ The first public release. Everything below is what ships in it.
   `REVERTED_OTHER`, `REFUSED_BY_CLIENT` or `UNRESOLVED` — never trusting `maxDeposit()`.
 - **Exit measured by simulation.** `earn_balance` reports `exit.exitableNow`, what a withdrawal of the
   whole position would actually return at this block, next to `usdcValue`, what it is worth.
+- **The transactions behind the scan.** `earn_balance` reports `scan.depositTxs` and
+  `scan.withdrawTxs` — `{ txHash, blockNumber, amountUsdc }`, oldest first — projected from the
+  logs the basis scan already fetched, so an explorer link needs no second query. Each list holds
+  at most the 100 most recent; the counts remain the totals.
 - **Whole-history basis.** Entry basis and accrued yield come from the vault's own events, from its
   deployment block; they read `unknown` unless the scan covered the whole history.
 - **The unsigned envelope.** Every prepared call returns inside

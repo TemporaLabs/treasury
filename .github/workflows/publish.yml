@@ -1,0 +1,118 @@
+# Publishes @temporalabs/treasury to npm.
+#
+# 🔴 workflow_dispatch ONLY — deliberately NOT triggered by pushing a tag.
+#
+# Tagging and publishing are two separate irreversible acts and this repository keeps them
+# separate on purpose. A tag can be moved or deleted; an npm version can NEVER be reused, so
+# `0.1.0` is a one-shot resource and publishing it is the point of no return. Coupling the two
+# would mean `git push --tags` silently spends that one shot. Someone chooses the tag, looks at
+# it, and then chooses to publish it.
+#
+# The tag must already exist and must agree with package.json — see the gate below, which is the
+# whole reason this file is not three lines long.
+name: publish
+
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "the existing tag to publish, e.g. v0.1.0 — must match package.json's version"
+        type: string
+        required: true
+      dry_run:
+        description: "pack and run every gate WITHOUT publishing (use this first)"
+        type: boolean
+        default: true
+
+permissions:
+  contents: read
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
+      # npm provenance is minted from this OIDC identity. Nothing else in this job needs it, and
+      # no other job in this repository has it except ci.yml's `attest`.
+      id-token: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # The TAG is what gets published, never a branch head — a branch can move between the
+          # moment someone reads it and the moment this runs.
+          ref: refs/tags/${{ inputs.tag }}
+          persist-credentials: false
+
+      - name: the tag must agree with package.json, or this is the wrong one-shot version
+        env:
+          TAG: ${{ inputs.tag }}
+        run: |
+          set -euo pipefail
+          want="${TAG#v}"
+          got="$(node -p 'require("./package.json").version')"
+          [ "$want" = "$got" ] || {
+            echo "::error::tag ${TAG} carries version ${want} but package.json at that tag says ${got} — publishing would burn the wrong version number, permanently"; exit 1; }
+          echo "tag ${TAG} == package.json ${got}" >> "$GITHUB_STEP_SUMMARY"
+
+      - name: this version must not already exist on the registry
+        run: |
+          set -euo pipefail
+          name="$(node -p 'require("./package.json").name')"
+          ver="$(node -p 'require("./package.json").version')"
+          # `npm view` exits non-zero with E404 when the package does not exist at all, which is
+          # the expected state for a first publish — that is a PASS, not a failure. Only an
+          # existing matching version is fatal.
+          if npm view "${name}@${ver}" version 2>/dev/null | grep -q .; then
+            echo "::error::${name}@${ver} is already published and npm versions are immutable — bump the version instead"; exit 1
+          fi
+          echo "${name}@${ver} is not on the registry" >> "$GITHUB_STEP_SUMMARY"
+
+      - name: the tag must be an ancestor of main — never publish off a branch that did not ship
+        run: |
+          set -euo pipefail
+          git fetch --no-tags --depth=200 origin main
+          git merge-base --is-ancestor HEAD FETCH_HEAD || {
+            echo "::error::this tag is not reachable from origin/main — it names a tree that was never merged"; exit 1; }
+          echo "tag is an ancestor of main" >> "$GITHUB_STEP_SUMMARY"
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          registry-url: https://registry.npmjs.org
+
+      - run: npm ci
+
+      # The full gate, not a subset: the same suite and typecheck CI runs on every push. A publish
+      # is the one action that cannot be rolled back, so it gets the strictest check, not the
+      # fastest one.
+      - run: npm test
+
+      # `prepack` already runs the build and refuses a stale committed bundle; running it here
+      # surfaces that failure before the publish step rather than inside it.
+      - run: npm pack --dry-run
+
+      - name: publish (provenance comes from this job's OIDC identity)
+        if: ${{ !inputs.dry_run }}
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+        # `publishConfig` in package.json already sets access: public and provenance: true.
+        run: npm publish
+
+      - name: dry run — nothing was published
+        if: ${{ inputs.dry_run }}
+        run: |
+          echo "dry_run was true: every gate above passed and nothing was published." >> "$GITHUB_STEP_SUMMARY"
+
+      - name: verify the published version resolves
+        if: ${{ !inputs.dry_run }}
+        run: |
+          set -euo pipefail
+          name="$(node -p 'require("./package.json").name')"
+          ver="$(node -p 'require("./package.json").version')"
+          for i in $(seq 1 10); do
+            got="$(npm view "${name}@${ver}" version 2>/dev/null || true)"
+            [ "$got" = "$ver" ] && { echo "published ${name}@${ver}" >> "$GITHUB_STEP_SUMMARY"; exit 0; }
+            sleep 6
+          done
+          echo "::error::${name}@${ver} did not resolve after publish"; exit 1

@@ -26,6 +26,7 @@ subject per file, facts stated with the block or date they were measured at.
 | [`runbooks/sign_and_send.md`](runbooks/sign_and_send.md) | one working way to sign and send the prepared calls from a process that holds a key, with the three failure modes met doing it |
 | [`runbooks/verify_the_bundle.md`](runbooks/verify_the_bundle.md) | how to check that the bundle you installed is the one CI built from the commit it claims |
 | [`licensing.md`](licensing.md) | why Apache-2.0, what the licence does and does not grant, and what keeps the official distribution official |
+| [`release-process.md`](release-process.md) | how a release ships, why the npm publish happens on every one, and why the plugin needs no registry |
 
 ## Contributing and project
 

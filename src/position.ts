@@ -67,6 +67,17 @@ export interface Position {
     toBlock: string;
     deposits: number;
     withdrawals: number;
+    /**
+     * The Deposit transactions this scan actually saw, oldest first — `txHash` is what an explorer
+     * link needs. Derived from the logs the scan already fetched to compute `entryBasisUsdc`; no
+     * extra request is made for them. Bounded by `MAX_SCAN_TXS`: when `deposits` exceeds the array's
+     * length, the list is the most recent that many and the COUNT is the total.
+     * 🔴 These are the events inside the SCANNED WINDOW. They are the whole history only when
+     * `wholeHistory` is true — the same caveat that makes `entryBasisUsdc` unknown otherwise.
+     */
+    depositTxs: ScanTx[];
+    /** The Withdraw transactions this scan saw, on the same terms as `depositTxs`. */
+    withdrawTxs: ScanTx[];
     complete: boolean;
     capped: boolean;
     providerWindow?: string;
@@ -180,8 +191,58 @@ class WindowTooNarrow extends Error {
   }
 }
 
-type EventLog = { args: { assets?: bigint; shares?: bigint } };
+/**
+ * The shape the scan narrows a provider's log to. `transactionHash`/`blockNumber`/`logIndex` come
+ * back on every log the walk ALREADY fetched — reading them costs no extra request. viem types the
+ * first two as nullable because a pending log has neither; a scan bounded by `toBlock: <a number>`
+ * cannot return one, and the projection below still handles it rather than asserting it away.
+ */
+type EventLog = {
+  transactionHash: `0x${string}` | null;
+  blockNumber: bigint | null;
+  logIndex: number | null;
+  args: { assets?: bigint; shares?: bigint };
+};
 type Scan = { logs: EventLog[]; coveredFrom: bigint; capped: boolean; window: bigint | undefined };
+
+/** One Deposit or Withdraw, as an operator needs it to reach a block explorer. */
+export interface ScanTx {
+  /** `null` only for a log the provider returned without one — never for a log from a mined range. */
+  txHash: `0x${string}` | null;
+  blockNumber: string | null;
+  /** The event's `assets`, formatted in the vault's asset units, e.g. `"10 USDC"`. */
+  amountUsdc: string;
+}
+
+/**
+ * How many transactions each of `scan.depositTxs` / `scan.withdrawTxs` carries at most. The COUNTS
+ * (`scan.deposits` / `scan.withdrawals`) stay the totals, so a truncated list is always detectable
+ * by comparing the two. A cap exists because this list is the only part of the response that grows
+ * with an account's history: an allocator depositing hourly reaches four figures in a year, and a
+ * tool response that large is a different failure from the one this field was added to fix.
+ */
+export const MAX_SCAN_TXS = 100;
+
+/**
+ * 🔴 SORT, DO NOT TRUST THE ORDER THE WALK PRODUCED — it is path-dependent. The single-request path
+ * returns the provider's own ascending order, while the chunked fallback walks BACKWARDS from
+ * `toBlock` and pushes each chunk, so its array is descending by chunk and ascending inside one.
+ * Both paths feed this function, and the sums above are order-independent so nothing else in this
+ * file ever noticed. A list of transactions handed to a human is the first consumer that does.
+ */
+function txsOf(logs: EventLog[], decimals: number, symbol: string): ScanTx[] {
+  const key = (l: EventLog): [bigint, number] => [l.blockNumber ?? -1n, l.logIndex ?? -1];
+  const sorted = [...logs].sort((a, b) => {
+    const [ab, ai] = key(a);
+    const [bb, bi] = key(b);
+    return ab === bb ? ai - bi : ab < bb ? -1 : 1;
+  });
+  return sorted.slice(-MAX_SCAN_TXS).map((l) => ({
+    txHash: l.transactionHash,
+    blockNumber: l.blockNumber === null ? null : l.blockNumber.toString(),
+    amountUsdc: `${formatAmount(l.args.assets ?? 0n, decimals)} ${symbol}`,
+  }));
+}
 
 /**
  * Did the CHAIN refuse this, or did the RPC fail to ask it? Every failure used to read as "cannot pay",
@@ -436,6 +497,8 @@ export async function getPosition(args: PositionArgs): Promise<Position> {
       toBlock: block.toString(),
       deposits: deps.length,
       withdrawals: wds.length,
+      depositTxs: txsOf(deps, vault.asset.decimals, vault.asset.symbol),
+      withdrawTxs: txsOf(wds, vault.asset.decimals, vault.asset.symbol),
       complete,
       capped,
       ...(providerWindow !== undefined ? { providerWindow: providerWindow.toString() } : {}),
