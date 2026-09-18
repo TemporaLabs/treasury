@@ -10,6 +10,7 @@ export const DISCLOSURES = {
   source: "Agent Treasury — pre-deposit disclosures, 2026-09-15",
   presentBefore: "the depositor's first deposit, on every distribution surface",
   items: [
+    "EVERY VAULT THIS CLIENT OFFERS TODAY IS A TEST VAULT — unproven, and named as such on-chain. They exist to exercise the product, not to hold savings. Deposit only an amount you are fully prepared to lose entirely, and do not move significant funds into one.",
     "This is a smart-contract vault, not a bank deposit. No deposit insurance of any kind applies.",
     "The share token's value is a function of the vault's underlying holdings and is not guaranteed. It can go down.",
     "The vault holds positions in third-party protocols, each of which carries smart-contract, custody, and mechanism risk that Tempora does not control.",

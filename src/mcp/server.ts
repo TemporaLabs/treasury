@@ -30,6 +30,8 @@ import { redactEndpoints, registerSecretSource } from "../redact.js";
 import { isAddress, getAddress } from "viem";
 import { isSupportedChainId, makePublicClient, rpcUrlFromEnv, logsRpcUrlFromEnv, rpcSourceForEnv, resolvedRpcSecrets, publicRpcHint, logsFallbackUrlFromEnv } from "../client.js";
 import { defaultVault, depositableVaults, listVaults, loadRegistry, resolveVault } from "../registry.js";
+import { linksFor } from "../links.js";
+import type { VaultEntry } from "../registry-schema.js";
 import { PACKAGE_VERSION } from "../version.js";
 import { preflightDeposit } from "../preflight.js";
 import { getPosition } from "../position.js";
@@ -79,10 +81,35 @@ const text = (v: unknown) => {
 };
 
 /** An unsigned build never leaves this server as a bare array. See contract 1 in the file header. */
-const unsigned = (calls: UnsignedCall[]) =>
+/**
+ * 🔴 THE ONE PLACE THE VAULT'S WARNING IS ATTACHED TO A RESPONSE. Every response that can be the
+ * last thing an agent reads before a signer sees calldata goes through here.
+ *
+ * It exists as a chokepoint rather than three tidy literals for a reason worth keeping. The warning
+ * first shipped on `earn_vaults` alone — a DISCOVERY call — while the warning's own text says to
+ * show it before preparing a deposit. A caller who names a vault directly never makes that call, so
+ * the disclosure reached whoever happened to have listed recently and nobody else. The repair added
+ * it to three call sites, and two of those three were then unguarded: deleting the field from them
+ * left the whole suite green.
+ *
+ * A test per call site would only have guarded the sites someone remembered to write a test for,
+ * which is the same defect one level up. So: attach it HERE, and `server.unit.test.ts` asserts this
+ * is the only place in the file that writes a `warning` field. A fourth money-committing tool then
+ * gets the disclosure by going through this helper, and a hand-rolled one is caught by that test
+ * rather than by someone noticing.
+ *
+ * Withdrawals deliberately do NOT call this. The warning is about COMMITTING money, not retrieving
+ * it, and a disclosure repeated where it does not apply is what teaches a reader to skip the one
+ * that does. That absence is asserted too.
+ */
+const commitsMoney = (vault: VaultEntry) => ({ warning: vault.warning });
+
+const unsigned = (calls: UnsignedCall[], vault?: VaultEntry) =>
   text({
     requires_signature: true,
     status: "unsigned",
+    // before `next_step`, so it is not past the field a reader stops at
+    ...(vault === undefined ? {} : commitsMoney(vault)),
     next_step:
       "Hand these calls to a signer IN ORDER, following `signer_rules`. A call carrying `precondition` must not be estimated or sent until that read holds on the RPC the signer sends through. Nothing has been submitted; no funds have moved.",
     signer_rules: SIGNER_RULES,
@@ -134,7 +161,7 @@ export function buildServer(): McpServer {
     {
       title: "List vaults",
       description:
-        "Every vault in the registry with its backend, chassis, decimals and MEASURED deposit-open status. `default` is used when a tool is called without `vault`; `depositable` is the subset any account can put money into today: ERC-4626 chassis + measured open. `defaultAccess` says whether the default takes deposits from any account (`open`) or only whitelisted ones (`whitelist`); for `whitelist`, run earn_status for the account before preparing a deposit.",
+        "Every vault in the registry. `symbol` is the vault's own on-chain ERC-20 ticker and `displayName` its `name()`; `links` are openable without any RPC endpoint, so an operator can verify the contract independently. SHOW `warning` TO THE DEPOSITOR — every vault offered today is a test vault. Each row also carries its backend, chassis, decimals and MEASURED deposit-open status. `default` is used when a tool is called without `vault`; `depositable` is the subset any account can put money into today: ERC-4626 chassis + measured open. `defaultAccess` says whether the default takes deposits from any account (`open`) or only whitelisted ones (`whitelist`); for `whitelist`, run earn_status for the account before preparing a deposit.",
       inputSchema: {},
     },
     guarded(async () => {
@@ -146,7 +173,10 @@ export function buildServer(): McpServer {
         depositable: depositableVaults().map((v) => v.slug),
         vaults: listVaults().map((v) => ({
           slug: v.slug,
+          symbol: v.shareSymbol,
           displayName: v.displayName,
+          warning: v.warning,
+          links: linksFor(v),
           backend: v.backend,
           isDefault: v.isDefault,
           chainId: v.chainId,
@@ -185,7 +215,7 @@ export function buildServer(): McpServer {
         const args = amount_usdc === undefined ? { vault, depositor: account, client } : { vault, depositor: account, client, assetsHuman: amount_usdc };
         const verdict = await preflightDeposit(args);
         // spread FIRST so the discriminant cannot be overwritten by a field of the same name
-        return text({ ...verdict, mode: "preflight", account });
+        return text({ ...verdict, mode: "preflight", account, ...commitsMoney(vault) });
       }
       // Health. A partial call (a vault but no account) is answered here too, and says so in
       // STRUCTURE rather than in prose — a note is exactly what a consumer skips, and the risk is
@@ -251,7 +281,11 @@ export function buildServer(): McpServer {
       // BY CONSTRUCTION; a swapped route is then wrong about the REQUEST, which the handler test
       // catches by asserting requested === returned, and never lying about the BODY.
       if (direction === "deposit") {
-        return text({ direction: "deposit" as const, ...(await quoteDeposit({ vault, depositor: account, assetsHuman: amount_usdc, client })) });
+        return text({
+          direction: "deposit" as const,
+          ...commitsMoney(vault),
+          ...(await quoteDeposit({ vault, depositor: account, assetsHuman: amount_usdc, client })),
+        });
       }
       return text({ direction: "withdraw" as const, ...(await quoteWithdraw({ vault, owner: account, assetsHuman: amount_usdc, client })) });
     }),
@@ -270,9 +304,10 @@ export function buildServer(): McpServer {
         receiver: addressArg.describe("where the SHARES land — usually the account, not necessarily"),
       },
     },
-    guarded(async ({ vault: slug, account, amount_usdc, receiver }) =>
-      unsigned(buildDeposit(supportedVault(slug), { assetsHuman: amount_usdc, receiver, account })),
-    ),
+    guarded(async ({ vault: slug, account, amount_usdc, receiver }) => {
+      const vault = supportedVault(slug);
+      return unsigned(buildDeposit(vault, { assetsHuman: amount_usdc, receiver, account }), vault);
+    }),
   );
 
   server.registerTool(

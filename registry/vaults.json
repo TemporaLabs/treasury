@@ -5,6 +5,7 @@
     {
       "slug": "cash-plus-usdc-2",
       "displayName": "Tempora Labs Cash Plus USDC (Test 2)",
+      "warning": "TEST VAULT — unproven. It exists to exercise this product, not to hold savings. Deposit only an amount you are fully prepared to lose entirely, and do not move significant funds into it. Show this warning before preparing any deposit.",
       "chainId": 8453,
       "address": "0x040fCA12673778FEED5DA7b2ccFbbAb0cc0134Cf",
       "chassis": "morpho-v2",
@@ -36,6 +37,7 @@
     {
       "slug": "cash-plus-usdc-2a",
       "displayName": "Tempora Labs Cash Plus USDC (Test 2A)",
+      "warning": "TEST VAULT — unproven. It exists to exercise this product, not to hold savings. Deposit only an amount you are fully prepared to lose entirely, and do not move significant funds into it. Show this warning before preparing any deposit.",
       "chainId": 8453,
       "address": "0x1516D2c082b9cc9af852B1Ebc828f168F27299ef",
       "chassis": "fusion",
