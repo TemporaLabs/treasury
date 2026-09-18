@@ -101,7 +101,8 @@ jobs:
 
       - name: dry run — nothing was published
         if: ${{ inputs.dry_run }}
-        run: echo "dry_run was true: every gate above passed and nothing was published." >> "$GITHUB_STEP_SUMMARY"
+        run: |
+          echo "dry_run was true: every gate above passed and nothing was published." >> "$GITHUB_STEP_SUMMARY"
 
       - name: verify the published version resolves
         if: ${{ !inputs.dry_run }}
