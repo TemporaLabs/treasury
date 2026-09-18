@@ -1,0 +1,68 @@
+{
+  "schemaVersion": 1,
+  "reconciledAtIso": "2026-09-16T04:51:22Z",
+  "vaults": [
+    {
+      "slug": "cash-plus-usdc-2",
+      "displayName": "Tempora Labs Cash Plus USDC (Test 2)",
+      "chainId": 8453,
+      "address": "0x040fCA12673778FEED5DA7b2ccFbbAb0cc0134Cf",
+      "chassis": "morpho-v2",
+      "backend": "tempora",
+      "isDefault": true,
+      "asset": {
+        "address": "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913",
+        "symbol": "USDC",
+        "decimals": 6
+      },
+      "shareDecimals": 18,
+      "shareSymbol": "tlCashPlusUSDC2",
+      "depositOpen": {
+        "open": true,
+        "method": "simulated-deposit-from-stranger",
+        "measuredAtBlock": 51372415,
+        "measuredAtIso": "2026-09-16T04:49:00Z",
+        "detail": "deposit(1 USDC, 0x…dEaD) from 0x…dEaD reverted 0xe65b7a77 TransferFromReverted at block 51372415 — it reached the token pull, so access is open; maxDeposit() reads 0 to every caller on this chassis by design and is not consulted."
+      },
+      "deployedAtBlock": 51371133,
+      "notes": [
+        "18-decimal shares against a 6-decimal asset — a share amount is never an asset amount here.",
+        "Morpho Vault V2. maxDeposit() and maxWithdraw() return 0 to every caller by protocol design; the pre-flight simulates the real call and earn_balance simulates the exit. Neither reads those views.",
+        "Withdrawals are served from idle USDC, then through the vault's liquidity adapter; a withdrawal larger than that reverts until positions are unwound. earn_balance reports exitableNow by simulating the withdrawal.",
+        "No fee is set: performanceFee() = 0 and managementFee() = 0 at block 51372415. The curator can introduce one, and the vault's fee timelocks are 0 (timelock(setPerformanceFee) = timelock(setManagementFee) = 0 at block 51404161), so a change needs no notice. Read both fees before depositing.",
+        "The DEFAULT vault, and open to any account: it is in depositable."
+      ]
+    },
+    {
+      "slug": "cash-plus-usdc-2a",
+      "displayName": "Tempora Labs Cash Plus USDC (Test 2A)",
+      "chainId": 8453,
+      "address": "0x1516D2c082b9cc9af852B1Ebc828f168F27299ef",
+      "chassis": "fusion",
+      "backend": "tempora",
+      "isDefault": false,
+      "asset": {
+        "address": "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913",
+        "symbol": "USDC",
+        "decimals": 6
+      },
+      "shareDecimals": 8,
+      "shareSymbol": "tlCashPlusUSDC2A",
+      "depositOpen": {
+        "open": false,
+        "method": "simulated-deposit-from-stranger",
+        "measuredAtBlock": 51361109,
+        "measuredAtIso": "2026-09-15T22:32:47Z",
+        "reason": "WHITELIST_GATED",
+        "detail": "deposit(1 USDC, 0x…dEaD) from 0x…dEaD reverted 0x068ca9d8 AccessManagedUnauthorized at block 51361109. The AccessManager at 0xD76eadf8451eB94df0eADd8BfB01C66EF3182ECC returns getTargetFunctionRole(vault, deposit) = 800; withdraw and redeem are PUBLIC_ROLE (2^64-1), so an account that holds shares can always leave."
+      },
+      "deployedAtBlock": 51359816,
+      "notes": [
+        "8-decimal shares against a 6-decimal asset — a share amount is never an asset amount here.",
+        "getInstantWithdrawalFuses() returns three fuses (measured at block 51361109), so a withdrawal is served from the vault's liquid balance and then, in fuse order, by unwinding its positions in the same transaction. A withdrawal larger than what those positions can release in-block still reverts; earn_balance reports exitableNow, which simulates the withdrawal rather than reading maxWithdraw.",
+        "Deposits need role 800 on the AccessManager. An account without it gets WHITELIST_GATED from earn_status and earn_quote, and this client refuses to build a deposit for it. Withdrawals are public.",
+        "Whitelist-gated (role 800 on its AccessManager): not in depositable. Listed so that an admitted account's position can be read and exited; a non-member gets WHITELIST_GATED from earn_status before anything is built."
+      ]
+    }
+  ]
+}
