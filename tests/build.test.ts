@@ -2,6 +2,7 @@ import { describe, it, expect } from "vitest";
 import { decodeFunctionData, toFunctionSelector } from "viem";
 import { erc4626Abi } from "../src/abi/erc4626.js";
 import { buildDeposit, buildWithdraw } from "../src/build.js";
+import { buildServer } from "../src/mcp/server.js";
 import { parseAmount } from "../src/units.js";
 import { EARN } from "../src/config/earn.js";
 import { FIXTURE, fixtureVault } from "./fixtures/registry.js";
@@ -153,4 +154,32 @@ describe("the decoded call agrees with the calldata it is shipped beside (#11)",
     }
     expect(calls[1]!.precondition?.read).toBe("allowance");
   });
+});
+
+
+/**
+ * A response field an agent is expected to SURFACE has to be named in the tool's own description,
+ * not only in `docs/tools.md`.
+ *
+ * The discriminator, which is the part worth keeping: **does an agent learn this field exists
+ * without reading a file it never reads?** `docs/tools.md` is the human integrator's document; the
+ * description is what reaches the model before it decides what to tell an operator. It bites
+ * hardest here, because the entire point of `function`/`args` is helping an operator who cannot
+ * read calldata — and the agent that would offer them is the one being told they exist.
+ */
+describe("the prepare tools tell an agent the decoded form exists (#11)", () => {
+  type Registered = Record<string, { description?: string }>;
+  const described = (name: string) =>
+    ((buildServer() as unknown as { _registeredTools: Registered })._registeredTools[name] ?? {}).description ?? "";
+
+  for (const name of ["earn_prepare_deposit", "earn_prepare_withdraw"]) {
+    it(`${name}'s description names function and args`, () => {
+      const d = described(name);
+      expect(d, "the description must exist at all").not.toBe("");
+      expect(d).toContain("`function`");
+      expect(d).toContain("`args`");
+      // the unit trap travels with the field, or an operator pastes "1.5" where 1500000 belongs
+      expect(d).toMatch(/RAW contract units|raw contract units/);
+    });
+  }
 });
