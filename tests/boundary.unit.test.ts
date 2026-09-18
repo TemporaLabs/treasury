@@ -401,11 +401,11 @@ describe("D. Enzyme stays refused at BUILD — the boundary, not a note in a doc
   });
 
   it("and it is not in the depositable set", () => {
-    expect(depositableVaults().map((v) => v.slug)).not.toContain(FIXTURE.enzyme);
+    expect(depositableVaults().map((v) => v.symbol)).not.toContain(FIXTURE.enzyme);
     // The control: the same call DOES return the open fixtures, so "not in the set" is a fact about
     // this chassis and not about an empty set. (The SHIPPED registry's depositable set is asserted
     // in registry.test.ts, not here.)
-    expect(depositableVaults().map((v) => v.slug)).toEqual(expect.arrayContaining([FIXTURE.morphoOpen, FIXTURE.morphoOpen2]));
+    expect(depositableVaults().map((v) => v.symbol)).toEqual(expect.arrayContaining([FIXTURE.morphoOpen, FIXTURE.morphoOpen2]));
   });
 });
 

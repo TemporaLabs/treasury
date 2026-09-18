@@ -30,7 +30,7 @@ const WHALE: Address = EARN.fixtures.usdcWhale;
 const STRANGER: Address = EARN.fixtures.stranger;
 const ROUND_TRIP = EARN.roundTripVault;
 /** The whitelist-gated sibling, for the access-discrimination pair. Its member is DISCOVERED from the chain. */
-const GATED = "cash-plus-usdc-2a";
+const GATED = "tlCashPlusUSDC2A";
 /**
  * The account holding the gated vault's deposit role, DISCOVERED FROM THE CHAIN in `beforeAll` and
  * impersonated — an address, never a key, and never written down here (`tests/access.ts` says why).
@@ -134,9 +134,9 @@ async function sendBuffered(to: Address, data: `0x${string}`, from: Address = WH
   // prove is the round trip through the real contracts, and the pair above proves the gate is read.
   it.each([[`${ROUND_TRIP} (the round-trip target and the DEFAULT, open — the whale deposits)`, ROUND_TRIP]])(
     "%s: preflight NEEDS_APPROVAL → approve+deposit mint shares → OPEN_READY → redeem returns the USDC",
-    async (_label, slug) => {
+    async (_label, symbol) => {
       const depositor = WHALE;
-    const vault = getVault(slug);
+    const vault = getVault(symbol);
     const amount = EARN.fixtures.forkDepositUsdc;
     const usdcBefore = await pub.readContract({ address: vault.asset.address, abi: erc4626Abi, functionName: "balanceOf", args: [depositor] });
     expect(usdcBefore).toBeGreaterThan(parseUnits(amount, 6));
@@ -174,7 +174,7 @@ async function sendBuffered(to: Address, data: `0x${string}`, from: Address = WH
     const after = await getPosition({ vault, principal: depositor, client: pub as never, maxLogRequests: 2 });
     const shares = await pub.readContract({ address: vault.address, abi: erc4626Abi, functionName: "balanceOf", args: [depositor] });
     expect(shares).toBeGreaterThan(sharesBefore);
-    expect(after.shares).toMatch(new RegExp(`${vault.shareSymbol}$`));
+    expect(after.shares).toMatch(new RegExp(`${vault.symbol}$`));
 
     // After the approve landed, a fresh preflight for the same amount is OPEN_READY — the allowance was the only thing in the way.
     // (The approve was consumed by the deposit, so approve again for the check to be about access, not allowance.)
@@ -249,7 +249,7 @@ async function sendBuffered(to: Address, data: `0x${string}`, from: Address = WH
         const obs = extractRevert(e);
         why = obs ? `selector=${obs.selector} reason=${obs.reason ?? ""}` : String(e).slice(0, 300);
       }
-      throw new Error(`REDEEM-ALL reverted (${slug}) tx ${rh} gasUsed ${rr.gasUsed}; shares=${sharesNow}; ${why}`);
+      throw new Error(`REDEEM-ALL reverted (${symbol}) tx ${rh} gasUsed ${rr.gasUsed}; shares=${sharesNow}; ${why}`);
     }
 
     const usdcAfter = await pub.readContract({ address: vault.asset.address, abi: erc4626Abi, functionName: "balanceOf", args: [depositor] });

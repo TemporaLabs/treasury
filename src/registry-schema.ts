@@ -45,8 +45,14 @@ export const depositOpenSchema = z.object({
 
 export const vaultEntrySchema = z
   .object({
-    slug: z.string().regex(/^[a-z0-9][a-z0-9-]*$/),
-    displayName: z.string().min(1),
+    /**
+     * The vault's own ERC-20 ticker, from `symbol()` — the identifier every tool takes and returns.
+     * It is the chain's name for this vault rather than one this repository assigns, so anyone
+     * holding the address can check it, and `scripts/registry-check.ts` reconciles it.
+     */
+    symbol: z.string().min(1).regex(/^[A-Za-z0-9][A-Za-z0-9._-]*$/),
+    /** The vault's own `name()`, reconciled the same way. */
+    name: z.string().min(1),
     /**
      * What a depositor must be told about THIS vault before any deposit is prepared. REQUIRED,
      * and deliberately not defaulted: a vault cannot enter the registry without someone stating
@@ -64,7 +70,6 @@ export const vaultEntrySchema = z
     asset: z.object({ address, symbol: z.string().min(1), decimals: z.number().int().min(0).max(36) }),
     /** Measured on-chain via `decimals()`. 18 on Morpho V2 and Enzyme, 8 on Fusion — never assume. */
     shareDecimals: z.number().int().min(0).max(36),
-    shareSymbol: z.string().min(1),
     depositOpen: depositOpenSchema,
     /**
      * The first block at which the vault contract has code (measured by bisecting `eth_getCode`). A
@@ -105,7 +110,7 @@ export const registrySchema = z
   })
   .strict()
   .superRefine((r, ctx) => {
-    const slugs = new Set<string>();
+    const symbols = new Set<string>();
     const addrs = new Set<string>();
     const defaults = r.vaults.filter((v) => v.isDefault);
     if (defaults.length !== 1) {
@@ -117,12 +122,12 @@ export const registrySchema = z
     // a gated default costs an agent a clear refusal, never funds. It must still be a chassis this client
     // can build for, and it may not be closed for any other reason.
     if (d && !(erc4626Chassis.has(d.chassis) && (d.depositOpen.open || d.depositOpen.reason === "WHITELIST_GATED"))) {
-      ctx.addIssue({ code: "custom", path: ["vaults"], message: `the default vault (${d.slug}) must be ERC-4626 and either measured open or WHITELIST_GATED` });
+      ctx.addIssue({ code: "custom", path: ["vaults"], message: `the default vault (${d.symbol}) must be ERC-4626 and either measured open or WHITELIST_GATED` });
     }
     r.vaults.forEach((v, i) => {
-      if (slugs.has(v.slug)) ctx.addIssue({ code: "custom", path: ["vaults", i, "slug"], message: `duplicate slug ${v.slug}` });
+      if (symbols.has(v.symbol)) ctx.addIssue({ code: "custom", path: ["vaults", i, "symbol"], message: `duplicate symbol ${v.symbol}` });
       if (addrs.has(v.address)) ctx.addIssue({ code: "custom", path: ["vaults", i, "address"], message: `duplicate address ${v.address}` });
-      slugs.add(v.slug);
+      symbols.add(v.symbol);
       addrs.add(v.address);
     });
   });

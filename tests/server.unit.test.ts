@@ -79,33 +79,33 @@ describe("earn_vaults — Tempora vaults only, and the access of each is reporte
       depositable: string[];
       vaults: { backend: string }[];
     };
-    expect(out.default).toBe("cash-plus-usdc-2");
+    expect(out.default).toBe("tlCashPlusUSDC2");
     expect(out.defaultAccess).toBe("open");
     // This file runs on the fixture registry (shipped rows + synthetic ones), so assert membership,
     // not the exact set — registry.test.ts pins the exact shipped set.
     expect(out.depositable).toContain(out.default);
-    expect(out.depositable).not.toContain("cash-plus-usdc-2a");
+    expect(out.depositable).not.toContain("tlCashPlusUSDC2A");
     expect(new Set(out.vaults.map((v) => v.backend))).toEqual(new Set(["tempora"]));
   });
 
   /**
    * The identity an agent DISPLAYS, and the links a human uses to check it. Both were absent: the
    * ticker was reconciled against the chain and then dropped before it reached a caller, so an
-   * agent naming a vault to a depositor could only quote the internal slug. The warning matters
+   * agent naming a vault to a depositor could only quote the internal registry identifier. The warning matters
    * more than either — nothing in the tool surface said these are test vaults.
    */
   it("every row carries its on-chain ticker, a depositor warning, and an explorer link that resolves to its own address", async () => {
     const out = payload(await tools()["earn_vaults"]!.handler({}, {})) as {
-      vaults: { slug: string; symbol: string; warning: string; address: string; chassis: string; links: { explorer: string; app?: string } }[];
+      vaults: { symbol: string; warning: string; address: string; chassis: string; links: { explorer: string; app?: string } }[];
     };
     expect(out.vaults.length).toBeGreaterThan(0);
     for (const v of out.vaults) {
-      expect(v.symbol, `${v.slug} has no ticker`).toBeTruthy();
-      expect(v.warning, `${v.slug} has no depositor warning`).toBeTruthy();
+      expect(v.symbol, `${v.symbol} has no ticker`).toBeTruthy();
+      expect(v.warning, `${v.symbol} has no depositor warning`).toBeTruthy();
       // the link must name THIS vault — a constant that merely looks like a URL would pass a
       // truthiness check and send an operator to the wrong contract
-      expect(v.links.explorer, `${v.slug} explorer link`).toContain(v.address);
-      if (v.chassis === "morpho-v2") expect(v.links.app, `${v.slug} app link`).toContain(v.address);
+      expect(v.links.explorer, `${v.symbol} explorer link`).toContain(v.address);
+      if (v.chassis === "morpho-v2") expect(v.links.app, `${v.symbol} app link`).toContain(v.address);
     }
   });
 });

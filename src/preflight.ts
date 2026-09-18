@@ -103,7 +103,7 @@ export async function preflightDeposit(args: PreflightArgs): Promise<PreflightRe
   const { vault, depositor, client } = args;
   const findings: string[] = [];
   const refuse = (why: string): PreflightResult => ({
-    vault: vault.slug,
+    vault: vault.symbol,
     depositor,
     status: "REFUSED_BY_CLIENT",
     canDeposit: false,
@@ -131,7 +131,7 @@ export async function preflightDeposit(args: PreflightArgs): Promise<PreflightRe
       client.readContract({ address: vault.address, abi: erc4626Abi, functionName: "decimals" }),
     ]);
   } catch (e) {
-    return { vault: vault.slug, depositor, status: "UNRESOLVED", canDeposit: false, findings: [...findings, `identity reads failed: ${describeError(e)}`] };
+    return { vault: vault.symbol, depositor, status: "UNRESOLVED", canDeposit: false, findings: [...findings, `identity reads failed: ${describeError(e)}`] };
   }
   if (onchainAsset.toLowerCase() !== vault.asset.address.toLowerCase()) {
     return refuse(`registry asset ${vault.asset.address} != on-chain asset() ${onchainAsset} — registry row is wrong or the address is a different contract`);
@@ -155,12 +155,12 @@ export async function preflightDeposit(args: PreflightArgs): Promise<PreflightRe
       client.readContract({ address: vault.address, abi: erc4626Abi, functionName: "maxDeposit", args: [depositor] }),
     ]);
   } catch (e) {
-    return { vault: vault.slug, depositor, status: "UNRESOLVED", canDeposit: false, findings: [...findings, `state reads failed: ${describeError(e)}`] };
+    return { vault: vault.symbol, depositor, status: "UNRESOLVED", canDeposit: false, findings: [...findings, `state reads failed: ${describeError(e)}`] };
   }
 
   const balances = {
     asset: `${formatAmount(assetBal, vault.asset.decimals)} ${vault.asset.symbol}`,
-    shares: `${formatAmount(shareBal, vault.shareDecimals)} ${vault.shareSymbol}`,
+    shares: `${formatAmount(shareBal, vault.shareDecimals)} ${vault.symbol}`,
     allowance: `${formatAmount(allowance, vault.asset.decimals)} ${vault.asset.symbol}`,
   };
   const quotes: PreflightResult["quotes"] = {
@@ -176,7 +176,7 @@ export async function preflightDeposit(args: PreflightArgs): Promise<PreflightRe
   // Preview (does not depend on access) — gives the shares quote where the chassis supports it.
   try {
     const previewShares = await client.readContract({ address: vault.address, abi: erc4626Abi, functionName: "previewDeposit", args: [assets] });
-    quotes.previewShares = `${formatAmount(previewShares, vault.shareDecimals)} ${vault.shareSymbol}`;
+    quotes.previewShares = `${formatAmount(previewShares, vault.shareDecimals)} ${vault.symbol}`;
   } catch {
     findings.push("previewDeposit() reverted; no shares quote");
   }
@@ -191,16 +191,16 @@ export async function preflightDeposit(args: PreflightArgs): Promise<PreflightRe
       account: depositor,
     });
     findings.push("simulated deposit() SUCCEEDED from this address with the current allowance");
-    return { vault: vault.slug, depositor, status: "OPEN_READY", canDeposit: true, findings, balances, quotes, advisory, measuredAtBlock: Number(block) };
+    return { vault: vault.symbol, depositor, status: "OPEN_READY", canDeposit: true, findings, balances, quotes, advisory, measuredAtBlock: Number(block) };
   } catch (e) {
     const obs = extractRevert(e);
     if (!obs) {
-      return { vault: vault.slug, depositor, status: "UNRESOLVED", canDeposit: false, findings: [...findings, `simulation did not return a definite revert: ${describeError(e)}`], balances, quotes, advisory, measuredAtBlock: Number(block) };
+      return { vault: vault.symbol, depositor, status: "UNRESOLVED", canDeposit: false, findings: [...findings, `simulation did not return a definite revert: ${describeError(e)}`], balances, quotes, advisory, measuredAtBlock: Number(block) };
     }
     const c = classifyRevert(obs);
     findings.push(c.note);
     return {
-      vault: vault.slug,
+      vault: vault.symbol,
       depositor,
       status: c.status,
       canDeposit: c.status === "NEEDS_APPROVAL",

@@ -43,17 +43,17 @@ const addressArg = z
   .refine((s) => isAddress(s), "must be an EVM address")
   .transform((s) => getAddress(s));
 const amountArg = z.string().regex(/^\d+(\.\d+)?$/, 'plain decimal USDC amount, e.g. "25" or "12.5"');
-const vaultArg = z.string().optional().describe("registry slug; omit for the default vault");
+const vaultArg = z.string().optional().describe("the vault's ERC-20 ticker, e.g. tlCashPlusUSDC2 (earn_vaults lists them); omit for the default vault");
 const accountArg = addressArg.describe("the account whose shares these are — the depositor, the owner, the holder");
 
-function supportedVault(slug?: string) {
-  const vault = resolveVault(slug);
+function supportedVault(symbol?: string) {
+  const vault = resolveVault(symbol);
   if (!isSupportedChainId(vault.chainId)) throw new Error(`chain ${vault.chainId} unsupported`);
   return vault;
 }
 
-function clientFor(slug?: string) {
-  const vault = supportedVault(slug);
+function clientFor(symbol?: string) {
+  const vault = supportedVault(symbol);
   return { vault, client: makePublicClient(vault.chainId, rpcUrlFromEnv(vault.chainId)) };
 }
 
@@ -135,20 +135,19 @@ export function buildServer(): McpServer {
     {
       title: "List vaults",
       description:
-        "Every vault in the registry. `symbol` is the vault's own on-chain ERC-20 ticker and `displayName` its `name()`; `links` are openable without any RPC endpoint, so an operator can verify the contract independently. SHOW `warning` TO THE DEPOSITOR — every vault offered today is a test vault. Each row also carries its backend, chassis, decimals and MEASURED deposit-open status. `default` is used when a tool is called without `vault`; `depositable` is the subset any account can put money into today: ERC-4626 chassis + measured open. `defaultAccess` says whether the default takes deposits from any account (`open`) or only whitelisted ones (`whitelist`); for `whitelist`, run earn_status for the account before preparing a deposit.",
+        "Every vault in the registry. `symbol` is the vault's own on-chain ERC-20 ticker — the value every other tool takes as `vault` — and `name` its `name()`; `links` are openable without any RPC endpoint, so an operator can verify the contract independently. SHOW `warning` TO THE DEPOSITOR — every vault offered today is a test vault. Each row also carries its backend, chassis, decimals and MEASURED deposit-open status. `default` is used when a tool is called without `vault`; `depositable` is the subset any account can put money into today: ERC-4626 chassis + measured open. `defaultAccess` says whether the default takes deposits from any account (`open`) or only whitelisted ones (`whitelist`); for `whitelist`, run earn_status for the account before preparing a deposit.",
       inputSchema: {},
     },
     guarded(async () => {
       const reg = loadRegistry();
       return text({
         reconciledAtIso: reg.reconciledAtIso,
-        default: defaultVault().slug,
+        default: defaultVault().symbol,
         defaultAccess: defaultVault().depositOpen.open ? "open" : "whitelist",
-        depositable: depositableVaults().map((v) => v.slug),
+        depositable: depositableVaults().map((v) => v.symbol),
         vaults: listVaults().map((v) => ({
-          slug: v.slug,
-          symbol: v.shareSymbol,
-          displayName: v.displayName,
+          symbol: v.symbol,
+          name: v.name,
           warning: v.warning,
           links: linksFor(v),
           backend: v.backend,
@@ -183,9 +182,9 @@ export function buildServer(): McpServer {
         "With NO arguments: is the server up and the RPC reachable — chain id, latest block, registry version, and which env var supplied the RPC (never the URL). With `account`: simulates deposit() from that address and reports OPEN_READY, NEEDS_APPROVAL, WHITELIST_GATED, REVERTED_OTHER, REFUSED_BY_CLIENT or UNRESOLVED, never trusting maxDeposit(). The `mode` field says which answer you got.",
       inputSchema: { vault: vaultArg, account: accountArg.optional(), amount_usdc: amountArg.optional() },
     },
-    guarded(async ({ vault: slug, account, amount_usdc }) => {
+    guarded(async ({ vault: symbol, account, amount_usdc }) => {
       if (account !== undefined) {
-        const { vault, client } = clientFor(slug);
+        const { vault, client } = clientFor(symbol);
         const args = amount_usdc === undefined ? { vault, depositor: account, client } : { vault, depositor: account, client, assetsHuman: amount_usdc };
         const verdict = await preflightDeposit(args);
         // spread FIRST so the discriminant cannot be overwritten by a field of the same name
@@ -206,8 +205,8 @@ export function buildServer(): McpServer {
       // Only the account-missing case is "partial": `vault` HAS a default (documented as "omit for
       // the default vault" across the whole tool surface), `account` has none. So {account, no vault}
       // is a complete preflight against the default, not a partial call.
-      const partial = slug !== undefined ? { requested: "preflight", missing: ["account"] } : {};
-      const vault = supportedVault(slug);
+      const partial = symbol !== undefined ? { requested: "preflight", missing: ["account"] } : {};
+      const vault = supportedVault(symbol);
       const src = rpcSourceForEnv(vault.chainId);
       const base = {
         mode: "health",
@@ -244,8 +243,8 @@ export function buildServer(): McpServer {
         direction: z.enum(["deposit", "withdraw"]).describe("which side to quote — required, there is no default"),
       },
     },
-    guarded(async ({ vault: slug, account, amount_usdc, direction }) => {
-      const { vault, client } = clientFor(slug);
+    guarded(async ({ vault: symbol, account, amount_usdc, direction }) => {
+      const { vault, client } = clientFor(symbol);
       // 🔴 The tag is emitted from INSIDE each branch, beside the fields that branch produces —
       // never `{ direction, ...quote }` from the input argument. Measured in review: with the tag
       // taken from the input, swapping these two branches left `tsc -b` clean and all 61 tests
@@ -274,8 +273,8 @@ export function buildServer(): McpServer {
         receiver: addressArg.describe("where the SHARES land — usually the account, not necessarily"),
       },
     },
-    guarded(async ({ vault: slug, account, amount_usdc, receiver }) =>
-      unsigned(buildDeposit(supportedVault(slug), { assetsHuman: amount_usdc, receiver, account })),
+    guarded(async ({ vault: symbol, account, amount_usdc, receiver }) =>
+      unsigned(buildDeposit(supportedVault(symbol), { assetsHuman: amount_usdc, receiver, account })),
     ),
   );
 
@@ -294,8 +293,8 @@ export function buildServer(): McpServer {
         shares_exact: z.string().regex(/^\d+(\.\d+)?$/).optional(),
       },
     },
-    guarded(async ({ vault: slug, receiver, account, amount_usdc, all, shares_exact }) => {
-      const vault = supportedVault(slug);
+    guarded(async ({ vault: symbol, receiver, account, amount_usdc, all, shares_exact }) => {
+      const vault = supportedVault(symbol);
       // ⚠️ `receiver` and `account` are DIFFERENT slots and both are addresses, so a transposition
       // here type-checks. `account` is the owner whose shares burn; `receiver` is the payee.
       if (all) {
@@ -320,8 +319,8 @@ export function buildServer(): McpServer {
         max_log_requests: z.number().int().positive().max(400).optional().describe("cap on eth_getLogs calls per event per scan; default 100 (= 1,000 blocks on Alchemy free, 200,000 on Base public). scan.wholeHistory says whether the scan actually covered every block since the vault was deployed — scan.complete alone is only a reconciliation and can be vacuously true. For an older vault, a provider with a wide eth_getLogs range (TREASURY_LOGS_RPC_BASE) is what makes it whole"),
       },
     },
-    guarded(async ({ vault: slug, account, lookback_blocks, max_log_requests }) => {
-      const vault = supportedVault(slug);
+    guarded(async ({ vault: symbol, account, lookback_blocks, max_log_requests }) => {
+      const vault = supportedVault(symbol);
       const logsUrl = logsRpcUrlFromEnv(vault.chainId);
       const client = makePublicClient(vault.chainId, logsUrl);
       // `logsFallbackUrlFromEnv` returns undefined when the operator opted out or when the fallback

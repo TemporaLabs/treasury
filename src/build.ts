@@ -55,7 +55,7 @@ const GAS_ADVICE = "Set gas limit = eth_estimateGas × 1.5. Measured: an unbuffe
 function assert4626(vault: VaultEntry): void {
   if (!erc4626Chassis.has(vault.chassis)) {
     throw new Error(
-      `${vault.slug} is on ${vault.chassis}, which has no ERC-4626 deposit/redeem path; this client does not build calls for it`,
+      `${vault.symbol} is on ${vault.chassis}, which has no ERC-4626 deposit/redeem path; this client does not build calls for it`,
     );
   }
 }
@@ -75,7 +75,7 @@ export function buildDeposit(vault: VaultEntry, args: { assetsHuman: string; rec
       to: vault.asset.address,
       data: encodeFunctionData({ abi: erc4626Abi, functionName: "approve", args: [vault.address, assets] }),
       value: "0x0",
-      description: `Approve ${vault.shareSymbol} vault (${vault.address}) to pull ${pretty}`,
+      description: `Approve ${vault.symbol} vault (${vault.address}) to pull ${pretty}`,
       step: 1,
       of: 2,
       gasAdvice: GAS_ADVICE,
@@ -85,7 +85,7 @@ export function buildDeposit(vault: VaultEntry, args: { assetsHuman: string; rec
       to: vault.address,
       data: encodeFunctionData({ abi: erc4626Abi, functionName: "deposit", args: [assets, args.receiver] }),
       value: "0x0",
-      description: `Deposit ${pretty} into ${vault.displayName}; shares minted to ${args.receiver}`,
+      description: `Deposit ${pretty} into ${vault.name}; shares minted to ${args.receiver}`,
       step: 2,
       of: 2,
       gasAdvice: GAS_ADVICE,
@@ -116,14 +116,14 @@ export function buildWithdraw(
 ): UnsignedCall[] {
   assert4626(vault);
   if (args.all) {
-    const shares = parseAmount(args.sharesExact, vault.shareDecimals, `share balance (${vault.shareSymbol})`);
+    const shares = parseAmount(args.sharesExact, vault.shareDecimals, `share balance (${vault.symbol})`);
     return [
       {
         chainId: vault.chainId,
         to: vault.address,
         data: encodeFunctionData({ abi: erc4626Abi, functionName: "redeem", args: [shares, args.receiver, args.owner] }),
         value: "0x0",
-        description: `Withdraw EVERYTHING from ${vault.displayName}: redeem ${formatAmount(shares, vault.shareDecimals)} ${vault.shareSymbol} (the exact balance) for ${vault.asset.symbol}, paid to ${args.receiver}`,
+        description: `Withdraw EVERYTHING from ${vault.name}: redeem ${formatAmount(shares, vault.shareDecimals)} ${vault.symbol} (the exact balance) for ${vault.asset.symbol}, paid to ${args.receiver}`,
         step: 1,
         of: 1,
         gasAdvice: GAS_ADVICE,
@@ -137,7 +137,7 @@ export function buildWithdraw(
       to: vault.address,
       data: encodeFunctionData({ abi: erc4626Abi, functionName: "withdraw", args: [assets, args.receiver, args.owner] }),
       value: "0x0",
-      description: `Withdraw ${formatAmount(assets, vault.asset.decimals)} ${vault.asset.symbol} from ${vault.displayName}, paid to ${args.receiver}; the vault burns the shares that costs at inclusion`,
+      description: `Withdraw ${formatAmount(assets, vault.asset.decimals)} ${vault.asset.symbol} from ${vault.name}, paid to ${args.receiver}; the vault burns the shares that costs at inclusion`,
       step: 1,
       of: 1,
       gasAdvice: GAS_ADVICE,

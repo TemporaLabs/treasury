@@ -3,7 +3,7 @@
  * same boundary an agent uses — and stopping exactly where the skill stops: at unsigned calls.
  *
  *   TREASURY_RPC_BASE=… npx tsx scripts/roundtrip.ts --account 0x… --receiver 0x… \
- *     [--vault <slug>] [--amount 0.05] [--out ./roundtrip-out] [--server dist|src]
+ *     [--vault <ticker>] [--amount 0.05] [--out ./roundtrip-out] [--server dist|src]
  *
  * The round-trip harness. Vault and amount default from src/config/earn.ts (`roundTripVault`,
  * `roundTripAmountUsdc`) — the default vault; change `EARN.roundTripVault`, not this script. The
@@ -37,7 +37,7 @@ const flag = (name: string): string | undefined => {
   return i >= 0 ? argv[i + 1] : undefined;
 };
 const usage = (msg: string): never => {
-  console.error(`roundtrip: ${msg}\nusage: --account <0x…> --receiver <0x…> [--vault <slug>] [--amount <usdc>] [--out dir] [--server dist|src]`);
+  console.error(`roundtrip: ${msg}\nusage: --account <0x…> --receiver <0x…> [--vault <ticker>] [--amount <usdc>] [--out dir] [--server dist|src]`);
   process.exit(2);
 };
 const vault = flag("vault") ?? EARN.roundTripVault;
@@ -112,9 +112,9 @@ child.stdin.write(JSON.stringify({ jsonrpc: "2.0", method: "notifications/initia
 console.log(`server: ${useDist ? "dist/mcp-server.mjs" : "src/mcp/server.ts (tsx)"}  vault: ${vault}  account: ${account}  amount: ${amount} USDC`);
 
 console.log("\n1. earn_vaults");
-const vaults = await tool<{ vaults: { slug: string; address: string; chassis: string; isDefault: boolean; asset: { address: string } }[] }>("earn_vaults");
-const row = vaults.vaults.find((v) => v.slug === vault);
-check(Boolean(row), `registry lists ${vault}`, vaults.vaults.map((v) => v.slug));
+const vaults = await tool<{ vaults: { symbol: string; address: string; chassis: string; isDefault: boolean; asset: { address: string } }[] }>("earn_vaults");
+const row = vaults.vaults.find((v) => v.symbol === vault);
+check(Boolean(row), `registry lists ${vault}`, vaults.vaults.map((v) => v.symbol));
 if (!row) process.exit(1);
 console.log(`       ${row.address}  chassis=${row.chassis}  default=${row.isDefault}`);
 

@@ -4,7 +4,7 @@ Eight tools, all prefixed `earn_`. Two kinds: **READ** tools query the chain and
 **PREPARE** tools return unsigned calls for your signer. Nothing signs, sends or transfers, and CI
 asserts the tool list exactly — a ninth tool, or a `sign`, fails the build.
 
-Every tool that takes a vault takes it as `vault`, a registry slug, and uses the default when it is
+Every tool that takes a vault takes it as `vault`, the vault's ERC-20 ticker (e.g. `tlCashPlusUSDC2`), and uses the default when it is
 omitted. Every tool that takes an address takes it as `account` — whose shares these are.
 `earn_prepare_withdraw` also takes `receiver`, which is a different thing (where the USDC lands).
 
@@ -19,7 +19,7 @@ No inputs. Every vault in the registry with its chassis, decimals and **measured
 status (the block and method it was measured at). Each row carries the vault's public identity:
 
 - `symbol` — the vault's own ERC-20 ticker, e.g. `tlCashPlusUSDC2`, as `symbol()` reports it;
-- `displayName` — the vault's `name()`;
+- `name` — the vault's `name()`;
 - `address` — the contract itself;
 - `links` — `explorer` always, and `app` where the chassis has a known front end. **These need no
   RPC endpoint.** They are how an operator verifies, without this client's help, that the address
@@ -43,7 +43,7 @@ an acknowledgement before building a first deposit.
 
 | input | |
 |---|---|
-| `vault` | optional slug |
+| `vault` | optional ticker |
 | `account` | optional address |
 | `amount_usdc` | optional; the amount the simulated deposit uses |
 
@@ -70,7 +70,7 @@ vault on another.
 
 | input | |
 |---|---|
-| `vault` | optional slug |
+| `vault` | optional ticker |
 | `account` | required |
 | `amount_usdc` | required |
 | `direction` | required, `"deposit"` or `"withdraw"`; echoed back on the result |
@@ -87,7 +87,7 @@ verdict (`OK` or `REVERTED` with the reason in liquidity terms), the vault's `in
 
 | input | |
 |---|---|
-| `vault` | optional slug |
+| `vault` | optional ticker |
 | `account` | required |
 | `lookback_blocks` | optional; default is from the vault's deployment block, i.e. the whole history |
 | `max_log_requests` | optional; cap on `eth_getLogs` calls per event per scan, default 100 |
@@ -110,7 +110,7 @@ objects worth reading carefully:
 
 | input | |
 |---|---|
-| `vault` | optional slug |
+| `vault` | optional ticker |
 | `account` | required; the depositing account, which signs both calls |
 | `amount_usdc` | required |
 | `receiver` | required; where the **shares** land — usually the account, not necessarily |
@@ -124,7 +124,7 @@ the signer's transactions confirm.
 
 | input | |
 |---|---|
-| `vault` | optional slug |
+| `vault` | optional ticker |
 | `account` | required; whose shares are burnt |
 | `receiver` | required; where the **USDC** lands — not necessarily the account |
 | `amount_usdc` | the USDC to withdraw (`withdraw(assets, receiver, owner)`) |

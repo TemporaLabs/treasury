@@ -30,13 +30,13 @@ export function listVaults(): VaultEntry[] {
   return loadRegistry().vaults;
 }
 
-export function getVault(slug: string): VaultEntry {
-  const v = loadRegistry().vaults.find((x) => x.slug === slug);
+export function getVault(symbol: string): VaultEntry {
+  const v = loadRegistry().vaults.find((x) => x.symbol === symbol);
   if (!v) {
     const known = loadRegistry()
-      .vaults.map((x) => x.slug)
+      .vaults.map((x) => x.symbol)
       .join(", ");
-    throw new Error(`unknown vault slug "${slug}"; known: ${known}`);
+    throw new Error(`unknown vault "${symbol}"; known: ${known}`);
   }
   return v;
 }
@@ -49,15 +49,15 @@ export function getVault(slug: string): VaultEntry {
 export function defaultVault(): VaultEntry {
   const v = getVault(EARN.defaultVault);
   if (!v.isDefault) {
-    const marked = loadRegistry().vaults.find((x) => x.isDefault)?.slug ?? "(none)";
+    const marked = loadRegistry().vaults.find((x) => x.isDefault)?.symbol ?? "(none)";
     throw new Error(`config/earn.ts names "${EARN.defaultVault}" as the default but the registry marks "${marked}"; change both or neither`);
   }
   return v;
 }
 
-/** Resolves an optional slug to a vault: the named one, or the default. */
-export function resolveVault(slug?: string): VaultEntry {
-  return slug ? getVault(slug) : defaultVault();
+/** Resolves an optional ticker to a vault: the named one, or the default. */
+export function resolveVault(symbol?: string): VaultEntry {
+  return symbol ? getVault(symbol) : defaultVault();
 }
 
 /**
