@@ -24,6 +24,10 @@ The first public release. Everything below is what ships in it.
   deployment block; they read `unknown` unless the scan covered the whole history.
 - **The unsigned envelope.** Every prepared call returns inside
   `{ requires_signature: true, status: "unsigned", calls }`.
+- **Prepared calls carry their own decoding.** Alongside the raw `data`, every call reports
+  `function` (e.g. `approve(address spender, uint256 value)`) and `args` by name, so an operator
+  signing through a block explorer's Write Contract form does not hand-decode calldata. Both are
+  produced at the same call site as `data`, from the same arguments, so they cannot drift from it.
 - **The hand-off to the signer, in the skill.** Before any prepared call reaches a signer the agent quotes
   every destination back to the operator with the message it came from and waits for the paste-back;
   "go" approves the plan, never the address; a config file, an environment variable or an earlier
