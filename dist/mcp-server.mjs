@@ -55997,15 +55997,12 @@ ${hint}` : JSON.stringify({ ...v, setup_required: hint }, null, 2);
   }
   return { content: [{ type: "text", text: body }] };
 };
-var unsigned = (calls, warning) => text({
+var commitsMoney = (vault) => ({ warning: vault.warning });
+var unsigned = (calls, vault) => text({
   requires_signature: true,
   status: "unsigned",
-  // 🔴 BEFORE `next_step`, deliberately. The vault's own warning names preparing a deposit as the
-  // moment to show it, and it first shipped in `earn_vaults` alone — a DISCOVERY call. A caller
-  // who names a vault directly never makes that call, so the disclosure reached whoever happened
-  // to have listed recently and nobody else. A field the caller must have remembered is not a
-  // disclosure; it has to travel with the thing it is about.
-  ...warning === void 0 ? {} : { warning },
+  // before `next_step`, so it is not past the field a reader stops at
+  ...vault === void 0 ? {} : commitsMoney(vault),
   next_step: "Hand these calls to a signer IN ORDER, following `signer_rules`. A call carrying `precondition` must not be estimated or sent until that read holds on the RPC the signer sends through. Nothing has been submitted; no funds have moved.",
   signer_rules: SIGNER_RULES,
   calls
@@ -56085,7 +56082,7 @@ function buildServer() {
         const { vault: vault2, client } = clientFor(symbol2);
         const args = amount_usdc === void 0 ? { vault: vault2, depositor: account, client } : { vault: vault2, depositor: account, client, assetsHuman: amount_usdc };
         const verdict = await preflightDeposit(args);
-        return text({ ...verdict, mode: "preflight", account, warning: vault2.warning });
+        return text({ ...verdict, mode: "preflight", account, ...commitsMoney(vault2) });
       }
       const partial2 = symbol2 !== void 0 ? { requested: "preflight", missing: ["account"] } : {};
       const vault = supportedVault(symbol2);
@@ -56126,7 +56123,7 @@ function buildServer() {
       if (direction === "deposit") {
         return text({
           direction: "deposit",
-          warning: vault.warning,
+          ...commitsMoney(vault),
           ...await quoteDeposit({ vault, depositor: account, assetsHuman: amount_usdc, client })
         });
       }
@@ -56147,7 +56144,7 @@ function buildServer() {
     },
     guarded(async ({ vault: symbol2, account, amount_usdc, receiver }) => {
       const vault = supportedVault(symbol2);
-      return unsigned(buildDeposit(vault, { assetsHuman: amount_usdc, receiver, account }), vault.warning);
+      return unsigned(buildDeposit(vault, { assetsHuman: amount_usdc, receiver, account }), vault);
     })
   );
   server.registerTool(
