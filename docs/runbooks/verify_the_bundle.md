@@ -90,16 +90,22 @@ keep and later pass to `gh attestation verify --bundle <file>`; the signature an
 inclusion are checked locally, but the trust roots are still fetched from Sigstore/GitHub on first
 use, so "offline" means "without this repository", not "air-gapped".
 
-## The npm half (dormant on purpose)
+## The npm half
 
-`package.json` is prepared for a future `npm publish --provenance` — `repository`
-names the public repository, `TemporaLabs/treasury` (CI fails if it names anything else, because
-that is the only repository provenance can be issued from), `files` limits the tarball to `dist/` and `registry/` (the skill is not in it — it ships from the plugin repository),
-`publishConfig.provenance` is on, and `prepack` builds so `main`/`types` exist in the
-tarball — only `dist/*.mjs` is committed, so without that build the tarball would carry the bundle
-and nothing the manifest's own `main`/`types` point at. It stays `private: true`. Flipping that, and the first publish, are a maintainer's per-instance
-calls; npm provenance additionally requires a public source repository and a cloud-hosted runner
-with `id-token: write`, which only the public repository satisfies.
+The package is published as [`@temporalabs/treasury`](https://www.npmjs.com/package/@temporalabs/treasury)
+with npm provenance: each version is published from `publish.yml` running on GitHub's hosted runner
+with `id-token: write`, from the release tag, and npm records that fact against the tarball.
+`package.json` is what makes that hold — `repository` names the public repository,
+`TemporaLabs/treasury` (CI fails if it names anything else, because that is the only repository
+provenance can be issued from), `files` limits the tarball to `dist/` and `registry/` (the skill is
+not in it — it ships from the plugin repository), `publishConfig.provenance` is on, and `prepack`
+builds so `main`/`types` exist in the tarball — only `dist/*.mjs` is committed, so without that build
+the tarball would carry the bundle and nothing the manifest's own `main`/`types` point at.
+
+To check a published version against the attested bundle: `npm pack @temporalabs/treasury@<version>`
+downloads the exact tarball; the `dist/mcp-server.mjs` inside it must have the same sha256 as the
+attestation for that version's tag. `npm audit signatures` in a project that depends on the package
+verifies npm's own provenance record for it.
 
 `prepack` **rebuilds** `dist/mcp-server.mjs`, so an `npm pack` or `npm publish` would otherwise ship
 whatever the publishing machine built rather than the attested committed file — agreeing only while
@@ -110,6 +116,5 @@ produces the `main`/`types` outputs the tarball needs, and then **refuses** if t
 a byte from what is committed and attested. Verified by changing a disclosure string in `src/` and
 running it: exit 1, naming the file; restored, exit 0.
 
-So a publish from any machine ships the attested bytes or does not happen. A future publish job
-should still run on the same commit CI attested — this guard makes a mismatch loud rather than
-making the job unnecessary.
+So a publish from any machine ships the attested bytes or does not happen. `publish.yml` runs on the
+tagged commit CI attested — this guard makes a mismatch loud rather than making the job unnecessary.

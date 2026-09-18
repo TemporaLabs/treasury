@@ -119,7 +119,16 @@ Before a release is tagged, pin its release branch instead —
 suffix tracks the plugin repository's default branch.
 
 The plugin is packaged in [TemporaLabs/treasury-plugin](https://github.com/TemporaLabs/treasury-plugin)
-from this repository's releases. Any other MCP host runs the same bundled server —
+from this repository's releases.
+
+**npm** — the same server, and the library, for any other MCP host or for your own code:
+
+```bash
+npm install @temporalabs/treasury@0.1.0
+```
+
+Point your MCP host at `node_modules/@temporalabs/treasury/dist/mcp-server.mjs` — the same attested
+bundle the plugin carries. Details, including the library entry points —
 [`docs/install.md`](docs/install.md).
 
 ## Security

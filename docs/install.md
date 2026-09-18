@@ -46,22 +46,33 @@ up a same-version rebuild, `claude plugin uninstall treasury@treasury` then inst
 
 ## Any agent runtime — the MCP server over stdio
 
-The same bundle runs under any MCP host. There is no npm package yet (publishing is a later step, see
-[`runbooks/verify_the_bundle.md`](runbooks/verify_the_bundle.md)); take `dist/mcp-server.mjs`
-from a checkout of the repository, or from the plugin cache after a Claude Code install, and point your
-runtime's MCP configuration at it:
+The same bundle is published to npm as `@temporalabs/treasury`. Install it, pinned to the exact
+version — a published version is immutable, so the install cannot drift — and point your runtime's
+MCP configuration at the bundle inside the package:
+
+```bash
+npm install @temporalabs/treasury@0.1.0
+```
 
 ```json
 {
   "mcpServers": {
     "treasury": {
       "command": "node",
-      "args": ["<path-to-checkout>/dist/mcp-server.mjs"],
+      "args": ["node_modules/@temporalabs/treasury/dist/mcp-server.mjs"],
       "env": { "TREASURY_RPC_BASE": "https://..." }
     }
   }
 }
 ```
+
+That file is byte-identical to the `dist/mcp-server.mjs` committed at the matching tag and to the
+bundle the Claude Code plugin carries; [`runbooks/verify_the_bundle.md`](runbooks/verify_the_bundle.md)
+shows how to check it from the tarball. A checkout of the repository at the tag, or the plugin cache
+after a Claude Code install, holds the same file if you would rather not install from npm.
+
+⚠️ In 0.1.0 the package's `treasury-mcp` bin exits without starting the server
+([#22](https://github.com/TemporaLabs/treasury/issues/22)). Run the bundle by path, as above.
 
 The server speaks MCP over stdio and exposes exactly the eight tools in [`tools.md`](tools.md). No
 tool signs or sends: your runtime's own signer takes the calls the `earn_prepare_*` tools return.
@@ -72,8 +83,8 @@ these tools and what to refuse.
 
 ## As a library
 
-`@temporalabs/treasury` also exports the builders, the pre-flight, the position scan and the registry
-as plain functions. ⚠️ The library returns bare `UnsignedCall[]` arrays; the
+`@temporalabs/treasury` — the same package, `npm install @temporalabs/treasury@0.1.0` — also exports
+the builders, the pre-flight, the position scan and the registry as plain functions. ⚠️ The library returns bare `UnsignedCall[]` arrays; the
 `{ requires_signature: true, status: "unsigned", calls }` envelope is a property of the MCP boundary,
 not of the functions. If you consume the library directly, you are the boundary.
 
