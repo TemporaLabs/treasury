@@ -69,7 +69,6 @@ npm run typecheck
 npm test                          # unit tests
 TREASURY_RPC_BASE=https://... npm test          # adds live read-only checks against Base
 TREASURY_RPC_BASE=https://... npm run test:fork # anvil fork round trips with impersonated accounts
-npm run lint:skill                # validates the earn skill definition
 ```
 
 - **Use `npm ci`, not `npm install`.** It fails on a stale lockfile, which is what CI does.
@@ -94,15 +93,12 @@ npm run lint:skill                # validates the earn skill definition
   request, so it can merge without waiting on the feature's review.
 - **Show that a new test can fail.** Break the behaviour it guards, confirm the test goes red, then
   restore it. A test that passes both ways proves nothing.
-- **Skill text goes through validation.** Changes to `SKILL.md` must pass `npm run lint:skill`.
-  A change to the skill's `description` decides whether an agent reaches the skill at all, so it is
-  measured by **routing a built plugin** — `claude -p --plugin-dir <built plugin tree>
-  --output-format stream-json --verbose`, run from a directory that is *not* the plugin tree, and
-  read by parsing `tool_use` blocks for the skill's own tools. The queries in `evals/` are the set
-  to route. Do not substring-match tool names against the raw stream: that reports tools merely
-  *offered*. And do not quote a pass rate on the negative queries as evidence when the positives are
-  near zero — a negative passes by *not* triggering, so a skill that cannot be reached at all scores
-  perfectly on them.
+- **The skill lives in the plugin repository.** `SKILL.md`, its trigger queries and its validation
+  ship from [TemporaLabs/treasury-plugin](https://github.com/TemporaLabs/treasury-plugin), which
+  carries the skill and the bundled server together and checks the skill's tool table against the
+  server's real `tools/list`. A change here that adds, removes or renames a tool needs the matching
+  change there; this repository cannot catch that drift, and that repository can.
+
 - **Expect questions.** Reviewers run the change rather than only reading it, and a review usually
   takes more than one round. Approval does not mean merge; a Tempora Labs maintainer merges.
 - **Do not bump versions.** Releases are cut by maintainers, each as a single commit of the release

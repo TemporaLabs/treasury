@@ -42,8 +42,7 @@
     "test:fork": "tsc -b && TREASURY_FORK=1 vitest run --testTimeout 300000 tests/fork.test.ts",
     "mcp": "tsx src/mcp/server.ts",
     "registry:check": "tsx scripts/registry-check.ts",
-    "notices:check": "tsx scripts/third-party-notices.ts",
-    "lint:skill": "bash scripts/lint-skill.sh"
+    "notices:check": "tsx scripts/third-party-notices.ts"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.20.0",
