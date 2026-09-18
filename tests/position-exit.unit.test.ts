@@ -33,7 +33,7 @@ function vaultClient(opts: { shares: bigint; value: bigint; liquid?: bigint; pay
     client: {
       getBlockNumber: async () => HEAD,
       readContract: async ({ address, functionName, args }: { address: string; functionName: string; args?: readonly unknown[] }) => {
-        const vault = getVault("cash-plus-usdc-2a");
+        const vault = getVault("tlCashPlusUSDC2A");
         if (functionName === "balanceOf") return address.toLowerCase() === vault.asset.address.toLowerCase() ? (opts.liquid ?? 0n) : opts.shares;
         if (functionName === "convertToAssets") return args?.[0] === opts.shares ? opts.value : 1_000_000n;
         if (functionName === "maxWithdraw") return opts.maxWithdraw ?? opts.value;
@@ -51,7 +51,7 @@ function vaultClient(opts: { shares: bigint; value: bigint; liquid?: bigint; pay
   };
 }
 
-const vault = getVault("cash-plus-usdc-2a");
+const vault = getVault("tlCashPlusUSDC2A");
 
 describe("earn_balance says what can be withdrawn now, not only what the position is worth", () => {
   it("the live Fusion shape: maxWithdraw reports the whole position, only the idle balance is payable", async () => {

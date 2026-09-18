@@ -34,10 +34,10 @@ export async function quoteDeposit(args: { vault: VaultEntry; depositor: Address
     client.readContract({ address: vault.address, abi: erc4626Abi, functionName: "convertToAssets", args: [10n ** BigInt(vault.shareDecimals)] }),
   ]);
   const q: DepositQuote = {
-    vault: vault.slug,
+    vault: vault.symbol,
     depositor,
     amountUsdc: `${formatAmount(assets, vault.asset.decimals)} ${vault.asset.symbol}`,
-    expectedShares: previewShares === undefined ? "unavailable (previewDeposit reverted)" : `${formatAmount(previewShares, vault.shareDecimals)} ${vault.shareSymbol}`,
+    expectedShares: previewShares === undefined ? "unavailable (previewDeposit reverted)" : `${formatAmount(previewShares, vault.shareDecimals)} ${vault.symbol}`,
     sharePriceInAssets: `${formatAmount(oneShareInAssets, vault.asset.decimals)} ${vault.asset.symbol} per share`,
     preflight: pre,
     canProceed: pre.canDeposit,
@@ -92,7 +92,7 @@ export async function quoteWithdraw(args: { vault: VaultEntry; owner: Address; a
       // when the vault simply had 0.80 USDC liquid — measured 2026-09-13 on a Fusion vault).
       const reason = obs.reason ?? "";
       if (toBurn !== undefined && held < toBurn) {
-        note = `withdraw() reverted: the owner holds ${formatAmount(held, vault.shareDecimals)} ${vault.shareSymbol} against ${formatAmount(toBurn, vault.shareDecimals)} needed — insufficient shares. (${reason || obs.selector})`;
+        note = `withdraw() reverted: the owner holds ${formatAmount(held, vault.shareDecimals)} ${vault.symbol} against ${formatAmount(toBurn, vault.shareDecimals)} needed — insufficient shares. (${reason || obs.selector})`;
       } else if (/transfer amount exceeds balance|ERC20InsufficientBalance/i.test(reason) || liquid < assets) {
         note = `withdraw() reverted: the vault holds ${formatAmount(liquid, vault.asset.decimals)} ${vault.asset.symbol} liquid against ${formatAmount(assets, vault.asset.decimals)} requested — this chassis pays withdrawals from its own balance in the same block; the rest is deployed and needs the fund to unwind first. Withdraw at most the liquid amount now, or wait. maxWithdraw() (${maxW === undefined ? "reverted" : formatAmount(maxW, vault.asset.decimals)}) does not know this.`;
       } else {
@@ -103,11 +103,11 @@ export async function quoteWithdraw(args: { vault: VaultEntry; owner: Address; a
     }
   }
   return {
-    vault: vault.slug,
+    vault: vault.symbol,
     owner,
     amountUsdc: `${formatAmount(assets, vault.asset.decimals)} ${vault.asset.symbol}`,
-    sharesToBurn: toBurn === undefined ? "unavailable (previewWithdraw reverted)" : `${formatAmount(toBurn, vault.shareDecimals)} ${vault.shareSymbol}`,
-    sharesHeld: `${formatAmount(held, vault.shareDecimals)} ${vault.shareSymbol}`,
+    sharesToBurn: toBurn === undefined ? "unavailable (previewWithdraw reverted)" : `${formatAmount(toBurn, vault.shareDecimals)} ${vault.symbol}`,
+    sharesHeld: `${formatAmount(held, vault.shareDecimals)} ${vault.symbol}`,
     simulated,
     note,
     instantLiquidity: `${formatAmount(liquid, vault.asset.decimals)} ${vault.asset.symbol}`,

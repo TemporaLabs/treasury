@@ -21,22 +21,22 @@ const open = (block: number) => ({ open: true, method: "simulated-deposit-from-s
 const closed = (reason: "WHITELIST_GATED" | "NOT_ERC4626", block: number) =>
   ({ open: false, method: "simulated-deposit-from-stranger", measuredAtBlock: block, measuredAtIso: "2026-09-15T00:00:00Z", reason }) as const;
 
-/** Slugs the unit tiers name. Exported so a test never spells one as a literal twice. */
+/** Tickers the unit tiers name. Exported so a test never spells one as a literal twice. */
 export const FIXTURE = {
   /** 18-decimal shares, 6-decimal asset, open to anyone — the deposit/withdraw arithmetic path. */
-  morphoOpen: "fixture-morpho-open",
+  morphoOpen: "fixMORPHO",
   /** A second open row, so "the depositable set" is a set and not a single row. */
-  morphoOpen2: "fixture-morpho-open-2",
+  morphoOpen2: "fixMORPHO2",
   /** 8-decimal shares, whitelist-gated — the access-refusal path, and the decimals trap. */
-  fusionGated: "fixture-fusion-gated",
+  fusionGated: "fixFUSION",
   /** No ERC-4626 deposit path at all — the chassis-refusal path. */
-  enzyme: "fixture-enzyme",
+  enzyme: "fixENZYME",
 } as const;
 
 const rows = [
   {
-    slug: FIXTURE.morphoOpen,
-    displayName: "Fixture Morpho V2 (open)",
+    symbol: FIXTURE.morphoOpen,
+    name: "Fixture Morpho V2 (open)",
     warning: "TEST FIXTURE — not a real vault.",
     chainId: 8453,
     address: "0x1111111111111111111111111111111111111111",
@@ -45,14 +45,13 @@ const rows = [
     isDefault: false,
     asset: usdc,
     shareDecimals: 18,
-    shareSymbol: "fixMORPHO",
     depositOpen: open(51_000_001),
     deployedAtBlock: 50_000_001,
     notes: ["A FIXTURE. No contract exists at this address."],
   },
   {
-    slug: FIXTURE.morphoOpen2,
-    displayName: "Fixture Morpho V2 (open, second)",
+    symbol: FIXTURE.morphoOpen2,
+    name: "Fixture Morpho V2 (open, second)",
     warning: "TEST FIXTURE — not a real vault.",
     chainId: 8453,
     address: "0x2222222222222222222222222222222222222222",
@@ -61,14 +60,13 @@ const rows = [
     isDefault: false,
     asset: usdc,
     shareDecimals: 18,
-    shareSymbol: "fixMORPHO2",
     depositOpen: open(51_000_002),
     deployedAtBlock: 50_000_002,
     notes: ["A FIXTURE. No contract exists at this address."],
   },
   {
-    slug: FIXTURE.fusionGated,
-    displayName: "Fixture Fusion (whitelist-gated)",
+    symbol: FIXTURE.fusionGated,
+    name: "Fixture Fusion (whitelist-gated)",
     warning: "TEST FIXTURE — not a real vault.",
     chainId: 8453,
     address: "0x3333333333333333333333333333333333333333",
@@ -77,14 +75,13 @@ const rows = [
     isDefault: false,
     asset: usdc,
     shareDecimals: 8,
-    shareSymbol: "fixFUSION",
     depositOpen: closed("WHITELIST_GATED", 51_000_003),
     deployedAtBlock: 50_000_003,
     notes: ["A FIXTURE. No contract exists at this address."],
   },
   {
-    slug: FIXTURE.enzyme,
-    displayName: "Fixture Enzyme (no ERC-4626 deposit path)",
+    symbol: FIXTURE.enzyme,
+    name: "Fixture Enzyme (no ERC-4626 deposit path)",
     warning: "TEST FIXTURE — not a real vault.",
     chainId: 8453,
     address: "0x4444444444444444444444444444444444444444",
@@ -93,7 +90,6 @@ const rows = [
     isDefault: false,
     asset: usdc,
     shareDecimals: 18,
-    shareSymbol: "fixENZYME",
     depositOpen: closed("NOT_ERC4626", 51_000_004),
     deployedAtBlock: 50_000_004,
     notes: ["A FIXTURE. No contract exists at this address."],
@@ -107,7 +103,7 @@ const rows = [
 export function useFixtureRegistry(): Registry {
   // Always merge onto the SHIPPED rows, never onto whatever is installed: calling this twice must
   // be the same as calling it once, or the second call appends the fixtures to themselves and the
-  // schema refuses a duplicate slug — in a test that has nothing to do with slugs.
+  // schema refuses a duplicate symbol — in a test that has nothing to do with identifiers.
   __setRegistryForTests(undefined);
   const shipped = loadRegistry();
   const merged = registrySchema.parse({
@@ -124,9 +120,9 @@ export function useShippedRegistry(): void {
   __setRegistryForTests(undefined);
 }
 
-/** A fixture row, by slug. Fails loudly rather than returning undefined into an assertion. */
-export function fixtureVault(slug: string): VaultEntry {
-  const v = useFixtureRegistry().vaults.find((x) => x.slug === slug);
-  if (!v) throw new Error(`no fixture vault "${slug}"`);
+/** A fixture row, by ticker. Fails loudly rather than returning undefined into an assertion. */
+export function fixtureVault(symbol: string): VaultEntry {
+  const v = useFixtureRegistry().vaults.find((x) => x.symbol === symbol);
+  if (!v) throw new Error(`no fixture vault "${symbol}"`);
   return v;
 }

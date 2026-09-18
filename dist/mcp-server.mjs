@@ -55138,8 +55138,14 @@ var depositOpenSchema = external_exports.object({
   detail: external_exports.string().optional()
 });
 var vaultEntrySchema = external_exports.object({
-  slug: external_exports.string().regex(/^[a-z0-9][a-z0-9-]*$/),
-  displayName: external_exports.string().min(1),
+  /**
+   * The vault's own ERC-20 ticker, from `symbol()` — the identifier every tool takes and returns.
+   * It is the chain's name for this vault rather than one this repository assigns, so anyone
+   * holding the address can check it, and `scripts/registry-check.ts` reconciles it.
+   */
+  symbol: external_exports.string().min(1).regex(/^[A-Za-z0-9][A-Za-z0-9._-]*$/),
+  /** The vault's own `name()`, reconciled the same way. */
+  name: external_exports.string().min(1),
   /**
    * What a depositor must be told about THIS vault before any deposit is prepared. REQUIRED,
    * and deliberately not defaulted: a vault cannot enter the registry without someone stating
@@ -55157,7 +55163,6 @@ var vaultEntrySchema = external_exports.object({
   asset: external_exports.object({ address, symbol: external_exports.string().min(1), decimals: external_exports.number().int().min(0).max(36) }),
   /** Measured on-chain via `decimals()`. 18 on Morpho V2 and Enzyme, 8 on Fusion — never assume. */
   shareDecimals: external_exports.number().int().min(0).max(36),
-  shareSymbol: external_exports.string().min(1),
   depositOpen: depositOpenSchema,
   /**
    * The first block at which the vault contract has code (measured by bisecting `eth_getCode`). A
@@ -55190,7 +55195,7 @@ var registrySchema = external_exports.object({
   reconciledAtIso: external_exports.string().datetime(),
   vaults: external_exports.array(vaultEntrySchema).min(1)
 }).strict().superRefine((r, ctx) => {
-  const slugs = /* @__PURE__ */ new Set();
+  const symbols = /* @__PURE__ */ new Set();
   const addrs = /* @__PURE__ */ new Set();
   const defaults = r.vaults.filter((v) => v.isDefault);
   if (defaults.length !== 1) {
@@ -55198,12 +55203,12 @@ var registrySchema = external_exports.object({
   }
   const d = defaults[0];
   if (d && !(erc4626Chassis.has(d.chassis) && (d.depositOpen.open || d.depositOpen.reason === "WHITELIST_GATED"))) {
-    ctx.addIssue({ code: "custom", path: ["vaults"], message: `the default vault (${d.slug}) must be ERC-4626 and either measured open or WHITELIST_GATED` });
+    ctx.addIssue({ code: "custom", path: ["vaults"], message: `the default vault (${d.symbol}) must be ERC-4626 and either measured open or WHITELIST_GATED` });
   }
   r.vaults.forEach((v, i) => {
-    if (slugs.has(v.slug)) ctx.addIssue({ code: "custom", path: ["vaults", i, "slug"], message: `duplicate slug ${v.slug}` });
+    if (symbols.has(v.symbol)) ctx.addIssue({ code: "custom", path: ["vaults", i, "symbol"], message: `duplicate symbol ${v.symbol}` });
     if (addrs.has(v.address)) ctx.addIssue({ code: "custom", path: ["vaults", i, "address"], message: `duplicate address ${v.address}` });
-    slugs.add(v.slug);
+    symbols.add(v.symbol);
     addrs.add(v.address);
   });
 });
@@ -55214,11 +55219,11 @@ var EARN = {
    * Tempora Labs Cash Plus USDC (Test 2), Base — a Morpho Vault V2, the Tempora vault this client
    * offers by default. Deposits are OPEN to any account (measured by a simulated stranger deposit;
    * `earn_vaults` reports `defaultAccess: "open"`). The whitelist-gated sibling, Cash Plus USDC
-   * (Test 2A), stays listed as `cash-plus-usdc-2a` and is refused per account by the pre-flight.
+   * (Test 2A), stays listed as `tlCashPlusUSDC2A` and is refused per account by the pre-flight.
    */
-  defaultVault: "cash-plus-usdc-2",
+  defaultVault: "tlCashPlusUSDC2",
   /** The round-trip target. The same vault as the default; open, so the fork tier deposits from the whale directly. */
-  roundTripVault: "cash-plus-usdc-2",
+  roundTripVault: "tlCashPlusUSDC2",
   /** USDC, as a decimal string — the amount `scripts/roundtrip.ts` prepares by default. Never a float. */
   roundTripAmountUsdc: "0.05",
   /** Fixtures the fork and live tiers share. */
@@ -55245,24 +55250,24 @@ function loadRegistry() {
 function listVaults() {
   return loadRegistry().vaults;
 }
-function getVault(slug) {
-  const v = loadRegistry().vaults.find((x) => x.slug === slug);
+function getVault(symbol2) {
+  const v = loadRegistry().vaults.find((x) => x.symbol === symbol2);
   if (!v) {
-    const known = loadRegistry().vaults.map((x) => x.slug).join(", ");
-    throw new Error(`unknown vault slug "${slug}"; known: ${known}`);
+    const known = loadRegistry().vaults.map((x) => x.symbol).join(", ");
+    throw new Error(`unknown vault "${symbol2}"; known: ${known}`);
   }
   return v;
 }
 function defaultVault() {
   const v = getVault(EARN.defaultVault);
   if (!v.isDefault) {
-    const marked = loadRegistry().vaults.find((x) => x.isDefault)?.slug ?? "(none)";
+    const marked = loadRegistry().vaults.find((x) => x.isDefault)?.symbol ?? "(none)";
     throw new Error(`config/earn.ts names "${EARN.defaultVault}" as the default but the registry marks "${marked}"; change both or neither`);
   }
   return v;
 }
-function resolveVault(slug) {
-  return slug ? getVault(slug) : defaultVault();
+function resolveVault(symbol2) {
+  return symbol2 ? getVault(symbol2) : defaultVault();
 }
 function depositableVaults() {
   return loadRegistry().vaults.filter(
@@ -55482,7 +55487,7 @@ async function preflightDeposit(args) {
   const { vault, depositor, client } = args;
   const findings = [];
   const refuse = (why) => ({
-    vault: vault.slug,
+    vault: vault.symbol,
     depositor,
     status: "REFUSED_BY_CLIENT",
     canDeposit: false,
@@ -55506,7 +55511,7 @@ async function preflightDeposit(args) {
       client.readContract({ address: vault.address, abi: erc4626Abi, functionName: "decimals" })
     ]);
   } catch (e) {
-    return { vault: vault.slug, depositor, status: "UNRESOLVED", canDeposit: false, findings: [...findings, `identity reads failed: ${describeError(e)}`] };
+    return { vault: vault.symbol, depositor, status: "UNRESOLVED", canDeposit: false, findings: [...findings, `identity reads failed: ${describeError(e)}`] };
   }
   if (onchainAsset.toLowerCase() !== vault.asset.address.toLowerCase()) {
     return refuse(`registry asset ${vault.asset.address} != on-chain asset() ${onchainAsset} \u2014 registry row is wrong or the address is a different contract`);
@@ -55527,11 +55532,11 @@ async function preflightDeposit(args) {
       client.readContract({ address: vault.address, abi: erc4626Abi, functionName: "maxDeposit", args: [depositor] })
     ]);
   } catch (e) {
-    return { vault: vault.slug, depositor, status: "UNRESOLVED", canDeposit: false, findings: [...findings, `state reads failed: ${describeError(e)}`] };
+    return { vault: vault.symbol, depositor, status: "UNRESOLVED", canDeposit: false, findings: [...findings, `state reads failed: ${describeError(e)}`] };
   }
   const balances = {
     asset: `${formatAmount(assetBal, vault.asset.decimals)} ${vault.asset.symbol}`,
-    shares: `${formatAmount(shareBal, vault.shareDecimals)} ${vault.shareSymbol}`,
+    shares: `${formatAmount(shareBal, vault.shareDecimals)} ${vault.symbol}`,
     allowance: `${formatAmount(allowance, vault.asset.decimals)} ${vault.asset.symbol}`
   };
   const quotes = {
@@ -55545,7 +55550,7 @@ async function preflightDeposit(args) {
   if (assetBal < assets) findings.push(`depositor holds ${balances.asset}, less than the ${formatAmount(assets, vault.asset.decimals)} requested \u2014 a live deposit would fail on balance even if access is open`);
   try {
     const previewShares = await client.readContract({ address: vault.address, abi: erc4626Abi, functionName: "previewDeposit", args: [assets] });
-    quotes.previewShares = `${formatAmount(previewShares, vault.shareDecimals)} ${vault.shareSymbol}`;
+    quotes.previewShares = `${formatAmount(previewShares, vault.shareDecimals)} ${vault.symbol}`;
   } catch {
     findings.push("previewDeposit() reverted; no shares quote");
   }
@@ -55558,16 +55563,16 @@ async function preflightDeposit(args) {
       account: depositor
     });
     findings.push("simulated deposit() SUCCEEDED from this address with the current allowance");
-    return { vault: vault.slug, depositor, status: "OPEN_READY", canDeposit: true, findings, balances, quotes, advisory, measuredAtBlock: Number(block) };
+    return { vault: vault.symbol, depositor, status: "OPEN_READY", canDeposit: true, findings, balances, quotes, advisory, measuredAtBlock: Number(block) };
   } catch (e) {
     const obs = extractRevert(e);
     if (!obs) {
-      return { vault: vault.slug, depositor, status: "UNRESOLVED", canDeposit: false, findings: [...findings, `simulation did not return a definite revert: ${describeError(e)}`], balances, quotes, advisory, measuredAtBlock: Number(block) };
+      return { vault: vault.symbol, depositor, status: "UNRESOLVED", canDeposit: false, findings: [...findings, `simulation did not return a definite revert: ${describeError(e)}`], balances, quotes, advisory, measuredAtBlock: Number(block) };
     }
     const c = classifyRevert(obs);
     findings.push(c.note);
     return {
-      vault: vault.slug,
+      vault: vault.symbol,
       depositor,
       status: c.status,
       canDeposit: c.status === "NEEDS_APPROVAL",
@@ -55653,7 +55658,7 @@ async function measureExit(a) {
       measuredAs: "nothing to withdraw",
       instantLiquidity: liquidText,
       maxWithdrawSays: maxText,
-      note: `the account holds ${formatAmount(shares, vault.shareDecimals)} ${vault.shareSymbol}, which converts to nothing at this share price. No withdrawal was simulated.`
+      note: `the account holds ${formatAmount(shares, vault.shareDecimals)} ${vault.symbol}, which converts to nothing at this share price. No withdrawal was simulated.`
     };
   }
   const attempt = async (assets) => {
@@ -55769,10 +55774,10 @@ async function getPosition(args) {
   const basisUnknown = !wholeHistory;
   const fmtA = (x) => `${formatAmount(x, vault.asset.decimals)} ${vault.asset.symbol}`;
   return {
-    vault: vault.slug,
+    vault: vault.symbol,
     principal,
     sharesExact: formatAmount(shares, vault.shareDecimals),
-    shares: `${formatAmount(shares, vault.shareDecimals)} ${vault.shareSymbol}`,
+    shares: `${formatAmount(shares, vault.shareDecimals)} ${vault.symbol}`,
     usdcValue: fmtA(value),
     exit,
     // On a scan failure NOTHING was read, so basis and yield are unknown — never 0 and value−0, which
@@ -55806,10 +55811,10 @@ async function quoteDeposit(args) {
     client.readContract({ address: vault.address, abi: erc4626Abi, functionName: "convertToAssets", args: [10n ** BigInt(vault.shareDecimals)] })
   ]);
   const q = {
-    vault: vault.slug,
+    vault: vault.symbol,
     depositor,
     amountUsdc: `${formatAmount(assets, vault.asset.decimals)} ${vault.asset.symbol}`,
-    expectedShares: previewShares === void 0 ? "unavailable (previewDeposit reverted)" : `${formatAmount(previewShares, vault.shareDecimals)} ${vault.shareSymbol}`,
+    expectedShares: previewShares === void 0 ? "unavailable (previewDeposit reverted)" : `${formatAmount(previewShares, vault.shareDecimals)} ${vault.symbol}`,
     sharePriceInAssets: `${formatAmount(oneShareInAssets, vault.asset.decimals)} ${vault.asset.symbol} per share`,
     preflight: pre,
     canProceed: pre.canDeposit,
@@ -55840,7 +55845,7 @@ async function quoteWithdraw(args) {
       simulated = "REVERTED";
       const reason = obs.reason ?? "";
       if (toBurn !== void 0 && held < toBurn) {
-        note = `withdraw() reverted: the owner holds ${formatAmount(held, vault.shareDecimals)} ${vault.shareSymbol} against ${formatAmount(toBurn, vault.shareDecimals)} needed \u2014 insufficient shares. (${reason || obs.selector})`;
+        note = `withdraw() reverted: the owner holds ${formatAmount(held, vault.shareDecimals)} ${vault.symbol} against ${formatAmount(toBurn, vault.shareDecimals)} needed \u2014 insufficient shares. (${reason || obs.selector})`;
       } else if (/transfer amount exceeds balance|ERC20InsufficientBalance/i.test(reason) || liquid < assets) {
         note = `withdraw() reverted: the vault holds ${formatAmount(liquid, vault.asset.decimals)} ${vault.asset.symbol} liquid against ${formatAmount(assets, vault.asset.decimals)} requested \u2014 this chassis pays withdrawals from its own balance in the same block; the rest is deployed and needs the fund to unwind first. Withdraw at most the liquid amount now, or wait. maxWithdraw() (${maxW === void 0 ? "reverted" : formatAmount(maxW, vault.asset.decimals)}) does not know this.`;
       } else {
@@ -55851,11 +55856,11 @@ async function quoteWithdraw(args) {
     }
   }
   return {
-    vault: vault.slug,
+    vault: vault.symbol,
     owner,
     amountUsdc: `${formatAmount(assets, vault.asset.decimals)} ${vault.asset.symbol}`,
-    sharesToBurn: toBurn === void 0 ? "unavailable (previewWithdraw reverted)" : `${formatAmount(toBurn, vault.shareDecimals)} ${vault.shareSymbol}`,
-    sharesHeld: `${formatAmount(held, vault.shareDecimals)} ${vault.shareSymbol}`,
+    sharesToBurn: toBurn === void 0 ? "unavailable (previewWithdraw reverted)" : `${formatAmount(toBurn, vault.shareDecimals)} ${vault.symbol}`,
+    sharesHeld: `${formatAmount(held, vault.shareDecimals)} ${vault.symbol}`,
     simulated,
     note,
     instantLiquidity: `${formatAmount(liquid, vault.asset.decimals)} ${vault.asset.symbol}`,
@@ -55873,7 +55878,7 @@ var GAS_ADVICE = "Set gas limit = eth_estimateGas \xD7 1.5. Measured: an unbuffe
 function assert4626(vault) {
   if (!erc4626Chassis.has(vault.chassis)) {
     throw new Error(
-      `${vault.slug} is on ${vault.chassis}, which has no ERC-4626 deposit/redeem path; this client does not build calls for it`
+      `${vault.symbol} is on ${vault.chassis}, which has no ERC-4626 deposit/redeem path; this client does not build calls for it`
     );
   }
 }
@@ -55887,7 +55892,7 @@ function buildDeposit(vault, args) {
       to: vault.asset.address,
       data: encodeFunctionData({ abi: erc4626Abi, functionName: "approve", args: [vault.address, assets] }),
       value: "0x0",
-      description: `Approve ${vault.shareSymbol} vault (${vault.address}) to pull ${pretty}`,
+      description: `Approve ${vault.symbol} vault (${vault.address}) to pull ${pretty}`,
       step: 1,
       of: 2,
       gasAdvice: GAS_ADVICE
@@ -55897,7 +55902,7 @@ function buildDeposit(vault, args) {
       to: vault.address,
       data: encodeFunctionData({ abi: erc4626Abi, functionName: "deposit", args: [assets, args.receiver] }),
       value: "0x0",
-      description: `Deposit ${pretty} into ${vault.displayName}; shares minted to ${args.receiver}`,
+      description: `Deposit ${pretty} into ${vault.name}; shares minted to ${args.receiver}`,
       step: 2,
       of: 2,
       gasAdvice: GAS_ADVICE,
@@ -55915,14 +55920,14 @@ function buildDeposit(vault, args) {
 function buildWithdraw(vault, args) {
   assert4626(vault);
   if (args.all) {
-    const shares = parseAmount(args.sharesExact, vault.shareDecimals, `share balance (${vault.shareSymbol})`);
+    const shares = parseAmount(args.sharesExact, vault.shareDecimals, `share balance (${vault.symbol})`);
     return [
       {
         chainId: vault.chainId,
         to: vault.address,
         data: encodeFunctionData({ abi: erc4626Abi, functionName: "redeem", args: [shares, args.receiver, args.owner] }),
         value: "0x0",
-        description: `Withdraw EVERYTHING from ${vault.displayName}: redeem ${formatAmount(shares, vault.shareDecimals)} ${vault.shareSymbol} (the exact balance) for ${vault.asset.symbol}, paid to ${args.receiver}`,
+        description: `Withdraw EVERYTHING from ${vault.name}: redeem ${formatAmount(shares, vault.shareDecimals)} ${vault.symbol} (the exact balance) for ${vault.asset.symbol}, paid to ${args.receiver}`,
         step: 1,
         of: 1,
         gasAdvice: GAS_ADVICE
@@ -55936,7 +55941,7 @@ function buildWithdraw(vault, args) {
       to: vault.address,
       data: encodeFunctionData({ abi: erc4626Abi, functionName: "withdraw", args: [assets, args.receiver, args.owner] }),
       value: "0x0",
-      description: `Withdraw ${formatAmount(assets, vault.asset.decimals)} ${vault.asset.symbol} from ${vault.displayName}, paid to ${args.receiver}; the vault burns the shares that costs at inclusion`,
+      description: `Withdraw ${formatAmount(assets, vault.asset.decimals)} ${vault.asset.symbol} from ${vault.name}, paid to ${args.receiver}; the vault burns the shares that costs at inclusion`,
       step: 1,
       of: 1,
       gasAdvice: GAS_ADVICE
@@ -55968,15 +55973,15 @@ var DISCLOSURES = {
 // src/mcp/server.ts
 var addressArg = external_exports.string().refine((s) => isAddress(s), "must be an EVM address").transform((s) => getAddress(s));
 var amountArg = external_exports.string().regex(/^\d+(\.\d+)?$/, 'plain decimal USDC amount, e.g. "25" or "12.5"');
-var vaultArg = external_exports.string().optional().describe("registry slug; omit for the default vault");
+var vaultArg = external_exports.string().optional().describe("the vault's ERC-20 ticker, e.g. tlCashPlusUSDC2 (earn_vaults lists them); omit for the default vault");
 var accountArg = addressArg.describe("the account whose shares these are \u2014 the depositor, the owner, the holder");
-function supportedVault(slug) {
-  const vault = resolveVault(slug);
+function supportedVault(symbol2) {
+  const vault = resolveVault(symbol2);
   if (!isSupportedChainId(vault.chainId)) throw new Error(`chain ${vault.chainId} unsupported`);
   return vault;
 }
-function clientFor(slug) {
-  const vault = supportedVault(slug);
+function clientFor(symbol2) {
+  const vault = supportedVault(symbol2);
   return { vault, client: makePublicClient(vault.chainId, rpcUrlFromEnv(vault.chainId)) };
 }
 var RPC_FAILURE = /RPC Request failed|HTTP request failed|reads failed|over rate limit|rate.?limit|"unreachable"|fetch failed|ETIMEDOUT|ECONNREFUSED/i;
@@ -56028,20 +56033,19 @@ function buildServer() {
     "earn_vaults",
     {
       title: "List vaults",
-      description: "Every vault in the registry. `symbol` is the vault's own on-chain ERC-20 ticker and `displayName` its `name()`; `links` are openable without any RPC endpoint, so an operator can verify the contract independently. SHOW `warning` TO THE DEPOSITOR \u2014 every vault offered today is a test vault. Each row also carries its backend, chassis, decimals and MEASURED deposit-open status. `default` is used when a tool is called without `vault`; `depositable` is the subset any account can put money into today: ERC-4626 chassis + measured open. `defaultAccess` says whether the default takes deposits from any account (`open`) or only whitelisted ones (`whitelist`); for `whitelist`, run earn_status for the account before preparing a deposit.",
+      description: "Every vault in the registry. `symbol` is the vault's own on-chain ERC-20 ticker \u2014 the value every other tool takes as `vault` \u2014 and `name` its `name()`; `links` are openable without any RPC endpoint, so an operator can verify the contract independently. SHOW `warning` TO THE DEPOSITOR \u2014 every vault offered today is a test vault. Each row also carries its backend, chassis, decimals and MEASURED deposit-open status. `default` is used when a tool is called without `vault`; `depositable` is the subset any account can put money into today: ERC-4626 chassis + measured open. `defaultAccess` says whether the default takes deposits from any account (`open`) or only whitelisted ones (`whitelist`); for `whitelist`, run earn_status for the account before preparing a deposit.",
       inputSchema: {}
     },
     guarded(async () => {
       const reg = loadRegistry();
       return text({
         reconciledAtIso: reg.reconciledAtIso,
-        default: defaultVault().slug,
+        default: defaultVault().symbol,
         defaultAccess: defaultVault().depositOpen.open ? "open" : "whitelist",
-        depositable: depositableVaults().map((v) => v.slug),
+        depositable: depositableVaults().map((v) => v.symbol),
         vaults: listVaults().map((v) => ({
-          slug: v.slug,
-          symbol: v.shareSymbol,
-          displayName: v.displayName,
+          symbol: v.symbol,
+          name: v.name,
           warning: v.warning,
           links: linksFor(v),
           backend: v.backend,
@@ -56073,15 +56077,15 @@ function buildServer() {
       description: "With NO arguments: is the server up and the RPC reachable \u2014 chain id, latest block, registry version, and which env var supplied the RPC (never the URL). With `account`: simulates deposit() from that address and reports OPEN_READY, NEEDS_APPROVAL, WHITELIST_GATED, REVERTED_OTHER, REFUSED_BY_CLIENT or UNRESOLVED, never trusting maxDeposit(). The `mode` field says which answer you got.",
       inputSchema: { vault: vaultArg, account: accountArg.optional(), amount_usdc: amountArg.optional() }
     },
-    guarded(async ({ vault: slug, account, amount_usdc }) => {
+    guarded(async ({ vault: symbol2, account, amount_usdc }) => {
       if (account !== void 0) {
-        const { vault: vault2, client } = clientFor(slug);
+        const { vault: vault2, client } = clientFor(symbol2);
         const args = amount_usdc === void 0 ? { vault: vault2, depositor: account, client } : { vault: vault2, depositor: account, client, assetsHuman: amount_usdc };
         const verdict = await preflightDeposit(args);
         return text({ ...verdict, mode: "preflight", account, ...commitsMoney(vault2) });
       }
-      const partial2 = slug !== void 0 ? { requested: "preflight", missing: ["account"] } : {};
-      const vault = supportedVault(slug);
+      const partial2 = symbol2 !== void 0 ? { requested: "preflight", missing: ["account"] } : {};
+      const vault = supportedVault(symbol2);
       const src = rpcSourceForEnv(vault.chainId);
       const base2 = {
         mode: "health",
@@ -56114,8 +56118,8 @@ function buildServer() {
         direction: external_exports.enum(["deposit", "withdraw"]).describe("which side to quote \u2014 required, there is no default")
       }
     },
-    guarded(async ({ vault: slug, account, amount_usdc, direction }) => {
-      const { vault, client } = clientFor(slug);
+    guarded(async ({ vault: symbol2, account, amount_usdc, direction }) => {
+      const { vault, client } = clientFor(symbol2);
       if (direction === "deposit") {
         return text({
           direction: "deposit",
@@ -56138,8 +56142,8 @@ function buildServer() {
         receiver: addressArg.describe("where the SHARES land \u2014 usually the account, not necessarily")
       }
     },
-    guarded(async ({ vault: slug, account, amount_usdc, receiver }) => {
-      const vault = supportedVault(slug);
+    guarded(async ({ vault: symbol2, account, amount_usdc, receiver }) => {
+      const vault = supportedVault(symbol2);
       return unsigned(buildDeposit(vault, { assetsHuman: amount_usdc, receiver, account }), vault);
     })
   );
@@ -56157,8 +56161,8 @@ function buildServer() {
         shares_exact: external_exports.string().regex(/^\d+(\.\d+)?$/).optional()
       }
     },
-    guarded(async ({ vault: slug, receiver, account, amount_usdc, all, shares_exact }) => {
-      const vault = supportedVault(slug);
+    guarded(async ({ vault: symbol2, receiver, account, amount_usdc, all, shares_exact }) => {
+      const vault = supportedVault(symbol2);
       if (all) {
         if (!shares_exact) throw new Error("all=true requires shares_exact (copy earn_balance.sharesExact verbatim)");
         return unsigned(buildWithdraw(vault, { receiver, owner: account, all: true, sharesExact: shares_exact }));
@@ -56179,8 +56183,8 @@ function buildServer() {
         max_log_requests: external_exports.number().int().positive().max(400).optional().describe("cap on eth_getLogs calls per event per scan; default 100 (= 1,000 blocks on Alchemy free, 200,000 on Base public). scan.wholeHistory says whether the scan actually covered every block since the vault was deployed \u2014 scan.complete alone is only a reconciliation and can be vacuously true. For an older vault, a provider with a wide eth_getLogs range (TREASURY_LOGS_RPC_BASE) is what makes it whole")
       }
     },
-    guarded(async ({ vault: slug, account, lookback_blocks, max_log_requests }) => {
-      const vault = supportedVault(slug);
+    guarded(async ({ vault: symbol2, account, lookback_blocks, max_log_requests }) => {
+      const vault = supportedVault(symbol2);
       const logsUrl = logsRpcUrlFromEnv(vault.chainId);
       const client = makePublicClient(vault.chainId, logsUrl);
       const fallbackUrl = logsFallbackUrlFromEnv(vault.chainId, logsUrl);

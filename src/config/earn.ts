@@ -1,5 +1,5 @@
 /**
- * The earn wiring — THE place to point the skill at a vault. Shipped code names no vault slug
+ * The earn wiring — THE place to point the skill at a vault. Shipped code names no vault ticker
  * as a literal; `scripts/roundtrip.ts` and the tiers read the default and the round-trip target
  * from here (the fork and live tiers also name the gated sibling directly, for the access pair).
  *
@@ -12,7 +12,7 @@
  *   `roundTripVault` what the deposit → redeem tiers exercise. The same vault today.
  *
  * Addresses live in the registry (`registry/vaults.json`, schema-validated, block-stamped) — a
- * slug here resolves through it.
+ * ticker here resolves through it.
  *
  * 🔴 NO DEPOSITOR ADDRESS IS CONFIGURED HERE, and that is a rule rather than an omission. A gated
  * vault's whitelist is the fund's to hold, and its members are readable from the chain: the fork
@@ -21,20 +21,20 @@
  * stale the moment the whitelist changes. An address is never a key either way (CONTRIBUTING.md, the first rule).
  */
 
-/** A registry slug — resolved via `getVault`, so a typo fails at load, not at a call site. */
-export type VaultSlug = string;
+/** A vault's ERC-20 ticker — resolved via `getVault`, so a typo fails at load, not at a call site. */
+export type VaultSymbol = string;
 
 export const EARN = {
   /**
    * Tempora Labs Cash Plus USDC (Test 2), Base — a Morpho Vault V2, the Tempora vault this client
    * offers by default. Deposits are OPEN to any account (measured by a simulated stranger deposit;
    * `earn_vaults` reports `defaultAccess: "open"`). The whitelist-gated sibling, Cash Plus USDC
-   * (Test 2A), stays listed as `cash-plus-usdc-2a` and is refused per account by the pre-flight.
+   * (Test 2A), stays listed as `tlCashPlusUSDC2A` and is refused per account by the pre-flight.
    */
-  defaultVault: "cash-plus-usdc-2" satisfies VaultSlug,
+  defaultVault: "tlCashPlusUSDC2" satisfies VaultSymbol,
 
   /** The round-trip target. The same vault as the default; open, so the fork tier deposits from the whale directly. */
-  roundTripVault: "cash-plus-usdc-2" satisfies VaultSlug,
+  roundTripVault: "tlCashPlusUSDC2" satisfies VaultSymbol,
 
   /** USDC, as a decimal string — the amount `scripts/roundtrip.ts` prepares by default. Never a float. */
   roundTripAmountUsdc: "0.05",

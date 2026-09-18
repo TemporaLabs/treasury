@@ -12,7 +12,7 @@ the row is wrong, never the chain.
 
 | | |
 |---|---|
-| slug | `cash-plus-usdc-2` |
+| ticker | `tlCashPlusUSDC2` |
 | chain | Base (8453) |
 | vault | [`0x040fCA12673778FEED5DA7b2ccFbbAb0cc0134Cf`](https://basescan.org/address/0x040fCA12673778FEED5DA7b2ccFbbAb0cc0134Cf) |
 | asset | USDC [`0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913`](https://basescan.org/address/0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913), 6 decimals |
@@ -28,7 +28,7 @@ the row is wrong, never the chain.
 
 | | |
 |---|---|
-| slug | `cash-plus-usdc-2a` |
+| ticker | `tlCashPlusUSDC2A` |
 | chain | Base (8453) |
 | vault | [`0x1516D2c082b9cc9af852B1Ebc828f168F27299ef`](https://basescan.org/address/0x1516D2c082b9cc9af852B1Ebc828f168F27299ef) |
 | asset | USDC [`0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913`](https://basescan.org/address/0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913), 6 decimals |

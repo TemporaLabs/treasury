@@ -20,14 +20,15 @@ import { findRoleHolder } from "./access.js";
 
 const STRANGER = EARN.fixtures.stranger;
 /** The whitelist-gated Fusion sibling — the vault the access-discrimination tests run on. */
-const GATED = "cash-plus-usdc-2a";
+const GATED = "tlCashPlusUSDC2A";
 const hasRpc = Boolean(process.env["TREASURY_RPC_BASE"] || process.env["BASE_RPC_URL"]);
 const live = hasRpc ? describe : describe.skip;
 
 /** Spark USDC Vault (MetaMorpho, sparkUSDC) — a public 4626 that is NOT ours. The positive control. (name() verified on-chain 2026-09-11) */
 const control: VaultEntry = {
-  slug: "control-spark-usdc-vault",
-  displayName: "Spark USDC Vault (control, not a Tempora vault)",
+  symbol: "sparkUSDC",
+  name: "Spark USDC Vault (control, not a Tempora vault)",
+  warning: "CONTROL ROW — a third-party vault used to prove a measurement discriminates. Never offered.",
   chainId: 8453,
   address: "0x7BfA7C4f149E7415b73bdeDfe609237e29CBF34A",
   chassis: "morpho-v2",
@@ -35,7 +36,6 @@ const control: VaultEntry = {
   isDefault: false,
   asset: { address: "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913", symbol: "USDC", decimals: 6 },
   shareDecimals: 18,
-  shareSymbol: "sparkUSDC",
   depositOpen: { open: true, method: "simulated-deposit-from-stranger", measuredAtBlock: 51154060, measuredAtIso: "2026-09-11T03:00:00Z" },
   notes: [],
 };
@@ -98,7 +98,7 @@ live("preflight against live Base (read-only)", () => {
     // vault on Base (2026-09-11) — a premise about chain state nobody had checked. Assert shape
     // and consistency instead, which cannot be falsified by someone burning shares to the address.
     const a = await getPosition({ vault: control, principal: STRANGER, client, maxLogRequests: 2 });
-    expect(a.shares).toMatch(new RegExp(`^\\d+(\\.\\d+)? ${control.shareSymbol}$`));
+    expect(a.shares).toMatch(new RegExp(`^\\d+(\\.\\d+)? ${control.symbol}$`));
     expect(a.sharesExact).toMatch(/^\d+(\.\d+)?$/);
     expect(a.usdcValue).toMatch(/^\d+(\.\d+)? USDC$/);
     expect(a.sharePriceInAssets).toMatch(/^\d+(\.\d+)? USDC per share$/);
@@ -114,7 +114,7 @@ live("preflight against live Base (read-only)", () => {
     const q = await quoteDeposit({ vault: defaultVault(), depositor: STRANGER, assetsHuman: "100", client });
     expect(q.preflight.status).toBe("NEEDS_APPROVAL"); // the default is open
     expect(q.canProceed).toBe(true);
-    expect(q.expectedShares).toMatch(new RegExp(`${defaultVault().shareSymbol}$`));
+    expect(q.expectedShares).toMatch(new RegExp(`${defaultVault().symbol}$`));
     expect(Number(q.expectedShares.split(" ")[0])).toBeGreaterThan(50); // ~1 USDC/share
     // no rate is quoted at all: the field does not exist on the result
     expect(q).not.toHaveProperty("currentApy");

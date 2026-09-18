@@ -26,9 +26,9 @@ describe("the shipped registry", () => {
 
   it("offers TWO Tempora vaults on Base, and the default is Cash Plus USDC (Test 2) — open to any account", () => {
     const d = defaultVault();
-    expect(listVaults().map((v) => v.slug)).toEqual(["cash-plus-usdc-2", "cash-plus-usdc-2a"]);
-    expect(d.slug).toBe("cash-plus-usdc-2");
-    expect(d.displayName).toBe("Tempora Labs Cash Plus USDC (Test 2)");
+    expect(listVaults().map((v) => v.symbol)).toEqual(["tlCashPlusUSDC2", "tlCashPlusUSDC2A"]);
+    expect(d.symbol).toBe("tlCashPlusUSDC2");
+    expect(d.name).toBe("Tempora Labs Cash Plus USDC (Test 2)");
     expect(d.backend).toBe("tempora");
     expect(d.chainId).toBe(8453);
     expect(d.address).toBe("0x040fCA12673778FEED5DA7b2ccFbbAb0cc0134Cf");
@@ -39,12 +39,12 @@ describe("the shipped registry", () => {
   });
 
   it("carries MEASURED share decimals — 18 on the Morpho V2 default, 8 on the Fusion sibling, both against 6-decimal USDC", () => {
-    const two = getVault("cash-plus-usdc-2");
-    const twoA = getVault("cash-plus-usdc-2a");
+    const two = getVault("tlCashPlusUSDC2");
+    const twoA = getVault("tlCashPlusUSDC2A");
     expect(two.shareDecimals).toBe(18); // measured via decimals()
-    expect(two.shareSymbol).toBe("tlCashPlusUSDC2");
+    expect(two.symbol).toBe("tlCashPlusUSDC2");
     expect(twoA.shareDecimals).toBe(8);
-    expect(twoA.shareSymbol).toBe("tlCashPlusUSDC2A");
+    expect(twoA.symbol).toBe("tlCashPlusUSDC2A");
     for (const v of [two, twoA]) {
       expect(v.asset).toMatchObject({ symbol: "USDC", decimals: 6, address: "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913" });
       expect(v.shareDecimals).not.toBe(v.asset.decimals);
@@ -55,9 +55,9 @@ describe("the shipped registry", () => {
     // The Morpho V2 vault takes a deposit from anyone (a stranger's simulated deposit reached the token
     // pull). The Fusion sibling is whitelist-gated and stays out of the set — listed so an admitted
     // account's position can be read and exited, refused for everyone else before anything is built.
-    expect(depositableVaults().map((v) => v.slug)).toEqual(["cash-plus-usdc-2"]);
+    expect(depositableVaults().map((v) => v.symbol)).toEqual(["tlCashPlusUSDC2"]);
     expect(defaultVault().depositOpen.open).toBe(true);
-    expect(getVault("cash-plus-usdc-2a").depositOpen).toMatchObject({ open: false, reason: "WHITELIST_GATED" });
+    expect(getVault("tlCashPlusUSDC2A").depositOpen).toMatchObject({ open: false, reason: "WHITELIST_GATED" });
   });
 
   it("access is a MEASUREMENT with a block on it, not a flag someone set", () => {
@@ -66,17 +66,17 @@ describe("the shipped registry", () => {
     expect(open.measuredAtBlock).toBeGreaterThan(51_371_133);
     expect(open.detail).toMatch(/0xe65b7a77/); // TransferFromReverted — reached the token pull, so access is open
     expect(defaultVault().deployedAtBlock).toBe(51_371_133);
-    const gated = getVault("cash-plus-usdc-2a").depositOpen;
+    const gated = getVault("tlCashPlusUSDC2A").depositOpen;
     expect(gated.detail).toMatch(/0x068ca9d8/); // AccessManagedUnauthorized — the revert actually observed
-    expect(getVault("cash-plus-usdc-2a").deployedAtBlock).toBe(51_359_816);
+    expect(getVault("tlCashPlusUSDC2A").deployedAtBlock).toBe(51_359_816);
     for (const v of listVaults()) expect(v.deployedAtBlock!).toBeLessThan(v.depositOpen.measuredAtBlock);
   });
 
   it("config/earn.ts and the registry name the SAME default — the config is the toggle, the registry the measurement", () => {
-    expect(defaultVault().slug).toBe(EARN.defaultVault);
-    expect(loadRegistry().vaults.find((v) => v.isDefault)?.slug).toBe(EARN.defaultVault);
-    // and the round-trip target resolves — a typo'd slug fails here, not in a fork run 20 minutes in
-    expect(getVault(EARN.roundTripVault).slug).toBe(EARN.roundTripVault);
+    expect(defaultVault().symbol).toBe(EARN.defaultVault);
+    expect(loadRegistry().vaults.find((v) => v.isDefault)?.symbol).toBe(EARN.defaultVault);
+    // and the round-trip target resolves — a typo'd ticker fails here, not in a fork run 20 minutes in
+    expect(getVault(EARN.roundTripVault).symbol).toBe(EARN.roundTripVault);
   });
 
   it("names no depositor: who may deposit is on the chain, not in this repository", () => {
@@ -87,7 +87,7 @@ describe("the shipped registry", () => {
   });
 
   it("unknown slugs fail loudly and name what is known", () => {
-    expect(() => getVault("nope")).toThrow(/unknown vault slug "nope"; known: /);
+    expect(() => getVault("nope")).toThrow(/unknown vault "nope"; known: /);
   });
 });
 
@@ -98,19 +98,19 @@ describe("the registry schema refuses the mistakes a hand-edit would make", () =
 
   it("the fixtures themselves parse — the control for every mutation below", () => {
     expect(() => registrySchema.parse(base())).not.toThrow();
-    expect(base().vaults.map((v) => v.slug)).toEqual(expect.arrayContaining([FIXTURE.morphoOpen, FIXTURE.fusionGated, FIXTURE.enzyme]));
+    expect(base().vaults.map((v) => v.symbol)).toEqual(expect.arrayContaining([FIXTURE.morphoOpen, FIXTURE.fusionGated, FIXTURE.enzyme]));
   });
 
   it("a closed vault without a reason", () => {
     const r = base();
-    const f = r.vaults.find((v) => v.slug === FIXTURE.fusionGated)!;
+    const f = r.vaults.find((v) => v.symbol === FIXTURE.fusionGated)!;
     delete (f.depositOpen as { reason?: string }).reason;
     expect(() => registrySchema.parse(r)).toThrow(/closed vault must say why/);
   });
 
   it("an Enzyme vault marked open (it has no 4626 deposit path)", () => {
     const r = base();
-    const e = r.vaults.find((v) => v.slug === FIXTURE.enzyme)!;
+    const e = r.vaults.find((v) => v.symbol === FIXTURE.enzyme)!;
     e.depositOpen = { open: true, method: "simulated-deposit-from-stranger", measuredAtBlock: 1, measuredAtIso: "2026-09-11T00:00:00Z" };
     expect(() => registrySchema.parse(r)).toThrow(/no ERC-4626 deposit path/);
   });
@@ -121,10 +121,10 @@ describe("the registry schema refuses the mistakes a hand-edit would make", () =
     expect(() => registrySchema.parse(r)).toThrow(/duplicate address/);
   });
 
-  it("a duplicated slug", () => {
+  it("a duplicated symbol", () => {
     const r = base();
-    r.vaults[1]!.slug = r.vaults[0]!.slug;
-    expect(() => registrySchema.parse(r)).toThrow(/duplicate slug/);
+    r.vaults[1]!.symbol = r.vaults[0]!.symbol;
+    expect(() => registrySchema.parse(r)).toThrow(/duplicate symbol/);
   });
 
   it("an unchecksummed or malformed address", () => {
@@ -141,24 +141,24 @@ describe("the registry schema refuses the mistakes a hand-edit would make", () =
 
   it("two defaults, or a default that is closed for a reason other than a whitelist", () => {
     const r = base();
-    r.vaults.find((v) => v.slug === FIXTURE.morphoOpen)!.isDefault = true;
+    r.vaults.find((v) => v.symbol === FIXTURE.morphoOpen)!.isDefault = true;
     expect(() => registrySchema.parse(r)).toThrow(/exactly one vault must be isDefault; found 2/);
 
     const r2 = base();
     r2.vaults.find((v) => v.isDefault)!.isDefault = false;
-    r2.vaults.find((v) => v.slug === FIXTURE.enzyme)!.isDefault = true; // NOT_ERC4626
+    r2.vaults.find((v) => v.symbol === FIXTURE.enzyme)!.isDefault = true; // NOT_ERC4626
     expect(() => registrySchema.parse(r2)).toThrow(new RegExp(`default vault \\(${FIXTURE.enzyme}\\) must be ERC-4626 and either measured open or WHITELIST_GATED`));
 
     const r3 = base();
     r3.vaults.find((v) => v.isDefault)!.isDefault = false;
-    const paused = r3.vaults.find((v) => v.slug === FIXTURE.fusionGated)!;
+    const paused = r3.vaults.find((v) => v.symbol === FIXTURE.fusionGated)!;
     paused.isDefault = true;
     paused.depositOpen = { ...paused.depositOpen, reason: "PAUSED" };
     expect(() => registrySchema.parse(r3)).toThrow(new RegExp(`default vault \\(${FIXTURE.fusionGated}\\) must be ERC-4626 and either measured open or WHITELIST_GATED`));
 
     const r4 = base(); // a WHITELIST_GATED ERC-4626 default is accepted — which is what ships
     r4.vaults.find((v) => v.isDefault)!.isDefault = false;
-    r4.vaults.find((v) => v.slug === FIXTURE.fusionGated)!.isDefault = true;
+    r4.vaults.find((v) => v.symbol === FIXTURE.fusionGated)!.isDefault = true;
     expect(() => registrySchema.parse(r4)).not.toThrow();
   });
 
