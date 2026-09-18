@@ -112,21 +112,84 @@ describe("earn_vaults — Tempora vaults only, and the access of each is reporte
 });
 
 /**
- * The warning has to reach the caller AT THE POINT OF USE, not only at discovery.
+ * The warning has to reach the caller AT THE POINT OF USE, not only at discovery — and it has to
+ * KEEP reaching it.
  *
- * It shipped in `earn_vaults` alone — while the warning's own text says "Show this warning before
- * preparing any deposit". So the tool that PREPARES a deposit did not carry the disclosure that
- * names preparing a deposit, and the instruction survived only if a model still happened to be
- * attending to an `earn_vaults` response from earlier in the conversation. A caller naming a vault
- * directly skips discovery entirely.
+ * It shipped on `earn_vaults` alone, a discovery call, while its own text says to show it before
+ * preparing a deposit. The repair put it on three money-committing responses; two of those three
+ * were then unguarded, and deleting the field from them left the whole suite green. A test per call
+ * site would only guard the sites someone remembered to write one for — the same defect one level
+ * up — so the attachment is a single helper in the source and the first test below pins it there.
  */
-describe("the test-vault warning reaches the deposit path, not just discovery", () => {
-  it("earn_prepare_deposit carries the vault's warning in its envelope", async () => {
+describe("the test-vault warning travels with money-committing responses, and only those", () => {
+  const zero = "0x" + "0".repeat(64);
+  /** Answers enough chain reads for a quote to be produced; values are irrelevant, presence is not. */
+  const startRpc = async () => {
+    const srv = createServer((req, res) => {
+      let b = "";
+      req.on("data", (c) => (b += c));
+      req.on("end", () => {
+        const r = JSON.parse(b) as { id: number; method: string };
+        const result = r.method === "eth_blockNumber" ? "0x30f0000" : r.method === "eth_chainId" ? "0x2105" : zero;
+        res.writeHead(200, { "content-type": "application/json" });
+        res.end(JSON.stringify({ jsonrpc: "2.0", id: r.id, result }));
+      });
+    });
+    await new Promise<void>((r) => srv.listen(0, "127.0.0.1", r));
+    const { port } = srv.address() as { port: number };
+    return { url: `http://127.0.0.1:${port}/v2/K`, close: () => new Promise<void>((r) => srv.close(() => r())) };
+  };
+  afterEach(() => {
+    delete process.env["TREASURY_RPC_BASE"];
+  });
+
+  /**
+   * The structural one. `commitsMoney` is the only thing that may write a `warning` field onto a
+   * response, `earn_vaults`'s per-row listing aside — so a fourth money-committing tool either goes
+   * through the chokepoint and is disclosed for free, or hand-rolls the field and fails here.
+   */
+  it("only the chokepoint and the vault listing write a warning field", () => {
+    const src = readFileSync(new URL("../src/mcp/server.ts", import.meta.url), "utf8").replace(/\/\*[\s\S]*?\*\/|\/\/.*$/gm, "");
+    const writers = src.split("\n").filter((l) => /\bwarning:/.test(l)).map((l) => l.trim());
+    expect(writers).toEqual([
+      "const commitsMoney = (vault: VaultEntry) => ({ warning: vault.warning });",
+      "warning: v.warning,",
+    ]);
+  });
+
+  it("earn_prepare_deposit carries it, before next_step", async () => {
     const out = payload(
       await tools()["earn_prepare_deposit"]!.handler({ amount_usdc: "25", receiver: RECEIVER, account: RECEIVER }, {}),
     ) as { warning?: string };
-    expect(out.warning, "earn_prepare_deposit must carry the warning").toBeTruthy();
-    expect(out.warning).toBe(defaultVault().warning);
+    expect(out.warning, "earn_prepare_deposit must carry the warning").toBe(defaultVault().warning);
+    expect(Object.keys(out).indexOf("warning")).toBeLessThan(Object.keys(out).indexOf("next_step"));
+  });
+
+  it("earn_status's pre-flight verdict carries it", async () => {
+    process.env["TREASURY_RPC_BASE"] = "http://127.0.0.1:9/v2/K"; // refused: the verdict path, not a pass
+    const out = payload(await tools()["earn_status"]!.handler({ account: RECEIVER }, {})) as { mode?: string; warning?: string };
+    expect(out.mode).toBe("preflight");
+    expect(out.warning, "earn_status preflight must carry the warning").toBe(defaultVault().warning);
+  });
+
+  it("earn_quote carries it on the deposit side and NOT on the withdraw side", async () => {
+    const rpc = await startRpc();
+    process.env["TREASURY_RPC_BASE"] = rpc.url;
+    try {
+      const dep = payload(await tools()["earn_quote"]!.handler({ account: RECEIVER, amount_usdc: "1", direction: "deposit" }, {})) as { warning?: string };
+      expect(dep.warning, "earn_quote deposit must carry the warning").toBe(defaultVault().warning);
+      const wd = payload(await tools()["earn_quote"]!.handler({ account: RECEIVER, amount_usdc: "1", direction: "withdraw" }, {})) as { warning?: string };
+      expect(wd.warning, "a withdrawal quote must NOT carry it — money leaving is not the risk it describes").toBeUndefined();
+    } finally {
+      await rpc.close();
+    }
+  });
+
+  it("earn_prepare_withdraw does NOT carry it", async () => {
+    const out = payload(
+      await tools()["earn_prepare_withdraw"]!.handler({ amount_usdc: "1", receiver: RECEIVER, account: RECEIVER }, {}),
+    ) as { warning?: string };
+    expect(out.warning, "repeating a disclosure where it does not apply is what trains a reader to skip it").toBeUndefined();
   });
 });
 

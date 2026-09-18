@@ -25,6 +25,8 @@ status (the block and method it was measured at). Each row carries the vault's p
   RPC endpoint.** They are how an operator verifies, without this client's help, that the address
   about to be used is the vault it claims to be;
 - `warning` — what to show before preparing a deposit into this vault. Show it; do not summarise it.
+  It is repeated on every response that commits money — see `earn_prepare_deposit` below — so a
+  caller who never lists still receives it.
 
 And, once per response:
 
@@ -115,10 +117,16 @@ objects worth reading carefully:
 | `amount_usdc` | required |
 | `receiver` | required; where the **shares** land — usually the account, not necessarily |
 
-Returns `{ requires_signature: true, status: "unsigned", calls: [approve, deposit] }`. Each call is
+Returns `{ requires_signature: true, status: "unsigned", warning, calls: [approve, deposit] }`. Each call is
 `{ to, data, value, description, gasAdvice, precondition? }`. Hand them to your signer **in order**;
 the deposit's precondition names the allowance the approve must have set. Nothing has happened until
 the signer's transactions confirm.
+
+`warning` is the vault's own disclosure, repeated here rather than left at discovery — **show it
+before the signer sees the calls, verbatim**. Every response that commits money carries it:
+`earn_status`'s pre-flight verdict, `earn_quote` on the deposit side, and this one. Withdrawals
+deliberately do not: the risk it describes is committing funds, not retrieving them, and a
+disclosure repeated where it does not apply is what teaches a reader to skip it.
 
 ## `earn_prepare_withdraw` — PREPARE
 
