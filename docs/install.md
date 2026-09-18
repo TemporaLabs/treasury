@@ -5,9 +5,15 @@ Treasury is an MCP server plus an agent skill. Two ways to get it in front of an
 ## Claude Code — the plugin
 
 ```bash
-claude plugin marketplace add TemporaLabs/treasury-plugin
+claude plugin marketplace add TemporaLabs/treasury-plugin@v0.1.0
 claude plugin install treasury@treasury
 ```
+
+`@<ref>` pins the marketplace to a tag or a branch, and is recorded with the marketplace entry, so
+`claude plugin marketplace update` refreshes *that* ref rather than moving the install onto another
+branch; `#<ref>` is equivalent. Prefer a tag — it is immutable. Before a release is tagged, pin its
+release branch instead (`TemporaLabs/treasury-plugin@release/v0.1.0`); dropping the suffix entirely
+tracks the plugin repository's default branch.
 
 The plugin is packaged in [TemporaLabs/treasury-plugin](https://github.com/TemporaLabs/treasury-plugin)
 from this repository's releases. It gives Claude Code the `earn` skill and the eight `earn_*` tools. The plugin starts the

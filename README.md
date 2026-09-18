@@ -106,13 +106,17 @@ agent   25.09 USDC; 25.09 withdrawable now. Put in 25.00, earned 0.09.
 
 ## Install
 
-**Claude Code:**
+**Claude Code** — pin to a release tag; a tag is immutable, so the install cannot drift:
 
 ```bash
-claude plugin marketplace add TemporaLabs/treasury-plugin
+claude plugin marketplace add TemporaLabs/treasury-plugin@v0.1.0
 claude plugin install treasury@treasury
 export TREASURY_RPC_BASE=https://...   # a keyed Base RPC; unset = the public RPC, which rate-limits quickly
 ```
+
+Before a release is tagged, pin its release branch instead —
+`claude plugin marketplace add TemporaLabs/treasury-plugin@release/v0.1.0`. Dropping the `@<ref>`
+suffix tracks the plugin repository's default branch.
 
 The plugin is packaged in [TemporaLabs/treasury-plugin](https://github.com/TemporaLabs/treasury-plugin)
 from this repository's releases. Any other MCP host runs the same bundled server —
