@@ -80,10 +80,16 @@ const text = (v: unknown) => {
 };
 
 /** An unsigned build never leaves this server as a bare array. See contract 1 in the file header. */
-const unsigned = (calls: UnsignedCall[]) =>
+const unsigned = (calls: UnsignedCall[], warning?: string) =>
   text({
     requires_signature: true,
     status: "unsigned",
+    // 🔴 BEFORE `next_step`, deliberately. The vault's own warning names preparing a deposit as the
+    // moment to show it, and it first shipped in `earn_vaults` alone — a DISCOVERY call. A caller
+    // who names a vault directly never makes that call, so the disclosure reached whoever happened
+    // to have listed recently and nobody else. A field the caller must have remembered is not a
+    // disclosure; it has to travel with the thing it is about.
+    ...(warning === undefined ? {} : { warning }),
     next_step:
       "Hand these calls to a signer IN ORDER, following `signer_rules`. A call carrying `precondition` must not be estimated or sent until that read holds on the RPC the signer sends through. Nothing has been submitted; no funds have moved.",
     signer_rules: SIGNER_RULES,
@@ -189,7 +195,7 @@ export function buildServer(): McpServer {
         const args = amount_usdc === undefined ? { vault, depositor: account, client } : { vault, depositor: account, client, assetsHuman: amount_usdc };
         const verdict = await preflightDeposit(args);
         // spread FIRST so the discriminant cannot be overwritten by a field of the same name
-        return text({ ...verdict, mode: "preflight", account });
+        return text({ ...verdict, mode: "preflight", account, warning: vault.warning });
       }
       // Health. A partial call (a vault but no account) is answered here too, and says so in
       // STRUCTURE rather than in prose — a note is exactly what a consumer skips, and the risk is
@@ -255,7 +261,11 @@ export function buildServer(): McpServer {
       // BY CONSTRUCTION; a swapped route is then wrong about the REQUEST, which the handler test
       // catches by asserting requested === returned, and never lying about the BODY.
       if (direction === "deposit") {
-        return text({ direction: "deposit" as const, ...(await quoteDeposit({ vault, depositor: account, assetsHuman: amount_usdc, client })) });
+        return text({
+          direction: "deposit" as const,
+          warning: vault.warning,
+          ...(await quoteDeposit({ vault, depositor: account, assetsHuman: amount_usdc, client })),
+        });
       }
       return text({ direction: "withdraw" as const, ...(await quoteWithdraw({ vault, owner: account, assetsHuman: amount_usdc, client })) });
     }),
@@ -274,9 +284,10 @@ export function buildServer(): McpServer {
         receiver: addressArg.describe("where the SHARES land — usually the account, not necessarily"),
       },
     },
-    guarded(async ({ vault: slug, account, amount_usdc, receiver }) =>
-      unsigned(buildDeposit(supportedVault(slug), { assetsHuman: amount_usdc, receiver, account })),
-    ),
+    guarded(async ({ vault: slug, account, amount_usdc, receiver }) => {
+      const vault = supportedVault(slug);
+      return unsigned(buildDeposit(vault, { assetsHuman: amount_usdc, receiver, account }), vault.warning);
+    }),
   );
 
   server.registerTool(

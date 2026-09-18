@@ -13,7 +13,19 @@
  */
 import type { VaultEntry } from "./registry-schema.js";
 
-/** Block explorers, by chain. Base only — the registry's `chainId` is a literal 8453. */
+/**
+ * Block explorers, by chain.
+ *
+ * 🔴 THIS MAP MAY NOT BE MISSED A CHAIN. An unknown `chainId` interpolates `undefined` into the
+ * URL — `undefined0x040f…` — which is a well-formed string, so nothing throws and the caller
+ * receives a link that goes nowhere. Today that is unreachable, but only because the registry
+ * schema pins `chainId: z.literal(8453)`: a wrong value is a compile-time error wherever a
+ * `VaultEntry` is built, and `loadRegistry()` rejects the whole file on any parse failure.
+ *
+ * So the safety here is the LITERAL, not this map. **Widening the schema to a second chain
+ * without adding its row below reintroduces the broken link**, silently. Add the row in the same
+ * change, or make the lookup fail loudly instead.
+ */
 const EXPLORER: Record<number, string> = {
   8453: "https://basescan.org/address/",
 };
