@@ -55628,6 +55628,20 @@ var WindowTooNarrow = class extends Error {
   window;
   needed;
 };
+var MAX_SCAN_TXS = 100;
+function txsOf(logs, decimals, symbol2) {
+  const key = (l) => [l.blockNumber ?? -1n, l.logIndex ?? -1];
+  const sorted = [...logs].sort((a, b) => {
+    const [ab, ai] = key(a);
+    const [bb, bi] = key(b);
+    return ab === bb ? ai - bi : ab < bb ? -1 : 1;
+  });
+  return sorted.slice(-MAX_SCAN_TXS).map((l) => ({
+    txHash: l.transactionHash,
+    blockNumber: l.blockNumber === null ? null : l.blockNumber.toString(),
+    amountUsdc: `${formatAmount(l.args.assets ?? 0n, decimals)} ${symbol2}`
+  }));
+}
 function isRevert(e) {
   return e instanceof BaseError2 && e.walk((x) => x instanceof ContractFunctionRevertedError || x instanceof ExecutionRevertedError) !== null;
 }
@@ -55790,6 +55804,8 @@ async function getPosition(args) {
       toBlock: block.toString(),
       deposits: deps.length,
       withdrawals: wds.length,
+      depositTxs: txsOf(deps, vault.asset.decimals, vault.asset.symbol),
+      withdrawTxs: txsOf(wds, vault.asset.decimals, vault.asset.symbol),
       complete,
       capped,
       ...providerWindow !== void 0 ? { providerWindow: providerWindow.toString() } : {},
