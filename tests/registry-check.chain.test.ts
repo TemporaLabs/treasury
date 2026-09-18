@@ -32,7 +32,7 @@ const encString = (s: string) => {
   const bytes = Buffer.from(s, "utf8").toString("hex");
   return "0x" + word("20") + word(bytes.length ? (bytes.length / 2).toString(16) : "0") + bytes.padEnd(Math.ceil(bytes.length / 64) * 64, "0");
 };
-const SEL = { decimals: "0x313ce567", symbol: "0x95d89b41", asset: "0x38d52e0f" } as const;
+const SEL = { decimals: "0x313ce567", symbol: "0x95d89b41", name: "0x06fdde03", asset: "0x38d52e0f" } as const;
 
 /**
  * A mock chain. `corrupt` lets one row's symbol disagree, which is the discriminating case.
@@ -73,9 +73,10 @@ function startMock(corrupt?: { address: string; symbol: string }, corruptDeploym
       perAddress.set(who, (perAddress.get(who) ?? new Set()).add(sel));
       if (sel === SEL.decimals) return { jsonrpc: "2.0", id, result: encUint(row.shareDecimals) };
       if (sel === SEL.symbol) {
-        const sym = corrupt && corrupt.address.toLowerCase() === row.address.toLowerCase() ? corrupt.symbol : row.shareSymbol;
+        const sym = corrupt && corrupt.address.toLowerCase() === row.address.toLowerCase() ? corrupt.symbol : row.symbol;
         return { jsonrpc: "2.0", id, result: encString(sym) };
       }
+      if (sel === SEL.name) return { jsonrpc: "2.0", id, result: encString(row.name) };
       if (sel === SEL.asset) {
         if (row.chassis === "enzyme") return { jsonrpc: "2.0", id, error: { code: 3, message: "execution reverted" } };
         return { jsonrpc: "2.0", id, result: encAddr(row.asset.address) };
@@ -150,14 +151,14 @@ describe("registry-check reconciles against the CHAIN and nothing else", () => {
     // The method set is the instrument: an extra reach (a registry service, an operator endpoint)
     // would show up here even if the verdict were unchanged.
     expect([...mock.methods].sort()).toEqual(["eth_blockNumber", "eth_call", "eth_getCode"]);
-    // and it ASKED THE CHAIN about every row. Printing a slug is not interrogating an address:
+    // and it ASKED THE CHAIN about every row. Printing an identifier is not interrogating an address:
     // a reconciler that read row one and trusted the rest would pass a verdict assertion and fail
     // this one. Enzyme is asked decimals()/symbol() but not asset() — that is the row's own rule.
     expect(r.out).toContain(`${reg.vaults.length} rows`);
     for (const v of reg.vaults) {
       const asked = mock.perAddress.get(v.address.toLowerCase()) ?? new Set<string>();
-      const want = v.chassis === "enzyme" ? ["getCode", SEL.decimals, SEL.symbol] : ["getCode", SEL.decimals, SEL.symbol, SEL.asset];
-      expect([...asked].sort(), `${v.slug} (${v.address}) was not fully interrogated`).toEqual([...want].sort());
+      const want = v.chassis === "enzyme" ? ["getCode", SEL.decimals, SEL.symbol, SEL.name] : ["getCode", SEL.decimals, SEL.symbol, SEL.name, SEL.asset];
+      expect([...asked].sort(), `${v.symbol} (${v.address}) was not fully interrogated`).toEqual([...want].sort());
     }
   }, 180_000);
 
@@ -174,7 +175,7 @@ describe("registry-check reconciles against the CHAIN and nothing else", () => {
     mocks.push(mock.close);
     const r = await run(mock.url);
     expect(r.status).toBe(1);
-    expect(r.out).toMatch(new RegExp(`${target.slug}: shareSymbol`));
+    expect(r.out).toMatch(new RegExp(`${target.address}: registry symbol`));
     expect(r.out).toContain("the chain is right; fix the row");
   }, 180_000);
 
@@ -203,7 +204,7 @@ describe("registry-check reconciles against the CHAIN and nothing else", () => {
     mocks.push(mock.close);
     const r = await run(mock.url);
     expect(r.status).toBe(1);
-    expect(r.out).toMatch(new RegExp(`${target.slug}: deployedAtBlock \\d+ is LATE`));
+    expect(r.out).toMatch(new RegExp(`${target.symbol}: deployedAtBlock \\d+ is LATE`));
     expect(r.out).toContain("the chain is right; fix the row");
   }, 180_000);
 });

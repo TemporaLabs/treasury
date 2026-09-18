@@ -17,7 +17,7 @@ const ACCOUNT = EARN.fixtures.stranger;
  * literal head silently goes below `deployedAtBlock` the day the registry points at a newer vault,
  * and every scan test then fails on an empty range while claiming to be about windows and fallbacks.
  */
-const VAULT = getVault("cash-plus-usdc-2a");
+const VAULT = getVault("tlCashPlusUSDC2A");
 const DEPLOYED = BigInt(VAULT.deployedAtBlock!);
 const HEAD = DEPLOYED + 3_384n;
 const PUBLICNODE_ARCHIVE = "Archive requests require a personal token. Get one at: https://example.invalid";
@@ -53,8 +53,8 @@ function provider(opts: { window?: bigint; fail?: string; depositBlock?: bigint;
 describe("registry: every vault records the block its contract was deployed at", () => {
   it("each row carries deployedAtBlock, below every measurement taken on it", () => {
     for (const v of listVaults()) {
-      expect(v.deployedAtBlock, v.slug).toBeTypeOf("number");
-      expect(v.deployedAtBlock!, v.slug).toBeLessThan(v.depositOpen.measuredAtBlock);
+      expect(v.deployedAtBlock, v.symbol).toBeTypeOf("number");
+      expect(v.deployedAtBlock!, v.symbol).toBeLessThan(v.depositOpen.measuredAtBlock);
     }
   });
 });

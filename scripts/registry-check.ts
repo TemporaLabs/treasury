@@ -4,7 +4,7 @@
  *   TREASURY_RPC_BASE=https://... npx tsx scripts/registry-check.ts
  *
  * The chain is the only source a row is checked against. A row is a claim about a contract at an
- * address; `symbol()`, `decimals()` and `asset()` are what the contract says about itself, and a
+ * address; `symbol()`, `name()`, `decimals()` and `asset()` are what the contract says about itself, and a
  * disagreement means the row is wrong — never the chain. There is no upstream repository, deploy
  * record or operator this script consults: the client knows an address and an RPC, nothing else.
  *
@@ -78,12 +78,12 @@ console.log(`registry reconciledAtIso=${reg.reconciledAtIso}; chain check at blo
 
 for (const v of reg.vaults) {
   if (v.chainId !== base.id) {
-    fail(`${v.slug}: chainId ${v.chainId} is not Base (${base.id}) — this script only reaches Base`);
+    fail(`${v.symbol}: chainId ${v.chainId} is not Base (${base.id}) — this script only reaches Base`);
     continue;
   }
   const code = await client.getCode({ address: v.address });
   if (!code || code === "0x") {
-    fail(`${v.slug}: no contract at ${v.address}`);
+    fail(`${v.symbol}: no contract at ${v.address}`);
     continue;
   }
   // `deployedAtBlock` is what `earn_balance` scans from, so a row that is one block late silently
@@ -94,39 +94,59 @@ for (const v of reg.vaults) {
       client.getCode({ address: v.address, blockNumber: at }),
       at > 0n ? client.getCode({ address: v.address, blockNumber: at - 1n }) : Promise.resolve(undefined),
     ]);
-    if (!there || there === "0x") fail(`${v.slug}: deployedAtBlock ${at} has no code at ${v.address}`);
-    else if (before && before !== "0x") fail(`${v.slug}: deployedAtBlock ${at} is LATE — code already exists at ${at - 1n}`);
-    else ok(`${v.slug}: deployedAtBlock ${at} is the first block with code`);
+    if (!there || there === "0x") fail(`${v.symbol}: deployedAtBlock ${at} has no code at ${v.address}`);
+    else if (before && before !== "0x") fail(`${v.symbol}: deployedAtBlock ${at} is LATE — code already exists at ${at - 1n}`);
+    else ok(`${v.symbol}: deployedAtBlock ${at} is the first block with code`);
   }
   try {
     const dec = await client.readContract({ address: v.address, abi: erc4626Abi, functionName: "decimals" });
-    if (dec !== v.shareDecimals) fail(`${v.slug}: shareDecimals ${v.shareDecimals} != decimals() ${dec}`);
-    else ok(`${v.slug}: decimals() = ${dec}`);
+    if (dec !== v.shareDecimals) fail(`${v.symbol}: shareDecimals ${v.shareDecimals} != decimals() ${dec}`);
+    else ok(`${v.symbol}: decimals() = ${dec}`);
   } catch (e) {
-    if (isRevert(e)) fail(`${v.slug}: decimals() reverted`);
-    else cannotCheck(`${v.slug}: decimals()`, why(e));
+    if (isRevert(e)) fail(`${v.symbol}: decimals() reverted`);
+    else cannotCheck(`${v.symbol}: decimals()`, why(e));
   }
   try {
     const sym = await client.readContract({ address: v.address, abi: erc4626Abi, functionName: "symbol" });
-    if (sym !== v.shareSymbol) fail(`${v.slug}: shareSymbol "${v.shareSymbol}" != symbol() "${sym}"`);
-    else ok(`${v.slug}: symbol() = ${sym}`);
+    if (sym !== v.symbol) fail(`${v.address}: registry symbol "${v.symbol}" != symbol() "${sym}"`);
+    else ok(`${v.symbol}: symbol() = ${sym}`);
   } catch (e) {
-    if (isRevert(e)) fail(`${v.slug}: symbol() reverted`);
-    else cannotCheck(`${v.slug}: symbol()`, why(e));
+    if (isRevert(e)) fail(`${v.symbol}: symbol() reverted`);
+    else cannotCheck(`${v.symbol}: symbol()`, why(e));
+  }
+  // `name()` is the other half of the vault's public identity, and the half an operator reads back
+  // on a block explorer to confirm they are looking at the right contract. Unreconciled, the
+  // registry could present any name it liked against a real address.
+  try {
+    const nm = await client.readContract({ address: v.address, abi: erc4626Abi, functionName: "name" });
+    if (nm !== v.name) fail(`${v.address}: registry name "${v.name}" != name() "${nm}"`);
+    else ok(`${v.symbol}: name() = ${nm}`);
+  } catch (e) {
+    if (isRevert(e)) fail(`${v.symbol}: name() reverted`);
+    else cannotCheck(`${v.symbol}: name()`, why(e));
   }
   if (v.chassis === "enzyme") {
-    ok(`${v.slug}: enzyme — asset() expected to revert, skipped`);
+    ok(`${v.symbol}: enzyme — asset() expected to revert, skipped`);
     continue;
   }
   try {
     const asset = await client.readContract({ address: v.address, abi: erc4626Abi, functionName: "asset" });
-    if (asset.toLowerCase() !== v.asset.address.toLowerCase()) fail(`${v.slug}: asset() ${asset} != registry ${v.asset.address}`);
-    else ok(`${v.slug}: asset() matches`);
+    if (asset.toLowerCase() !== v.asset.address.toLowerCase()) fail(`${v.symbol}: asset() ${asset} != registry ${v.asset.address}`);
+    else ok(`${v.symbol}: asset() matches`);
   } catch (e) {
-    if (isRevert(e)) fail(`${v.slug}: asset() reverted on a chassis marked ERC-4626`);
-    else cannotCheck(`${v.slug}: asset()`, why(e));
+    if (isRevert(e)) fail(`${v.symbol}: asset() reverted on a chassis marked ERC-4626`);
+    else cannotCheck(`${v.symbol}: asset()`, why(e));
   }
 }
+
+// The per-row lines above are ✓ / ✗ / ?, and a reader who stops there can carry away the wrong
+// verdict: an all-✓ run with three ? lines LOOKS complete. Say it in words at the point the rows
+// end, not only in the summary further down, which is what a skimmer skips.
+console.log(
+  failures || unresolved
+    ? `\n>>> NOT A PASS: ${failures} disagreement(s), ${unresolved} check(s) not made.`
+    : `\n>>> PASS: every check was made and every one agreed.`,
+);
 
 if (failures) {
   console.error(`\n${failures} disagreement(s) — the chain is right; fix the row`);

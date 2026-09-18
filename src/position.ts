@@ -246,7 +246,7 @@ async function measureExit(a: {
       measuredAs: "nothing to withdraw",
       instantLiquidity: liquidText,
       maxWithdrawSays: maxText,
-      note: `the account holds ${formatAmount(shares, vault.shareDecimals)} ${vault.shareSymbol}, which converts to nothing at this share price. No withdrawal was simulated.`,
+      note: `the account holds ${formatAmount(shares, vault.shareDecimals)} ${vault.symbol}, which converts to nothing at this share price. No withdrawal was simulated.`,
     };
   }
 
@@ -420,10 +420,10 @@ export async function getPosition(args: PositionArgs): Promise<Position> {
 
   const fmtA = (x: bigint) => `${formatAmount(x, vault.asset.decimals)} ${vault.asset.symbol}`;
   return {
-    vault: vault.slug,
+    vault: vault.symbol,
     principal,
     sharesExact: formatAmount(shares, vault.shareDecimals),
-    shares: `${formatAmount(shares, vault.shareDecimals)} ${vault.shareSymbol}`,
+    shares: `${formatAmount(shares, vault.shareDecimals)} ${vault.symbol}`,
     usdcValue: fmtA(value),
     exit,
     // On a scan failure NOTHING was read, so basis and yield are unknown — never 0 and value−0, which
