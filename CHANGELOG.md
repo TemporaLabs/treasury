@@ -4,7 +4,7 @@ All notable changes to Agent Treasury are recorded here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versions follow [SemVer](https://semver.org/).
 Pre-1.0, minor versions may change tool names, schemas and behaviour.
 
-## [Unreleased]
+## [0.1.0] - 2026-09-18
 
 The first public release. Everything below is what ships in it.
 
@@ -32,8 +32,6 @@ The first public release. Everything below is what ships in it.
 - **Endpoint redaction.** A keyed RPC URL never appears in tool output, on any failure path.
 - **A signed, reproducible bundle.** `dist/mcp-server.mjs` is committed, rebuilt in CI byte-for-byte,
   and carries a provenance attestation on the public repository.
-
-### Changed
 - **Licence: Apache License 2.0** from launch, with `NOTICE`.
 - **A Developer Certificate of Origin** (`DCO.md`, the standard text from developercertificate.org),
   certified per commit by a `Signed-off-by` trailer and checked by a GitHub check that reads every
@@ -47,5 +45,5 @@ The first public release. Everything below is what ships in it.
 - **Pre-deposit disclosures** are plain-language terms this repository owns, including that the default
   is a Tempora-curated destination on which Tempora can set fees.
 - **The default's fee and position notes say what the chain says.** Its fee timelocks are 0, so a fee
-  can be introduced without notice (the docs used to say "timelocked"); and one of its positions lends
-  against a stablecoin priced at par by a fixed oracle, which the fund's loss model does not price.
+  can be introduced without notice; and one of its positions lends against a stablecoin priced at
+  par by a fixed oracle, which the fund's loss model does not price.
