@@ -384,3 +384,25 @@ describe("earn_balance wires the fallback — the server line, not just the posi
     }
   }, 30_000);
 });
+
+/**
+ * A new response field an agent is expected to SURFACE has to be named in the tool's own
+ * description, not only in `docs/tools.md`.
+ *
+ * The discriminator, which is the part worth keeping: **does an agent learn this field exists
+ * without reading a file it never reads?** `docs/tools.md` is the human integrator's document; the
+ * description is what reaches the model before it decides what to tell an operator. A field that
+ * exists, is populated, is documented for humans and is never mentioned to the agent is
+ * indistinguishable from one that was never added — which is the same shape as the vault warning
+ * shipping on a discovery call nobody was required to make.
+ */
+describe("a response field an agent must surface is named in its tool's own description", () => {
+  it("earn_balance's description names the transaction lists and their truncation rule", () => {
+    const d = (tools()["earn_balance"] as unknown as { description: string }).description;
+    expect(d, "the description must exist at all").toBeTypeOf("string");
+    expect(d).toContain("depositTxs");
+    expect(d).toContain("withdrawTxs");
+    // the caveat travels with the field, or a reader takes a capped list for a complete one
+    expect(d).toMatch(/100|totals/);
+  });
+});

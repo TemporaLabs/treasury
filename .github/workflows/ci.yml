@@ -37,6 +37,23 @@ jobs:
         with:
           node-version: 22
           cache: npm
+      # 🔴 Nothing else validates workflow SYNTAX, and the failure is silent: GitHub refuses to
+      # load an unparseable workflow and simply never shows it, so a broken file looks exactly
+      # like a workflow that was not triggered. Caught live — a `: ` inside an unquoted one-line
+      # `run:` made publish.yml unparseable while every other check in this file stayed green.
+      - name: workflows — every .github/workflows/*.yml parses
+        run: |
+          python3 - <<'PY'
+          import pathlib, sys, yaml
+          bad = []
+          for f in sorted(pathlib.Path(".github/workflows").glob("*.y*ml")):
+              try:
+                  yaml.safe_load(f.read_text())
+              except Exception as e:
+                  bad.append(f"{f}: {e}")
+          print("\n".join(bad) or "all workflows parse")
+          sys.exit(1 if bad else 0)
+          PY
       - name: docs — every relative link in docs/ resolves
         run: |
           python3 - <<'PY'

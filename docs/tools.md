@@ -107,6 +107,13 @@ objects worth reading carefully:
   short. Only then are `entryBasisUsdc` and `accruedYieldUsdc` numbers; otherwise they read
   `unknown`. `scan.source` says `"fallback"` when the configured RPC could not cover the range and the
   public fallback did — see [`configuration.md`](configuration.md).
+- **`scan.depositTxs` / `scan.withdrawTxs`** — the transactions behind those events, oldest first:
+  `txHash`, `blockNumber`, `amountUsdc`. Paste `txHash` after the explorer's `/tx/` to show an
+  operator what landed; `earn_vaults` gives the vault's own `links.explorer`. These come from the
+  logs the basis scan already fetched, so they cost no extra request — and they carry the same
+  caveat as the basis: they are the events **inside the scanned window**, which is the whole history
+  only when `wholeHistory` is true. Each list holds at most 100 entries, the most recent; `deposits`
+  and `withdrawals` remain the totals, so a truncated list is visible by comparing the two.
 
 ## `earn_prepare_deposit` — PREPARE
 
