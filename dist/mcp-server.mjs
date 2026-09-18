@@ -54830,6 +54830,7 @@ init_base();
 init_contract();
 init_node();
 init_encodeFunctionData();
+init_getAbiItem();
 init_getAddress();
 init_isAddress();
 
@@ -55325,7 +55326,11 @@ var erc4626Abi = [
     stateMutability: "nonpayable",
     inputs: [
       { name: "spender", type: "address" },
-      { name: "amount", type: "uint256" }
+      // `value`, not `amount`: these names are now USER-VISIBLE as `UnsignedCall.args`, and an
+      // operator reads them next to a block explorer's own form, which is labelled from the
+      // verified contract's ABI. EIP-20 and OpenZeppelin's implementation both name this `value`.
+      // Encoding is unaffected — a parameter binds by position and type, never by name.
+      { name: "value", type: "uint256" }
     ],
     outputs: [{ type: "bool" }]
   },
@@ -55890,6 +55895,20 @@ async function quoteWithdraw(args) {
 }
 
 // src/build.ts
+function encodeCall(abi2, functionName, args) {
+  const item = getAbiItem({ abi: abi2, name: functionName, args });
+  if (item === void 0 || item.type !== "function") {
+    throw new Error(`${functionName} is not a function on this ABI; this client cannot build a call for it`);
+  }
+  if (item.inputs.length !== args.length) {
+    throw new Error(`${functionName} takes ${item.inputs.length} argument(s), got ${args.length}`);
+  }
+  return {
+    data: encodeFunctionData({ abi: abi2, functionName, args }),
+    function: `${functionName}(${item.inputs.map((i, n) => `${i.type} ${i.name || `arg${n}`}`).join(", ")})`,
+    args: Object.fromEntries(item.inputs.map((i, n) => [i.name || `arg${n}`, String(args[n])]))
+  };
+}
 var GAS_ADVICE = "Set gas limit = eth_estimateGas \xD7 1.5. Measured: an unbuffered estimate ran out of gas on a Morpho Vault V2 redeem (310,505 gas) while simulation and prior-block re-simulation both succeeded \u2014 accrual work grows with elapsed time between estimate and inclusion.";
 function assert4626(vault) {
   if (!erc4626Chassis.has(vault.chassis)) {
@@ -55906,7 +55925,7 @@ function buildDeposit(vault, args) {
     {
       chainId: vault.chainId,
       to: vault.asset.address,
-      data: encodeFunctionData({ abi: erc4626Abi, functionName: "approve", args: [vault.address, assets] }),
+      ...encodeCall(erc4626Abi, "approve", [vault.address, assets]),
       value: "0x0",
       description: `Approve ${vault.symbol} vault (${vault.address}) to pull ${pretty}`,
       step: 1,
@@ -55916,7 +55935,7 @@ function buildDeposit(vault, args) {
     {
       chainId: vault.chainId,
       to: vault.address,
-      data: encodeFunctionData({ abi: erc4626Abi, functionName: "deposit", args: [assets, args.receiver] }),
+      ...encodeCall(erc4626Abi, "deposit", [assets, args.receiver]),
       value: "0x0",
       description: `Deposit ${pretty} into ${vault.name}; shares minted to ${args.receiver}`,
       step: 2,
@@ -55941,7 +55960,7 @@ function buildWithdraw(vault, args) {
       {
         chainId: vault.chainId,
         to: vault.address,
-        data: encodeFunctionData({ abi: erc4626Abi, functionName: "redeem", args: [shares, args.receiver, args.owner] }),
+        ...encodeCall(erc4626Abi, "redeem", [shares, args.receiver, args.owner]),
         value: "0x0",
         description: `Withdraw EVERYTHING from ${vault.name}: redeem ${formatAmount(shares, vault.shareDecimals)} ${vault.symbol} (the exact balance) for ${vault.asset.symbol}, paid to ${args.receiver}`,
         step: 1,
@@ -55955,7 +55974,7 @@ function buildWithdraw(vault, args) {
     {
       chainId: vault.chainId,
       to: vault.address,
-      data: encodeFunctionData({ abi: erc4626Abi, functionName: "withdraw", args: [assets, args.receiver, args.owner] }),
+      ...encodeCall(erc4626Abi, "withdraw", [assets, args.receiver, args.owner]),
       value: "0x0",
       description: `Withdraw ${formatAmount(assets, vault.asset.decimals)} ${vault.asset.symbol} from ${vault.name}, paid to ${args.receiver}; the vault burns the shares that costs at inclusion`,
       step: 1,
@@ -56150,7 +56169,7 @@ function buildServer() {
     "earn_prepare_deposit",
     {
       title: "Prepare an unsigned deposit",
-      description: "Returns the UNSIGNED calls for a deposit \u2014 [approve(asset \u2192 vault), deposit(assets, receiver)] \u2014 inside an envelope with requires_signature: true. Amount is USDC. NOTHING IS SUBMITTED: hand the calls to a signer in order. This tool cannot sign or send, and the deposit has not happened until the signer's transactions confirm.",
+      description: "Returns the UNSIGNED calls for a deposit \u2014 [approve(asset \u2192 vault), deposit(assets, receiver)] \u2014 inside an envelope with requires_signature: true. Amount is USDC. NOTHING IS SUBMITTED: hand the calls to a signer in order. This tool cannot sign or send, and the deposit has not happened until the signer's transactions confirm. Each call also carries `function` and `args` \u2014 the same call `data` encodes, decoded, e.g. `approve(address spender, uint256 value)` with `{ spender, value }` \u2014 so an operator without a CLI signer can fill a block explorer's Write Contract form directly. `args` values are RAW contract units, which is what the form takes; `description` is the human sentence.",
       inputSchema: {
         vault: vaultArg,
         account: accountArg.describe("the depositing account \u2014 the one that signs both calls; step 2's allowance precondition is read for it"),
@@ -56167,7 +56186,7 @@ function buildServer() {
     "earn_prepare_withdraw",
     {
       title: "Prepare an unsigned withdrawal",
-      description: "Returns the UNSIGNED call for a withdrawal in USDC terms \u2014 withdraw(assets, receiver, owner) \u2014 inside an envelope with requires_signature: true. To empty the account pass all=true with shares_exact copied verbatim from earn_balance.sharesExact (redeem of the exact balance; never a rounded number). NOTHING IS SUBMITTED and no funds have moved until a signer confirms.",
+      description: "Returns the UNSIGNED call for a withdrawal in USDC terms \u2014 withdraw(assets, receiver, owner) \u2014 inside an envelope with requires_signature: true. To empty the account pass all=true with shares_exact copied verbatim from earn_balance.sharesExact (redeem of the exact balance; never a rounded number). NOTHING IS SUBMITTED and no funds have moved until a signer confirms. Each call also carries `function` and `args` \u2014 the same call `data` encodes, decoded, e.g. `approve(address spender, uint256 value)` with `{ spender, value }` \u2014 so an operator without a CLI signer can fill a block explorer's Write Contract form directly. `args` values are RAW contract units, which is what the form takes; `description` is the human sentence.",
       inputSchema: {
         vault: vaultArg,
         receiver: addressArg.describe("where the USDC lands \u2014 NOT necessarily the account"),
