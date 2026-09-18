@@ -12,8 +12,7 @@
     "NOTICE",
     "THIRD_PARTY_NOTICES.md",
     "dist",
-    "registry",
-    "skills"
+    "registry"
   ],
   "publishConfig": {
     "access": "public",
