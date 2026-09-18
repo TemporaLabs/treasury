@@ -15,6 +15,7 @@ import { buildServer } from "../src/mcp/server.js";
 import { EARN } from "../src/config/earn.js";
 import { readFileSync } from "node:fs";
 import { FIXTURE, useFixtureRegistry, useShippedRegistry } from "./fixtures/registry.js";
+import { defaultVault } from "../src/registry.js";
 
 // The unit tiers exercise code paths (18-decimal shares, an open vault) that the shipped
 // registry does not offer; `fixtures/registry.ts` explains why they are synthetic.
@@ -107,6 +108,25 @@ describe("earn_vaults — Tempora vaults only, and the access of each is reporte
       expect(v.links.explorer, `${v.symbol} explorer link`).toContain(v.address);
       if (v.chassis === "morpho-v2") expect(v.links.app, `${v.symbol} app link`).toContain(v.address);
     }
+  });
+});
+
+/**
+ * The warning has to reach the caller AT THE POINT OF USE, not only at discovery.
+ *
+ * It shipped in `earn_vaults` alone — while the warning's own text says "Show this warning before
+ * preparing any deposit". So the tool that PREPARES a deposit did not carry the disclosure that
+ * names preparing a deposit, and the instruction survived only if a model still happened to be
+ * attending to an `earn_vaults` response from earlier in the conversation. A caller naming a vault
+ * directly skips discovery entirely.
+ */
+describe("the test-vault warning reaches the deposit path, not just discovery", () => {
+  it("earn_prepare_deposit carries the vault's warning in its envelope", async () => {
+    const out = payload(
+      await tools()["earn_prepare_deposit"]!.handler({ amount_usdc: "25", receiver: RECEIVER, account: RECEIVER }, {}),
+    ) as { warning?: string };
+    expect(out.warning, "earn_prepare_deposit must carry the warning").toBeTruthy();
+    expect(out.warning).toBe(defaultVault().warning);
   });
 });
 

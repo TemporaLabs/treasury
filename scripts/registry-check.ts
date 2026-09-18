@@ -139,6 +139,15 @@ for (const v of reg.vaults) {
   }
 }
 
+// The per-row lines above are ✓ / ✗ / ?, and a reader who stops there can carry away the wrong
+// verdict: an all-✓ run with three ? lines LOOKS complete. Say it in words at the point the rows
+// end, not only in the summary further down, which is what a skimmer skips.
+console.log(
+  failures || unresolved
+    ? `\n>>> NOT A PASS: ${failures} disagreement(s), ${unresolved} check(s) not made.`
+    : `\n>>> PASS: every check was made and every one agreed.`,
+);
+
 if (failures) {
   console.error(`\n${failures} disagreement(s) — the chain is right; fix the row`);
   if (unresolved) console.error(`${unresolved} further check(s) could not be made at all; see below`);
