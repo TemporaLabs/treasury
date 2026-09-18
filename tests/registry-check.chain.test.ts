@@ -34,8 +34,12 @@ const encString = (s: string) => {
 };
 const SEL = { decimals: "0x313ce567", symbol: "0x95d89b41", asset: "0x38d52e0f" } as const;
 
-/** A mock chain. `corrupt` lets one row's symbol disagree, which is the discriminating case. */
-function startMock(corrupt?: { address: string; symbol: string }, corruptDeployment?: { address: string }): Promise<{ url: string; methods: Set<string>; perAddress: Map<string, Set<string>>; close: () => Promise<void>; server: Server }> {
+/**
+ * A mock chain. `corrupt` lets one row's symbol disagree, which is the discriminating case.
+ * `rateLimit` makes the TRANSPORT fail for one selector — HTTP 429, the way a public endpoint
+ * refuses under load — which must read as "not checked" and never as a disagreement.
+ */
+function startMock(corrupt?: { address: string; symbol: string }, corruptDeployment?: { address: string }, rateLimit?: { selector: string }): Promise<{ url: string; methods: Set<string>; perAddress: Map<string, Set<string>>; close: () => Promise<void>; server: Server }> {
   const methods = new Set<string>();
   /** address → the selectors it was actually asked about. A reconciler that checks only the first
    *  row passes a verdict assertion and fails this one. */
@@ -85,6 +89,13 @@ function startMock(corrupt?: { address: string; symbol: string }, corruptDeploym
     req.on("data", (c) => (body += c));
     req.on("end", () => {
       const parsed = JSON.parse(body);
+      // The endpoint refuses, at the HTTP layer — not the contract. This is what a public RPC does
+      // under load, and the whole point of the test below is that it must not be read as bad data.
+      if (rateLimit && JSON.stringify(parsed).includes(rateLimit.selector)) {
+        res.writeHead(429, { "content-type": "text/plain" });
+        res.end("Too Many Requests");
+        return;
+      }
       const out = Array.isArray(parsed) ? parsed.map(handle) : handle(parsed);
       res.writeHead(200, { "content-type": "application/json" });
       res.end(JSON.stringify(out));
@@ -165,6 +176,22 @@ describe("registry-check reconciles against the CHAIN and nothing else", () => {
     expect(r.status).toBe(1);
     expect(r.out).toMatch(new RegExp(`${target.slug}: shareSymbol`));
     expect(r.out).toContain("the chain is right; fix the row");
+  }, 180_000);
+
+  it("the ENDPOINT refuses (429) → 'not checked', never a disagreement, and the URL is not echoed", async () => {
+    // 🔴 The defect this exists for: a bare `catch` around each read attributed EVERY failure to the
+    // contract, so a rate-limited endpoint made the script print "N disagreement(s) — the chain is
+    // right; fix the row" about a registry that was correct. Measured on the real public endpoint:
+    // three runs of an unchanged registry gave 1, 6 and 6 "disagreements"; a keyed endpoint gave 0.
+    const mock = await startMock(undefined, undefined, { selector: SEL.asset });
+    mocks.push(mock.close);
+    const r = await run(mock.url);
+    expect(r.status, "an unchecked row is not a pass").toBe(1);
+    expect(r.out, "a transport failure must be named as one").toContain("NOT CHECKED");
+    expect(r.out, "and must not be reported as bad data").not.toContain("the chain is right; fix the row");
+    expect(r.out, "no row disagreed, because none of them did").not.toMatch(/^✗/m);
+    // The endpoint is a secret when it carries a key. viem puts the request URL in its message.
+    expect(r.out, "the endpoint must never be echoed on an error path").not.toContain(mock.url);
   }, 180_000);
 
   it("a deployedAtBlock that is one block LATE → exit 1, naming that row", async () => {
