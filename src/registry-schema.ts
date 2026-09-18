@@ -47,6 +47,14 @@ export const vaultEntrySchema = z
   .object({
     slug: z.string().regex(/^[a-z0-9][a-z0-9-]*$/),
     displayName: z.string().min(1),
+    /**
+     * What a depositor must be told about THIS vault before any deposit is prepared. REQUIRED,
+     * and deliberately not defaulted: a vault cannot enter the registry without someone stating
+     * its risk posture in words, and a production vault's text will not read like a test
+     * vault's. `earn_vaults` returns it per row; the skill shows it to the depositor rather
+     * than summarising it.
+     */
+    warning: z.string().min(1),
     chainId: z.literal(8453),
     address,
     chassis: chassisSchema,

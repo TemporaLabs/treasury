@@ -55140,6 +55140,14 @@ var depositOpenSchema = external_exports.object({
 var vaultEntrySchema = external_exports.object({
   slug: external_exports.string().regex(/^[a-z0-9][a-z0-9-]*$/),
   displayName: external_exports.string().min(1),
+  /**
+   * What a depositor must be told about THIS vault before any deposit is prepared. REQUIRED,
+   * and deliberately not defaulted: a vault cannot enter the registry without someone stating
+   * its risk posture in words, and a production vault's text will not read like a test
+   * vault's. `earn_vaults` returns it per row; the skill shows it to the depositor rather
+   * than summarising it.
+   */
+  warning: external_exports.string().min(1),
   chainId: external_exports.literal(8453),
   address,
   chassis: chassisSchema,
@@ -55260,6 +55268,20 @@ function depositableVaults() {
   return loadRegistry().vaults.filter(
     (v) => erc4626Chassis.has(v.chassis) && v.depositOpen.open
   );
+}
+
+// src/links.ts
+var EXPLORER = {
+  8453: "https://basescan.org/address/"
+};
+var APP = {
+  "morpho-v2": (chainId, address2) => chainId === 8453 ? `https://app.morpho.org/base/vault/${address2}` : void 0
+};
+function linksFor(vault) {
+  const links = { explorer: `${EXPLORER[vault.chainId]}${vault.address}` };
+  const app = APP[vault.chassis]?.(vault.chainId, vault.address);
+  if (app) links.app = app;
+  return links;
 }
 
 // src/version.ts
@@ -55927,6 +55949,7 @@ var DISCLOSURES = {
   source: "Agent Treasury \u2014 pre-deposit disclosures, 2026-09-15",
   presentBefore: "the depositor's first deposit, on every distribution surface",
   items: [
+    "EVERY VAULT THIS CLIENT OFFERS TODAY IS A TEST VAULT \u2014 unproven, and named as such on-chain. They exist to exercise the product, not to hold savings. Deposit only an amount you are fully prepared to lose entirely, and do not move significant funds into one.",
     "This is a smart-contract vault, not a bank deposit. No deposit insurance of any kind applies.",
     "The share token's value is a function of the vault's underlying holdings and is not guaranteed. It can go down.",
     "The vault holds positions in third-party protocols, each of which carries smart-contract, custody, and mechanism risk that Tempora does not control.",
@@ -55969,9 +55992,12 @@ ${hint}` : JSON.stringify({ ...v, setup_required: hint }, null, 2);
   }
   return { content: [{ type: "text", text: body }] };
 };
-var unsigned = (calls) => text({
+var commitsMoney = (vault) => ({ warning: vault.warning });
+var unsigned = (calls, vault) => text({
   requires_signature: true,
   status: "unsigned",
+  // before `next_step`, so it is not past the field a reader stops at
+  ...vault === void 0 ? {} : commitsMoney(vault),
   next_step: "Hand these calls to a signer IN ORDER, following `signer_rules`. A call carrying `precondition` must not be estimated or sent until that read holds on the RPC the signer sends through. Nothing has been submitted; no funds have moved.",
   signer_rules: SIGNER_RULES,
   calls
@@ -56002,7 +56028,7 @@ function buildServer() {
     "earn_vaults",
     {
       title: "List vaults",
-      description: "Every vault in the registry with its backend, chassis, decimals and MEASURED deposit-open status. `default` is used when a tool is called without `vault`; `depositable` is the subset any account can put money into today: ERC-4626 chassis + measured open. `defaultAccess` says whether the default takes deposits from any account (`open`) or only whitelisted ones (`whitelist`); for `whitelist`, run earn_status for the account before preparing a deposit.",
+      description: "Every vault in the registry. `symbol` is the vault's own on-chain ERC-20 ticker and `displayName` its `name()`; `links` are openable without any RPC endpoint, so an operator can verify the contract independently. SHOW `warning` TO THE DEPOSITOR \u2014 every vault offered today is a test vault. Each row also carries its backend, chassis, decimals and MEASURED deposit-open status. `default` is used when a tool is called without `vault`; `depositable` is the subset any account can put money into today: ERC-4626 chassis + measured open. `defaultAccess` says whether the default takes deposits from any account (`open`) or only whitelisted ones (`whitelist`); for `whitelist`, run earn_status for the account before preparing a deposit.",
       inputSchema: {}
     },
     guarded(async () => {
@@ -56014,7 +56040,10 @@ function buildServer() {
         depositable: depositableVaults().map((v) => v.slug),
         vaults: listVaults().map((v) => ({
           slug: v.slug,
+          symbol: v.shareSymbol,
           displayName: v.displayName,
+          warning: v.warning,
+          links: linksFor(v),
           backend: v.backend,
           isDefault: v.isDefault,
           chainId: v.chainId,
@@ -56049,7 +56078,7 @@ function buildServer() {
         const { vault: vault2, client } = clientFor(slug);
         const args = amount_usdc === void 0 ? { vault: vault2, depositor: account, client } : { vault: vault2, depositor: account, client, assetsHuman: amount_usdc };
         const verdict = await preflightDeposit(args);
-        return text({ ...verdict, mode: "preflight", account });
+        return text({ ...verdict, mode: "preflight", account, ...commitsMoney(vault2) });
       }
       const partial2 = slug !== void 0 ? { requested: "preflight", missing: ["account"] } : {};
       const vault = supportedVault(slug);
@@ -56088,7 +56117,11 @@ function buildServer() {
     guarded(async ({ vault: slug, account, amount_usdc, direction }) => {
       const { vault, client } = clientFor(slug);
       if (direction === "deposit") {
-        return text({ direction: "deposit", ...await quoteDeposit({ vault, depositor: account, assetsHuman: amount_usdc, client }) });
+        return text({
+          direction: "deposit",
+          ...commitsMoney(vault),
+          ...await quoteDeposit({ vault, depositor: account, assetsHuman: amount_usdc, client })
+        });
       }
       return text({ direction: "withdraw", ...await quoteWithdraw({ vault, owner: account, assetsHuman: amount_usdc, client }) });
     })
@@ -56105,9 +56138,10 @@ function buildServer() {
         receiver: addressArg.describe("where the SHARES land \u2014 usually the account, not necessarily")
       }
     },
-    guarded(
-      async ({ vault: slug, account, amount_usdc, receiver }) => unsigned(buildDeposit(supportedVault(slug), { assetsHuman: amount_usdc, receiver, account }))
-    )
+    guarded(async ({ vault: slug, account, amount_usdc, receiver }) => {
+      const vault = supportedVault(slug);
+      return unsigned(buildDeposit(vault, { assetsHuman: amount_usdc, receiver, account }), vault);
+    })
   );
   server.registerTool(
     "earn_prepare_withdraw",
