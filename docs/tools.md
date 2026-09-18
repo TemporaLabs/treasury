@@ -125,9 +125,29 @@ objects worth reading carefully:
 | `receiver` | required; where the **shares** land — usually the account, not necessarily |
 
 Returns `{ requires_signature: true, status: "unsigned", warning, calls: [approve, deposit] }`. Each call is
-`{ to, data, value, description, gasAdvice, precondition? }`. Hand them to your signer **in order**;
-the deposit's precondition names the allowance the approve must have set. Nothing has happened until
-the signer's transactions confirm.
+`{ to, data, function, args, value, description, gasAdvice, precondition? }`. Hand them to your signer
+**in order**; the deposit's precondition names the allowance the approve must have set. Nothing has
+happened until the signer's transactions confirm.
+
+`function` and `args` are the same call `data` encodes, in the form a block explorer's **Write
+Contract** tab asks for — for an operator with no CLI signer, that is often the friendliest way to
+sign something:
+
+```json
+{ "function": "approve(address spender, uint256 value)",
+  "args": { "spender": "0x1516…99ef", "value": "1000000" } }
+```
+
+Three things to know about them:
+
+- **`args` values are RAW contract units**, exactly what the form takes — `1000000`, not `1 USDC`.
+  `description` is the human sentence; `args` is what you paste.
+- **They cannot disagree with `data`.** Both are produced at one call site from one argument tuple,
+  and the parameter names are read off the same ABI entry that encodes the bytes. There is no
+  decode step to drift (see `encodeCall` in `src/build.ts`).
+- **The parameter NAMES are this client's; the bytes are the contract's.** An explorer labels its
+  form from the verified contract's own ABI, which may name a parameter differently. The values,
+  their order and their types are what bind — if a label differs, fill by position.
 
 `warning` is the vault's own disclosure, repeated here rather than left at discovery — **show it
 before the signer sees the calls, verbatim**. Every response that commits money carries it:

@@ -1,4 +1,4 @@
-import { encodeFunctionData, type Address, type Hex } from "viem";
+import { encodeFunctionData, getAbiItem, type Abi, type AbiFunction, type Address, type Hex } from "viem";
 import { erc4626Abi } from "./abi/erc4626.js";
 import { erc4626Chassis, type VaultEntry } from "./registry-schema.js";
 import { parseAmount, formatAmount } from "./units.js";
@@ -12,6 +12,18 @@ export interface UnsignedCall {
   chainId: number;
   to: Address;
   data: Hex;
+  /**
+   * The same call `data` encodes, in the form a block explorer's "Write Contract" tab asks for:
+   * a full signature with parameter names, e.g. `approve(address spender, uint256 value)`.
+   * See `encodeCall` for why this cannot drift from `data`.
+   */
+  function: string;
+  /**
+   * The arguments of `function`, by name, as strings — `{ spender: "0x…", value: "1000000" }`.
+   * Values are raw contract units (the same integers `data` carries), NOT human decimals, because
+   * that is what an explorer's form takes. `description` is the human-readable sentence.
+   */
+  args: Record<string, string>;
   value: "0x0";
   /** What a human should read before anyone signs this. */
   description: string;
@@ -50,6 +62,44 @@ export interface Precondition {
   why: string;
 }
 
+/**
+ * 🔴 ONE CALL SITE PRODUCES BOTH `data` AND ITS DECODING, FROM THE SAME ARGUMENT TUPLE.
+ *
+ * The obvious implementation of #11 is a second step that decodes the finished calldata back into
+ * names and values. That is two sources for one fact, and two sources drift: a decoder pointed at a
+ * stale ABI, or simply not re-run when an argument order changes, produces a signature and an
+ * argument list that disagree with the bytes an operator is about to sign — and the operator is
+ * using this field precisely BECAUSE they cannot read the bytes. Silent, and wrong in the one
+ * direction that matters.
+ *
+ * So there is no decode step. `data` is encoded from `args`, and the names are read off the same
+ * ABI entry `encodeFunctionData` resolves; the values ARE the tuple, stringified. The only way for
+ * the two to disagree is for viem to encode a different function than `getAbiItem` returns for the
+ * same name and ABI. (This is the same rule `linksFor` follows for a vault's links: derive from one
+ * row, never reconcile two sources that agree today.)
+ */
+function encodeCall<const TAbi extends Abi>(
+  abi: TAbi,
+  functionName: string,
+  args: readonly unknown[],
+): { data: Hex; function: string; args: Record<string, string> } {
+  const item = getAbiItem({ abi, name: functionName, args } as never) as AbiFunction | undefined;
+  if (item === undefined || item.type !== "function") {
+    throw new Error(`${functionName} is not a function on this ABI; this client cannot build a call for it`);
+  }
+  // A names/values length mismatch would silently drop or misalign an argument in the map an
+  // operator types into a form. `encodeFunctionData` rejects the same mismatch, but it must be
+  // impossible for THIS map to be built from one, whichever of the two runs first.
+  if (item.inputs.length !== args.length) {
+    throw new Error(`${functionName} takes ${item.inputs.length} argument(s), got ${args.length}`);
+  }
+  return {
+    data: encodeFunctionData({ abi, functionName, args } as never),
+    function: `${functionName}(${item.inputs.map((i, n) => `${i.type} ${i.name || `arg${n}`}`).join(", ")})`,
+    args: Object.fromEntries(item.inputs.map((i, n) => [i.name || `arg${n}`, String(args[n])])),
+  };
+}
+
 const GAS_ADVICE = "Set gas limit = eth_estimateGas × 1.5. Measured: an unbuffered estimate ran out of gas on a Morpho Vault V2 redeem (310,505 gas) while simulation and prior-block re-simulation both succeeded — accrual work grows with elapsed time between estimate and inclusion.";
 
 function assert4626(vault: VaultEntry): void {
@@ -73,7 +123,7 @@ export function buildDeposit(vault: VaultEntry, args: { assetsHuman: string; rec
     {
       chainId: vault.chainId,
       to: vault.asset.address,
-      data: encodeFunctionData({ abi: erc4626Abi, functionName: "approve", args: [vault.address, assets] }),
+      ...encodeCall(erc4626Abi, "approve", [vault.address, assets]),
       value: "0x0",
       description: `Approve ${vault.symbol} vault (${vault.address}) to pull ${pretty}`,
       step: 1,
@@ -83,7 +133,7 @@ export function buildDeposit(vault: VaultEntry, args: { assetsHuman: string; rec
     {
       chainId: vault.chainId,
       to: vault.address,
-      data: encodeFunctionData({ abi: erc4626Abi, functionName: "deposit", args: [assets, args.receiver] }),
+      ...encodeCall(erc4626Abi, "deposit", [assets, args.receiver]),
       value: "0x0",
       description: `Deposit ${pretty} into ${vault.name}; shares minted to ${args.receiver}`,
       step: 2,
@@ -121,7 +171,7 @@ export function buildWithdraw(
       {
         chainId: vault.chainId,
         to: vault.address,
-        data: encodeFunctionData({ abi: erc4626Abi, functionName: "redeem", args: [shares, args.receiver, args.owner] }),
+        ...encodeCall(erc4626Abi, "redeem", [shares, args.receiver, args.owner]),
         value: "0x0",
         description: `Withdraw EVERYTHING from ${vault.name}: redeem ${formatAmount(shares, vault.shareDecimals)} ${vault.symbol} (the exact balance) for ${vault.asset.symbol}, paid to ${args.receiver}`,
         step: 1,
@@ -135,7 +185,7 @@ export function buildWithdraw(
     {
       chainId: vault.chainId,
       to: vault.address,
-      data: encodeFunctionData({ abi: erc4626Abi, functionName: "withdraw", args: [assets, args.receiver, args.owner] }),
+      ...encodeCall(erc4626Abi, "withdraw", [assets, args.receiver, args.owner]),
       value: "0x0",
       description: `Withdraw ${formatAmount(assets, vault.asset.decimals)} ${vault.asset.symbol} from ${vault.name}, paid to ${args.receiver}; the vault burns the shares that costs at inclusion`,
       step: 1,
