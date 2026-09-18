@@ -15,13 +15,23 @@ refused, never truncated. Shares never cross the boundary as numbers — only as
 
 ## `earn_vaults` — READ
 
-No inputs. Every vault in the registry with its chassis, decimals, share symbol and
-**measured** deposit-open status (the block and method it was measured at), plus:
+No inputs. Every vault in the registry with its chassis, decimals and **measured** deposit-open
+status (the block and method it was measured at). Each row carries the vault's public identity:
 
-- `default` — the slug used when a tool is called without `vault`;
+- `symbol` — the vault's own ERC-20 ticker, e.g. `tlCashPlusUSDC2`, as `symbol()` reports it;
+- `displayName` — the vault's `name()`;
+- `address` — the contract itself;
+- `links` — `explorer` always, and `app` where the chassis has a known front end. **These need no
+  RPC endpoint.** They are how an operator verifies, without this client's help, that the address
+  about to be used is the vault it claims to be;
+- `warning` — what to show before preparing a deposit into this vault. Show it; do not summarise it.
+
+And, once per response:
+
+- `default` — the vault used when a tool is called without `vault`;
 - `defaultAccess` — `"open"` if the default takes deposits from any account, `"whitelist"` if only
   admitted ones;
-- `depositable` — the slugs any account can put money into today: ERC-4626 chassis and measured open.
+- `depositable` — those any account can put money into today: ERC-4626 chassis and measured open.
   **May be empty.** An empty set is a state of the offering, not a fault.
 
 ## `earn_terms` — READ

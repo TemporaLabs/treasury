@@ -87,6 +87,27 @@ describe("earn_vaults — Tempora vaults only, and the access of each is reporte
     expect(out.depositable).not.toContain("cash-plus-usdc-2a");
     expect(new Set(out.vaults.map((v) => v.backend))).toEqual(new Set(["tempora"]));
   });
+
+  /**
+   * The identity an agent DISPLAYS, and the links a human uses to check it. Both were absent: the
+   * ticker was reconciled against the chain and then dropped before it reached a caller, so an
+   * agent naming a vault to a depositor could only quote the internal slug. The warning matters
+   * more than either — nothing in the tool surface said these are test vaults.
+   */
+  it("every row carries its on-chain ticker, a depositor warning, and an explorer link that resolves to its own address", async () => {
+    const out = payload(await tools()["earn_vaults"]!.handler({}, {})) as {
+      vaults: { slug: string; symbol: string; warning: string; address: string; chassis: string; links: { explorer: string; app?: string } }[];
+    };
+    expect(out.vaults.length).toBeGreaterThan(0);
+    for (const v of out.vaults) {
+      expect(v.symbol, `${v.slug} has no ticker`).toBeTruthy();
+      expect(v.warning, `${v.slug} has no depositor warning`).toBeTruthy();
+      // the link must name THIS vault — a constant that merely looks like a URL would pass a
+      // truthiness check and send an operator to the wrong contract
+      expect(v.links.explorer, `${v.slug} explorer link`).toContain(v.address);
+      if (v.chassis === "morpho-v2") expect(v.links.app, `${v.slug} app link`).toContain(v.address);
+    }
+  });
 });
 
 describe("earn_prepare_* return an envelope, never a bare array", () => {

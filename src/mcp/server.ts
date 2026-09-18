@@ -30,6 +30,7 @@ import { redactEndpoints, registerSecretSource } from "../redact.js";
 import { isAddress, getAddress } from "viem";
 import { isSupportedChainId, makePublicClient, rpcUrlFromEnv, logsRpcUrlFromEnv, rpcSourceForEnv, resolvedRpcSecrets, publicRpcHint, logsFallbackUrlFromEnv } from "../client.js";
 import { defaultVault, depositableVaults, listVaults, loadRegistry, resolveVault } from "../registry.js";
+import { linksFor } from "../links.js";
 import { PACKAGE_VERSION } from "../version.js";
 import { preflightDeposit } from "../preflight.js";
 import { getPosition } from "../position.js";
@@ -134,7 +135,7 @@ export function buildServer(): McpServer {
     {
       title: "List vaults",
       description:
-        "Every vault in the registry with its backend, chassis, decimals and MEASURED deposit-open status. `default` is used when a tool is called without `vault`; `depositable` is the subset any account can put money into today: ERC-4626 chassis + measured open. `defaultAccess` says whether the default takes deposits from any account (`open`) or only whitelisted ones (`whitelist`); for `whitelist`, run earn_status for the account before preparing a deposit.",
+        "Every vault in the registry. `symbol` is the vault's own on-chain ERC-20 ticker and `displayName` its `name()`; `links` are openable without any RPC endpoint, so an operator can verify the contract independently. SHOW `warning` TO THE DEPOSITOR — every vault offered today is a test vault. Each row also carries its backend, chassis, decimals and MEASURED deposit-open status. `default` is used when a tool is called without `vault`; `depositable` is the subset any account can put money into today: ERC-4626 chassis + measured open. `defaultAccess` says whether the default takes deposits from any account (`open`) or only whitelisted ones (`whitelist`); for `whitelist`, run earn_status for the account before preparing a deposit.",
       inputSchema: {},
     },
     guarded(async () => {
@@ -146,7 +147,10 @@ export function buildServer(): McpServer {
         depositable: depositableVaults().map((v) => v.slug),
         vaults: listVaults().map((v) => ({
           slug: v.slug,
+          symbol: v.shareSymbol,
           displayName: v.displayName,
+          warning: v.warning,
+          links: linksFor(v),
           backend: v.backend,
           isDefault: v.isDefault,
           chainId: v.chainId,

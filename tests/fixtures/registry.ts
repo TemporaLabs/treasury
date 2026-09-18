@@ -37,6 +37,7 @@ const rows = [
   {
     slug: FIXTURE.morphoOpen,
     displayName: "Fixture Morpho V2 (open)",
+    warning: "TEST FIXTURE — not a real vault.",
     chainId: 8453,
     address: "0x1111111111111111111111111111111111111111",
     chassis: "morpho-v2",
@@ -52,6 +53,7 @@ const rows = [
   {
     slug: FIXTURE.morphoOpen2,
     displayName: "Fixture Morpho V2 (open, second)",
+    warning: "TEST FIXTURE — not a real vault.",
     chainId: 8453,
     address: "0x2222222222222222222222222222222222222222",
     chassis: "morpho-v2",
@@ -67,6 +69,7 @@ const rows = [
   {
     slug: FIXTURE.fusionGated,
     displayName: "Fixture Fusion (whitelist-gated)",
+    warning: "TEST FIXTURE — not a real vault.",
     chainId: 8453,
     address: "0x3333333333333333333333333333333333333333",
     chassis: "fusion",
@@ -82,6 +85,7 @@ const rows = [
   {
     slug: FIXTURE.enzyme,
     displayName: "Fixture Enzyme (no ERC-4626 deposit path)",
+    warning: "TEST FIXTURE — not a real vault.",
     chainId: 8453,
     address: "0x4444444444444444444444444444444444444444",
     chassis: "enzyme",
