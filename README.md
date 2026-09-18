@@ -2,7 +2,7 @@
 
 **Treasury management system for AI agents.** By Tempora Labs.
 
-[![ci](https://github.com/TemporaLabs/treasury/actions/workflows/ci.yml/badge.svg?branch=v0.1.0)](https://github.com/TemporaLabs/treasury/actions/workflows/ci.yml)
+[![ci](https://github.com/TemporaLabs/treasury/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/TemporaLabs/treasury/actions/workflows/ci.yml)
 [![DCO](https://github.com/TemporaLabs/treasury/actions/workflows/dco.yml/badge.svg)](https://github.com/TemporaLabs/treasury/actions/workflows/dco.yml)
 
 Agent Treasury gives an agent the tools to manage on-chain capital, starting with earning yield on
