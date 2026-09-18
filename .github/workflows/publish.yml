@@ -37,7 +37,7 @@ jobs:
       # no other job in this repository has it except ci.yml's `attest`.
       id-token: write
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           # The TAG is what gets published, never a branch head — a branch can move between the
           # moment someone reads it and the moment this runs.
@@ -76,7 +76,7 @@ jobs:
             echo "::error::this tag is not reachable from origin/main — it names a tree that was never merged"; exit 1; }
           echo "tag is an ancestor of main" >> "$GITHUB_STEP_SUMMARY"
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v7
         with:
           node-version: 22
           registry-url: https://registry.npmjs.org
