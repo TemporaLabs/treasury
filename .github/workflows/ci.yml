@@ -1,0 +1,293 @@
+name: ci
+
+on:
+  push:
+    # 🔴 VERSION BRANCHES TOO, not just main. A pull_request run verifies a PR's head, never the
+    # integrated tree it merges into; without a push trigger on the version branch, a merged branch
+    # is only ever verified piecewise, and merging to main becomes CI's first look at the combined
+    # content — which makes main the place you find out.
+    branches: [main, 'v[0-9]*', 'release/v[0-9]*']
+  pull_request:
+  workflow_dispatch:
+    inputs:
+      attest:
+        description: "auto = attest only where it can succeed (public repo, push); force = run the attestation step regardless, to prove the assertion goes red"
+        type: choice
+        options: [auto, force]
+        default: auto
+
+# 🔴 Read-only at workflow level ON PURPOSE. The attestation identity (`id-token: write`,
+# `attestations: write`) lives on the `attest` job below and nowhere else: that job runs no npm, no
+# tests, no dependency code, and checks out with `persist-credentials: false`. Granting it here
+# would hand the OIDC request token to every step of `check` — including `npm ci`'s lifecycle
+# scripts — so a compromised dependency could mint an attestation under this workflow's identity
+# for any bytes it likes (found in review).
+permissions:
+  contents: read
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    outputs:
+      packages: ${{ steps.pk.outputs.present }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      # 🔴 Nothing else validates workflow SYNTAX, and the failure is silent: GitHub refuses to
+      # load an unparseable workflow and simply never shows it, so a broken file looks exactly
+      # like a workflow that was not triggered. Caught live — a `: ` inside an unquoted one-line
+      # `run:` made publish.yml unparseable while every other check in this file stayed green.
+      - name: workflows — every .github/workflows/*.yml parses
+        run: |
+          python3 - <<'PY'
+          import pathlib, sys, yaml
+          bad = []
+          for f in sorted(pathlib.Path(".github/workflows").glob("*.y*ml")):
+              try:
+                  yaml.safe_load(f.read_text())
+              except Exception as e:
+                  bad.append(f"{f}: {e}")
+          print("\n".join(bad) or "all workflows parse")
+          sys.exit(1 if bad else 0)
+          PY
+      - name: docs — every relative link in docs/ resolves
+        run: |
+          python3 - <<'PY'
+          import re, pathlib, sys
+          bad = []
+          for md in pathlib.Path("docs").rglob("*.md"):
+              for m in re.finditer(r"\]\(([^)#:]+?)(?:#[^)]*)?\)", md.read_text()):
+                  target = (md.parent / m.group(1)).resolve()
+                  if not target.exists(): bad.append(f"{md}: {m.group(1)}")
+          print("\n".join(bad) or "all docs links resolve")
+          sys.exit(1 if bad else 0)
+          PY
+      # The decision lives in .github/scripts/detect-package.sh, with a case-driven proof beside
+      # it — it gates ten steps plus the whole `attest` job, and it has been wrong twice.
+      - name: detect packages (a documents-only version branch has none — a MOVED one is an error)
+        id: pk
+        run: |
+          present="$(bash .github/scripts/detect-package.sh)"
+          echo "packages present: $present" >> "$GITHUB_STEP_SUMMARY"
+          echo "present=$present" >> "$GITHUB_OUTPUT"
+      - name: the package detector can still go red (10 offline cases)
+        run: bash .github/scripts/detect-package.test.sh
+        # The skill ships from the PLUGIN repository; this package does not distribute it. Where it
+        # IS present — the drafting tree — it is checked in full. Where it is absent, there is
+        # nothing to check, and that is a complete product tree rather than a broken one.
+        # ⚠️ This is a presence test, never a skip switch: the three steps below are gated on it so
+        # that a tree WITH a skill can never quietly stop validating it.
+      - name: does this tree carry the skill?
+        id: sk
+        run: |
+          if [ -f skills/earn/SKILL.md ]; then echo "present=yes" >> "$GITHUB_OUTPUT"; else echo "present=no" >> "$GITHUB_OUTPUT"; fi
+          echo "skill present: $([ -f skills/earn/SKILL.md ] && echo yes || echo no)" >> "$GITHUB_STEP_SUMMARY"
+      - name: the declared version follows the version branch (release/v0.1.0 ⇒ 0.1.0)
+        # The convention was set by hand; this holds it. A PR into vX.Y.Z, or a push to it,
+        # fails if package.json declares anything else.
+        # main and feature branches are not checked — the version belongs to the cycle, not the PR.
+        env:
+          TARGET: ${{ github.base_ref || github.ref_name }}
+        run: |
+          case "$TARGET" in release/v[0-9]*.[0-9]*.[0-9]*|v[0-9]*.[0-9]*.[0-9]*) ;; *) echo "not a version branch ($TARGET) — skipped"; exit 0 ;; esac
+          want="${TARGET#release/}"; want="${want#v}"
+          fail=0
+          for f in package.json; do
+            got=$(node -e 'const j=require(process.argv[1]); const v=j.version; process.stdout.write(String(v))' "./$f")
+            if [ "$got" != "$want" ]; then echo "::error file=$f::declares $got but the branch is $TARGET — bump it"; fail=1; else echo "$f: $got ok"; fi
+          done
+          exit $fail
+      - run: npm ci
+        if: steps.pk.outputs.present == 'yes'
+      - run: npm run typecheck
+        if: steps.pk.outputs.present == 'yes'
+      - name: unit tests (no RPC in CI; live/fork tiers skip themselves)
+        if: steps.pk.outputs.present == 'yes'
+        run: npm test
+      - name: skill spec validation (skill-creator quick_validate)
+        if: steps.pk.outputs.present == 'yes' && steps.sk.outputs.present == 'yes'
+        run: |
+          git clone --depth 1 https://github.com/anthropics/claude-plugins-official /tmp/cpo
+          python3 /tmp/cpo/plugins/skill-creator/skills/skill-creator/scripts/quick_validate.py skills/earn
+      - name: bundled MCP server is current (the plugin runs the committed dist/)
+        if: steps.pk.outputs.present == 'yes'
+        run: |
+          npm run build
+          git diff --exit-code --stat -- dist/mcp-server.mjs \
+            || { echo "::error::dist/mcp-server.mjs is stale — run npm run build and commit it"; exit 1; }
+          git diff --exit-code --stat -- THIRD_PARTY_NOTICES.md \
+            || { echo "::error::THIRD_PARTY_NOTICES.md is stale — run npm run build and commit it"; exit 1; }
+      # ── Licensing (Apache-2.0). An npm tarball, and the plugin repository that
+      # copies the bundle, take what `files` publishes, so the licence, its NOTICE and the dependency
+      # notices must travel INSIDE that set. ───────────────────────────────────────
+      - name: the packed artifact ships LICENSE, NOTICE and the third-party notices
+        if: steps.pk.outputs.present == 'yes'
+        run: |
+          npm pack --dry-run --json --ignore-scripts > /tmp/pack.json
+          node -e '
+            const files = new Set(require("/tmp/pack.json")[0].files.map((f) => f.path));
+            const need = ["LICENSE", "NOTICE", "THIRD_PARTY_NOTICES.md", "dist/mcp-server.mjs"];
+            const missing = need.filter((f) => !files.has(f));
+            if (missing.length) { console.log("::error file=package.json::the packed artifact is missing " + missing.join(", ")); process.exit(1); }
+            console.log("packed artifact carries " + need.join(", "));
+          '
+      # ── Bundle provenance: the offline proof lives here; the attestation itself is the `attest`
+      # job below, which runs no dependency code (see the `permissions:` note at the top). ──────
+      - name: attestation gate — offline proof that the assertion can go red (12 cases)
+        if: steps.pk.outputs.present == 'yes'
+        run: bash .github/scripts/attestation-gate.test.sh
+      - name: package.json `repository` names the PUBLIC repo (npm provenance needs the source repo to match where it publishes from)
+        if: steps.pk.outputs.present == 'yes'
+        run: |
+          # The public repository is the only one that publishes, so this is the only URL provenance
+          # can accept. A fork or mirror of this tree passes here too; only the public repository
+          # publishes. The attest job is where the match is proven for real.
+          got=$(node -e 'const j=require("./package.json"); process.stdout.write(String(j.repository?.url ?? ""))')
+          want="git+https://github.com/TemporaLabs/treasury.git"
+          [ "$got" = "$want" ] || { echo "::error file=package.json::repository.url is '$got' but the public repository is TemporaLabs/treasury — an npm publish with provenance from anywhere else will be refused"; exit 1; }
+          echo "repository.url names the public repository"
+      - name: bundled server answers tools/list with no sign/send tool
+        if: steps.pk.outputs.present == 'yes'
+        run: |
+          python3 - <<'PY'
+          import json, subprocess
+          p = subprocess.Popen(["node","dist/mcp-server.mjs"], stdin=subprocess.PIPE, stdout=subprocess.PIPE, text=True)
+          def send(o): p.stdin.write(json.dumps(o)+"\n"); p.stdin.flush()
+          send({"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-06-18","capabilities":{},"clientInfo":{"name":"ci","version":"0"}}}); p.stdout.readline()
+          send({"jsonrpc":"2.0","method":"notifications/initialized"})
+          send({"jsonrpc":"2.0","id":2,"method":"tools/list","params":{}})
+          tools = json.loads(p.stdout.readline())["result"]["tools"]
+          names = [t["name"] for t in tools]
+          print(names)
+          assert set(names) == {"earn_vaults","earn_terms","earn_quote","earn_status","earn_prepare_deposit","earn_prepare_withdraw","earn_balance","earn_claim"}, names
+          assert not any(k in n for n in names for k in ("sign","send","transfer")), "a signing tool leaked in"
+          # EXACT property set per tool, re-derived from the live bundle — not a superset or a
+          # membership check (an earlier version would let a stray extra
+          # property through on the six tools it did not name).
+          props = {t["name"]: set((t.get("inputSchema") or {}).get("properties", {})) for t in tools}
+          expected = {
+              "earn_vaults": set(),
+              "earn_terms": set(),
+              "earn_status": {"vault", "account", "amount_usdc"},
+              "earn_quote": {"vault", "account", "amount_usdc", "direction"},
+              "earn_prepare_deposit": {"vault", "account", "amount_usdc", "receiver"},
+              "earn_prepare_withdraw": {"vault", "receiver", "account", "amount_usdc", "all", "shares_exact"},
+              "earn_balance": {"vault", "account", "lookback_blocks", "max_log_requests"},
+              "earn_claim": {"receipt_id"},
+          }
+          assert props == expected, {k: (sorted(props.get(k, [])), sorted(v)) for k, v in expected.items() if props.get(k) != v}
+          for old in ("depositor", "principal", "owner"):
+              leaked = [n for n, pr in props.items() if old in pr]
+              assert not leaked, f"{old!r} survives in {leaked}"
+          p.stdin.close(); p.wait(5)
+          PY
+      - name: SKILL.md's tool table matches the server's real tools/list
+        if: steps.pk.outputs.present == 'yes' && steps.sk.outputs.present == 'yes'
+        run: |
+          python3 - <<'PY'
+          import json, re, subprocess, pathlib, sys
+          p = subprocess.Popen(["node","dist/mcp-server.mjs"], stdin=subprocess.PIPE, stdout=subprocess.PIPE, text=True)
+          def send(o): p.stdin.write(json.dumps(o)+"\n"); p.stdin.flush()
+          send({"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-06-18","capabilities":{},"clientInfo":{"name":"ci","version":"0"}}}); p.stdout.readline()
+          send({"jsonrpc":"2.0","method":"notifications/initialized"})
+          send({"jsonrpc":"2.0","id":2,"method":"tools/list","params":{}})
+          live = {t["name"] for t in json.loads(p.stdout.readline())["result"]["tools"]}
+          p.stdin.close(); p.wait(5)
+          md = pathlib.Path("skills/earn/SKILL.md").read_text()
+          # ANCHORED ON THE TOOL TABLE'S FIRST COLUMN ONLY. A free prose scan had
+          # both failure modes: a forward-looking sentence ("future work may add `earn_transfer`")
+          # read as a phantom tool, and an unbackticked or call-style mention
+          # (`earn_balance(vault, account)`) extracted nothing at all and read as undocumented.
+          # The table is the contract; prose is not.
+          # ⚠️ PLAIN-TEXT CONTRACT for the table's first column: it must be exactly
+          #    | `tool_name` | … |   — no bold, no icon, no leading indent. A reviewer measured that
+          #    all three produce FALSE NEGATIVES (a documented tool reads as undocumented). That is
+          #    the safe direction — a spurious CI failure asks a person to look, rather than passing
+          #    silently — but it is invisible from reading the regex, so it is stated here.
+          documented = set(re.findall(r"^\|\s*`(earn_[a-z_]+)`", md, re.M))
+          missing = live - documented
+          phantom = documented - live
+          print("live:", sorted(live)); print("documented:", sorted(documented))
+          if missing: print("::error::SKILL.md never mentions:", sorted(missing))
+          if phantom: print("::error::SKILL.md names tools the server does not have:", sorted(phantom))
+          sys.exit(1 if (missing or phantom) else 0)
+          PY
+
+  # ── Bundle provenance ──────────────────────────────────────────────────────────────────────────
+  # What a marketplace install actually runs is the COMMITTED dist/mcp-server.mjs
+  # (git install, no npm). `check` proved, on this same commit, that the committed bundle equals a
+  # rebuild of the committed source (its stale-dist step) — `needs: check` is what carries that
+  # across. This job attests THAT file with GitHub's OIDC identity and verifies it back, so a
+  # stranger can later run `gh attestation verify` on the file in their plugin cache and get the
+  # commit and workflow that attested it (docs/runbooks/verify_the_bundle.md).
+  #
+  # This job deliberately runs NOTHING but checkout, the gate, the attest action, `gh`, and bash:
+  # no `npm ci`, no tests, no tsx. Credentials are not persisted into .git/config. The attestation
+  # identity is granted here and only here.
+  #
+  # 🔴 Artifact attestations are only issued for PUBLIC repositories, so on a private
+  # fork or mirror the attest step cannot succeed: the gate SKIPS it there and
+  # REQUIRES it on the public repo. A step that passes by skipping renders identically to one that
+  # worked, which is why the last step asserts the recorded outcomes against the gate's decision —
+  # and why `workflow_dispatch` with attest=force exists: it runs the step here, where GitHub refuses
+  # it, and the assertion goes red. That red is the proof the assertion can fire.
+  attest:
+    needs: check
+    if: needs.check.outputs.packages == 'yes'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+      id-token: write
+      attestations: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: attestation gate — decide
+        id: gate
+        env:
+          REPO_VISIBILITY: ${{ github.event.repository.visibility }}
+          EVENT_NAME: ${{ github.event_name }}
+          ATTEST_INPUT: ${{ github.event.inputs.attest }}
+        run: bash .github/scripts/attestation-gate.sh decide
+      - name: attest the committed bundle (SLSA build provenance, GitHub OIDC identity)
+        id: attest
+        if: steps.gate.outputs.attest != 'skip'
+        continue-on-error: true   # the assert step below turns a failure here into the job's red, with the reason
+        uses: actions/attest-build-provenance@v4
+        with:
+          subject-path: dist/mcp-server.mjs
+          show-summary: true
+      - name: verify the attestation against the committed bundle (what a stranger runs)
+        id: verify
+        if: steps.gate.outputs.attest != 'skip'
+        continue-on-error: true
+        env:
+          GH_TOKEN: ${{ github.token }}
+          ATTESTATION_URL: ${{ steps.attest.outputs.attestation-url }}
+        run: |
+          set -euo pipefail
+          f=dist/mcp-server.mjs
+          gh attestation verify "$f" --repo "$GITHUB_REPOSITORY" \
+            --signer-workflow "$GITHUB_REPOSITORY/.github/workflows/ci.yml" --format json > /tmp/verify.json
+          # the subject digest inside the verified attestation must be the digest of the file on disk
+          # NOW — a dist edited after the attest step must not verify
+          want=$(sha256sum "$f" | cut -d' ' -f1)
+          vd=$(python3 -c 'import json; r=json.load(open("/tmp/verify.json")); r=r if isinstance(r,list) else [r]; print(r[0]["verificationResult"]["statement"]["subject"][0]["digest"]["sha256"])')
+          [ "$vd" = "$want" ] || { echo "::error::attested digest $vd != file digest $want"; exit 1; }
+          echo "verified: $f sha256=$want, attested by $GITHUB_REPOSITORY/.github/workflows/ci.yml ($ATTESTATION_URL)"
+      - name: attestation gate — assert the outcomes match the decision (never a silent skip)
+        if: always()
+        env:
+          REPO_VISIBILITY: ${{ github.event.repository.visibility }}
+          EVENT_NAME: ${{ github.event_name }}
+          ATTEST_INPUT: ${{ github.event.inputs.attest }}
+          ATTEST_OUTCOME: ${{ steps.attest.outcome }}
+          ATTESTATION_ID: ${{ steps.attest.outputs.attestation-id }}
+          VERIFY_OUTCOME: ${{ steps.verify.outcome }}
+        run: bash .github/scripts/attestation-gate.sh assert

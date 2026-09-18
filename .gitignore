@@ -1,0 +1,8 @@
+node_modules
+*.tsbuildinfo
+
+# Only the bundled MCP server is committed; tsc output is not.
+dist/*
+!dist/*.mjs
+
+.env
