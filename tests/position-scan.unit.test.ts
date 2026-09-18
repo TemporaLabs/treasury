@@ -7,7 +7,7 @@
  * Every error string below is one a real provider returned on 2026-09-14.
  */
 import { describe, it, expect } from "vitest";
-import { getPosition, UNKNOWN_AFTER_SCAN_FAILURE, UNKNOWN_INCOMPLETE_SCAN } from "../src/position.js";
+import { getPosition, MAX_SCAN_TXS, UNKNOWN_AFTER_SCAN_FAILURE, UNKNOWN_INCOMPLETE_SCAN } from "../src/position.js";
 import { getVault, listVaults } from "../src/registry.js";
 import { EARN } from "../src/config/earn.js";
 
@@ -26,6 +26,18 @@ const BASE_PUBLIC = "eth_getLogs is limited to a 2,000 range";
 
 type GetLogsArgs = { fromBlock: bigint; toBlock: bigint; event: { name: string } };
 
+/**
+ * A log the way a provider actually returns one: `transactionHash`, `blockNumber` and `logIndex`
+ * ride along with every `eth_getLogs` result. A fixture that omitted them would let a change
+ * "surfacing the tx hashes we already have" pass while surfacing nothing.
+ */
+const log = (block: bigint, i = 0) => ({
+  transactionHash: `0x${block.toString(16).padStart(64, "0")}` as `0x${string}`,
+  blockNumber: block,
+  logIndex: i,
+  args: { assets: 1_000_000n, shares: 100_000_000n },
+});
+
 /** 1 share held, deposited once in a single Deposit event at `depositBlock`; the provider enforces `window`. */
 function provider(opts: { window?: bigint; fail?: string; depositBlock?: bigint; withdrawBlock?: bigint; shares?: bigint }) {
   const calls: GetLogsArgs[] = [];
@@ -41,9 +53,9 @@ function provider(opts: { window?: bigint; fail?: string; depositBlock?: bigint;
       if (opts.fail) throw new Error(opts.fail);
       if (opts.window !== undefined && a.toBlock - a.fromBlock + 1n > opts.window) throw new Error(BASE_PUBLIC.replace("2,000", opts.window.toLocaleString("en-US")) + (opts.window === 10n ? ` ${ALCHEMY_FREE}` : ""));
       const b = opts.depositBlock;
-      if (a.event.name === "Deposit" && b !== undefined && a.fromBlock <= b && b <= a.toBlock) return [{ args: { assets: 1_000_000n, shares: 100_000_000n } }];
+      if (a.event.name === "Deposit" && b !== undefined && a.fromBlock <= b && b <= a.toBlock) return [log(b)];
       const x = opts.withdrawBlock;
-      if (a.event.name === "Withdraw" && x !== undefined && a.fromBlock <= x && x <= a.toBlock) return [{ args: { assets: 1_000_000n, shares: 100_000_000n } }];
+      if (a.event.name === "Withdraw" && x !== undefined && a.fromBlock <= x && x <= a.toBlock) return [log(x)];
       return [];
     },
   };
@@ -240,5 +252,85 @@ describe("getPosition — where the history is read from", () => {
     expect(pos.scan.capped).toBe(true);
     expect(pos.scan.source).toBe("logs rpc");
     expect(primary.calls.length).toBe(2 * (1 + 3)); // per event: the sizing call + 3 walked windows
+  });
+});
+
+/**
+ * treasury#9 — the scan already walks these events to compute `entryBasisUsdc`; the transaction
+ * hash it needs for an explorer link rides on every log it already fetched. The tests that matter
+ * here are the two an eyeball would not catch: that NO extra request is made for them, and that the
+ * order is normalised — the chunked walk goes backwards, so its raw array is newest-chunk-first.
+ */
+describe("getPosition — the transactions behind the scan (#9)", () => {
+  const vault = VAULT;
+
+  /** Deposits at each named block; the provider enforces `window`, so a long range is walked in chunks. */
+  function multi(blocks: bigint[], window?: bigint) {
+    const calls: GetLogsArgs[] = [];
+    const client = {
+      getBlockNumber: async () => HEAD,
+      readContract: async ({ functionName }: { functionName: string }) => {
+        if (functionName === "balanceOf") return BigInt(blocks.length) * 100_000_000n;
+        if (functionName === "convertToAssets") return BigInt(blocks.length) * 1_000_000n;
+        return 0n;
+      },
+      getLogs: async (a: GetLogsArgs) => {
+        calls.push(a);
+        if (window !== undefined && a.toBlock - a.fromBlock + 1n > window) throw new Error(BASE_PUBLIC.replace("2,000", window.toLocaleString("en-US")));
+        if (a.event.name !== "Deposit") return [];
+        return blocks.filter((b) => a.fromBlock <= b && b <= a.toBlock).map((b) => log(b));
+      },
+    };
+    return { client: client as never, calls };
+  }
+
+  it("surfaces txHash, blockNumber and amount for each Deposit the scan saw", async () => {
+    const p = provider({ depositBlock: DEPLOYED + 5n });
+    const pos = await getPosition({ vault, principal: ACCOUNT, client: p.client, maxLogRequests: 1_000 });
+    expect(pos.scan.depositTxs).toEqual([
+      { txHash: `0x${(DEPLOYED + 5n).toString(16).padStart(64, "0")}`, blockNumber: String(DEPLOYED + 5n), amountUsdc: "1 USDC" },
+    ]);
+    expect(pos.scan.withdrawTxs).toEqual([]);
+    expect(pos.scan.deposits, "the count still agrees with the list").toBe(pos.scan.depositTxs.length);
+  });
+
+  it("🔴 costs NO extra request — the hashes come from the logs the basis scan already fetched", async () => {
+    // The whole point of #9's shape. A second eth_getLogs pass would double the cost of the
+    // most-called tool for data already in hand, and this is the assertion that forbids it.
+    const withOut = provider({ depositBlock: DEPLOYED + 5n });
+    await getPosition({ vault, principal: ACCOUNT, client: withOut.client, maxLogRequests: 1_000 });
+    expect(withOut.calls).toHaveLength(2); // one Deposit scan, one Withdraw scan. Not four.
+    expect(withOut.calls.map((c) => c.event.name)).toEqual(["Deposit", "Withdraw"]);
+  });
+
+  it("🔴 orders the list oldest-first even when the chunked walk produced it backwards", async () => {
+    // The chunked path walks DOWN from toBlock and pushes each chunk, so its raw array is
+    // descending by chunk. The sums this file already computes are order-independent, so nothing
+    // noticed until a list of transactions was handed to a human. Three deposits, three chunks.
+    const blocks = [DEPLOYED + 10n, DEPLOYED + 2_500n, DEPLOYED + 3_200n];
+    const p = multi(blocks, 2_000n);
+    const pos = await getPosition({ vault, principal: ACCOUNT, client: p.client, maxLogRequests: 100 });
+    expect(p.calls.length, "the premise: this really was walked in chunks").toBeGreaterThan(2);
+    expect(pos.scan.deposits).toBe(3);
+    expect(pos.scan.depositTxs.map((t) => t.blockNumber)).toEqual(blocks.map(String));
+  });
+
+  it("caps the list at MAX_SCAN_TXS, keeps the most recent, and leaves the COUNT as the total", async () => {
+    const blocks = Array.from({ length: MAX_SCAN_TXS + 7 }, (_, i) => DEPLOYED + 1n + BigInt(i));
+    const p = multi(blocks);
+    const pos = await getPosition({ vault, principal: ACCOUNT, client: p.client, maxLogRequests: 1_000 });
+    expect(pos.scan.deposits, "the count is the TOTAL, so truncation is detectable").toBe(blocks.length);
+    expect(pos.scan.depositTxs).toHaveLength(MAX_SCAN_TXS);
+    expect(pos.scan.depositTxs.at(-1)!.blockNumber).toBe(String(blocks.at(-1)));
+    expect(pos.scan.depositTxs[0]!.blockNumber).toBe(String(blocks.at(-MAX_SCAN_TXS)));
+  });
+
+  it("a scan that read nothing reports empty lists, never a partial one", async () => {
+    const primary = provider({ fail: PUBLICNODE_ARCHIVE });
+    const fallback = provider({ fail: "HTTP request failed. Status: 429" });
+    const pos = await getPosition({ vault, principal: ACCOUNT, client: primary.client, fallbackClient: fallback.client });
+    expect(pos.entryBasisUsdc).toBe(UNKNOWN_AFTER_SCAN_FAILURE);
+    expect(pos.scan.depositTxs).toEqual([]);
+    expect(pos.scan.withdrawTxs).toEqual([]);
   });
 });
