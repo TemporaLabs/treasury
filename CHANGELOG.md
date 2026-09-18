@@ -4,7 +4,7 @@ All notable changes to Agent Treasury are recorded here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versions follow [SemVer](https://semver.org/).
 Pre-1.0, minor versions may change tool names, schemas and behaviour.
 
-## [0.1.0] - 2026-09-18
+## [v0.1.0] - 2026-09-18
 
 The first public release. Everything below is what ships in it.
 
