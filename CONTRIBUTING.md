@@ -21,10 +21,29 @@ Certify it by adding a `Signed-off-by` trailer, with your real name, to every co
 Signed-off-by: Jane Smith <jane@example.com>
 ```
 
-`git commit -s` adds this automatically from your `user.name` and `user.email` git config. A CI
-check reads every commit on a pull request and fails if one is missing the trailer or the trailer's
-name and email do not match the commit's author — it does not look at merge commits, so it never
-blocks a maintainer's merge.
+`git commit -s` adds this automatically from your `user.name` and `user.email` git config, so set
+those before your first commit — in this repository, or globally with `--global`:
+
+```
+git config user.name  "Your Name"
+git config user.email "you@example.com"
+```
+
+Because `-s` reads the same two values git records as the commit's author, the trailer and the
+author match by construction. A CI check reads every commit on a pull request and fails if one is
+missing the trailer, or if the trailer's name and email do not match that commit's author — the
+comparison is case-insensitive, and merge commits are skipped, so merging never trips it.
+
+**Already committed without it?** That is the usual way people meet this check, and the fix is
+quick. `git commit --amend --signoff --no-edit` repairs the last commit;
+`git rebase --signoff <base>` repairs a branch of them, followed by
+`git push --force-with-lease`. The check reads every commit on the pull request, not the final
+diff, so a branch is only green once all of them carry the trailer.
+
+Your name and email enter public git history permanently, where they are cloned and mirrored beyond
+anyone's reach — clause (d) of [`DCO.md`](DCO.md) is what has you acknowledge that. Only the real
+*name* is required, so if you would rather not publish a personal address, GitHub's
+`users.noreply.github.com` address for your account is a fine choice.
 
 - **Third-party code is disclosed.** A contribution that includes code you did not write names its
   source and licence. Code under a licence incompatible with Apache-2.0 cannot merge.
@@ -88,7 +107,9 @@ TREASURY_RPC_BASE=https://... npm run test:fork # anvil fork round trips with im
 
 ## Pull requests
 
-- **Target the current version branch** — `v0.1.0` today. Releases are cut from it; a pull request against a tag will be retargeted.
+- **Target the current release branch** — `release/vX.Y.Z`, not `main` and not a tag. Ask in an
+  issue if you are unsure which one is current; a pull request opened against the wrong base
+  will be retargeted.
 - **Keep a pull request to one change.** A documentation fix found along the way gets its own pull
   request, so it can merge without waiting on the feature's review.
 - **Show that a new test can fail.** Break the behaviour it guards, confirm the test goes red, then
