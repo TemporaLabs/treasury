@@ -1,6 +1,6 @@
 # Open Agent Treasury
 
-**The treasury management system (TMS) for AI agents.** By Tempora Labs.
+**The open-sourced treasury management system (TMS) for AI agents.** By Tempora Labs.
 
 [![ci](https://github.com/TemporaLabs/treasury/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/TemporaLabs/treasury/actions/workflows/ci.yml)
 [![DCO](https://github.com/TemporaLabs/treasury/actions/workflows/dco.yml/badge.svg)](https://github.com/TemporaLabs/treasury/actions/workflows/dco.yml)
