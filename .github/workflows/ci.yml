@@ -66,6 +66,27 @@ jobs:
           print("\n".join(bad) or "all docs links resolve")
           sys.exit(1 if bad else 0)
           PY
+      # The install instructions pin a version on purpose (an immutable publish cannot drift); the
+      # cost is eight prose pins nothing tied to a release. Script + proof in .github/scripts.
+      # On main the pins must name the newest release tag — a tag pushed without its follow-up
+      # documentation change (docs/release-process.md step 6) goes red on the next push here.
+      # On a release branch the docs legitimately lag package.json until the publish has happened,
+      # so only their agreement with each other is checked there.
+      - name: documentation pins ONE version — and on main, the latest release tag
+        env:
+          TARGET: ${{ github.base_ref || github.ref_name }}
+        run: |
+          git fetch -q --depth=1 origin '+refs/tags/*:refs/tags/*' || true
+          latest="$(git tag -l 'v[0-9]*' --sort=-v:refname | head -1)"
+          if [ "$TARGET" = "main" ] && [ -n "$latest" ]; then
+            echo "main: pins must equal the newest tag ${latest}"
+            bash .github/scripts/version-pins.sh "${latest#v}"
+          else
+            echo "${TARGET}: pins must agree with each other (newest tag: ${latest:-none})"
+            bash .github/scripts/version-pins.sh
+          fi
+      - name: the version-pin gate can still go red (7 offline cases)
+        run: bash .github/scripts/version-pins.test.sh
       # The decision lives in .github/scripts/detect-package.sh, with a case-driven proof beside
       # it — it gates ten steps plus the whole `attest` job, and it has been wrong twice.
       - name: detect packages (a documents-only version branch has none — a MOVED one is an error)
