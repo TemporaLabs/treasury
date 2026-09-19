@@ -8,6 +8,13 @@ updates:
     groups:
       dev-dependencies:
         dependency-type: "development"
+    ignore:
+      # A TypeScript major is a compiler migration, not a bump; the 5 -> 7 PR
+      # failed typecheck outright. @types/node tracks the engine in package.json.
+      - dependency-name: "typescript"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "@types/node"
+        update-types: ["version-update:semver-major"]
 
   - package-ecosystem: "github-actions"
     directory: "/"
