@@ -109,8 +109,12 @@ jobs:
       # successful publish as failed, and a re-run of the workflow would then have hard-failed on the
       # "not already on the registry" gate above. So this step polls for ten minutes and, if the
       # version has still not resolved, records a WARNING rather than a failure — the publish step
-      # above is the only step whose exit says whether the publish happened.
-      - name: verify the published version resolves
+      # above is the only step whose exit says whether the publish happened. Ten minutes is a chosen
+      # bound, not a fitted one. The trade is deliberate: a persistent cause (wrong package name,
+      # a registry outage) and slow propagation now both end in the same warning after ten minutes,
+      # and the poll cannot tell them apart — nor can it tell a network failure from "not yet";
+      # the warning names the command to run by hand, which settles all of them.
+      - name: wait for the published version to resolve (advisory — the publish step above is the verdict)
         if: ${{ !inputs.dry_run }}
         run: |
           set -euo pipefail
