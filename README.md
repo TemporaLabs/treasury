@@ -1,11 +1,11 @@
-# Agent Treasury
+# Open Agent Treasury
 
 **The treasury management system (TMS) for AI agents.** By Tempora Labs.
 
 [![ci](https://github.com/TemporaLabs/treasury/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/TemporaLabs/treasury/actions/workflows/ci.yml)
 [![DCO](https://github.com/TemporaLabs/treasury/actions/workflows/dco.yml/badge.svg)](https://github.com/TemporaLabs/treasury/actions/workflows/dco.yml)
 
-Agent Treasury gives an agent the tools to manage on-chain capital, starting with earning yield on
+Open Agent Treasury (OAT) gives an agent the tools to manage on-chain capital, starting with earning yield on
 idle USDC. Its first skill, **Earn**, lets an agent inspect Tempora-curated vaults on Base, check
 what a position is worth and how much of it is withdrawable now, and prepare deposits and
 withdrawals. The agent's own wallet stays the account and the agent's own signer stays the only
