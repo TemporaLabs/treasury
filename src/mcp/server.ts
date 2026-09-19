@@ -23,6 +23,8 @@
  *    three different tools. `receiver` stays distinct because it genuinely is: `account` owns the
  *    shares, `receiver` is where the money lands.
  */
+import { realpathSync } from "node:fs";
+import { fileURLToPath } from "node:url";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { z } from "zod";
@@ -397,7 +399,26 @@ async function main(): Promise<void> {
   await server.connect(new StdioServerTransport());
 }
 
-if (process.argv[1] && /server\.(ts|mjs|js)$/.test(process.argv[1])) {
+/**
+ * True only when THIS module is the file Node was asked to run. The comparison is by resolved path,
+ * not by name: an earlier guard tested `process.argv[1]` against `/server\.(ts|mjs|js)$/`, which is
+ * the basename of whatever was invoked — so the published bin (`treasury-mcp`, a symlink npm makes)
+ * never matched and exited silently (#22), while any unrelated script named `*server.mjs` that merely
+ * imported this module matched and seized stdio. Node resolves the main module's symlink before
+ * evaluating it, so `import.meta.url` is already the real path and the two sides agree for a bin.
+ * Anything unresolvable is treated as "not the entry point": the module loads and does nothing.
+ */
+function isEntryPoint(): boolean {
+  const invoked = process.argv[1];
+  if (!invoked) return false;
+  try {
+    return realpathSync(invoked) === realpathSync(fileURLToPath(import.meta.url));
+  } catch {
+    return false;
+  }
+}
+
+if (isEntryPoint()) {
   main().catch((e) => {
     // Defence-in-depth: HARDENED, NOT TESTED. main() only builds the server and connects a stdio
     // transport — every RPC URL is resolved inside a handler body, so nothing reachable here can

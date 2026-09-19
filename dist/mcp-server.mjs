@@ -17061,6 +17061,10 @@ var init_call = __esm({
   }
 });
 
+// src/mcp/server.ts
+import { realpathSync } from "fs";
+import { fileURLToPath as fileURLToPath3 } from "url";
+
 // node_modules/zod/v3/helpers/util.js
 var util;
 (function(util2) {
@@ -56255,7 +56259,16 @@ async function main() {
   const server = buildServer();
   await server.connect(new StdioServerTransport());
 }
-if (process.argv[1] && /server\.(ts|mjs|js)$/.test(process.argv[1])) {
+function isEntryPoint() {
+  const invoked = process.argv[1];
+  if (!invoked) return false;
+  try {
+    return realpathSync(invoked) === realpathSync(fileURLToPath3(import.meta.url));
+  } catch {
+    return false;
+  }
+}
+if (isEntryPoint()) {
   main().catch((e) => {
     process.stderr.write(`treasury mcp: ${redactEndpoints(String(e))}
 `);
