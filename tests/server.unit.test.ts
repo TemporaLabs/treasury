@@ -405,4 +405,20 @@ describe("a response field an agent must surface is named in its tool's own desc
     // the caveat travels with the field, or a reader takes a capped list for a complete one
     expect(d).toMatch(/100|totals/);
   });
+
+  // `exit.instantLiquidity` is the vault's own liquid balance — per `src/position.ts` the real
+  // withdrawal ceiling, which `maxWithdraw()` does not reflect. It was populated by both of these
+  // tools and named by neither (#17): an agent reading `usdcValue` and `maxWithdrawSays` alone can
+  // tell an operator a position is fully withdrawable when it is not. The population is the set of
+  // response types that declare the field — `ExitBlock` in `src/position.ts` (earn_balance) and
+  // `WithdrawQuote` in `src/quote.ts` (earn_quote).
+  for (const name of ["earn_quote", "earn_balance"]) {
+    it(`${name}'s description names instantLiquidity, the withdrawal ceiling maxWithdraw does not know`, () => {
+      const d = (tools()[name] as unknown as { description: string }).description;
+      expect(d, "the description must exist at all").toBeTypeOf("string");
+      expect(d).toContain("instantLiquidity");
+      // and says what it is — a name alone tells an agent nothing about why to surface it
+      expect(d).toMatch(/liquid balance/);
+    });
+  }
 });

@@ -169,10 +169,21 @@ describe("the decoded call agrees with the calldata it is shipped beside (#11)",
  */
 describe("the prepare tools tell an agent the decoded form exists (#11)", () => {
   type Registered = Record<string, { description?: string }>;
-  const described = (name: string) =>
-    ((buildServer() as unknown as { _registeredTools: Registered })._registeredTools[name] ?? {}).description ?? "";
+  const registered = (buildServer() as unknown as { _registeredTools: Registered })._registeredTools;
+  const described = (name: string) => (registered[name] ?? {}).description ?? "";
 
-  for (const name of ["earn_prepare_deposit", "earn_prepare_withdraw"]) {
+  // The population is DERIVED from what the server registers, not written down here: a third
+  // money-committing tool is subject to this requirement the moment it exists, rather than only
+  // tripping the census and being waved through once the count is bumped (#17). A derived loop
+  // over nothing would generate no tests and pass vacuously, so the population is asserted first,
+  // against the two tools known to exist — a filter that stops matching fails here, loudly.
+  const prepareTools = Object.keys(registered).filter((n) => n.startsWith("earn_prepare_"));
+  it("the derived population holds every prepare tool (the loop below cannot be empty)", () => {
+    expect(prepareTools).toEqual(expect.arrayContaining(["earn_prepare_deposit", "earn_prepare_withdraw"]));
+    expect(prepareTools.every((n) => n.startsWith("earn_prepare_"))).toBe(true);
+  });
+
+  for (const name of prepareTools) {
     it(`${name}'s description names function and args`, () => {
       const d = described(name);
       expect(d, "the description must exist at all").not.toBe("");

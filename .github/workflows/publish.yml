@@ -104,15 +104,29 @@ jobs:
         run: |
           echo "dry_run was true: every gate above passed and nothing was published." >> "$GITHUB_STEP_SUMMARY"
 
-      - name: verify the published version resolves
+      # The registry can take minutes to serve a freshly published scoped package: 0.1.0 was
+      # accepted at once and resolved about 4½ minutes later. The earlier 60-second poll marked that
+      # successful publish as failed, and a re-run of the workflow would then have hard-failed on the
+      # "not already on the registry" gate above. So this step polls for ten minutes and, if the
+      # version has still not resolved, records a WARNING rather than a failure — the publish step
+      # above is the only step whose exit says whether the publish happened. Ten minutes is a chosen
+      # bound, not a fitted one. The trade is deliberate: a persistent cause (wrong package name,
+      # a registry outage) and slow propagation now both end in the same warning after ten minutes,
+      # and the poll cannot tell them apart — nor can it tell a network failure from "not yet";
+      # the warning names the command to run by hand, which settles all of them.
+      - name: wait for the published version to resolve (advisory — the publish step above is the verdict)
         if: ${{ !inputs.dry_run }}
         run: |
           set -euo pipefail
           name="$(node -p 'require("./package.json").name')"
           ver="$(node -p 'require("./package.json").version')"
-          for i in $(seq 1 10); do
+          for i in $(seq 1 40); do
             got="$(npm view "${name}@${ver}" version 2>/dev/null || true)"
-            [ "$got" = "$ver" ] && { echo "published ${name}@${ver}" >> "$GITHUB_STEP_SUMMARY"; exit 0; }
-            sleep 6
+            if [ "$got" = "$ver" ]; then
+              echo "published ${name}@${ver} — resolved after about $(( (i - 1) * 15 ))s" >> "$GITHUB_STEP_SUMMARY"
+              exit 0
+            fi
+            sleep 15
           done
-          echo "::error::${name}@${ver} did not resolve after publish"; exit 1
+          echo "::warning::${name}@${ver} did not resolve within 10 minutes; the publish step succeeded, so check the registry by hand: npm view ${name}@${ver} version"
+          echo "published ${name}@${ver} — NOT yet resolving after 10 minutes; check by hand" >> "$GITHUB_STEP_SUMMARY"

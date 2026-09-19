@@ -23,6 +23,8 @@
  *    three different tools. `receiver` stays distinct because it genuinely is: `account` owns the
  *    shares, `receiver` is where the money lands.
  */
+import { realpathSync } from "node:fs";
+import { fileURLToPath } from "node:url";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { z } from "zod";
@@ -261,7 +263,7 @@ export function buildServer(): McpServer {
     {
       title: "Quote a deposit or a withdrawal",
       description:
-        "Pre-trade quote, in USDC. direction=deposit: expected shares (previewDeposit), share price, and the access verdict from a simulated deposit(). This client quotes no rate: an ERC-4626 vault exposes none, and it calls no yield API. direction=withdraw: shares burned (previewWithdraw), shares held, a simulated withdraw() verdict, maxWithdraw advisory only (Morpho V2 returns 0 by design), and queue depth. Run before the matching earn_prepare_* tool.",
+        "Pre-trade quote, in USDC. direction=deposit: expected shares (previewDeposit), share price, and the access verdict from a simulated deposit(). This client quotes no rate: an ERC-4626 vault exposes none, and it calls no yield API. direction=withdraw: shares burned (previewWithdraw), shares held, a simulated withdraw() verdict, `instantLiquidity` — the vault's own liquid balance of the asset, which is chassis-specific in BOTH directions: a Fusion vault without instant-withdrawal fuses pays only from it, so there it is the ceiling maxWithdraw() does not know; a Morpho V2 vault holds almost none and still pays out of its markets, so there it is near zero and NOT a ceiling — the simulated verdict is what decides — maxWithdraw advisory only (Morpho V2 returns 0 by design), and queue depth. Run before the matching earn_prepare_* tool.",
       inputSchema: {
         vault: vaultArg,
         account: accountArg,
@@ -342,7 +344,7 @@ export function buildServer(): McpServer {
     {
       title: "Earn position",
       description:
-        "Shares held (exact string + display), current USDC value, WHAT CAN ACTUALLY BE WITHDRAWN NOW (`exit`, measured by simulating the withdrawal — `usdcValue` is what the position is worth, `exit.exitableNow` is what the vault can pay; on a Fusion vault without instant-withdrawal fuses they differ by 10x and `maxWithdraw()` reports the larger one), entry basis and accrued yield derived from the vault's own Deposit/Withdraw events for this account, and share price. `scan.complete` says whether the event window covered the whole position; `sharesExact` is what earn_prepare_withdraw({ all }) needs. `scan.depositTxs` and `scan.withdrawTxs` carry the transactions behind those events — `{ txHash, blockNumber, amountUsdc }`, oldest first — so an operator can be shown an explorer link without anyone rebuilding the log query; each list holds at most the 100 most recent, while `scan.deposits`/`scan.withdrawals` stay the totals.",
+        "Shares held (exact string + display), current USDC value, WHAT CAN ACTUALLY BE WITHDRAWN NOW (`exit`, measured by simulating the withdrawal — `usdcValue` is what the position is worth, `exit.exitableNow` is what the vault can pay, `exit.instantLiquidity` is the vault's own liquid balance of the asset, chassis-specific in both directions — a Fusion vault without instant-withdrawal fuses pays only from it, so there it is the ceiling and `usdcValue` can exceed `exitableNow` by 10x while `maxWithdraw()` — `exit.maxWithdrawSays` — reports the larger one; a Morpho V2 vault holds almost none and still pays out of its markets, so there a near-zero `instantLiquidity` is not a ceiling and `exitableNow` is the verdict), entry basis and accrued yield derived from the vault's own Deposit/Withdraw events for this account, and share price. `scan.complete` says whether the event window covered the whole position; `sharesExact` is what earn_prepare_withdraw({ all }) needs. `scan.depositTxs` and `scan.withdrawTxs` carry the transactions behind those events — `{ txHash, blockNumber, amountUsdc }`, oldest first — so an operator can be shown an explorer link without anyone rebuilding the log query; each list holds at most the 100 most recent, while `scan.deposits`/`scan.withdrawals` stay the totals.",
       inputSchema: {
         vault: vaultArg,
         account: accountArg,
@@ -397,7 +399,26 @@ async function main(): Promise<void> {
   await server.connect(new StdioServerTransport());
 }
 
-if (process.argv[1] && /server\.(ts|mjs|js)$/.test(process.argv[1])) {
+/**
+ * True only when THIS module is the file Node was asked to run. The comparison is by resolved path,
+ * not by name: an earlier guard tested `process.argv[1]` against `/server\.(ts|mjs|js)$/`, which is
+ * the basename of whatever was invoked — so the published bin (`treasury-mcp`, a symlink npm makes)
+ * never matched and exited silently (#22), while any unrelated script named `*server.mjs` that merely
+ * imported this module matched and seized stdio. Node resolves the main module's symlink before
+ * evaluating it, so `import.meta.url` is already the real path and the two sides agree for a bin.
+ * Anything unresolvable is treated as "not the entry point": the module loads and does nothing.
+ */
+function isEntryPoint(): boolean {
+  const invoked = process.argv[1];
+  if (!invoked) return false;
+  try {
+    return realpathSync(invoked) === realpathSync(fileURLToPath(import.meta.url));
+  } catch {
+    return false;
+  }
+}
+
+if (isEntryPoint()) {
   main().catch((e) => {
     // Defence-in-depth: HARDENED, NOT TESTED. main() only builds the server and connects a stdio
     // transport — every RPC URL is resolved inside a handler body, so nothing reachable here can
