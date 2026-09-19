@@ -56149,7 +56149,7 @@ function buildServer() {
     "earn_quote",
     {
       title: "Quote a deposit or a withdrawal",
-      description: "Pre-trade quote, in USDC. direction=deposit: expected shares (previewDeposit), share price, and the access verdict from a simulated deposit(). This client quotes no rate: an ERC-4626 vault exposes none, and it calls no yield API. direction=withdraw: shares burned (previewWithdraw), shares held, a simulated withdraw() verdict, maxWithdraw advisory only (Morpho V2 returns 0 by design), and queue depth. Run before the matching earn_prepare_* tool.",
+      description: "Pre-trade quote, in USDC. direction=deposit: expected shares (previewDeposit), share price, and the access verdict from a simulated deposit(). This client quotes no rate: an ERC-4626 vault exposes none, and it calls no yield API. direction=withdraw: shares burned (previewWithdraw), shares held, a simulated withdraw() verdict, `instantLiquidity` \u2014 the vault's own liquid balance, the real ceiling on what it can pay out this block \u2014 maxWithdraw advisory only (Morpho V2 returns 0 by design; on a Fusion vault it can report far more than `instantLiquidity`), and queue depth. Run before the matching earn_prepare_* tool.",
       inputSchema: {
         vault: vaultArg,
         account: accountArg,
@@ -56214,7 +56214,7 @@ function buildServer() {
     "earn_balance",
     {
       title: "Earn position",
-      description: "Shares held (exact string + display), current USDC value, WHAT CAN ACTUALLY BE WITHDRAWN NOW (`exit`, measured by simulating the withdrawal \u2014 `usdcValue` is what the position is worth, `exit.exitableNow` is what the vault can pay; on a Fusion vault without instant-withdrawal fuses they differ by 10x and `maxWithdraw()` reports the larger one), entry basis and accrued yield derived from the vault's own Deposit/Withdraw events for this account, and share price. `scan.complete` says whether the event window covered the whole position; `sharesExact` is what earn_prepare_withdraw({ all }) needs. `scan.depositTxs` and `scan.withdrawTxs` carry the transactions behind those events \u2014 `{ txHash, blockNumber, amountUsdc }`, oldest first \u2014 so an operator can be shown an explorer link without anyone rebuilding the log query; each list holds at most the 100 most recent, while `scan.deposits`/`scan.withdrawals` stay the totals.",
+      description: "Shares held (exact string + display), current USDC value, WHAT CAN ACTUALLY BE WITHDRAWN NOW (`exit`, measured by simulating the withdrawal \u2014 `usdcValue` is what the position is worth, `exit.exitableNow` is what the vault can pay, `exit.instantLiquidity` is the vault's own liquid balance that bounds it; on a Fusion vault without instant-withdrawal fuses they differ by 10x and `maxWithdraw()` \u2014 `exit.maxWithdrawSays` \u2014 reports the larger one), entry basis and accrued yield derived from the vault's own Deposit/Withdraw events for this account, and share price. `scan.complete` says whether the event window covered the whole position; `sharesExact` is what earn_prepare_withdraw({ all }) needs. `scan.depositTxs` and `scan.withdrawTxs` carry the transactions behind those events \u2014 `{ txHash, blockNumber, amountUsdc }`, oldest first \u2014 so an operator can be shown an explorer link without anyone rebuilding the log query; each list holds at most the 100 most recent, while `scan.deposits`/`scan.withdrawals` stay the totals.",
       inputSchema: {
         vault: vaultArg,
         account: accountArg,
