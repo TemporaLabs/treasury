@@ -102,10 +102,18 @@ not in it — it ships from the plugin repository), `publishConfig.provenance` i
 builds so `main`/`types` exist in the tarball — only `dist/*.mjs` is committed, so without that build
 the tarball would carry the bundle and nothing the manifest's own `main`/`types` point at.
 
-To check a published version against the attested bundle: `npm pack @temporalabs/treasury@<version>`
-downloads the exact tarball; the `dist/mcp-server.mjs` inside it must have the same sha256 as the
-attestation for that version's tag. `npm audit signatures` in a project that depends on the package
-verifies npm's own provenance record for it.
+To check a published version against the bundle it should carry: `npm pack @temporalabs/treasury@<version>`
+downloads the exact tarball, and the `dist/mcp-server.mjs` inside it must have the same sha256 as the
+file committed at that version's tag — `git show refs/tags/v<version>:dist/mcp-server.mjs | sha256sum`.
+Compare against the tag, not against "an attestation": CI attests the bundle on every push to `main`
+and to release branches, so one digest accumulates many attestations and a tarball carrying a later
+`main` bundle would still verify. The tag is the only ref that names one release.
+
+Whether npm holds a provenance record for a version at all is a separate question:
+`npm view @temporalabs/treasury@<version> dist.attestations` prints it when one exists (its
+`predicateType` is SLSA provenance). `npm audit signatures`, run in a project that depends on the
+package, checks the signatures on what is installed — but it reports counts and invalid entries only,
+so a version published without provenance passes it silently.
 
 `prepack` **rebuilds** `dist/mcp-server.mjs`, so an `npm pack` or `npm publish` would otherwise ship
 whatever the publishing machine built rather than the attested committed file — agreeing only while
