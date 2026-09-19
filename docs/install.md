@@ -59,14 +59,15 @@ npm install @temporalabs/treasury@0.1.0
   "mcpServers": {
     "treasury": {
       "command": "node",
-      "args": ["node_modules/@temporalabs/treasury/dist/mcp-server.mjs"],
+      "args": ["<project>/node_modules/@temporalabs/treasury/dist/mcp-server.mjs"],
       "env": { "TREASURY_RPC_BASE": "https://..." }
     }
   }
 }
 ```
 
-That file is byte-identical to the `dist/mcp-server.mjs` committed at the matching tag and to the
+Give the absolute path: a relative one resolves against the host's working directory, which is
+rarely the project. That file is byte-identical to the `dist/mcp-server.mjs` committed at the matching tag and to the
 bundle the Claude Code plugin carries; [`runbooks/verify_the_bundle.md`](runbooks/verify_the_bundle.md)
 shows how to check it from the tarball. A checkout of the repository at the tag, or the plugin cache
 after a Claude Code install, holds the same file if you would rather not install from npm.
