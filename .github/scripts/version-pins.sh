@@ -15,13 +15,27 @@
 # The plugin release carries the same version as the package it bundles; the plugin pins are held
 # to the same version for that reason. A deliberate divergence changes this script, not the docs.
 #
-# Usage: version-pins.sh [expected-version]      (bare X.Y.Z, no leading v)
+# Usage: version-pins.sh [expected-version | --newest-release-tag]
+#   expected-version       bare X.Y.Z, no leading v
+#   --newest-release-tag   expected = the newest RELEASE tag (vX.Y.Z exactly — a pre-release tag
+#                          such as v0.2.0-alpha or v0.1.1-rc.1 is never chosen, because no pin can
+#                          equal it and the gate would be unsatisfiable until the tag was deleted)
 # Exit 0 when the pins agree (and match the expected version, if given). Exit 1 naming each pin
-# that disagrees. Exit 2 when NO pin is found at all: the patterns stopped matching, which is the
-# gate failing to run and must not read as a pass.
+# that disagrees. Exit 2 when the gate could not run — NO pin found at all (the patterns stopped
+# matching), or --newest-release-tag found NO release tag (on main after the first release that is
+# a failed tag fetch, never a real state, and it must not degrade to the weaker check silently).
 set -euo pipefail
 
 expected="${1:-}"
+if [ "$expected" = "--newest-release-tag" ]; then
+  expected=$(git tag -l 'v[0-9]*' | grep -E '^v[0-9]+\.[0-9]+\.[0-9]+$' | sort -V | tail -1 || true)
+  if [ -z "$expected" ]; then
+    echo "::error::no release tag (vX.Y.Z) is visible — on main after the first release that means the tag fetch failed, so the pins were checked against nothing"
+    exit 2
+  fi
+  echo "newest release tag: ${expected}"
+  expected="${expected#v}"
+fi
 files=$(git ls-files README.md 'docs/**/*.md' 'docs/*.md' | sort -u)
 [ -n "$files" ] || { echo "::error::no README.md or docs/*.md tracked — nothing to check"; exit 2; }
 

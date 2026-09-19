@@ -35,4 +35,12 @@ expect 2 "no pin matches at all — the gate did not run, and says so"
 write 0.1.1 0.1.1 0.1.1
 sed -i 's#@release/v0.1.1#@release/v0.1.0#' docs/runbooks/verify.md; git add -A
 expect 1 "a release-branch pin lags while every other pin is current"
+# --newest-release-tag: a pre-release tag is never chosen, and no release tag at all is a refusal
+write 0.1.1 0.1.1 0.1.1
+expect 2 "no release tag visible — the gate refuses rather than checking against nothing" --newest-release-tag
+git commit -q -m "pins"
+git tag v0.1.0; git tag v0.1.1; git tag v0.1.1-rc.1; git tag v0.2.0-alpha; git tag v0.10.0-beta.1
+expect 0 "newest RELEASE tag is v0.1.1 despite v0.2.0-alpha, v0.1.1-rc.1 and v0.10.0-beta.1" --newest-release-tag
+git tag v0.10.0
+expect 1 "v0.10.0 sorts above v0.2.0-alpha AND above v0.1.1 numerically, and the pins now lag it" --newest-release-tag
 echo "all cases behaved"
