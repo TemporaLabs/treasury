@@ -9,12 +9,12 @@ Open Agent Treasury (OAT) gives an agent the tools to manage on-chain capital, s
 idle USDC. Its first skill, **Earn**, lets an agent inspect Tempora-curated vaults on Base, check
 what a position is worth and how much of it is withdrawable now, and prepare deposits and
 withdrawals. The agent's own wallet stays the account and the agent's own signer stays the only
-thing that can move money — Agent Treasury prepares unsigned transactions; it never signs.
+thing that can move money — OAT prepares unsigned transactions; it never signs.
 
 A [treasury management system](https://treasury.ripple.com/posts/what-is-treasury-management-system)
-is the software a finance team runs to centralise cash, investments, payments and reporting. Agent
-Treasury is that system with an AI agent as the treasurer and digital assets as the balance sheet —
-starting with the investment function.
+is the software a finance team runs to centralise cash, investments, payments and reporting. OAT is
+that system with an AI agent as the treasurer and digital assets as the balance sheet — starting
+with the investment function.
 
 > **Experimental — pre-1.0.** Behaviour may change between versions. Review every transaction before
 > signing it, and read [`docs/risks.md`](docs/risks.md) before a first deposit.
@@ -24,13 +24,13 @@ starting with the investment function.
 Agents are starting to hold real balances — budgets, revenue, working capital — and most of it sits
 idle in a wallet. Treasury management is the discipline of knowing what money is available,
 deciding what must stay available, controlling how it moves, and putting genuine surplus to work
-within a risk budget. Agent Treasury gives an agent that discipline as tools, with the rule a
+within a risk budget. OAT gives an agent that discipline as tools, with the rule a
 treasurer works under built in: it can measure, decide and prepare, and only the owner's signer can
 execute.
 
 ## The first skill: Earn
 
-Agent Treasury ships one skill today, **`earn`** — put idle USDC to work in a Tempora vault and
+OAT ships one skill today, **`earn`** — put idle USDC to work in a Tempora vault and
 manage the position.
 
 - **Deposit.** Idle USDC goes into a Tempora vault. Before anything is built, the skill shows the
@@ -46,14 +46,14 @@ permission to invest it. Everything is USDC in, USDC out, and every action comes
 **unsigned** transactions for the agent's own signer:
 
 ```
-   agent ──▶ Agent Treasury ──▶ { requires_signature: true, status: "unsigned", calls: [...] }
-                                                    │
-                                your signer — a wallet, a policy engine, a token-bound account
-                                                    │
-                                                  Base
+   agent ──▶ OAT ──▶ { requires_signature: true, status: "unsigned", calls: [...] }
+                                         │
+                     your signer — a wallet, a policy engine, a token-bound account
+                                         │
+                                       Base
 ```
 
-Agent Treasury cannot sign, send or transfer, and there is no tool that would let it. A test fails
+OAT cannot sign, send or transfer, and there is no tool that would let it. A test fails
 the build if anything in this package reads a private key.
 
 ## Where the money goes
@@ -87,7 +87,7 @@ events. The live rate is
 on-chain, and a yield is always a measurement of the past, not a promise.
 
 **Fees and interest.** The default is a Tempora-curated destination. Its fees are readable on-chain
-— none was set at the last measurement — and Tempora can set them as curator. Agent Treasury offers it
+— none was set at the last measurement — and Tempora can set them as curator. OAT offers it
 because it is Tempora's, not because it is the best-yielding vault available.
 
 ## An example
@@ -160,8 +160,8 @@ Pull requests are welcome. Commits carry a `Signed-off-by` trailer (`git commit 
 
 ## Licence
 
-Agent Treasury is open source under the [Apache License, Version 2.0](LICENSE). Use it, modify it,
+OAT is open source under the [Apache License, Version 2.0](LICENSE). Use it, modify it,
 redistribute it — inside commercial agents, wallets and hosted services — keeping [`LICENSE`](LICENSE)
 and [`NOTICE`](NOTICE). The Tempora names and marks are not licensed (section 6): a fork may say it is based on
-Agent Treasury; it may not present itself as the official distribution. Tempora's fund-operations infrastructure is separate and is not
+OAT; it may not present itself as the official distribution. Tempora's fund-operations infrastructure is separate and is not
 part of this repository. More: [`docs/licensing.md`](docs/licensing.md).
