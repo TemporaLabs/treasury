@@ -25,10 +25,10 @@ const INITIALIZE =
     params: { protocolVersion: "2025-06-18", capabilities: {}, clientInfo: { name: "test", version: "0" } },
   }) + "\n";
 
-/** Run `node <entry>`, write one initialize request, return the first stdout line (or "" if none). */
-function firstReply(entry: string): Promise<{ stdout: string; stderr: string; code: number | null }> {
+/** Run `node [...flags] <entry>`, write one initialize request, return what came back. */
+function firstReply(entry: string, flags: string[] = []): Promise<{ stdout: string; stderr: string; code: number | null }> {
   return new Promise((resolvePromise) => {
-    const p = spawn("node", [entry], { stdio: ["pipe", "pipe", "pipe"] });
+    const p = spawn("node", [...flags, entry], { stdio: ["pipe", "pipe", "pipe"] });
     let stdout = "";
     let stderr = "";
     p.stdout.on("data", (d) => (stdout += d));
@@ -82,6 +82,18 @@ describe("the bundle starts the server only when it is the entry file", () => {
 
   it("imported by an unrelated script named `*server.mjs`, it does NOT start: no reply, clean exit", async () => {
     const r = await firstReply(importer);
+    expect(r.stdout).toBe("");
+    expect(r.stderr).toBe("");
+    expect(r.code).toBe(0);
+  });
+
+  it("preloaded with `--import` ahead of another entry named `*server.mjs`, it does NOT start", async () => {
+    // import.meta.url is the bundle, process.argv[1] is the other entry: the guard reads "not me".
+    // The name-based guard this replaced started the server here whenever the OTHER entry's name
+    // ended in `server.mjs` — which is the entry's name, not the bundle's.
+    const other = join(dir, "other-server.mjs");
+    writeFileSync(other, "");
+    const r = await firstReply(other, ["--import", pathToFileURL(BUNDLE).href]);
     expect(r.stdout).toBe("");
     expect(r.stderr).toBe("");
     expect(r.code).toBe(0);
