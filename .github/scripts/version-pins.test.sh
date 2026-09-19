@@ -5,6 +5,9 @@ set -euo pipefail
 here="$(cd "$(dirname "$0")" && pwd)"; check="$here/version-pins.sh"
 tmp="$(mktemp -d)"; trap 'rm -rf "$tmp"' EXIT
 cd "$tmp"; git init -q -b main .; mkdir -p docs/runbooks
+# the tag cases commit, and a CI runner has no git identity of its own
+export GIT_AUTHOR_NAME="Ada Example" GIT_AUTHOR_EMAIL="ada@example.org"
+export GIT_COMMITTER_NAME="Ada Example" GIT_COMMITTER_EMAIL="ada@example.org"
 
 write() { # write <version-for-README> <version-for-docs> <version-for-runbook>
   printf 'npm install @temporalabs/treasury@%s\nclaude plugin marketplace add TemporaLabs/treasury-plugin@v%s\n' "$1" "$1" > README.md
