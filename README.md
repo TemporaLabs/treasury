@@ -1,6 +1,6 @@
 # Agent Treasury
 
-**Treasury management system for AI agents.** By Tempora Labs.
+**The treasury management system (TMS) for AI agents.** By Tempora Labs.
 
 [![ci](https://github.com/TemporaLabs/treasury/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/TemporaLabs/treasury/actions/workflows/ci.yml)
 [![DCO](https://github.com/TemporaLabs/treasury/actions/workflows/dco.yml/badge.svg)](https://github.com/TemporaLabs/treasury/actions/workflows/dco.yml)
@@ -10,6 +10,11 @@ idle USDC. Its first skill, **Earn**, lets an agent inspect Tempora-curated vaul
 what a position is worth and how much of it is withdrawable now, and prepare deposits and
 withdrawals. The agent's own wallet stays the account and the agent's own signer stays the only
 thing that can move money — Agent Treasury prepares unsigned transactions; it never signs.
+
+A [treasury management system](https://treasury.ripple.com/posts/what-is-treasury-management-system)
+is the software a finance team runs to centralise cash, investments, payments and reporting. Agent
+Treasury is that system with an AI agent as the treasurer and digital assets as the balance sheet —
+starting with the investment function.
 
 > **Experimental — pre-1.0.** Behaviour may change between versions. Review every transaction before
 > signing it, and read [`docs/risks.md`](docs/risks.md) before a first deposit.
