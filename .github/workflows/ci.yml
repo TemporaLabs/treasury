@@ -66,6 +66,28 @@ jobs:
           print("\n".join(bad) or "all docs links resolve")
           sys.exit(1 if bad else 0)
           PY
+      # The install instructions pin a version on purpose (an immutable publish cannot drift); the
+      # cost is eight prose pins nothing tied to a release. Script + proof in .github/scripts.
+      # On main the pins must name the newest RELEASE tag (pre-release tags are never chosen) — a
+      # tag pushed without its follow-up documentation change (docs/release-process.md step 6) goes
+      # red on the next push here; and on main, zero visible release tags is a failed fetch, not a
+      # state, so the script refuses rather than dropping to the weaker check.
+      # On a release branch the docs legitimately lag package.json until the publish has happened,
+      # so only their agreement with each other is checked there. That couples this gate to the
+      # written order: the release pull request itself passes ONLY because step 6 follows the tag.
+      - name: documentation pins ONE version — and on main, the newest release tag
+        env:
+          TARGET: ${{ github.base_ref || github.ref_name }}
+        run: |
+          if [ "$TARGET" = "main" ]; then
+            git fetch -q --depth=1 origin '+refs/tags/*:refs/tags/*' || echo "::warning::tag fetch failed"
+            bash .github/scripts/version-pins.sh --newest-release-tag
+          else
+            echo "${TARGET}: pins must agree with each other"
+            bash .github/scripts/version-pins.sh
+          fi
+      - name: the version-pin gate can still go red (10 offline cases)
+        run: bash .github/scripts/version-pins.test.sh
       # The decision lives in .github/scripts/detect-package.sh, with a case-driven proof beside
       # it — it gates ten steps plus the whole `attest` job, and it has been wrong twice.
       - name: detect packages (a documents-only version branch has none — a MOVED one is an error)
