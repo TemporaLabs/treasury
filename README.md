@@ -5,6 +5,10 @@
 [![ci](https://github.com/TemporaLabs/treasury/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/TemporaLabs/treasury/actions/workflows/ci.yml)
 [![DCO](https://github.com/TemporaLabs/treasury/actions/workflows/dco.yml/badge.svg)](https://github.com/TemporaLabs/treasury/actions/workflows/dco.yml)
 
+<p align="center">
+  <img src="docs/assets/oat-mascot.svg" alt="Open Agent Treasury mascot: a blue pirate robot holding a purple treasure chest" width="320" height="320">
+</p>
+
 Open Agent Treasury (OAT) gives an agent the tools to manage on-chain capital, starting with earning yield on
 idle USDC. Its first skill, **Earn**, lets an agent inspect Tempora-curated vaults on Base, check
 what a position is worth and how much of it is withdrawable now, and prepare deposits and
