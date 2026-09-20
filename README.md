@@ -9,6 +9,7 @@
   <img src="docs/assets/oat-mascot.svg" alt="Open Agent Treasury mascot: a blue pirate robot holding a purple treasure chest" width="320" height="320">
 </p>
 
+
 Open Agent Treasury (OAT) helps agents manage on-chain capital. Its first skill, **Earn**, lets
 agents inspect Tempora-curated vaults on Base, track USDC positions, and prepare deposits and
 withdrawals. It ships as an agent plugin, an MCP server, and a TypeScript/JavaScript library.
