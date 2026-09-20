@@ -1,6 +1,6 @@
 # Open Agent Treasury
 
-**The open-sourced treasury management system (TMS) for AI agents.** By Tempora Labs.
+**The open-source treasury management system (TMS) for AI agents.** By Tempora Labs.
 
 [![ci](https://github.com/TemporaLabs/treasury/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/TemporaLabs/treasury/actions/workflows/ci.yml)
 [![DCO](https://github.com/TemporaLabs/treasury/actions/workflows/dco.yml/badge.svg)](https://github.com/TemporaLabs/treasury/actions/workflows/dco.yml)
@@ -9,163 +9,110 @@
   <img src="docs/assets/oat-mascot.svg" alt="Open Agent Treasury mascot: a blue pirate robot holding a purple treasure chest" width="320" height="320">
 </p>
 
-Open Agent Treasury (OAT) gives an agent the tools to manage on-chain capital, starting with earning yield on
-idle USDC. Its first skill, **Earn**, lets an agent inspect Tempora-curated vaults on Base, check
-what a position is worth and how much of it is withdrawable now, and prepare deposits and
-withdrawals. The agent's own wallet stays the account and the agent's own signer stays the only
-thing that can move money — OAT prepares unsigned transactions; it never signs.
+Open Agent Treasury (OAT) helps agents manage on-chain capital. Its first skill, **Earn**, lets
+agents inspect Tempora-curated vaults on Base, track USDC positions, and prepare deposits and
+withdrawals. It ships as an agent plugin, an MCP server, and a TypeScript/JavaScript library.
 
-A [treasury management system](https://treasury.ripple.com/posts/what-is-treasury-management-system)
-is the software a finance team runs to centralise cash, investments, payments and reporting. OAT is
-that system with an AI agent as the treasurer and digital assets as the balance sheet — starting
-with the investment function.
+**OAT prepares transactions. Your signer executes them.** It never holds private keys, signs,
+or sends transactions. You decide how much capital an agent may put to work.
 
-> **Experimental — pre-1.0.** Behaviour may change between versions. Review every transaction before
-> signing it, and read [`docs/risks.md`](docs/risks.md) before a first deposit.
+> **Experimental — pre-1.0. Real funds, real risk.** Returns are variable, capital is at risk,
+> and withdrawals depend on available liquidity. Review every transaction before signing and
+> read the [risks](docs/risks.md) before depositing.
 
-## Why
+## What you can do
 
-Agents are starting to hold real balances — budgets, revenue, working capital — and most of it sits
-idle in a wallet. Treasury management is the discipline of knowing what money is available,
-deciding what must stay available, controlling how it moves, and putting genuine surplus to work
-within a risk budget. OAT gives an agent that discipline as tools, with the rule a
-treasurer works under built in: it can measure, decide and prepare, and only the owner's signer can
-execute.
+- **Inspect vaults:** check assets, fees, and deposit access.
+- **Prepare a deposit:** review terms and simulate access before building unsigned calls.
+- **Track a position:** see its value, deposits, and earnings from on-chain records.
+- **Prepare a withdrawal:** check how much is withdrawable now and build unsigned calls.
 
-## The first skill: Earn
+Earn currently supports **USDC in, USDC out** through Tempora's ERC-4626 vaults on Base.
+See the [eight `earn_*` tools](docs/tools.md) for inputs, outputs, and limits.
 
-OAT ships one skill today, **`earn`** — put idle USDC to work in a Tempora vault and
-manage the position.
+## Quick start
 
-- **Deposit.** Idle USDC goes into a Tempora vault. Before anything is built, the skill shows the
-  terms once and checks, by simulating the deposit, that this account is actually allowed in.
-- **Hold.** The position earns the vault's variable yield. The skill reports what it is worth, what
-  went in and what it has earned, read from the vault's own on-chain records — never a guess.
-- **Withdraw.** Some or all, subject to the vault's available liquidity. No vault offered today has a
-  lock-up or queues withdrawals: a withdrawal settles in the same transaction, and the skill
-  measures what can be withdrawn *right now* before you sign.
+**Requires Node.js 22+ on your `PATH`.** Use a keyed Base RPC; the public fallback rate-limits quickly.
 
-What amount is surplus is the operator's call, not the skill's: a balance in a wallet is not
-permission to invest it. Everything is USDC in, USDC out, and every action comes back as
-**unsigned** transactions for the agent's own signer:
-
-```
-   agent ──▶ OAT ──▶ { requires_signature: true, status: "unsigned", calls: [...] }
-                                         │
-                     your signer — a wallet, a policy engine, a token-bound account
-                                         │
-                                       Base
-```
-
-OAT cannot sign, send or transfer, and there is no tool that would let it. A test fails
-the build if anything in this package reads a private key.
-
-## Where the money goes
-
-A Tempora vault is an ERC-4626 vault on Base, curated by Tempora Labs, that lends USDC into
-on-chain lending markets. **Cash Plus USDC** is the offering: stablecoin only, no lock-up, yield
-from lending, positions readable on-chain by anyone. These are experimental, yield-bearing vault
-positions, not bank savings accounts: returns are variable, capital is at risk, and a withdrawal
-depends on the liquidity available when it is made.
-
-| vault | chassis | deposits | address |
-|---|---|---|---|
-| **Cash Plus USDC (Test 2)** — the default | Morpho Vault V2 | open to any account | [`0x040fCA…134Cf`](https://basescan.org/address/0x040fCA12673778FEED5DA7b2ccFbbAb0cc0134Cf) |
-| Cash Plus USDC (Test 2A) | IPOR Fusion | whitelist-gated | [`0x1516D2…299ef`](https://basescan.org/address/0x1516D2c082b9cc9af852B1Ebc828f168F27299ef) |
-
-**The default is Cash Plus USDC (Test 2).** It lends through Morpho on Base, keeps a liquid balance
-for withdrawals, and any account can deposit. "Test" is in the name on purpose: these are the
-test-series vaults — real contracts, real USDC, real positions — operated by Tempora while the
-product is proven. The full detail, with the block each fact was measured at, is in
-[`docs/vaults.md`](docs/vaults.md).
-
-**Liquidity.** No vault offered today has a lock-up. A withdrawal is paid from the
-vault's liquid balance and then by unwinding positions in the same transaction; under stress part
-of a position may take longer, and the skill measures what is exitable now rather than promising.
-
-**Yield.** A floating USDC lending rate — what the vault's positions earn, less any vault fee. The
-default charged no fee and was earning **4.4% net APY** (30-day average 4.4%) when measured on
-2026-09-17 through Morpho's public API — by a human, not by this client, which quotes no rate at
-all. The skill reports the share price and what your own position has earned, from the vault's
-events. The live rate is
-on-chain, and a yield is always a measurement of the past, not a promise.
-
-**Fees and interest.** The default is a Tempora-curated destination. Its fees are readable on-chain
-— none was set at the last measurement — and Tempora can set them as curator. OAT offers it
-because it is Tempora's, not because it is the best-yielding vault available.
-
-## An example
-
-```
-you     Put 25 USDC to work.
-
-agent   Cash Plus USDC (Test 2) is open to this account. 25 USDC buys <shares> at today's
-        share price. Two transactions to sign, in order:
-        { requires_signature: true, status: "unsigned",
-          calls: [ approve(USDC → vault, 25 USDC), deposit(25 USDC, account) ] }
-
-you     Sign them — or don't. Nothing has happened yet.
-
-        …later…
-
-you     What is it worth, and how much can I take out today?
-
-agent   25.09 USDC; 25.09 withdrawable now. Put in 25.00, earned 0.09.
-```
-
-## Install
-
-**Claude Code** — pin to a release tag; a tag is immutable, so the install cannot drift:
+### Claude Code
 
 ```bash
+export TREASURY_RPC_BASE=https://...  # replace with your Base RPC URL
 claude plugin marketplace add TemporaLabs/treasury-plugin@v0.1.0
 claude plugin install treasury@treasury
-export TREASURY_RPC_BASE=https://...   # a keyed Base RPC; unset = the public RPC, which rate-limits quickly
 ```
 
-Before a release is tagged, pin its release branch instead —
-`claude plugin marketplace add TemporaLabs/treasury-plugin@release/v0.1.0`. Dropping the `@<ref>`
-suffix tracks the plugin repository's default branch.
+Restart your Claude Code session after installing so the MCP tools connect. Before a release is
+tagged, use `@release/v0.1.0` instead of `@v0.1.0`. Keep the ref explicit to avoid tracking the
+plugin repository's default branch.
 
-The plugin is packaged in [TemporaLabs/treasury-plugin](https://github.com/TemporaLabs/treasury-plugin)
-from this repository's releases.
-
-**npm** — the same server, and the library, for any other MCP host or for your own code:
+### Other MCP hosts
 
 ```bash
 npm install @temporalabs/treasury@0.1.0
 ```
 
-Point your MCP host at `node_modules/@temporalabs/treasury/dist/mcp-server.mjs` — the same attested
-bundle the plugin carries. Details, including the library entry points —
-[`docs/install.md`](docs/install.md).
+Add the server to your host's MCP configuration, replacing the path and RPC URL:
+
+```json
+{
+  "mcpServers": {
+    "treasury": {
+      "command": "node",
+      "args": ["<absolute-project-path>/node_modules/@temporalabs/treasury/dist/mcp-server.mjs"],
+      "env": { "TREASURY_RPC_BASE": "https://..." }
+    }
+  }
+}
+```
+
+In v0.1.0, run the bundle by path as shown; the `treasury-mcp` shortcut does not start the server.
+For library usage, host setup, and troubleshooting, see [installation](docs/install.md).
+
+### Try it
+
+Ask your agent:
+
+> Show me the available vaults and their risks. Then prepare a 25 USDC deposit into the default vault.
+
+OAT returns unsigned calls for your signer to review and execute. Preparing a deposit moves no money.
+Later, ask: **“What is my position worth, and how much can I withdraw now?”**
+
+## Vaults
+
+The default, **Cash Plus USDC (Test 2)**, uses Morpho Vault V2 and is open to any account.
+**Cash Plus USDC (Test 2A)** uses IPOR Fusion and requires whitelist access. Both are experimental
+vaults using real USDC, not bank savings accounts. Neither currently has a lock-up, but liquidity
+can limit withdrawals.
+
+Tempora Labs curates these vaults and can set fees. OAT offers Tempora's vaults; it does not compare
+them against the market or promise the best yield. It reports your position's value and earnings,
+not a quoted APY.
+
+See [vault details](docs/vaults.md) for addresses, access rules, fees, and dated measurements.
 
 ## Security
 
-- **No keys, no custody.** Funds move only in transactions your signer approves, from your account.
-- **No telemetry.** The server calls the RPC you configure and nothing else — no analytics, no
-  yield API, no vendor. A keyed RPC URL is treated as a secret and never repeated in output.
-- **A verifiable bundle.** The server is rebuilt in CI and must match byte-for-byte; every build
-  carries a provenance attestation you can check —
-  [`docs/runbooks/verify_the_bundle.md`](docs/runbooks/verify_the_bundle.md).
-- **Found a vulnerability?** [`SECURITY.md`](SECURITY.md) — privately, never as a public issue.
+- **No keys or custody:** your wallet holds the position; only your signer can move funds.
+- **Direct RPC access:** no Tempora service in the request path and no telemetry. Keyed RPC URLs are redacted.
+- **Verifiable builds:** CI checks the committed bundle; [verify its provenance](docs/runbooks/verify_the_bundle.md).
+- **Private vulnerability reporting:** follow [SECURITY.md](SECURITY.md), not a public issue.
 
 ## Documentation
 
-[`docs/`](docs/README.md) — install, the tools under the skill, the vaults, the risks,
-configuration, the security model, and a runbook for signing and sending.
-Release notes: [`CHANGELOG.md`](CHANGELOG.md).
+- [Tool reference](docs/tools.md) · [Configuration](docs/configuration.md)
+- [Risks](docs/risks.md) · [Security model](docs/security-model.md)
+- [Signing and sending](docs/runbooks/sign_and_send.md) · [All docs](docs/README.md) · [Changelog](CHANGELOG.md)
 
 ## Contributing
 
-Pull requests are welcome. Commits carry a `Signed-off-by` trailer (`git commit -s`) certifying the
-[Developer Certificate of Origin](DCO.md). How to build, test and what a change must keep true:
-[`CONTRIBUTING.md`](CONTRIBUTING.md).
+Feedback and pull requests are welcome. See [CONTRIBUTING.md](CONTRIBUTING.md) for development,
+testing, and contribution guidelines. Every commit needs a `Signed-off-by` trailer (`git commit -s`)
+certifying the [Developer Certificate of Origin](DCO.md).
 
 ## Licence
 
-OAT is open source under the [Apache License, Version 2.0](LICENSE). Use it, modify it,
-redistribute it — inside commercial agents, wallets and hosted services — keeping [`LICENSE`](LICENSE)
-and [`NOTICE`](NOTICE). The Tempora names and marks are not licensed (section 6): a fork may say it is based on
-OAT; it may not present itself as the official distribution. Tempora's fund-operations infrastructure is separate and is not
-part of this repository. More: [`docs/licensing.md`](docs/licensing.md).
+[Apache-2.0](LICENSE). Keep [LICENSE](LICENSE) and [NOTICE](NOTICE) when redistributing.
+The licence does not grant rights to Tempora's names or marks; forks must not claim to be the
+official distribution. Tempora's fund-operations infrastructure is separate from this repository.
+See [licensing](docs/licensing.md) for details.
