@@ -1,4 +1,4 @@
-# Open Agent Treasury
+# OAT: Open Agent Treasury
 
 **The open-source treasury management system (TMS) for AI agents.** By Tempora Labs.
 
