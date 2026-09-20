@@ -1,6 +1,6 @@
-# OAT: Open Agent Treasury
+# Open Agent Treasury
 
-**The open-source treasury management system (TMS) for AI agents.** Built by Tempora Labs.
+**The open-source treasury management system (TMS) for AI agents.** Built by Tempora Labs and contributors.
 
 [![ci](https://github.com/TemporaLabs/treasury/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/TemporaLabs/treasury/actions/workflows/ci.yml)
 [![DCO](https://github.com/TemporaLabs/treasury/actions/workflows/dco.yml/badge.svg)](https://github.com/TemporaLabs/treasury/actions/workflows/dco.yml)
