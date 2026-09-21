@@ -108,8 +108,9 @@ if (privyAppId) files["/privy-provider.js"] = ["text/javascript; charset=utf-8",
 const DEFAULT_CSP = "default-src 'none'; script-src 'self' 'unsafe-inline'; connect-src 'self'; style-src 'unsafe-inline'; base-uri 'none'; form-action 'none'; object-src 'none'; frame-ancestors 'none'";
 // Privy mode only. Privy's login and wallet run against Privy's own servers and an iframe, so this page
 // may talk to them, and to the Base RPC its wallet reads from, and to nothing else. The default page above
-// never gets these; a page served without --privy-app-id cannot reach any of them.
-const PRIVY_CSP = "default-src 'none'; script-src 'self' 'unsafe-inline'; connect-src 'self' https://auth.privy.io https://*.privy.io https://mainnet.base.org; style-src 'unsafe-inline'; img-src data: https://*.privy.io; font-src data:; frame-src https://auth.privy.io https://*.privy.io; base-uri 'none'; form-action 'none'; object-src 'none'; frame-ancestors 'none'";
+// never gets these; a page served without --privy-app-id cannot reach any of them. The wallet's reads and
+// sends go to Privy's own Base RPC (privy.systems, a different domain from privy.io), named here exactly.
+const PRIVY_CSP = "default-src 'none'; script-src 'self' 'unsafe-inline'; connect-src 'self' https://auth.privy.io https://*.privy.io https://base-mainnet.rpc.privy.systems https://mainnet.base.org; style-src 'unsafe-inline'; img-src data: https://*.privy.io; font-src data:; frame-src https://auth.privy.io https://*.privy.io; base-uri 'none'; form-action 'none'; object-src 'none'; frame-ancestors 'none'";
 const CSP = privyAppId ? PRIVY_CSP : DEFAULT_CSP;
 
 const server = http.createServer((req, res) => {

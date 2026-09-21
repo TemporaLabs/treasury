@@ -61,7 +61,7 @@ describe("open.mjs --privy-app-id", () => {
 
     const csp = String((await get(url, "/")).headers["content-security-policy"]);
     const directive = (name: string) => (csp.split(";").map((d) => d.trim()).find((d) => d.startsWith(name + " ")) ?? "").split(/\s+/).slice(1);
-    expect(directive("connect-src").sort()).toEqual(["'self'", "https://*.privy.io", "https://auth.privy.io", "https://mainnet.base.org"].sort());
+    expect(directive("connect-src").sort()).toEqual(["'self'", "https://*.privy.io", "https://auth.privy.io", "https://base-mainnet.rpc.privy.systems", "https://mainnet.base.org"].sort());
     expect(directive("frame-src").sort()).toEqual(["https://*.privy.io", "https://auth.privy.io"].sort());
     expect(directive("script-src")).toEqual(["'self'", "'unsafe-inline'"]); // no eval, no remote script
     expect(directive("default-src")).toEqual(["'none'"]);
