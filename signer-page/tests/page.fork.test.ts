@@ -475,6 +475,43 @@ fork("the sign page in a browser, on a fork of Base", () => {
     expect([...writes].sort()).toEqual(["eth_requestAccounts", "eth_sendTransaction"]);
   }, 180_000);
 
+  it("privy mode: no wallet extension is needed, login is offered, and a new wallet is told how to get funded", async () => {
+    // A stub stands in for Privy's 5 MB bundle: it answers like a wallet that was just created (no USDC, no ETH).
+    const NEW_WALLET = "0x3333333333333333333333333333333333333333";
+    const stubFile = join(mkdtempSync(join(tmpdir(), "treasury-privy-stub-")), "privy-provider.js");
+    writeFileSync(stubFile, `export async function connectPrivy(appId) {
+      globalThis.__privyAppId = appId;
+      const answers = { eth_chainId: "0x2105", eth_accounts: ["${NEW_WALLET}"], eth_requestAccounts: ["${NEW_WALLET}"], eth_call: "0x" + "0".repeat(64), eth_getBalance: "0x0" };
+      return { request: async ({ method }) => answers[method], on() {} };
+    }`);
+    const url = await new Promise<string>((ok, no) => {
+      const child = spawn(process.execPath, [OPENER, "--no-open", "--port", "0", "--minutes", "5", "--manual", "--privy-app-id", "cmubfegl2028d0ci3n0f2u6z5", "--privy-bundle", stubFile], { stdio: ["ignore", "pipe", "pipe"] });
+      served = { url: "", stop: () => child.kill() };
+      let out = "";
+      child.stdout!.on("data", (d) => { out += d; const m = out.match(/(http:\/\/127\.0\.0\.1:\d+\/#\S+)/); if (m) ok(m[1]!); });
+      child.on("exit", (c) => no(new Error(`opener exited ${c}`)));
+    });
+    tab = await openTab(null); //                        a browser with no wallet extension at all
+    await tab.goto(url);
+    await tab.waitFor("!document.querySelector('#connect').hidden", "the connect card");
+    expect(await tab.ev("document.querySelector('#fatal').hidden")).toBe(true); // not "no wallet extension found"
+    expect(await tab.text("#btn-connect")).toBe("Log in with email");
+    expect(await tab.text("#wallet-status")).toMatch(/Privy will email you a code/);
+    expect(await tab.ev("globalThis.__privyAppId")).toBe("cmubfegl2028d0ci3n0f2u6z5");
+
+    await tab.click("#btn-connect");
+    await tab.waitFor("!document.querySelector('#manual').hidden && document.querySelector('#position').innerText.length > 0", "the position card");
+    const pos = await tab.text("#position");
+    expect(pos).toContain(NEW_WALLET);
+    expect(pos).toMatch(/fund this wallet/i); //          told to send USDC and ETH on Base to the address shown
+    expect(pos).toMatch(/low: a vault transaction can be refused/);
+    // A deposit it cannot cover is refused before anything is built.
+    await typeInto(tab, "#amt-deposit", "1");
+    await tab.click("#btn-deposit");
+    await tab.waitFor("/you have 0 USDC/.test(document.querySelector('#manual-msg').innerText)", "the refusal");
+    expect(await tab.ev("document.querySelector('#calls').hidden")).toBe(true);
+  }, 60_000);
+
   it("withdraw everything (redeem the exact share balance) empties the position", async () => {
     // Put a position in place directly on the fork, then take it out through the page.
     await direct(depositCalls());

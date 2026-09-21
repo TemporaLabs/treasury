@@ -16,6 +16,9 @@ Pre-1.0, minor versions may change tool names, schemas and behaviour.
   agent's prose; or `open.mjs --manual`, where you type a deposit or withdrawal amount on the page. The
   page's own calls go through the same validator as an envelope. The core package does not depend on it,
   import it, or publish it, and a test keeps it that way.
+  An opt-in `--privy-app-id` mode replaces the browser extension with an email login that Privy turns
+  into a wallet on Base; it loads a bundle you build yourself and widens the page's policy to Privy only in
+  that mode.
   **This adds a wallet-facing client, which CONTRIBUTING rule 1 says will not merge; see the pull
   request for the decision it needs.**
 

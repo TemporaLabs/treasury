@@ -30,6 +30,7 @@ let firstCount = 0; // calls before this index are asked for straight away; the 
 let following = false; // no --account: the calls are re-aimed at whichever wallet the operator connects
 let manual = false; //    --manual: no envelope; the operator types an amount and the page builds the calls
 let manualVault = null;
+let setWalletLater = ""; // the wallet card's first line, set once the card exists
 try {
   const frag = location.hash.slice(1);
   if (!frag) throw new Error("there are no calls in the address. Open the full address the opener printed (it ends in a long #… part), or run: node signer-page/open.mjs --account 0x… --file envelope.json");
@@ -93,18 +94,33 @@ if (manual) {
 } else renderDestination();
 
 // ---- wallet
-await new Promise((resolve) => {
-  if (window.ethereum) return resolve();
-  addEventListener("ethereum#initialized", resolve, { once: true });
-  setTimeout(resolve, 1500);
-});
-const eth = window.ethereum;
-if (!eth) {
-  fatal("no wallet extension found in this browser (window.ethereum is missing). Open this page in the browser that has MetaMask, Rabby or Coinbase Wallet, or use the terminal hand-off.");
-  throw new Error("no wallet");
+// Either the browser's own extension, or (only when the opener was given --privy-app-id) an email login
+// that Privy turns into a wallet. Both are handed to the rest of the page as the same kind of provider,
+// and the page asks either one for the same fixed list of methods.
+let eth;
+if (payload.privyAppId !== undefined) {
+  if (!/^[a-z0-9]{10,40}$/.test(String(payload.privyAppId))) { fatal("the Privy app id in the address is not an app id"); throw new Error("bad privy app id"); }
+  try {
+    const { connectPrivy } = await import("./privy-provider.js");
+    eth = await connectPrivy(payload.privyAppId);
+  } catch (e) { fatal(`Privy could not start: ${msgOf(e)}`); throw e; }
+  $("#btn-connect").textContent = "Log in with email";
+  setWalletLater = "Not logged in. Privy will email you a code and create a wallet for you on Base.";
+} else {
+  await new Promise((resolve) => {
+    if (window.ethereum) return resolve();
+    addEventListener("ethereum#initialized", resolve, { once: true });
+    setTimeout(resolve, 1500);
+  });
+  eth = window.ethereum;
+  if (!eth) {
+    fatal("no wallet extension found in this browser (window.ethereum is missing). Open this page in the browser that has MetaMask, Rabby or Coinbase Wallet, or use the terminal hand-off.");
+    throw new Error("no wallet");
+  }
 }
 const rpc = (method, params = []) => eth.request({ method, params });
 $("#connect").hidden = false;
+const privyMode = payload.privyAppId !== undefined;
 
 let connected = false; // the operator has connected once
 let walletOk = false; //  connected, on Base, and the right account — kept current by the wallet's events
@@ -114,6 +130,7 @@ const steps = [];
 const hashes = [];
 
 const setWallet = (text, cls = "muted") => { const w = $("#wallet-status"); w.textContent = text; w.className = cls; };
+if (setWalletLater) setWallet(setWalletLater);
 const refresh = () => {
   steps.forEach((s, i) => { s.btn.disabled = !(walletOk && !busy && i === next && !s.hash && !s.blocked); });
   if (manual) updateManual();
@@ -342,7 +359,8 @@ async function readPosition() {
   r("worth", document.createTextNode(`${units(value, v.asset.decimals)} ${v.asset.symbol}`));
   // A vault transaction asks the wallet to reserve gas for a limit of about 2.4 million, far more than it
   // uses, so a wallet holding only a sliver of ETH can be refused even though the cost would be a cent.
-  r("ETH for gas (Base)", document.createTextNode(`${units(gasEth, 18)} ETH`), ...(gasEth < 100_000_000_000_000n ? [el("br"), el("span", "muted", "low: a vault transaction can be refused with less than about 0.0001 ETH; add a little ETH on Base")] : []));
+  if (privyMode && usdc === 0n) r("fund this wallet", el("span", "muted", "This wallet is new. To deposit, send USDC and a little ETH (for gas) on Base to the address above."));
+    r("ETH for gas (Base)", document.createTextNode(`${units(gasEth, 18)} ETH`), ...(gasEth < 100_000_000_000_000n ? [el("br"), el("span", "muted", "low: a vault transaction can be refused with less than about 0.0001 ETH; add a little ETH on Base")] : []));
   updateManual();
 }
 

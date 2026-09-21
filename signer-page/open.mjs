@@ -9,32 +9,37 @@
  *   node signer-page/open.mjs --file envelope.json     (no --account: the page aims the calls at whichever wallet you connect)
  *   node signer-page/open.mjs --file deposit.json --then withdraw.json   (the withdraw appears on the page once the deposit confirms)
  *   node signer-page/open.mjs --manual [--vault tlCashPlusUSDC2]   (no envelope: deposit and withdraw any amount you type on the page)
+ *   … --privy-app-id <id>   (log in with an email code and use a Privy wallet instead of a browser extension; needs the bundle built, see privy/)
  *
  * The envelope is validated here first with the module the page uses; a poisoned one never gets a
  * URL. This process holds no key and sends nothing: the wallet in your browser does both.
  */
 import http from "node:http";
-import { readFileSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import { spawn } from "node:child_process";
 import { fileURLToPath } from "node:url";
-import { dirname, join } from "node:path";
+import { dirname, join, resolve } from "node:path";
 import { validatePayload, validateFollow, validateThen, placeholderAccount, encodePayload, slimPayload } from "./validate.mjs";
 
 const here = dirname(fileURLToPath(import.meta.url));
 const args = process.argv.slice(2);
 const opt = (k, d) => { const i = args.indexOf(k); return i >= 0 ? args[i + 1] : d; };
-const USAGE = "usage: node signer-page/open.mjs [--account 0x…] [--file envelope.json] [--then withdraw.json] | --manual [--vault symbol]  [--no-open] [--port 41337] [--minutes 30]  (envelope on stdin if no --file)";
+const USAGE = "usage: node signer-page/open.mjs [--account 0x…] [--file envelope.json] [--then withdraw.json] | --manual [--vault symbol]  [--privy-app-id id] [--no-open] [--port 41337] [--minutes 30]  (envelope on stdin if no --file)";
 
 const account = opt("--account");
 const file = opt("--file");
 const thenFile = opt("--then");
 const manual = args.includes("--manual");
 const vaultSymbol = opt("--vault");
+const privyAppId = opt("--privy-app-id");
+const privyBundleArg = opt("--privy-bundle"); // a bundle built elsewhere; the default is vendor/privy-provider.js
 const minutes = Number(opt("--minutes", "30"));
 const noOpen = args.includes("--no-open");
 const port = Number(opt("--port", "41337")); // fixed by default so the wallet's per-site permission survives between runs
 if (!Number.isInteger(port) || port < 0 || !(minutes > 0)) { console.error(USAGE); process.exit(2); }
 if (manual && (account || file || thenFile)) { console.error(`--manual builds its own calls from what you type, so it takes no envelope. ${USAGE}`); process.exit(2); }
+if (privyAppId !== undefined && !/^[a-z0-9]{10,40}$/.test(privyAppId)) { console.error(`--privy-app-id is not a Privy app id (lowercase letters and digits). ${USAGE}`); process.exit(2); }
+if (privyBundleArg && !privyAppId) { console.error(`--privy-bundle only applies with --privy-app-id. ${USAGE}`); process.exit(2); }
 if (!manual && vaultSymbol) { console.error(`--vault only applies to --manual. ${USAGE}`); process.exit(2); }
 
 let envelope, calls;
@@ -78,6 +83,13 @@ if (manual) {
   validateThen(payload, registry, first);
 } catch (e) { console.error(`refusing to open: ${e.message}`); process.exit(1); }
 
+if (privyAppId) payload.privyAppId = privyAppId;
+const privyBundle = privyBundleArg ? resolve(privyBundleArg) : join(here, "vendor", "privy-provider.js");
+if (privyAppId && !existsSync(privyBundle)) {
+  console.error("refusing to open: the Privy bundle is not built. Run: npm --prefix signer-page/privy ci && npm --prefix signer-page/privy run build");
+  process.exit(1);
+}
+
 const files = {
   "/": ["text/html; charset=utf-8", readFileSync(join(here, "index.html"))],
   "/app.mjs": ["text/javascript; charset=utf-8", readFileSync(join(here, "app.mjs"))],
@@ -85,13 +97,20 @@ const files = {
   "/registry.json": ["application/json", Buffer.from(JSON.stringify(registry))],
 };
 
+if (privyAppId) files["/privy-provider.js"] = ["text/javascript; charset=utf-8", readFileSync(privyBundle)];
+
 // The page's own script must load, so `script-src` names 'self'. It also allows inline script, because
 // a wallet extension may inject its provider that way and a stricter policy would make the page report
 // "no wallet". That is safe here: the page builds no markup from the envelope, and what the policy
 // does close is the way out. `connect-src 'self'` means nothing the page holds can be sent anywhere
 // but back to this origin, and `frame-ancestors 'none'` means it cannot be embedded.
 // (`default-src 'none'` alone is not enough: it is the fallback for script-src, and blocks the page.)
-const CSP = "default-src 'none'; script-src 'self' 'unsafe-inline'; connect-src 'self'; style-src 'unsafe-inline'; base-uri 'none'; form-action 'none'; object-src 'none'; frame-ancestors 'none'";
+const DEFAULT_CSP = "default-src 'none'; script-src 'self' 'unsafe-inline'; connect-src 'self'; style-src 'unsafe-inline'; base-uri 'none'; form-action 'none'; object-src 'none'; frame-ancestors 'none'";
+// Privy mode only. Privy's login and wallet run against Privy's own servers and an iframe, so this page
+// may talk to them, and to the Base RPC its wallet reads from, and to nothing else. The default page above
+// never gets these; a page served without --privy-app-id cannot reach any of them.
+const PRIVY_CSP = "default-src 'none'; script-src 'self' 'unsafe-inline'; connect-src 'self' https://auth.privy.io https://*.privy.io https://mainnet.base.org; style-src 'unsafe-inline'; img-src data: https://*.privy.io; font-src data:; frame-src https://auth.privy.io https://*.privy.io; base-uri 'none'; form-action 'none'; object-src 'none'; frame-ancestors 'none'";
+const CSP = privyAppId ? PRIVY_CSP : DEFAULT_CSP;
 
 const server = http.createServer((req, res) => {
   const addr = server.address();
@@ -106,7 +125,7 @@ const server = http.createServer((req, res) => {
 server.on("error", (e) => { console.error(`cannot listen on 127.0.0.1:${port}: ${e.code} — pass --port <n>`); process.exit(1); });
 server.listen(port, "127.0.0.1", () => {
   const url = `http://127.0.0.1:${server.address().port}/#${encodePayload(payload)}`;
-  console.log(`open this in the browser that has your wallet extension:\n${url}\n`);
+  console.log(privyAppId ? `open this in any browser (no wallet extension needed; you log in with an email code):\n${url}\n` : `open this in the browser that has your wallet extension:\n${url}\n`);
   console.log(`${manual ? `manual mode for ${payload.vault}: connect a wallet, then deposit or withdraw any amount you type` : `${payload.calls.length} call(s) for ${account ?? "whichever wallet you connect"}; ${account ? "the page checks the connected account against it" : "the page aims them at the wallet you connect and shows you the address before anything is sent"}`}. Serving for ${minutes} min or until Ctrl-C.`);
   if (!noOpen) {
     const cmd = process.platform === "darwin" ? "open" : process.platform === "win32" ? "start" : "xdg-open";

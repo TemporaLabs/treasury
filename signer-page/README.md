@@ -38,6 +38,41 @@ exactly the deposit after it. A test also pins its calldata byte for byte to wha
 emit. The two amount fields are the only inputs the page has; a test allows exactly those two and fails on
 any other, and on anything typed being used for more than an amount.
 
+### Privy mode: log in with an email code instead of a browser extension
+
+```bash
+npm --prefix signer-page/privy ci && npm --prefix signer-page/privy run build   # once: builds vendor/privy-provider.js
+node signer-page/open.mjs --manual --privy-app-id <your Privy app id>
+```
+
+The button becomes **Log in with email**. Privy's own modal asks for your email, sends a code, and creates
+an embedded wallet on Base for you. The rest of the page is unchanged: the same deposit and withdraw
+screens, the same validator, the same fixed list of wallet methods (the bridge in `privy/entry.jsx`
+enforces that list itself and refuses anything else). It also works with an envelope, and then follows the
+wallet Privy creates. It is opt-in: without `--privy-app-id` nothing here is loaded, the default policy is
+byte for byte the same, and the page never contacts Privy.
+
+What is different, so nobody is surprised:
+
+- **Custody.** Privy creates and holds the wallet's key material; a browser extension keeps it on your
+  machine. "Your wallet signs" is still true, but the wallet is Privy's, and you are trusting Privy.
+- **A new wallet starts empty.** The position card shows its address and says so. Send it USDC and a
+  little ETH on Base (gas) before depositing; the card shows the ETH balance and warns when it is low.
+- **Privy keeps a login session in this browser** (in its own storage, inside its script). The default page
+  stores nothing; this mode does not make that claim.
+- **The policy widens, only in this mode**, to `auth.privy.io`, `*.privy.io` and `mainnet.base.org` for
+  connections, and `*.privy.io` for frames and images. A test pins the exact list.
+- **Your Privy app must allow it.** The app id is a public identifier, not a secret. Add the page's origin
+  (`http://127.0.0.1:41337`) under allowed origins in the Privy dashboard, enable email login, and use an
+  embedded-wallet setting that lets a user create a wallet.
+- **The 5 MB bundle is built, never committed** (`vendor/` is gitignored), from versions pinned exactly in
+  `privy/package.json`. Privy's SDK brings a large dependency tree of its own, which is why this lives in
+  its own build folder and not in the core package.
+
+Verified: with the real bundle and a real app id, headless Chrome reaches the login modal and contacts only
+the page's own origin and `auth.privy.io`. Not verified: completing a login (it needs an email code), wallet
+creation under your app's settings, and sending a transaction through Privy's provider. See "Not yet covered".
+
 ### Envelope mode
 
 Leave `--account` out and the page follows the wallet you connect: the deposit's receiver (or a withdrawal's
@@ -89,7 +124,8 @@ It calls a fixed list of wallet methods and no others. Reads: `eth_chainId`, `et
 `eth_estimateGas`, `eth_getTransactionCount`, `eth_getTransactionReceipt`, `eth_getTransactionByHash`, `eth_getBalance`. Writes: `eth_requestAccounts`
 (connect), `wallet_switchEthereumChain` (to Base), and `eth_sendTransaction`, the one that makes your
 wallet ask you to confirm. It never asks a wallet to sign a message, has no field a key could be typed
-into (in manual mode, two short amount fields, allow-listed by a test), and stores nothing.
+into (in manual mode, two short amount fields, allow-listed by a test), and stores nothing (in Privy mode,
+Privy's own script keeps a login session; see above).
 
 Before each send it checks that the wallet is on Base and its selected account is the envelope's, and it
 pauses if either changes. A deposit waits for the approval to be visible on your wallet's own RPC (the
@@ -121,10 +157,11 @@ a full approve → deposit, a redeem, a poisoned address, markup in a descriptio
 confirmation, a failing receipt poll, an error after broadcast, and a wallet that changes chain or account
 midway.
 
-**Not yet covered: a real wallet extension.** The stand-in cannot show that MetaMask or Rabby injects
+**Not yet covered: a real wallet extension, and a completed Privy login.** The stand-in cannot show that MetaMask or Rabby injects
 itself into a page served with this policy. That needs one live run by a person.
 
 ## Not here, on purpose
 
-Privy or other embedded-wallet connectors, WalletConnect for phone wallets, a hosted copy of the page,
-and a one-time `connect-wallet` session are separate changes. This directory has no dependencies.
+Other embedded-wallet connectors, WalletConnect for phone wallets, a hosted copy of the page,
+and a one-time `connect-wallet` session are separate changes. The page itself has no dependencies; `privy/` is a
+separate build folder with its own pinned dev dependencies, used only to build the optional Privy bundle.
