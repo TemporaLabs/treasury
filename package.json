@@ -38,7 +38,7 @@
     "build": "tsc -b && tsup && tsx scripts/third-party-notices.ts --write",
     "typecheck": "tsc -b && tsc -p tsconfig.scripts.json",
     "test": "tsc -b && tsc -p tsconfig.scripts.json && vitest run",
-    "test:fork": "tsc -b && TREASURY_FORK=1 vitest run --testTimeout 300000 tests/fork.test.ts",
+    "test:fork": "tsc -b && TREASURY_FORK=1 vitest run --testTimeout 300000 --hookTimeout 300000 tests/fork.test.ts signer-page/tests/page.fork.test.ts",
     "mcp": "tsx src/mcp/server.ts",
     "registry:check": "tsx scripts/registry-check.ts",
     "notices:check": "tsx scripts/third-party-notices.ts"

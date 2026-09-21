@@ -4,6 +4,21 @@ All notable changes to Agent Treasury are recorded here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versions follow [SemVer](https://semver.org/).
 Pre-1.0, minor versions may change tool names, schemas and behaviour.
 
+## [Unreleased]
+
+### Added
+- **`signer-page/`, an optional companion that hands calls to your wallet extension.** It opens a
+  local page on `127.0.0.1`, connects MetaMask, Rabby or Coinbase Wallet, and sends each call with
+  `eth_sendTransaction`, so the wallet's own confirmation is the signature and nothing is copied into a
+  terminal. It holds no key, never signs a message, and never sends a step twice. Two ways in:
+  an envelope from `earn_prepare_deposit` / `earn_prepare_withdraw` (`open.mjs --file`), which it
+  validates and shows the destination of, read from the calldata and the registry rather than the
+  agent's prose; or `open.mjs --manual`, where you type a deposit or withdrawal amount on the page. The
+  page's own calls go through the same validator as an envelope. The core package does not depend on it,
+  import it, or publish it, and a test keeps it that way.
+  **This adds a wallet-facing client, which CONTRIBUTING rule 1 says will not merge; see the pull
+  request for the decision it needs.**
+
 ## [v0.1.0] - 2026-09-18
 
 The first public release. Everything below is what ships in it.
