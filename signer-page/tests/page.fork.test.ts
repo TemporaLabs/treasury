@@ -14,7 +14,7 @@ import { spawn, type ChildProcess } from "node:child_process";
 import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
-import { createPublicClient, erc20Abi, formatUnits, http, type Address } from "viem";
+import { createPublicClient, encodeFunctionData, erc20Abi, formatUnits, http, type Address } from "viem";
 import { base } from "viem/chains";
 import { erc4626Abi } from "../../src/abi/erc4626.js";
 import { buildDeposit, buildWithdraw, type UnsignedCall } from "../../src/build.js";
@@ -420,6 +420,7 @@ fork("the sign page in a browser, on a fork of Base", () => {
     expect(await t.text("#position")).toContain(ACCOUNT); //     the connected wallet, from the wallet
     expect(await t.disabled("#btn-withdraw")).toBe(true); //     no shares yet, so no withdraw to offer
     expect(await t.disabled("#max-withdraw")).toBe(true);
+    expect(await t.ev("document.querySelector('#send-panel').hidden")).toBe(true); // sending is a Privy-mode feature only
     for (const [typed, why] of [["", /enter an amount/], ["0", /more than zero/], ["abc", /enter an amount/], ["1e3", /enter an amount/], ["0.0000001", /decimal places/], ["900000000000", /you have/]] as const) {
       await typeInto(t, "#amt-deposit", typed);
       await t.click("#btn-deposit");
@@ -511,6 +512,64 @@ fork("the sign page in a browser, on a fork of Base", () => {
     await tab.waitFor("/you have 0 USDC/.test(document.querySelector('#manual-msg').innerText)", "the refusal");
     expect(await tab.ev("document.querySelector('#calls').hidden")).toBe(true);
   }, 60_000);
+
+  it("privy mode: send USDC to another address, which is checked in full, and lands exactly", async () => {
+    // The stub hands the page the injected fake wallet (routed to the fork) as if it were Privy's provider.
+    const RECIPIENT = "0x5aAeb6053F3E94C9b9A09f33669435E7Ef1BeAed" as Address; // an EIP-55 test-vector address
+    const stubFile = join(mkdtempSync(join(tmpdir(), "treasury-privy-stub-")), "privy-provider.js");
+    writeFileSync(stubFile, "export async function connectPrivy() { return window.ethereum; }");
+    await new Promise<void>((ok, no) => {
+      const child = spawn(process.execPath, [OPENER, "--no-open", "--port", "0", "--minutes", "5", "--manual", "--privy-app-id", "cmubfegl2028d0ci3n0f2u6z5", "--privy-bundle", stubFile], { stdio: ["ignore", "pipe", "pipe"] });
+      let out = "";
+      child.stdout!.on("data", (d) => { out += d; const m = out.match(/(http:\/\/127\.0\.0\.1:\d+\/#\S+)/); if (m) { served = { url: m[1]!, stop: () => child.kill() }; ok(); } });
+      child.on("exit", (c) => no(new Error(`opener exited ${c}`)));
+    });
+    tab = await openTab(wallet);
+    await tab.goto(served!.url);
+    await tab.waitFor("!document.querySelector('#connect').hidden", "the connect card");
+    await tab.click("#btn-connect");
+    await tab.waitFor("!document.querySelector('#manual').hidden && !document.querySelector('#btn-send').disabled", "the send panel to be ready");
+    expect(await tab.ev("document.querySelector('#send-panel').hidden")).toBe(false);
+
+    const refuse = async (amount: string, to: string, why: RegExp) => {
+      await typeInto(tab!, "#amt-send", amount);
+      await typeInto(tab!, "#send-to", to);
+      await tab!.click("#btn-send");
+      await tab!.waitFor(`/${why.source}/.test(document.querySelector('#manual-msg').innerText)`, `a refusal for ${JSON.stringify(to)} / ${amount}`);
+      expect(await tab!.ev("document.querySelector('#calls').hidden")).toBe(true); // nothing was built
+    };
+    await refuse("1", "", /enter the full address/);
+    await refuse("1", "0x1234", /enter the full address/);
+    await refuse("1", "0x5aAeb6053F3E94C9b9A09f33669435E7Ef1BeAEd", /typo/); //   one capital letter changed
+    await refuse("1", ACCOUNT, /own address/);
+    await refuse("1", vault.address, /token or vault contract/);
+    await refuse("1", vault.asset.address, /token or vault contract/);
+    await refuse("1", "0x" + "0".repeat(40), /zero address/);
+    await refuse("0", RECIPIENT, /more than zero/);
+    await refuse("900000000000", RECIPIENT, /you have/);
+    expect(wallet.sent()).toEqual([]);
+
+    const usdcOf = (a: Address) => pub.readContract({ address: vault.asset.address, abi: erc20Abi, functionName: "balanceOf", args: [a] }) as Promise<bigint>;
+    const before = await usdcOf(RECIPIENT);
+    await typeInto(tab, "#amt-send", "1.25");
+    await typeInto(tab, "#send-to", RECIPIENT.toLowerCase()); //   pasted in one case: accepted, and shown checksummed
+    await tab.click("#btn-send");
+    await tab.waitFor("document.querySelectorAll('#steps .step').length === 1", "the send step");
+    const card = await tab.text("#destination");
+    expect(card).toContain(RECIPIENT); //                          the recipient in full, in its checksummed form
+    expect(card).toMatch(/Send 1\.25 USDC to /);
+    expect(card).toMatch(/Check every character/);
+    expect(card).not.toContain(vault.name); //                     a send is not shown as a vault action
+    await tab.waitFor(`!document.querySelector(${JSON.stringify(send(1))}).disabled`, "the send to be ready");
+    await tab.click(send(1)); await confirmed(tab, 1);
+
+    expect((await usdcOf(RECIPIENT)) - before).toBe(1_250_000n); // exactly what was typed, to exactly that address
+    const tx = wallet.sent()[0]!.params[0];
+    expect(tx.to.toLowerCase()).toBe(vault.asset.address.toLowerCase());
+    expect(tx.data.toLowerCase()).toBe(encodeFunctionData({ abi: erc20Abi, functionName: "transfer", args: [RECIPIENT, 1_250_000n] }).toLowerCase());
+    const writes = new Set(wallet.calls.map((c) => c.method).filter((m) => !/^eth_(chainId|accounts|call|estimateGas|getTransactionCount|getTransactionReceipt|getTransactionByHash|getBalance)$/.test(m)));
+    expect([...writes].sort()).toEqual(["eth_requestAccounts", "eth_sendTransaction"]);
+  }, 120_000);
 
   it("withdraw everything (redeem the exact share balance) empties the position", async () => {
     // Put a position in place directly on the fork, then take it out through the page.

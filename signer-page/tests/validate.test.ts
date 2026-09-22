@@ -1,9 +1,9 @@
 import { describe, it, expect } from "vitest";
-import { encodeFunctionData, maxUint256, type Address, type Hex } from "viem";
+import { encodeFunctionData, erc20Abi, getAddress, keccak256 as viemKeccak, maxUint256, toBytes, type Address, type Hex } from "viem";
 import { erc4626Abi } from "../../src/abi/erc4626.js";
 import { buildDeposit, buildWithdraw, type UnsignedCall } from "../../src/build.js";
 import { loadRegistry, getVault } from "../../src/registry.js";
-import { validatePayload, validateFollow, rebindPayload, validateThen, rebindThen, placeholderAccount, parseAmount, buildManualCalls, balanceOfCalldata, convertToAssetsCalldata, decodeCall, encodePayload, decodePayload, slimPayload, SELECTORS } from "../validate.mjs";
+import { validatePayload, validateFollow, rebindPayload, validateThen, rebindThen, placeholderAccount, parseAmount, buildManualCalls, balanceOfCalldata, convertToAssetsCalldata, keccak256, toChecksumAddress, parseAddress, buildTransferCall, validateSend, decodeCall, encodePayload, decodePayload, slimPayload, SELECTORS } from "../validate.mjs";
 
 // The page ships the real registry, so these tests read the real registry and the real builders:
 // a control here is what an agent's `earn_prepare_*` call would actually hand over, and a mutation
@@ -286,5 +286,84 @@ describe("manual mode: the page builds the calls from a typed amount", () => {
   it("the read helpers encode what the vault ABI expects", () => {
     expect(balanceOfCalldata(ACCOUNT)).toBe("0x70a08231" + "0".repeat(24) + "1".repeat(40));
     expect(convertToAssetsCalldata(255n)).toBe("0x07a2d13a" + "0".repeat(62) + "ff");
+  });
+});
+
+
+describe("send (Privy mode): USDC out to an address the operator typed", () => {
+  const RECIPIENT = "0x5aAeb6053F3E94C9b9A09f33669435E7Ef1BeAed" as Address; // an EIP-55 test-vector address
+  const v = vault as never;
+  const sendCalls = (to: string = RECIPIENT, assets = 1_200_000n) => [buildTransferCall({ vault: v, to, assets })];
+  const send = (calls: unknown[] = sendCalls(), account: string = ACCOUNT) => validateSend(calls, account, registry);
+
+  it("keccak-256 agrees with viem on empty, short, block-boundary and long inputs", () => {
+    for (const n of [0, 1, 3, 20, 31, 32, 55, 56, 135, 136, 137, 200, 272, 1000]) {
+      const bytes = Uint8Array.from({ length: n }, (_, i) => (i * 37 + n) & 0xff);
+      expect(keccak256(bytes)).toBe(viemKeccak(bytes).slice(2));
+    }
+    expect(keccak256(toBytes("abc"))).toBe("4e03657aea45a94fc7d47ba826c8d667c0d1e6e33a64a036ec44f58fa12d6c45");
+  });
+
+  it("checksums match viem for many addresses, and the EIP-55 specification's own examples", () => {
+    for (let i = 1; i <= 60; i++) {
+      const a = ("0x" + (BigInt(i) * 0x9e3779b97f4a7c15f39cc0605cedc8341082276bn).toString(16).padStart(40, "0").slice(-40)) as Address;
+      expect(toChecksumAddress(a)).toBe(getAddress(a));
+    }
+    for (const a of ["0x5aAeb6053F3E94C9b9A09f33669435E7Ef1BeAed", "0xfB6916095ca1df60bB79Ce92cE3Ea74c37c5d359", "0xdbF03B407c01E7cD3CBea99509d93f8DDDC8C6FB", "0xD1220A0cf47c7B9Be7A2E6BA89F429762e7b9aDb"]) {
+      expect(toChecksumAddress(a.toLowerCase())).toBe(a);
+    }
+  });
+
+  it("parseAddress: accepts the exact form, and one-case addresses; returns the checksummed form", () => {
+    expect(parseAddress(RECIPIENT)).toBe(RECIPIENT);
+    expect(parseAddress(" " + RECIPIENT.toLowerCase() + " ")).toBe(RECIPIENT);
+    expect(parseAddress("0x" + RECIPIENT.slice(2).toUpperCase())).toBe(RECIPIENT);
+  });
+
+  it.each([
+    ["", /enter the full address/], ["0x", /enter the full address/], ["5aAeb6053F3E94C9b9A09f33669435E7Ef1BeAed", /enter the full address/],
+    ["0x5aAeb6053F3E94C9b9A09f33669435E7Ef1BeAe", /enter the full address/], ["0x5aAeb6053F3E94C9b9A09f33669435E7Ef1BeAedd", /enter the full address/],
+    ["0x5aAeb6053F3E94C9b9A09f33669435E7Ef1BeAeg", /enter the full address/], ["vitalik.eth", /enter the full address/],
+    ["0x5aAeb6053F3E94C9b9A09f33669435E7Ef1BeAEd", /typo/], //  one capital flipped: the checksum catches it
+    ["0x5AAeb6053F3E94C9b9A09f33669435E7Ef1BeAed", /typo/],
+  ])("parseAddress refuses %j", (text, why) => expect(() => parseAddress(text)).toThrow(why));
+
+  it("the call it builds is byte-identical to USDC's transfer(address,uint256) as viem encodes it", () => {
+    const [c] = sendCalls(RECIPIENT, 1_234_567n);
+    expect(c!.data.toLowerCase()).toBe(encodeFunctionData({ abi: erc20Abi, functionName: "transfer", args: [RECIPIENT, 1_234_567n] }).toLowerCase());
+    expect(c!.to.toLowerCase()).toBe(vault.asset.address.toLowerCase());
+  });
+
+  it("a well-formed send validates, and decodes to the recipient and amount that were asked for", () => {
+    const [c] = send();
+    expect(c.decoded).toEqual({ fn: "transfer", to: RECIPIENT.toLowerCase(), amount: 1_200_000n });
+    expect(c.vault.asset.symbol).toBe("USDC");
+  });
+
+  it("it cannot go to the wallet itself, the zero address, the token, or any registry vault", () => {
+    expect(() => send(sendCalls(ACCOUNT))).toThrow(/own address/);
+    expect(() => send(sendCalls("0x" + "0".repeat(40)))).toThrow(/zero address/);
+    expect(() => send(sendCalls(vault.asset.address))).toThrow(/token or vault contract/);
+    expect(() => send(sendCalls(vault.address))).toThrow(/token or vault contract/);
+    expect(() => send(sendCalls(sibling.address))).toThrow(/token or vault contract/);
+  });
+
+  it("it refuses a zero amount, any other token, a value, another chain, extra calls, or malformed data", () => {
+    expect(() => send(sendCalls(RECIPIENT, 0n))).toThrow(/more than zero/);
+    expect(() => send([{ ...sendCalls()[0]!, to: FOREIGN }])).toThrow(/not one/);
+    expect(() => send([{ ...sendCalls()[0]!, value: "0x1" }])).toThrow(/no value/);
+    expect(() => send([{ ...sendCalls()[0]!, chainId: 1 }])).toThrow(/on Base/);
+    expect(() => send([...sendCalls(), ...sendCalls()])).toThrow(/exactly one call/);
+    expect(() => send([{ ...sendCalls()[0]!, data: sendCalls()[0]!.data + "00" }])).toThrow(/exact shape/);
+    expect(() => send([{ ...sendCalls()[0]!, data: "0x095ea7b3" + sendCalls()[0]!.data.slice(10) }])).toThrow(/exact shape/); // an approve is not a send
+    expect(() => send(sendCalls(), "not-an-address")).toThrow(/not an address/);
+  });
+
+  it("an agent's envelope can never carry a transfer: the shared validator still refuses it, however it is shaped", () => {
+    const evil = sendCalls(FOREIGN, 1_000_000n);
+    expect(() => validatePayload({ account: ACCOUNT, calls: evil }, registry)).toThrow(/is not approve\/deposit\/withdraw\/redeem/);
+    expect(() => validatePayload({ account: ACCOUNT, calls: [...deposit(), ...evil] }, registry)).toThrow();
+    expect(() => validateFollow({ ...slimPayload(ACCOUNT, deposit() as never), calls: evil, follow: true }, registry)).toThrow();
+    expect(Object.values(SELECTORS)).not.toContain("transfer");
   });
 });

@@ -244,6 +244,115 @@ export function buildManualCalls(kind, { vault, account, assets, shares, allowan
   throw new Error(`unknown action ${kind}`);
 }
 
+/**
+ * Send (Privy mode, manual only): USDC out of the connected wallet to an address the operator typed.
+ *
+ * This is deliberately NOT part of `validatePayload`. An envelope from an agent can never carry a
+ * transfer: the four shapes above stay the only ones an agent's output may take, and a transfer is
+ * refused there by its selector. A send exists only when the operator types the destination on this page,
+ * and it is checked here, on its own, by `validateSend`.
+ */
+export const TRANSFER_SELECTOR = "0xa9059cbb"; // transfer(address to, uint256 amount)
+const ZERO_ADDRESS = "0x" + "0".repeat(40);
+
+// Keccak-256, for EIP-55 address checksums (a typo in a mixed-case address is caught, not sent). Not
+// SHA3-256: Ethereum's padding byte is 0x01. Checked against viem's keccak256 in the tests.
+const M64 = (1n << 64n) - 1n;
+const ROT = [[0, 36, 3, 41, 18], [1, 44, 10, 45, 2], [62, 6, 43, 15, 61], [28, 55, 25, 21, 56], [27, 20, 39, 8, 14]]; // ROT[x][y]
+const RC = [
+  0x0000000000000001n, 0x0000000000008082n, 0x800000000000808an, 0x8000000080008000n, 0x000000000000808bn, 0x0000000080000001n,
+  0x8000000080008081n, 0x8000000000008009n, 0x000000000000008an, 0x0000000000000088n, 0x0000000080008009n, 0x000000008000000an,
+  0x000000008000808bn, 0x800000000000008bn, 0x8000000000008089n, 0x8000000000008003n, 0x8000000000008002n, 0x8000000000000080n,
+  0x000000000000800an, 0x800000008000000an, 0x8000000080008081n, 0x8000000000008080n, 0x0000000080000001n, 0x8000000080008008n,
+];
+const rotl = (x, n) => (n === 0 ? x : ((x << BigInt(n)) | (x >> BigInt(64 - n))) & M64);
+function keccakF(A) {
+  for (let round = 0; round < 24; round++) {
+    const C = [], D = [], B = new Array(25);
+    for (let x = 0; x < 5; x++) C[x] = A[x] ^ A[x + 5] ^ A[x + 10] ^ A[x + 15] ^ A[x + 20];
+    for (let x = 0; x < 5; x++) D[x] = C[(x + 4) % 5] ^ rotl(C[(x + 1) % 5], 1);
+    for (let i = 0; i < 25; i++) A[i] ^= D[i % 5];
+    for (let x = 0; x < 5; x++) for (let y = 0; y < 5; y++) B[y + 5 * ((2 * x + 3 * y) % 5)] = rotl(A[x + 5 * y], ROT[x][y]);
+    for (let y = 0; y < 5; y++) for (let x = 0; x < 5; x++) A[x + 5 * y] = B[x + 5 * y] ^ (~B[((x + 1) % 5) + 5 * y] & M64 & B[((x + 2) % 5) + 5 * y]);
+    A[0] ^= RC[round];
+  }
+}
+/** Keccak-256 of a byte array, as lowercase hex without 0x. */
+export function keccak256(bytes) {
+  const rate = 136;
+  const padded = new Uint8Array(Math.ceil((bytes.length + 1) / rate) * rate);
+  padded.set(bytes);
+  padded[bytes.length] ^= 0x01;
+  padded[padded.length - 1] ^= 0x80;
+  const A = new Array(25).fill(0n);
+  for (let off = 0; off < padded.length; off += rate) {
+    for (let i = 0; i < rate / 8; i++) {
+      let lane = 0n;
+      for (let b = 7; b >= 0; b--) lane = (lane << 8n) | BigInt(padded[off + i * 8 + b]);
+      A[i] ^= lane;
+    }
+    keccakF(A);
+  }
+  let out = "";
+  for (let i = 0; i < 4; i++) for (let b = 0; b < 8; b++) out += Number((A[i] >> BigInt(8 * b)) & 0xffn).toString(16).padStart(2, "0");
+  return out;
+}
+/** EIP-55 mixed-case form of an address. */
+export function toChecksumAddress(a) {
+  const lo = String(a).slice(2).toLowerCase();
+  const h = keccak256(new TextEncoder().encode(lo));
+  return "0x" + [...lo].map((c, i) => (/[a-f]/.test(c) && parseInt(h[i], 16) >= 8 ? c.toUpperCase() : c)).join("");
+}
+
+/**
+ * A typed address, as its EIP-55 form. Refuses anything that is not 0x plus 40 hex characters. An
+ * address written all in one case is accepted (it carries no checksum); one in mixed case must match its
+ * checksum exactly, so a mistyped or mangled character is refused instead of sent.
+ */
+export function parseAddress(text) {
+  const t = String(text ?? "").trim();
+  if (!/^0x[0-9a-fA-F]{40}$/.test(t)) throw new Error("enter the full address: 0x followed by 40 characters");
+  const body = t.slice(2);
+  const mixed = /[a-f]/.test(body) && /[A-F]/.test(body);
+  const checksummed = toChecksumAddress(t);
+  if (mixed && checksummed !== t) throw new Error("this address has a typo: its capital letters do not match its checksum. Copy it again");
+  return checksummed;
+}
+
+/** The one call a send is: USDC's transfer(to, amount), on the vault's asset token. */
+export function buildTransferCall({ vault, to, assets }) {
+  return { chainId: BASE_CHAIN_ID, to: vault.asset.address, data: TRANSFER_SELECTOR + addr64(to) + hex64(assets), value: "0x0" };
+}
+
+/**
+ * Validate a send built by `buildTransferCall` for `account`. Returns the call with its decoded fields and
+ * the registry vault whose asset it moves, or throws. It moves a registry vault's asset token and nothing
+ * else, from the connected wallet, to an address that is not the wallet itself, the zero address, the
+ * token, or any registry vault (USDC sent to a vault contract by transfer is lost, not deposited).
+ */
+export function validateSend(calls, account, registry) {
+  if (!ADDR.test(account ?? "")) throw new Error("the wallet's account is not an address");
+  if (!Array.isArray(calls) || calls.length !== 1) throw new Error("a send is exactly one call");
+  const c = calls[0];
+  if (!c || c.chainId !== BASE_CHAIN_ID) throw new Error("a send is on Base");
+  if (c.value !== undefined && c.value !== "0x0" && c.value !== "0") throw new Error("a send attaches no value");
+  const data = String(c.data ?? "");
+  if (!data.toLowerCase().startsWith(TRANSFER_SELECTOR) || data.length !== 10 + 64 * 2 || !/^0x[0-9a-fA-F]+$/.test(data)) throw new Error("this is not a transfer of the exact shape a send builds");
+  const onBase = (registry?.vaults ?? []).filter((v) => v.chainId === BASE_CHAIN_ID);
+  const vault = onBase.find((v) => lower(v.asset.address) === lower(c.to));
+  if (!vault) throw new Error(`a send moves a registry vault's asset token, and ${c.to} is not one`);
+  const to = addressWord(data, 0, "the recipient");
+  const amount = uintWord(data, 1);
+  if (amount === 0n) throw new Error("the amount must be more than zero");
+  const banned = new Set([lower(account), ZERO_ADDRESS, lower(vault.asset.address), ...onBase.map((v) => lower(v.address))]);
+  if (banned.has(to)) {
+    if (to === lower(account)) throw new Error("that is this wallet's own address");
+    if (to === ZERO_ADDRESS) throw new Error("that is the zero address, which destroys the money");
+    throw new Error("that is a token or vault contract, not a wallet; USDC sent there would be lost");
+  }
+  return [{ ...c, vault, decoded: { fn: "transfer", to, amount } }];
+}
+
 /** base64url of a UTF-8 JSON payload, shared by the opener (encode) and the page (decode). */
 export function encodePayload(obj) {
   let bin = "";

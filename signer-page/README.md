@@ -73,6 +73,25 @@ Verified: with the real bundle and a real app id, headless Chrome reaches the lo
 the page's own origin and `auth.privy.io`. Not verified: completing a login (it needs an email code), wallet
 creation under your app's settings, and sending a transaction through Privy's provider. See "Not yet covered".
 
+#### Send USDC out (Privy mode only)
+
+A wallet Privy creates is owned by its user: Privy's dashboard cannot sign for it, so it cannot move that
+wallet's funds. To get USDC out, the Privy page has a **Send USDC** panel: an amount and a destination
+address. It is not shown in extension mode, where the wallet itself can send.
+
+- The address you paste is checked before anything is built: 0x plus 40 characters, and if it is written in
+  mixed case its EIP-55 checksum must match, so a mistyped character is refused rather than sent. It is then
+  shown in full, checksummed, in bold, with a warning, in the Destination card, and again by Privy's own
+  confirmation.
+- It sends USDC (a registry vault's asset) and nothing else, from the connected wallet. It refuses a zero
+  amount, more than the wallet holds, the wallet's own address, the zero address, the USDC contract, and any
+  vault (USDC sent to a contract by `transfer` is lost, not deposited).
+- **It is not something an agent's envelope can ever carry.** The shared validator still refuses a
+  `transfer`; a send exists only when a person types the destination on this page, and has its own stricter
+  check (`validateSend`). Tests pin both.
+- It adds a third and fourth text field, so the allow-list test now names all four inputs: three amounts
+  and one address (at most 42 characters, so an address fits and a private key does not).
+
 ### Envelope mode
 
 Leave `--account` out and the page follows the wallet you connect: the deposit's receiver (or a withdrawal's

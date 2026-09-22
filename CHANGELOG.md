@@ -18,7 +18,9 @@ Pre-1.0, minor versions may change tool names, schemas and behaviour.
   import it, or publish it, and a test keeps it that way.
   An opt-in `--privy-app-id` mode replaces the browser extension with an email login that Privy turns
   into a wallet on Base; it loads a bundle you build yourself and widens the page's policy to Privy only in
-  that mode.
+  that mode. In Privy mode only, a **Send USDC** panel sends USDC from the connected wallet to an address
+  you paste (checksum-checked, shown in full before anything is sent, never something an agent's envelope
+  can carry), because a user-owned wallet's funds cannot be moved from Privy's dashboard.
   **This adds a wallet-facing client, which CONTRIBUTING rule 1 says will not merge; see the pull
   request for the decision it needs.**
 

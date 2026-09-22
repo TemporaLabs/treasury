@@ -5,7 +5,7 @@
 //
 // Text from the envelope reaches the DOM only through `textContent`. The agent's `description` is
 // shown, labelled as the agent's, and never used to decide anything.
-import { validatePayload, validateFollow, rebindPayload, validateThen, rebindThen, decodePayload, allowanceCalldata, parseAmount, buildManualCalls, balanceOfCalldata, convertToAssetsCalldata, BASE_CHAIN_HEX } from "./validate.mjs";
+import { validatePayload, validateFollow, rebindPayload, validateThen, rebindThen, decodePayload, allowanceCalldata, parseAmount, parseAddress, buildTransferCall, validateSend, buildManualCalls, balanceOfCalldata, convertToAssetsCalldata, BASE_CHAIN_HEX } from "./validate.mjs";
 
 const $ = (s) => document.querySelector(s);
 const el = (tag, cls, text) => { const n = document.createElement(tag); if (cls) n.className = cls; if (text !== undefined) n.textContent = text; return n; };
@@ -61,6 +61,7 @@ const sentence = (c) => {
   if (d.fn === "approve") return `Approve ${units(d.amount, dec)} ${v.asset.symbol} for ${v.name} to pull`;
   if (d.fn === "deposit") return `Deposit ${units(d.assets, dec)} ${v.asset.symbol} into ${v.name}`;
   if (d.fn === "withdraw") return `Withdraw ${units(d.assets, dec)} ${v.asset.symbol} from ${v.name}`;
+  if (d.fn === "transfer") return `Send ${units(d.amount, dec)} ${v.asset.symbol} to ${parseAddress(d.to)}`;
   return `Redeem ${units(d.shares, sh)} ${v.symbol} from ${v.name} for ${v.asset.symbol}`;
 };
 // Drawn again once a wallet connects in follow mode, so the operator reads the real address here
@@ -70,7 +71,11 @@ function renderDestination() {
   if (account) row("account", addr(account), el("span", "muted", following ? " — the wallet you connected; every call below was re-aimed at it" : manual ? " — the wallet you connected; every call below is for it" : " — the wallet you connect must be this one"));
   else row("account", document.createTextNode("the wallet you connect"), el("span", "muted", " — its address appears here, and in every step below, once you connect and before anything can be sent"));
   row("registry", el("span", "muted", `vault data reconciled against the chain ${registry.reconciledAtIso ?? "at an unrecorded time"}`));
-  const vaults = [...new Map(calls.map((c) => [c.vault.address, c.vault])).values()];
+  const vaults = [...new Map(calls.filter((c) => c.decoded.fn !== "transfer").map((c) => [c.vault.address, c.vault])).values()];
+  for (const c of calls.filter((c) => c.decoded.fn === "transfer")) { // a send: the token and the recipient, in full, before anything else
+    row("token", document.createTextNode(`${c.vault.asset.symbol} `), addr(c.vault.asset.address), el("span", "muted", " on Base (8453)"));
+    row("recipient", el("strong", "addr", parseAddress(c.decoded.to)), el("br"), el("span", "warn", "This is where the USDC goes. Check every character. It cannot be undone."));
+  }
   for (const v of vaults) {
     row("vault", document.createTextNode(v.name + " "), el("span", "muted", `(${v.symbol}${v.isDefault ? ", the default" : ""})`));
     if (v.warning) row("warning", el("span", "warn", v.warning)); // the registry says to show this before any deposit
@@ -82,7 +87,7 @@ function renderDestination() {
   }
   calls.forEach((c, i) => {
     const d = c.decoded;
-    const paidTo = d.fn === "approve" ? [] : [document.createTextNode(d.fn === "deposit" ? " → shares to " : " → paid to "), account ? addr(account) : document.createTextNode("the wallet you connect")];
+    const paidTo = d.fn === "approve" || d.fn === "transfer" ? [] : [document.createTextNode(d.fn === "deposit" ? " → shares to " : " → paid to "), account ? addr(account) : document.createTextNode("the wallet you connect")];
     row(`step ${i + 1} · decoded`, document.createTextNode(sentence(c)), ...paidTo);
   });
   $("#destination").hidden = false;
@@ -370,6 +375,7 @@ function updateManual() {
   $("#max-deposit").disabled = !on;
   $("#btn-withdraw").disabled = !on || pos.shares === 0n;
   $("#max-withdraw").disabled = !on || pos.shares === 0n;
+  if (privyMode) { $("#btn-send").disabled = !on || pos.usdc === 0n; $("#max-send").disabled = !on || pos.usdc === 0n; }
 }
 
 async function review(kind) {
@@ -390,11 +396,19 @@ async function review(kind) {
       const assets = parseAmount($("#amt-withdraw").value, dec);
       if (assets > pos.value) throw new Error(`your position is worth ${units(pos.value, dec)} ${v.asset.symbol}`);
       built = buildManualCalls("withdraw", { vault: v, account, assets });
+    } else if (kind === "send") {
+      if (!privyMode) throw new Error("sending is only offered with a Privy wallet");
+      const assets = parseAmount($("#amt-send").value, dec);
+      if (assets > pos.usdc) throw new Error(`you have ${units(pos.usdc, dec)} ${v.asset.symbol} in this wallet`);
+      const to = parseAddress($("#send-to").value);
+      built = [buildTransferCall({ vault: v, to, assets })];
     } else {
       if (pos.shares === 0n) throw new Error("you hold no shares in this vault");
       built = buildManualCalls("redeem", { vault: v, account, shares: pos.shares }); // the exact balance, never a rounded figure
     }
-    const checked = validatePayload({ account, calls: built }, registry); // this page's own output gets the check an agent's envelope gets
+    // This page's own output gets a check before it is shown: an agent's envelope has validatePayload, and a
+    // send, which no envelope may ever be, has its own stricter one.
+    const checked = kind === "send" ? validateSend(built, account, registry) : validatePayload({ account, calls: built }, registry);
     resetRun();
     calls = checked;
     firstCount = checked.length;
@@ -404,6 +418,11 @@ async function review(kind) {
   } catch (e) { say(msgOf(e), "bad"); }
 }
 if (manual) {
+  if (privyMode) {
+    $("#send-panel").hidden = false;
+    $("#btn-send").onclick = () => review("send");
+    $("#max-send").onclick = () => { if (pos) $("#amt-send").value = units(pos.usdc, manualVault.asset.decimals); };
+  }
   $("#btn-deposit").onclick = () => review("deposit");
   $("#btn-withdraw").onclick = () => review("withdraw");
   $("#max-withdraw").onclick = () => review("redeem");

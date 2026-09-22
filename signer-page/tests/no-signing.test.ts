@@ -46,19 +46,24 @@ describe("the page can ask a wallet to send, and can do nothing else with one", 
     for (const name of ["app.mjs", "validate.mjs", "open.mjs"]) expect({ name, hit: strip(source[name]!).match(/<input/i)?.[0] ?? null }).toEqual({ name, hit: null });
   });
 
-  it("the only inputs are the two amount fields: short, decimal-keyboard, no autofill, and nothing else", () => {
-    // Manual mode needs somewhere to type an amount. It is an allow-list, not an exception: an input of
-    // any other shape (another type, a longer field, a third field) fails here and needs a reviewer.
+  it("the only inputs are three amount fields and one address field: short, no autofill, and nothing else", () => {
+    // Manual mode needs somewhere to type an amount, and Privy mode's send needs somewhere to paste an
+    // address. It is an allow-list, not an exception: an input of any other shape (another type, a longer
+    // field, a fifth field) fails here and needs a reviewer.
     const inputs = [...source["index.html"]!.matchAll(/<input\b[^>]*>/gi)].map((m) => m[0]);
-    expect(inputs).toHaveLength(2);
     const attrs = (tag: string) => Object.fromEntries([...tag.matchAll(/([\w-]+)="([^"]*)"/g)].map((m) => [m[1]!, m[2]!]));
     const seen = inputs.map(attrs);
-    expect(seen.map((a) => a["id"]).sort()).toEqual(["amt-deposit", "amt-withdraw"]);
+    expect(seen.map((a) => a["id"]).sort()).toEqual(["amt-deposit", "amt-send", "amt-withdraw", "send-to"]);
     for (const a of seen) {
       expect(a["type"]).toBe("text");
-      expect(a["inputmode"]).toBe("decimal");
       expect(a["autocomplete"]).toBe("off");
-      expect(Number(a["maxlength"])).toBeLessThanOrEqual(20); // an amount fits; a key (64 hex) or a phrase does not
+      if (a["id"] === "send-to") {
+        expect(a["spellcheck"]).toBe("false");
+        expect(Number(a["maxlength"])).toBeLessThanOrEqual(42); // an address (0x + 40) fits; a private key (64 hex, 66 with 0x) does not
+      } else {
+        expect(a["inputmode"]).toBe("decimal");
+        expect(Number(a["maxlength"])).toBeLessThanOrEqual(20); // an amount fits; a key or a phrase does not
+      }
     }
   });
 
@@ -68,6 +73,10 @@ describe("the page can ask a wallet to send, and can do nothing else with one", 
     const parsed = [...app.matchAll(/parseAmount\(\$\("#amt-[a-z]+"\)\.value/g)].length;
     expect(reads).toBeGreaterThan(0);
     expect(parsed).toBe(reads); // every read of a field goes straight into parseAmount
+    const addrReads = [...app.matchAll(/\$\("#send-to"\)\.value/g)].length;
+    const addrParsed = [...app.matchAll(/parseAddress\(\$\("#send-to"\)\.value\)/g)].length;
+    expect(addrReads).toBeGreaterThan(0);
+    expect(addrParsed).toBe(addrReads); // the address field goes straight into parseAddress and nowhere else
   });
 
   it("text from the envelope never becomes markup, and no code is built from a string", () => {
