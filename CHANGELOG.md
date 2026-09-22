@@ -16,11 +16,13 @@ Pre-1.0, minor versions may change tool names, schemas and behaviour.
   agent's prose; or `open.mjs --manual`, where you type a deposit or withdrawal amount on the page. The
   page's own calls go through the same validator as an envelope. The core package does not depend on it,
   import it, or publish it, and a test keeps it that way.
-  An opt-in `--privy-app-id` mode replaces the browser extension with an email login that Privy turns
-  into a wallet on Base; it loads a bundle you build yourself and widens the page's policy to Privy only in
-  that mode. In Privy mode only, a **Send USDC** panel sends USDC from the connected wallet to an address
-  you paste (checksum-checked, shown in full before anything is sent, never something an agent's envelope
-  can carry), because a user-owned wallet's funds cannot be moved from Privy's dashboard.
+  An opt-in `--privy-app-id` mode replaces the browser extension with a login of your choice — email,
+  Google, or connecting an existing wallet (a browser extension, or WalletConnect's QR code for a phone
+  wallet) — inside Privy's own modal; it loads a bundle you build yourself and widens the page's policy,
+  only in that mode, to exactly what Privy and WalletConnect need. In Privy mode only, a **Send USDC**
+  panel sends USDC from the connected wallet to an address you paste (checksum-checked, shown in full
+  before anything is sent, never something an agent's envelope can carry), because a user-owned wallet's
+  funds cannot be moved from Privy's dashboard.
   **This adds a wallet-facing client, which CONTRIBUTING rule 1 says will not merge; see the pull
   request for the decision it needs.**
 

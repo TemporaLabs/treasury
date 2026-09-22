@@ -496,8 +496,8 @@ fork("the sign page in a browser, on a fork of Base", () => {
     await tab.goto(url);
     await tab.waitFor("!document.querySelector('#connect').hidden", "the connect card");
     expect(await tab.ev("document.querySelector('#fatal').hidden")).toBe(true); // not "no wallet extension found"
-    expect(await tab.text("#btn-connect")).toBe("Log in with email");
-    expect(await tab.text("#wallet-status")).toMatch(/Privy will email you a code/);
+    expect(await tab.text("#btn-connect")).toBe("Log in");
+    expect(await tab.text("#wallet-status")).toMatch(/Choose email, Google, or a wallet/);
     expect(await tab.ev("globalThis.__privyAppId")).toBe("cmubfegl2028d0ci3n0f2u6z5");
 
     await tab.click("#btn-connect");
@@ -570,6 +570,30 @@ fork("the sign page in a browser, on a fork of Base", () => {
     const writes = new Set(wallet.calls.map((c) => c.method).filter((m) => !/^eth_(chainId|accounts|call|estimateGas|getTransactionCount|getTransactionReceipt|getTransactionByHash|getBalance)$/.test(m)));
     expect([...writes].sort()).toEqual(["eth_requestAccounts", "eth_sendTransaction"]);
   }, 120_000);
+
+  it("privy mode with the REAL bundle: email, Google and wallet options render together on one screen — no second click to find a wallet", async () => {
+    // Not a stub here: the actual ~5.6 MB Privy bundle this repo builds, so this is the one place a CSP
+    // regression (a host silently dropped from the allow-list) would actually be caught, and the one place
+    // a regression to the old "Continue with a wallet" button (one extra click to even see a wallet) would
+    // be caught too.
+    const url = await new Promise<string>((ok, no) => {
+      const child = spawn(process.execPath, [OPENER, "--no-open", "--port", "0", "--minutes", "5", "--manual", "--privy-app-id", "cmubfegl2028d0ci3n0f2u6z5"], { stdio: ["ignore", "pipe", "pipe"] });
+      served = { url: "", stop: () => child.kill() };
+      let out = "";
+      child.stdout!.on("data", (d) => { out += d; const m = out.match(/(http:\/\/127\.0\.0\.1:\d+\/#\S+)/); if (m) ok(m[1]!); });
+      child.on("exit", (c) => no(new Error(`opener exited ${c}`)));
+    });
+    tab = await openTab(null); // a browser with no wallet extension at all
+    await tab.goto(url);
+    await tab.waitFor("!document.querySelector('#connect').hidden", "the connect card");
+    expect(await tab.ev("document.querySelector('#fatal').hidden")).toBe(true); // real Privy starts cleanly under this policy
+    await tab.click("#btn-connect");
+    // The wallet tiles are fetched from explorer-api.walletconnect.com, which this policy must allow. A
+    // blocked fetch does not error visibly — the modal just never grows past email — so the real signal is
+    // that specific wallet names (not this test's own words) show up unprompted, on the very first screen.
+    await tab.waitFor("/Google/.test(document.body.innerText) && /Wallet|MetaMask|Coinbase|Rainbow/.test(document.body.innerText) && !document.body.innerText.includes('Continue with a wallet')", "email, Google and wallet tiles together, with no intermediate button", 15_000);
+    expect(await tab.ev("document.querySelector('#fatal').hidden")).toBe(true);
+  }, 60_000);
 
   it("withdraw everything (redeem the exact share balance) empties the position", async () => {
     // Put a position in place directly on the fork, then take it out through the page.

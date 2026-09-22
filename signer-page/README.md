@@ -38,19 +38,30 @@ exactly the deposit after it. A test also pins its calldata byte for byte to wha
 emit. The two amount fields are the only inputs the page has; a test allows exactly those two and fails on
 any other, and on anything typed being used for more than an amount.
 
-### Privy mode: log in with an email code instead of a browser extension
+### Privy mode: log in with email, Google, or an existing wallet — no browser extension needed
 
 ```bash
 npm --prefix signer-page/privy ci && npm --prefix signer-page/privy run build   # once: builds vendor/privy-provider.js
 node signer-page/open.mjs --manual --privy-app-id <your Privy app id>
 ```
 
-The button becomes **Log in with email**. Privy's own modal asks for your email, sends a code, and creates
-an embedded wallet on Base for you. The rest of the page is unchanged: the same deposit and withdraw
-screens, the same validator, the same fixed list of wallet methods (the bridge in `privy/entry.jsx`
-enforces that list itself and refuses anything else). It also works with an envelope, and then follows the
-wallet Privy creates. It is opt-in: without `--privy-app-id` nothing here is loaded, the default policy is
-byte for byte the same, and the page never contacts Privy.
+The button becomes **Log in**, and Privy's own modal shows all three ways in on one screen — no second
+click to find "connect a wallet" the way Privy's own default order puts it behind one:
+
+- **Email** — Privy sends a code and, the first time, creates an embedded wallet on Base.
+- **Google** — via a Google OAuth popup, which needs no widening of this page's policy: a popup is a
+  separate browsing context, not governed by the CSP of the page that opened it.
+- **A wallet extension already installed** — shown directly if Privy detects one (MetaMask and similar).
+- **A phone wallet's QR code** — a WalletConnect tile, and "More options" for a wallet not shown outright.
+
+Whichever wallet results — an extension, a phone via WalletConnect, or one Privy creates for an email or
+Google login — is used exactly as it is, never wrapped in or confused with an embedded one.
+
+The rest of the page is unchanged: the same deposit and withdraw screens, the same validator, the same
+fixed list of wallet methods (the bridge in `privy/entry.jsx` enforces that list itself and refuses
+anything else). It also works with an envelope, and then follows the wallet that results. It is opt-in:
+without `--privy-app-id` nothing here is loaded, the default policy is byte for byte the same, and the page
+never contacts Privy.
 
 What is different, so nobody is surprised:
 
@@ -60,18 +71,27 @@ What is different, so nobody is surprised:
   little ETH on Base (gas) before depositing; the card shows the ETH balance and warns when it is low.
 - **Privy keeps a login session in this browser** (in its own storage, inside its script). The default page
   stores nothing; this mode does not make that claim.
-- **The policy widens, only in this mode**, to `auth.privy.io`, `*.privy.io` and `mainnet.base.org` for
-  connections, and `*.privy.io` for frames and images. A test pins the exact list.
+- **The policy widens, only in this mode**, to `auth.privy.io` / `*.privy.io` (Privy itself), Privy's own
+  Base RPC (`base-mainnet.rpc.privy.systems`) and `mainnet.base.org`, and — for "connect a wallet" —
+  `explorer-api.walletconnect.com` (the wallet list), `relay.walletconnect.org` (the live WalletConnect
+  session) and `verify.walletconnect.org` (its domain check). A test pins the exact list; verified in
+  headless Chrome, with the real bundle, against several wallets, with no policy violation.
 - **Your Privy app must allow it.** The app id is a public identifier, not a secret. Add the page's origin
-  (`http://127.0.0.1:41337`) under allowed origins in the Privy dashboard, enable email login, and use an
-  embedded-wallet setting that lets a user create a wallet.
+  under allowed origins in the Privy dashboard, and turn on, as login methods, whichever of email, Google
+  and external wallets you want offered — a method left off in the dashboard will not appear here either,
+  whatever this page asks for.
 - **The 5 MB bundle is built, never committed** (`vendor/` is gitignored), from versions pinned exactly in
   `privy/package.json`. Privy's SDK brings a large dependency tree of its own, which is why this lives in
   its own build folder and not in the core package.
 
-Verified: with the real bundle and a real app id, headless Chrome reaches the login modal and contacts only
-the page's own origin and `auth.privy.io`. Not verified: completing a login (it needs an email code), wallet
-creation under your app's settings, and sending a transaction through Privy's provider. See "Not yet covered".
+Verified: with the real bundle and a real app id, headless Chrome reaches the login modal, all three
+options render (email, Google, connect a wallet), and clicking into "connect a wallet" loads the full
+602-wallet list (MetaMask included) from `explorer-api.walletconnect.com` with no policy violation; picking
+a phone-only wallet (Rainbow, Trust Wallet) reaches the real QR screen, with WalletConnect's relay
+(`wss://relay.walletconnect.org`) and verify endpoint contacted and nothing refused. Not verified: completing
+any of the three logins for real (email and Google both need a real code or account; WalletConnect needs an
+actual phone to scan), wallet creation or connection under your app's settings, and sending a transaction
+through Privy's provider. See "Not yet covered".
 
 #### Send USDC out (Privy mode only)
 
@@ -176,11 +196,13 @@ a full approve → deposit, a redeem, a poisoned address, markup in a descriptio
 confirmation, a failing receipt poll, an error after broadcast, and a wallet that changes chain or account
 midway.
 
-**Not yet covered: a real wallet extension, and a completed Privy login.** The stand-in cannot show that MetaMask or Rabby injects
-itself into a page served with this policy. That needs one live run by a person.
+**Not yet covered: a real wallet extension, and a completed Privy login by any of its three methods.** The
+stand-in cannot show that MetaMask or Rabby injects itself into a page served with this policy, and no
+automated test can read an email code, complete a Google login, or scan a QR code with a phone. All of that
+needs one live run by a person.
 
 ## Not here, on purpose
 
-Other embedded-wallet connectors, WalletConnect for phone wallets, a hosted copy of the page,
-and a one-time `connect-wallet` session are separate changes. The page itself has no dependencies; `privy/` is a
-separate build folder with its own pinned dev dependencies, used only to build the optional Privy bundle.
+Other embedded-wallet connectors, a hosted copy of the page, and a one-time `connect-wallet` session are
+separate changes. The page itself has no dependencies; `privy/` is a separate build folder with its own
+pinned dev dependencies, used only to build the optional Privy bundle.

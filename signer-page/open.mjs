@@ -106,11 +106,15 @@ if (privyAppId) files["/privy-provider.js"] = ["text/javascript; charset=utf-8",
 // but back to this origin, and `frame-ancestors 'none'` means it cannot be embedded.
 // (`default-src 'none'` alone is not enough: it is the fallback for script-src, and blocks the page.)
 const DEFAULT_CSP = "default-src 'none'; script-src 'self' 'unsafe-inline'; connect-src 'self'; style-src 'unsafe-inline'; base-uri 'none'; form-action 'none'; object-src 'none'; frame-ancestors 'none'";
-// Privy mode only. Privy's login and wallet run against Privy's own servers and an iframe, so this page
-// may talk to them, and to the Base RPC its wallet reads from, and to nothing else. The default page above
-// never gets these; a page served without --privy-app-id cannot reach any of them. The wallet's reads and
+// Privy mode only. Privy's login and wallet run against Privy's own servers and an iframe, and its
+// "wallet" login method routes through WalletConnect for a browser extension or a phone's QR scan, so this
+// page may talk to Privy, the Base RPC its wallet reads from, and WalletConnect's wallet list / relay /
+// verify endpoints — and to nothing else. A Google OAuth popup needs no entry here: it is a separate
+// browsing context the CSP of this page does not govern (checked in headless Chrome: no violation, no
+// second-origin traffic attributable to this page). The default page above never gets any of this; a page
+// served without --privy-app-id cannot reach any of it. The wallet's reads and
 // sends go to Privy's own Base RPC (privy.systems, a different domain from privy.io), named here exactly.
-const PRIVY_CSP = "default-src 'none'; script-src 'self' 'unsafe-inline'; connect-src 'self' https://auth.privy.io https://*.privy.io https://base-mainnet.rpc.privy.systems https://mainnet.base.org; style-src 'unsafe-inline'; img-src data: https://*.privy.io; font-src data:; frame-src https://auth.privy.io https://*.privy.io; base-uri 'none'; form-action 'none'; object-src 'none'; frame-ancestors 'none'";
+const PRIVY_CSP = "default-src 'none'; script-src 'self' 'unsafe-inline'; connect-src 'self' https://auth.privy.io https://*.privy.io https://base-mainnet.rpc.privy.systems https://mainnet.base.org https://explorer-api.walletconnect.com wss://relay.walletconnect.org https://verify.walletconnect.org; style-src 'unsafe-inline'; img-src data: https://*.privy.io https://explorer-api.walletconnect.com; font-src data:; frame-src https://auth.privy.io https://*.privy.io https://verify.walletconnect.org; base-uri 'none'; form-action 'none'; object-src 'none'; frame-ancestors 'none'";
 const CSP = privyAppId ? PRIVY_CSP : DEFAULT_CSP;
 
 const server = http.createServer((req, res) => {

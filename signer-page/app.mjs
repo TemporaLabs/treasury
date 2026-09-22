@@ -99,9 +99,10 @@ if (manual) {
 } else renderDestination();
 
 // ---- wallet
-// Either the browser's own extension, or (only when the opener was given --privy-app-id) an email login
-// that Privy turns into a wallet. Both are handed to the rest of the page as the same kind of provider,
-// and the page asks either one for the same fixed list of methods.
+// Either the browser's own extension, or (only when the opener was given --privy-app-id) a login through
+// Privy — email, Google, or an existing wallet, all offered together on Privy's own first screen. Both are
+// handed to the rest of the page as the same kind of provider, and the page asks either one for the same
+// fixed list of methods.
 let eth;
 if (payload.privyAppId !== undefined) {
   if (!/^[a-z0-9]{10,40}$/.test(String(payload.privyAppId))) { fatal("the Privy app id in the address is not an app id"); throw new Error("bad privy app id"); }
@@ -109,8 +110,8 @@ if (payload.privyAppId !== undefined) {
     const { connectPrivy } = await import("./privy-provider.js");
     eth = await connectPrivy(payload.privyAppId);
   } catch (e) { fatal(`Privy could not start: ${msgOf(e)}`); throw e; }
-  $("#btn-connect").textContent = "Log in with email";
-  setWalletLater = "Not logged in. Privy will email you a code and create a wallet for you on Base.";
+  $("#btn-connect").textContent = "Log in";
+  setWalletLater = "Not logged in. Choose email, Google, or a wallet in the window Privy opens.";
 } else {
   await new Promise((resolve) => {
     if (window.ethereum) return resolve();

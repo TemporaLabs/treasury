@@ -61,18 +61,26 @@ describe("open.mjs --privy-app-id", () => {
 
     const csp = String((await get(url, "/")).headers["content-security-policy"]);
     const directive = (name: string) => (csp.split(";").map((d) => d.trim()).find((d) => d.startsWith(name + " ")) ?? "").split(/\s+/).slice(1);
-    expect(directive("connect-src").sort()).toEqual(["'self'", "https://*.privy.io", "https://auth.privy.io", "https://base-mainnet.rpc.privy.systems", "https://mainnet.base.org"].sort());
-    expect(directive("frame-src").sort()).toEqual(["https://*.privy.io", "https://auth.privy.io"].sort());
+    expect(directive("connect-src").sort()).toEqual([
+      "'self'", "https://*.privy.io", "https://auth.privy.io", "https://base-mainnet.rpc.privy.systems", "https://mainnet.base.org",
+      "https://explorer-api.walletconnect.com", "wss://relay.walletconnect.org", "https://verify.walletconnect.org",
+    ].sort());
+    expect(directive("frame-src").sort()).toEqual(["https://*.privy.io", "https://auth.privy.io", "https://verify.walletconnect.org"].sort());
     expect(directive("script-src")).toEqual(["'self'", "'unsafe-inline'"]); // no eval, no remote script
     expect(directive("default-src")).toEqual(["'none'"]);
     expect(directive("frame-ancestors")).toEqual(["'none'"]); //             still cannot be embedded
     expect(directive("form-action")).toEqual(["'none'"]);
-    expect(directive("img-src").sort()).toEqual(["data:", "https://*.privy.io"]);
+    expect(directive("img-src").sort()).toEqual(["data:", "https://*.privy.io", "https://explorer-api.walletconnect.com"].sort());
     expect(directive("font-src")).toEqual(["data:"]);
     const sources = csp.split(";").flatMap((d) => d.trim().split(/\s+/).slice(1));
     expect(sources).not.toContain("*"); //           no bare wildcard anywhere
     expect(sources).not.toContain("'unsafe-eval'");
-    expect(csp).not.toMatch(/walletconnect/i);
+    // WalletConnect is deliberate here — it is how "connect a wallet" reaches a phone's QR scan or a
+    // browser extension from inside Privy's own modal — but only these three hosts, verified in headless
+    // Chrome against several wallets (explorer-api for the wallet list, the relay for the live session,
+    // verify for its domain-verification step); no walletconnect.com (the deprecated v1 domain) and no
+    // analytics host.
+    expect([...new Set(sources.filter((s) => /walletconnect/i.test(s)))].sort()).toEqual(["https://explorer-api.walletconnect.com", "https://verify.walletconnect.org", "wss://relay.walletconnect.org"].sort());
   }, 20_000);
 
   it("refuses to start when the bundle is not built, and says how to build it", () => {
@@ -110,9 +118,18 @@ describe("the Privy bridge source (privy/entry.jsx) can do no more than the page
     expect(code).not.toMatch(/signMessage|signTypedData|signTransaction|personal_sign|eth_sign\b|signRawHash|exportWallet|useExportWallet|privateKey|private_key|mnemonic|seed ?phrase|localStorage|sessionStorage|indexedDB|document\.cookie|innerHTML/i);
   });
 
-  it("asks for email login only, on Base only", () => {
-    expect(code).toMatch(/loginMethods: \["email"\]/);
+  it("offers exactly email, a detected wallet extension, WalletConnect's QR and Google, all on the modal's first screen, on Base only", () => {
+    const primary = [...code.match(/primary: \[([\s\S]*?)\]/)![1]!.matchAll(/"([^"]+)"/g)].map((m) => m[1]!);
+    expect(primary).toEqual(["email", "google", "detected_ethereum_wallets", "wallet_connect"]); // order is the point: no second click to find a wallet, and Google is not folded into "More options"
+    expect(primary.length).toBeLessThanOrEqual(4); // Privy renders only the first four of `primary` on the first screen
+    expect(code).toMatch(/loginMethodsAndOrder: LOGIN_METHODS_AND_ORDER/); //     the login screen uses the ordered config
+    expect(code).toMatch(/live\.privy\.login\(\);/); //                          bare: an override here would discard that order
     expect(code).toMatch(/supportedChains: \[base\]/);
+  });
+
+  it("uses whichever wallet the login produced — an external one already connected, or an embedded one it creates — never assuming which", () => {
+    expect(code).not.toMatch(/walletClientType === "privy"/); // no longer filters to embedded wallets only
+    expect(code).toMatch(/live\.wallets\.wallets\[0\]/);
   });
 
   it("the build workspace keeps its dependencies out of the core package and pinned exactly", () => {
