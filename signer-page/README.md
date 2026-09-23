@@ -70,7 +70,13 @@ What is different, so nobody is surprised:
 - **A new wallet starts empty.** The position card shows its address and says so. Send it USDC and a
   little ETH on Base (gas) before depositing; the card shows the ETH balance and warns when it is low.
 - **Privy keeps a login session in this browser** (in its own storage, inside its script). The default page
-  stores nothing; this mode does not make that claim.
+  stores nothing; this mode does not make that claim. Because of that, this page also shows **Log out**
+  once logged in — a browser's own account switcher has no equivalent for a login, and without it the page
+  would silently keep reopening as the same person, on this device, until the browser's storage was cleared
+  by hand. Log out ends Privy's session (so a reload does not return as the same person) and clears the
+  page back to its pre-login state, so someone else can log in as themselves. It is refused, with the
+  reason, while a transaction from the current run has been sent and has not yet confirmed, the same way
+  switching accounts is.
 - **The policy widens, only in this mode**, to `auth.privy.io` / `*.privy.io` (Privy itself), Privy's own
   Base RPC (`base-mainnet.rpc.privy.systems`) and `mainnet.base.org`, and — for "connect a wallet" —
   `explorer-api.walletconnect.com` (the wallet list), `relay.walletconnect.org` (the live WalletConnect
@@ -163,8 +169,9 @@ It calls a fixed list of wallet methods and no others. Reads: `eth_chainId`, `et
 `eth_estimateGas`, `eth_getTransactionCount`, `eth_getTransactionReceipt`, `eth_getTransactionByHash`, `eth_getBalance`. Writes: `eth_requestAccounts`
 (connect), `wallet_switchEthereumChain` (to Base), and `eth_sendTransaction`, the one that makes your
 wallet ask you to confirm. It never asks a wallet to sign a message, has no field a key could be typed
-into (in manual mode, two short amount fields, allow-listed by a test), and stores nothing (in Privy mode,
-Privy's own script keeps a login session; see above).
+into (in manual mode, three short amount fields and one address field, allow-listed by a test), and stores
+nothing (in Privy mode, Privy's own script keeps a login session; see above, including **Log out**, the one
+control this page has that is not an EIP-1193 wallet method — it ends that session, not a transaction).
 
 Before each send it checks that the wallet is on Base and its selected account is the envelope's, and it
 pauses if either changes. A deposit waits for the approval to be visible on your wallet's own RPC (the

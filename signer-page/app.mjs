@@ -191,6 +191,7 @@ $("#btn-connect").onclick = async () => {
     connected = walletOk = true;
     setWallet(`Connected ${acct} on Base. The account matches.`, "status ok");
     $("#btn-connect").disabled = true;
+    if (privyMode) $("#btn-logout").hidden = false; // so whoever is logged in can end that session and let someone else log in
     if (manual) { $("#manual").hidden = false; await readPosition(); }
     else if (!steps.length) renderSteps();
     refresh();
@@ -428,4 +429,28 @@ if (manual) {
   $("#btn-withdraw").onclick = () => review("withdraw");
   $("#max-withdraw").onclick = () => review("redeem");
   $("#max-deposit").onclick = () => { if (pos) $("#amt-deposit").value = units(pos.usdc, manualVault.asset.decimals); };
+}
+
+// A login is a page state, not just a wallet connection — Privy remembers who is logged in across a
+// reload, so a person cannot hand this page to someone else just by disconnecting. Only Privy mode gets
+// this button: an extension's own account switcher already does the equivalent for extension mode.
+if (privyMode) {
+  $("#btn-logout").onclick = async () => {
+    if (inFlight()) { setWallet("A transaction from the current run has been sent and has not finished, so this page cannot log out yet. Let it finish, or reload the address.", "status bad"); return; }
+    $("#btn-logout").disabled = true;
+    try { await eth.logout(); }
+    catch (e) { setWallet(`Could not log out cleanly: ${msgOf(e)}. Reload the address to be sure nobody stays logged in.`, "status bad"); $("#btn-logout").disabled = false; return; }
+    connected = walletOk = false; busy = false;
+    if (manual) { account = null; pos = null; resetRun(); $("#manual").hidden = true; }
+    else {
+      steps.length = 0; $("#steps").replaceChildren(); hashes.length = 0; next = 0; runDone = false;
+      $("#calls").hidden = true; $("#done").hidden = true;
+      if (following) account = null; // a strict envelope still names one required account; only follow mode goes back to a placeholder
+    }
+    renderDestination();
+    $("#btn-connect").disabled = false;
+    $("#btn-logout").hidden = true;
+    setWallet("Logged out. Log in again, as yourself or as someone else, to continue.");
+    refresh();
+  };
 }

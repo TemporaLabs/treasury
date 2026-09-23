@@ -513,6 +513,76 @@ fork("the sign page in a browser, on a fork of Base", () => {
     expect(await tab.ev("document.querySelector('#calls').hidden")).toBe(true);
   }, 60_000);
 
+  it("privy mode: Log out ends the session and lets a different person log in, on the same page, with no reload", async () => {
+    // The stub tracks which of two identities is "logged in" and answers eth_accounts accordingly — a
+    // real Privy session, tracked the same way, in its own storage, is what logout() actually clears.
+    const FIRST = "0x1111111111111111111111111111111111111111", SECOND = "0x4444444444444444444444444444444444444444";
+    const stubFile = join(mkdtempSync(join(tmpdir(), "treasury-privy-stub-")), "privy-provider.js");
+    writeFileSync(stubFile, `export async function connectPrivy() {
+      let who = "${FIRST}";
+      const answers = () => ({ eth_chainId: "0x2105", eth_accounts: [who], eth_requestAccounts: [who], eth_call: "0x" + "0".repeat(64), eth_getBalance: "0x0" });
+      return {
+        request: async ({ method }) => answers()[method],
+        on() {},
+        async logout() { who = "${SECOND}"; globalThis.__loggedOut = (globalThis.__loggedOut ?? 0) + 1; },
+      };
+    }`);
+    const url = await new Promise<string>((ok, no) => {
+      const child = spawn(process.execPath, [OPENER, "--no-open", "--port", "0", "--minutes", "5", "--manual", "--privy-app-id", "cmubfegl2028d0ci3n0f2u6z5", "--privy-bundle", stubFile], { stdio: ["ignore", "pipe", "pipe"] });
+      served = { url: "", stop: () => child.kill() };
+      let out = "";
+      child.stdout!.on("data", (d) => { out += d; const m = out.match(/(http:\/\/127\.0\.0\.1:\d+\/#\S+)/); if (m) ok(m[1]!); });
+      child.on("exit", (c) => no(new Error(`opener exited ${c}`)));
+    });
+    tab = await openTab(null);
+    await tab.goto(url);
+    await tab.waitFor("!document.querySelector('#connect').hidden", "the connect card");
+    expect(await tab.ev("document.querySelector('#btn-logout').hidden")).toBe(true); // not offered before anyone is logged in
+
+    await tab.click("#btn-connect");
+    await tab.waitFor("document.querySelector('#position').innerText.includes(" + JSON.stringify(FIRST) + ")", "the first person's position");
+    expect(await tab.ev("document.querySelector('#btn-logout').hidden")).toBe(false);
+    expect(await tab.disabled("#btn-connect")).toBe(true); // no way to switch identity except Log out
+
+    await tab.click("#btn-logout");
+    await tab.waitFor("!document.querySelector('#btn-connect').disabled && document.querySelector('#btn-logout').hidden", "the logged-out state");
+    expect(await tab.ev("globalThis.__loggedOut")).toBe(1); // Privy's own session was actually ended, not just hidden on screen
+    expect(await tab.text("#wallet-status")).toMatch(/Logged out/);
+    expect(await tab.ev("document.querySelector('#manual').hidden")).toBe(true); // the first person's position is off screen, not just stale
+
+    await tab.click("#btn-connect"); // the next person's turn
+    await tab.waitFor("document.querySelector('#position').innerText.includes(" + JSON.stringify(SECOND) + ")", "the second person's position");
+    expect(await tab.text("#position")).not.toContain(FIRST);
+  }, 60_000);
+
+  it("privy mode: Log out is refused while a transaction from the current run is still unconfirmed", async () => {
+    const stubFile = join(mkdtempSync(join(tmpdir(), "treasury-privy-stub-")), "privy-provider.js");
+    writeFileSync(stubFile, "export async function connectPrivy() { return window.ethereum; }");
+    await new Promise<void>((ok, no) => {
+      const child = spawn(process.execPath, [OPENER, "--no-open", "--port", "0", "--minutes", "5", "--manual", "--privy-app-id", "cmubfegl2028d0ci3n0f2u6z5", "--privy-bundle", stubFile], { stdio: ["ignore", "pipe", "pipe"] });
+      let out = "";
+      child.stdout!.on("data", (d) => { out += d; const m = out.match(/(http:\/\/127\.0\.0\.1:\d+\/#\S+)/); if (m) { served = { url: m[1]!, stop: () => child.kill() }; ok(); } });
+      child.on("exit", (c) => no(new Error(`opener exited ${c}`)));
+    });
+    tab = await openTab(wallet); // ACCOUNT holds USDC (the fixture whale), routed to the fork
+    await tab.goto(served!.url);
+    await tab.waitFor("!document.querySelector('#connect').hidden", "the connect card");
+    await tab.click("#btn-connect");
+    await tab.waitFor("!document.querySelector('#btn-deposit').disabled", "the deposit button to be ready");
+    await typeInto(tab, "#amt-deposit", AMOUNT);
+    await tab.click("#btn-deposit");
+    await tab.waitFor("document.querySelectorAll('#steps .step').length === 2", "the two deposit steps");
+    await tab.waitFor(`!document.querySelector(${JSON.stringify(send(1))}).disabled`, "step 1 to be ready");
+    await tab.click(send(1));
+    await confirmed(tab, 1);
+    await tab.waitFor(`!document.querySelector(${JSON.stringify(send(2))}).disabled`, "step 2 to be ready");
+    // The deposit's second step has not been sent yet: logging out here would abandon it mid-sequence.
+    await tab.click("#btn-logout");
+    await tab.waitFor("/has not finished/.test(document.querySelector('#wallet-status').innerText)", "the refusal");
+    expect(await tab.ev("document.querySelector('#btn-logout').hidden")).toBe(false); // still logged in
+    expect(await tab.disabled(send(2))).toBe(false); // the run itself is untouched
+  }, 90_000);
+
   it("privy mode: send USDC to another address, which is checked in full, and lands exactly", async () => {
     // The stub hands the page the injected fake wallet (routed to the fork) as if it were Privy's provider.
     const RECIPIENT = "0x5aAeb6053F3E94C9b9A09f33669435E7Ef1BeAed" as Address; // an EIP-55 test-vector address

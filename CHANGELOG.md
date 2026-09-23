@@ -22,7 +22,10 @@ Pre-1.0, minor versions may change tool names, schemas and behaviour.
   only in that mode, to exactly what Privy and WalletConnect need. In Privy mode only, a **Send USDC**
   panel sends USDC from the connected wallet to an address you paste (checksum-checked, shown in full
   before anything is sent, never something an agent's envelope can carry), because a user-owned wallet's
-  funds cannot be moved from Privy's dashboard.
+  funds cannot be moved from Privy's dashboard. Privy mode also has a **Log out** button — Privy keeps its
+  own login session in the browser, so without one the page would keep reopening as whoever last logged in
+  until the browser's storage was cleared by hand; it is refused while a transaction from the current run
+  is still unconfirmed.
   **This adds a wallet-facing client, which CONTRIBUTING rule 1 says will not merge; see the pull
   request for the decision it needs.**
 

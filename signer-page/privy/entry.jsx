@@ -113,5 +113,13 @@ export async function connectPrivy(appId) {
     },
     on(ev, fn) { handlers.push([ev, fn]); inner?.on?.(ev, fn); },
     removeListener(ev, fn) { inner?.removeListener?.(ev, fn); },
+    // Not an EIP-1193 method — an extra the page calls directly, so whoever is logged in to Privy in this
+    // browser can end that session and let someone else log in as themselves. Ends Privy's own session
+    // (its cookie/storage, so a reload does not silently return as the same person) and drops the wallet
+    // provider this bridge was holding; the next `eth_requestAccounts` starts over from `login()`.
+    async logout() {
+      inner = null;
+      await live.privy.logout();
+    },
   };
 }
