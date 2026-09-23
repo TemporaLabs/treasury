@@ -81,12 +81,17 @@ Later, ask: **“What is my position worth, and how much can I withdraw now?”*
 
 ## Vaults
 
-The default, **Cash Plus USDC (Test 2)**, uses Morpho Vault V2 and is open to any account.
+The default, **Cash Plus USDC (Test 2B)**, uses Morpho Vault V2 and is open to any account. Its
+cash-like leg is a savings-rate instrument rather than a lending position — see
+[`docs/vaults.md`](docs/vaults.md#why-the-default-is-what-it-is) for why that's the default and the
+trade-off involved. It does not currently render on Morpho's own app; verify positions on
+[BaseScan](https://basescan.org/address/0x91BcEbA5feCB9E92d80F1845B55cC56621E9352F) instead.
 
-Explore the default vault in the [Morpho dashboard](https://app.morpho.org/base/vault/0x040fCA12673778FEED5DA7b2ccFbbAb0cc0134Cf/tempora-labs-cash-plus-usdc-test-2#overview) for a visual overview.
+**Cash Plus USDC (Test 2)** also uses Morpho Vault V2 and is open to any account; unlike Test 2B, it
+renders fully in the [Morpho dashboard](https://app.morpho.org/base/vault/0x040fCA12673778FEED5DA7b2ccFbbAb0cc0134Cf/tempora-labs-cash-plus-usdc-test-2#overview).
 
-**Cash Plus USDC (Test 2A)** uses IPOR Fusion and requires whitelist access. Both are experimental
-vaults using real USDC, not bank savings accounts. Neither currently has a lock-up, but liquidity
+**Cash Plus USDC (Test 2A)** uses IPOR Fusion and requires whitelist access. All three are experimental
+vaults using real USDC, not bank savings accounts. None currently has a lock-up, but liquidity
 can limit withdrawals.
 
 Tempora Labs curates these vaults and can set fees. OAT offers Tempora's vaults; it does not compare

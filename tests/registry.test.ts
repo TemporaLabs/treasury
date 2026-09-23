@@ -24,48 +24,53 @@ describe("the shipped registry", () => {
     expect(reg.vaults.length).toBeGreaterThan(0);
   });
 
-  it("offers TWO Tempora vaults on Base, and the default is Cash Plus USDC (Test 2) — open to any account", () => {
+  it("offers THREE Tempora vaults on Base, and the default is Cash Plus USDC (Test 2B) — open to any account", () => {
     const d = defaultVault();
-    expect(listVaults().map((v) => v.symbol)).toEqual(["tlCashPlusUSDC2", "tlCashPlusUSDC2A"]);
-    expect(d.symbol).toBe("tlCashPlusUSDC2");
-    expect(d.name).toBe("Tempora Labs Cash Plus USDC (Test 2)");
+    expect(listVaults().map((v) => v.symbol)).toEqual(["tlCashPlusUSDC2B", "tlCashPlusUSDC2", "tlCashPlusUSDC2A"]);
+    expect(d.symbol).toBe("tlCashPlusUSDC2B");
+    expect(d.name).toBe("Tempora Labs Cash Plus USDC (Test 2B)");
     expect(d.backend).toBe("tempora");
     expect(d.chainId).toBe(8453);
-    expect(d.address).toBe("0x040fCA12673778FEED5DA7b2ccFbbAb0cc0134Cf");
+    expect(d.address).toBe("0x91BcEbA5feCB9E92d80F1845B55cC56621E9352F");
     expect(d.chassis).toBe("morpho-v2");
     expect(resolveVault()).toBe(d);
     expect(listVaults().filter((v) => v.isDefault)).toHaveLength(1);
     for (const v of listVaults()) expect(v.backend).toBe("tempora");
   });
 
-  it("carries MEASURED share decimals — 18 on the Morpho V2 default, 8 on the Fusion sibling, both against 6-decimal USDC", () => {
+  it("carries MEASURED share decimals — 18 on both Morpho V2 vaults, 8 on the Fusion sibling, all against 6-decimal USDC", () => {
+    const twoB = getVault("tlCashPlusUSDC2B");
     const two = getVault("tlCashPlusUSDC2");
     const twoA = getVault("tlCashPlusUSDC2A");
-    expect(two.shareDecimals).toBe(18); // measured via decimals()
+    expect(twoB.shareDecimals).toBe(18); // measured via decimals()
+    expect(twoB.symbol).toBe("tlCashPlusUSDC2B");
+    expect(two.shareDecimals).toBe(18);
     expect(two.symbol).toBe("tlCashPlusUSDC2");
     expect(twoA.shareDecimals).toBe(8);
     expect(twoA.symbol).toBe("tlCashPlusUSDC2A");
-    for (const v of [two, twoA]) {
+    for (const v of [twoB, two, twoA]) {
       expect(v.asset).toMatchObject({ symbol: "USDC", decimals: 6, address: "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913" });
       expect(v.shareDecimals).not.toBe(v.asset.decimals);
     }
   });
 
-  it("🔴 the depositable set is exactly the default: open to any account, measured by a simulated deposit", () => {
-    // The Morpho V2 vault takes a deposit from anyone (a stranger's simulated deposit reached the token
-    // pull). The Fusion sibling is whitelist-gated and stays out of the set — listed so an admitted
-    // account's position can be read and exited, refused for everyone else before anything is built.
-    expect(depositableVaults().map((v) => v.symbol)).toEqual(["tlCashPlusUSDC2"]);
+  it("🔴 the depositable set is the two Morpho V2 vaults: both open to any account, measured by a simulated deposit", () => {
+    // Both Morpho V2 vaults take a deposit from anyone (a stranger's simulated deposit reached the
+    // token pull on each). The Fusion sibling is whitelist-gated and stays out of the set — listed so
+    // an admitted account's position can be read and exited, refused for everyone else before anything
+    // is built.
+    expect(depositableVaults().map((v) => v.symbol)).toEqual(["tlCashPlusUSDC2B", "tlCashPlusUSDC2"]);
     expect(defaultVault().depositOpen.open).toBe(true);
+    expect(getVault("tlCashPlusUSDC2").depositOpen.open).toBe(true);
     expect(getVault("tlCashPlusUSDC2A").depositOpen).toMatchObject({ open: false, reason: "WHITELIST_GATED" });
   });
 
   it("access is a MEASUREMENT with a block on it, not a flag someone set", () => {
     const open = defaultVault().depositOpen;
     expect(open.method).toBe("simulated-deposit-from-stranger");
-    expect(open.measuredAtBlock).toBeGreaterThan(51_371_133);
+    expect(open.measuredAtBlock).toBeGreaterThan(51_436_870);
     expect(open.detail).toMatch(/0xe65b7a77/); // TransferFromReverted — reached the token pull, so access is open
-    expect(defaultVault().deployedAtBlock).toBe(51_371_133);
+    expect(defaultVault().deployedAtBlock).toBe(51_436_870);
     const gated = getVault("tlCashPlusUSDC2A").depositOpen;
     expect(gated.detail).toMatch(/0x068ca9d8/); // AccessManagedUnauthorized — the revert actually observed
     expect(getVault("tlCashPlusUSDC2A").deployedAtBlock).toBe(51_359_816);

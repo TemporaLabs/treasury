@@ -1,7 +1,40 @@
 {
   "schemaVersion": 1,
-  "reconciledAtIso": "2026-09-18T16:25:46Z",
+  "reconciledAtIso": "2026-09-23T13:22:53Z",
   "vaults": [
+    {
+      "symbol": "tlCashPlusUSDC2B",
+      "name": "Tempora Labs Cash Plus USDC (Test 2B)",
+      "warning": "TEST VAULT — unproven, and newer than the other listed vaults with less operating history. It exists to exercise this product, not to hold savings. Deposit only an amount you are fully prepared to lose entirely, and do not move significant funds into it. Show this warning before preparing any deposit.",
+      "chainId": 8453,
+      "address": "0x91BcEbA5feCB9E92d80F1845B55cC56621E9352F",
+      "chassis": "morpho-v2",
+      "backend": "tempora",
+      "isDefault": true,
+      "asset": {
+        "address": "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913",
+        "symbol": "USDC",
+        "decimals": 6
+      },
+      "shareDecimals": 18,
+      "depositOpen": {
+        "open": true,
+        "method": "simulated-deposit-from-stranger",
+        "measuredAtBlock": 51690071,
+        "measuredAtIso": "2026-09-23T13:22:53Z",
+        "detail": "deposit(1 USDC, 0x…dEaD) from 0x…dEaD reverted 0xe65b7a77 TransferFromReverted at block 51690071 — it reached the token pull, so access is open; maxDeposit() reads 0 to every caller on this chassis by design and is not consulted."
+      },
+      "deployedAtBlock": 51436870,
+      "notes": [
+        "18-decimal shares against a 6-decimal asset — a share amount is never an asset amount here.",
+        "Morpho Vault V2. maxDeposit() and maxWithdraw() return 0 to every caller by protocol design; the pre-flight simulates the real call and earn_balance simulates the exit. Neither reads those views.",
+        "Withdrawals are served from idle USDC, then through the vault's liquidity adapter; a withdrawal larger than that reverts until positions are unwound. earn_balance reports exitableNow by simulating the withdrawal.",
+        "No fee is set: performanceFee() = 0 and managementFee() = 0 at block 51690071. The curator can introduce one, and the vault's fee timelocks are 0 (timelock(setPerformanceFee) = timelock(setManagementFee) = 0 at block 51690071), so a change needs no notice. Read both fees before depositing.",
+        "Three configured adapters (measured at block 51690071); Treasury does not model the fund's allocation across them — read the vault's positions on-chain before a first deposit.",
+        "This vault does not currently render on Morpho's own app (app.morpho.org returns \"Not Found\"/\"Unavailable\" for it, measured 2026-09-23), unlike Test 2 below. Positions cannot be visually cross-checked there; verify on-chain or via BaseScan instead.",
+        "The DEFAULT vault, and open to any account: it is in depositable."
+      ]
+    },
     {
       "symbol": "tlCashPlusUSDC2",
       "name": "Tempora Labs Cash Plus USDC (Test 2)",
@@ -10,7 +43,7 @@
       "address": "0x040fCA12673778FEED5DA7b2ccFbbAb0cc0134Cf",
       "chassis": "morpho-v2",
       "backend": "tempora",
-      "isDefault": true,
+      "isDefault": false,
       "asset": {
         "address": "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913",
         "symbol": "USDC",
@@ -30,7 +63,7 @@
         "Morpho Vault V2. maxDeposit() and maxWithdraw() return 0 to every caller by protocol design; the pre-flight simulates the real call and earn_balance simulates the exit. Neither reads those views.",
         "Withdrawals are served from idle USDC, then through the vault's liquidity adapter; a withdrawal larger than that reverts until positions are unwound. earn_balance reports exitableNow by simulating the withdrawal.",
         "No fee is set: performanceFee() = 0 and managementFee() = 0 at block 51372415. The curator can introduce one, and the vault's fee timelocks are 0 (timelock(setPerformanceFee) = timelock(setManagementFee) = 0 at block 51404161), so a change needs no notice. Read both fees before depositing.",
-        "The DEFAULT vault, and open to any account: it is in depositable."
+        "No longer the default (moved to Test 2B, 2026-09-23): its anchor sleeve is a lending vault (Spark USDC Vault), not the savings-rate instrument the product's cash leg is meant to be. Still open to any account and still in depositable."
       ]
     },
     {
