@@ -26,15 +26,17 @@ export type VaultSymbol = string;
 
 export const EARN = {
   /**
-   * Tempora Labs Cash Plus USDC (Test 2), Base — a Morpho Vault V2, the Tempora vault this client
+   * Tempora Labs Cash Plus USDC (Test 2B), Base — a Morpho Vault V2, the Tempora vault this client
    * offers by default. Deposits are OPEN to any account (measured by a simulated stranger deposit;
-   * `earn_vaults` reports `defaultAccess: "open"`). The whitelist-gated sibling, Cash Plus USDC
-   * (Test 2A), stays listed as `tlCashPlusUSDC2A` and is refused per account by the pre-flight.
+   * `earn_vaults` reports `defaultAccess: "open"`). Its cash-like leg is a savings-rate instrument
+   * rather than a lending position (`docs/vaults.md`), unlike the prior default, Test 2. The
+   * whitelist-gated sibling, Cash Plus USDC (Test 2A), stays listed as `tlCashPlusUSDC2A` and is
+   * refused per account by the pre-flight.
    */
-  defaultVault: "tlCashPlusUSDC2" satisfies VaultSymbol,
+  defaultVault: "tlCashPlusUSDC2B" satisfies VaultSymbol,
 
   /** The round-trip target. The same vault as the default; open, so the fork tier deposits from the whale directly. */
-  roundTripVault: "tlCashPlusUSDC2" satisfies VaultSymbol,
+  roundTripVault: "tlCashPlusUSDC2B" satisfies VaultSymbol,
 
   /** USDC, as a decimal string — the amount `scripts/roundtrip.ts` prepares by default. Never a float. */
   roundTripAmountUsdc: "0.05",

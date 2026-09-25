@@ -73,14 +73,14 @@ describe("tool surface", () => {
 });
 
 describe("earn_vaults — Tempora vaults only, and the access of each is reported", () => {
-  it("default is Cash Plus USDC 2 with defaultAccess open; it IS depositable; the gated sibling is listed but not depositable", async () => {
+  it("default is Cash Plus USDC 2B with defaultAccess open; it IS depositable; the gated sibling is listed but not depositable", async () => {
     const out = payload(await tools()["earn_vaults"]!.handler({}, {})) as {
       default: string;
       defaultAccess: string;
       depositable: string[];
       vaults: { backend: string }[];
     };
-    expect(out.default).toBe("tlCashPlusUSDC2");
+    expect(out.default).toBe("tlCashPlusUSDC2B");
     expect(out.defaultAccess).toBe("open");
     // This file runs on the fixture registry (shipped rows + synthetic ones), so assert membership,
     // not the exact set — registry.test.ts pins the exact shipped set.
