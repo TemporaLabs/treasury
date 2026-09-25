@@ -4,6 +4,31 @@ All notable changes to Agent Treasury are recorded here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versions follow [SemVer](https://semver.org/).
 Pre-1.0, minor versions may change tool names, schemas and behaviour.
 
+## [Unreleased]
+
+### Added
+- **`signer-page/`, an optional companion that hands calls to your wallet extension.** It opens a
+  local page on `127.0.0.1`, connects MetaMask, Rabby or Coinbase Wallet, and sends each call with
+  `eth_sendTransaction`, so the wallet's own confirmation is the signature and nothing is copied into a
+  terminal. It holds no key, never signs a message, and never sends a step twice. Two ways in:
+  an envelope from `earn_prepare_deposit` / `earn_prepare_withdraw` (`open.mjs --file`), which it
+  validates and shows the destination of, read from the calldata and the registry rather than the
+  agent's prose; or `open.mjs --manual`, where you type a deposit or withdrawal amount on the page. The
+  page's own calls go through the same validator as an envelope. The core package does not depend on it,
+  import it, or publish it, and a test keeps it that way.
+  An opt-in `--privy-app-id` mode replaces the browser extension with a login of your choice — email,
+  Google, or connecting an existing wallet (a browser extension, or WalletConnect's QR code for a phone
+  wallet) — inside Privy's own modal; it loads a bundle you build yourself and widens the page's policy,
+  only in that mode, to exactly what Privy and WalletConnect need. In Privy mode only, a **Send USDC**
+  panel sends USDC from the connected wallet to an address you paste (checksum-checked, shown in full
+  before anything is sent, never something an agent's envelope can carry), because a user-owned wallet's
+  funds cannot be moved from Privy's dashboard. Privy mode also has a **Log out** button — Privy keeps its
+  own login session in the browser, so without one the page would keep reopening as whoever last logged in
+  until the browser's storage was cleared by hand; it is refused while a transaction from the current run
+  is still unconfirmed.
+  **This adds a wallet-facing client, which CONTRIBUTING rule 1 says will not merge; see the pull
+  request for the decision it needs.**
+
 ## [v0.1.0] - 2026-09-18
 
 The first public release. Everything below is what ships in it.

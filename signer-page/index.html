@@ -1,0 +1,104 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Treasury Sign</title>
+<style>
+  :root { --bg:#fbfaf7; --ink:#1c1b18; --mute:#6b675e; --line:#dedad0; --ok:#1d6b3a; --bad:#9b2c1f; --accent:#2b4c7e; --card:#ffffff; }
+  @media (prefers-color-scheme: dark) { :root { --bg:#141412; --ink:#ebe8e0; --mute:#a39e93; --line:#33312c; --ok:#5fbf7f; --bad:#e0705f; --accent:#8fb0e0; --card:#1d1c19; } }
+  [hidden] { display:none !important; }
+  html,body { margin:0; background:var(--bg); color:var(--ink); font:15px/1.5 ui-sans-serif,system-ui,-apple-system,"Segoe UI",Roboto,sans-serif; }
+  main { max-width:720px; margin:0 auto; padding:32px 16px 64px; display:flex; flex-direction:column; gap:20px; }
+  h1 { font-size:20px; margin:0; letter-spacing:.01em; }
+  h2 { font-size:13px; text-transform:uppercase; letter-spacing:.08em; color:var(--mute); margin:0 0 8px; }
+  .card { background:var(--card); border:1px solid var(--line); border-radius:8px; padding:16px; }
+  table { border-collapse:collapse; width:100%; font-variant-numeric:tabular-nums; }
+  td { padding:4px 8px 4px 0; vertical-align:top; }
+  td:first-child { color:var(--mute); white-space:nowrap; width:8.5em; }
+  code, .addr { font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace; font-size:13px; word-break:break-all; }
+  a { color:var(--accent); }
+  .banner { border-left:4px solid var(--bad); padding:8px 12px; background:color-mix(in srgb, var(--bad) 8%, var(--card)); white-space:pre-wrap; }
+  button { font:inherit; padding:10px 16px; border-radius:6px; border:1px solid var(--accent); background:var(--accent); color:#fff; cursor:pointer; }
+  button:disabled { opacity:.45; cursor:not-allowed; }
+  button.secondary { background:transparent; color:var(--accent); }
+  .step { display:flex; flex-direction:column; gap:6px; padding:12px 0; border-top:1px solid var(--line); }
+  .step:first-child { border-top:0; padding-top:0; }
+  .step .head { display:flex; justify-content:space-between; align-items:baseline; gap:12px; }
+  .status { color:var(--mute); font-size:13px; word-break:break-all; }
+  .status.ok { color:var(--ok); } .status.bad { color:var(--bad); }
+  details summary { cursor:pointer; color:var(--mute); font-size:13px; }
+  .muted { color:var(--mute); font-size:13px; }
+  .warn { color:var(--bad); font-weight:600; }
+  pre { margin:0; white-space:pre-wrap; }
+  .actions { display:grid; grid-template-columns:repeat(auto-fit,minmax(260px,1fr)); gap:16px; margin-top:12px; }
+  .action { border:1px solid var(--line); border-radius:8px; padding:12px; display:flex; flex-direction:column; gap:8px; }
+  .action h3 { font-size:15px; margin:0; }
+  .field { display:flex; gap:8px; }
+  .field input { flex:1; min-width:0; font:inherit; font-variant-numeric:tabular-nums; padding:9px 10px; border-radius:6px; border:1px solid var(--line); background:var(--bg); color:var(--ink); }
+  .field input:focus { outline:2px solid var(--accent); outline-offset:1px; }
+  #position td:last-child { text-align:right; }
+  #send-panel { grid-column:1 / -1; }
+  #send-to { font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace; font-size:13px; }
+  body.manual h1 { order:-5; } body.manual #intro { order:-4; } body.manual #fatal { order:-3; } body.manual #connect { order:-2; } body.manual #manual { order:-1; }
+</style>
+</head>
+<body>
+<main>
+  <h1>Treasury — approve in your wallet</h1>
+  <p class="muted" id="intro">Your agent opened this page with unsigned calls in the address. Nothing here holds a key: your wallet extension signs, and only after you confirm each transaction in it. Everything below marked <em>decoded</em> was read from the call data itself and checked against the vault registry this page ships with; anything else is the agent's own words.</p>
+
+  <div id="fatal" class="banner" role="alert" hidden></div>
+
+  <section class="card" id="manual" hidden>
+    <h2>Your position</h2>
+    <table id="position"></table>
+    <div class="actions">
+      <div class="action">
+        <h3>Deposit</h3>
+        <div class="field"><input id="amt-deposit" type="text" inputmode="decimal" autocomplete="off" maxlength="20" placeholder="Amount in USDC" aria-label="Deposit amount in USDC"><button class="secondary" id="max-deposit" type="button">Max</button></div>
+        <button id="btn-deposit" type="button" disabled>Review deposit</button>
+      </div>
+      <div class="action">
+        <h3>Withdraw</h3>
+        <div class="field"><input id="amt-withdraw" type="text" inputmode="decimal" autocomplete="off" maxlength="20" placeholder="Amount in USDC" aria-label="Withdrawal amount in USDC"></div>
+        <button id="btn-withdraw" type="button" disabled>Review withdrawal</button>
+        <button class="secondary" id="max-withdraw" type="button" disabled>Withdraw everything</button>
+      </div>
+      <div class="action" id="send-panel" hidden>
+        <h3>Send USDC out of this wallet</h3>
+        <div class="field"><input id="amt-send" type="text" inputmode="decimal" autocomplete="off" maxlength="20" placeholder="Amount in USDC" aria-label="Amount of USDC to send"><button class="secondary" id="max-send" type="button">Max</button></div>
+        <div class="field"><input id="send-to" type="text" autocomplete="off" spellcheck="false" maxlength="42" placeholder="Send to: 0x… (full address)" aria-label="Address to send USDC to"></div>
+        <button id="btn-send" type="button" disabled>Review send</button>
+        <span class="muted">Sends go to the address you paste, and cannot be undone. You will see it in full before anything is sent.</span>
+      </div>
+    </div>
+    <p id="manual-msg" class="status" role="status"></p>
+  </section>
+
+  <section class="card" id="destination" hidden>
+    <h2>Destination — read this before you connect</h2>
+    <table id="fp"></table>
+  </section>
+
+  <section class="card" id="connect" hidden>
+    <h2>Wallet</h2>
+    <div id="wallet-status" class="muted">Not connected.</div>
+    <p><button id="btn-connect">Connect wallet</button> <button class="secondary" id="btn-logout" hidden>Log out</button></p>
+  </section>
+
+  <section class="card" id="calls" hidden>
+    <h2>Transactions, in order</h2>
+    <div id="steps"></div>
+  </section>
+
+  <section class="card" id="done" hidden>
+    <h2>Done</h2>
+    <p>All transactions confirmed. Your agent can see this on the chain; if it asks, paste this back:</p>
+    <pre id="summary" class="addr"></pre>
+    <p><button class="secondary" id="btn-copy">Copy</button></p>
+  </section>
+</main>
+<script type="module" src="./app.mjs"></script>
+</body>
+</html>

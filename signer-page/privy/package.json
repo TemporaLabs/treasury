@@ -1,0 +1,17 @@
+{
+  "name": "@temporalabs/treasury-sign-privy",
+  "private": true,
+  "description": "Build workspace for the optional Privy login of signer-page. Not part of the core package and not published; run `npm ci && npm run build` here to produce ../vendor/privy-provider.js.",
+  "type": "module",
+  "license": "Apache-2.0",
+  "scripts": {
+    "build": "node build.mjs"
+  },
+  "devDependencies": {
+    "@privy-io/react-auth": "3.44.0",
+    "esbuild": "0.25.12",
+    "react": "18.3.1",
+    "react-dom": "18.3.1",
+    "viem": "2.56.7"
+  }
+}
