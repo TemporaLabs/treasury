@@ -1,8 +1,8 @@
 # AGENTS.md
 
 Instructions for coding agents working in this repository. People should start with
-[`CONTRIBUTING.md`](CONTRIBUTING.md); it is the full version of everything below, and wins if the two
-ever disagree.
+[`CONTRIBUTING.md`](CONTRIBUTING.md); it is the fuller guide for people, and wins if the two ever
+disagree.
 
 Treasury is a depositor client for ERC-4626 vaults on Base: a vault registry, pre-flight checks, and
 builders for **unsigned** deposit and withdraw calls, served as a library and as an MCP server.
