@@ -16,6 +16,19 @@ Pre-1.0, minor versions may change tool names, schemas and behaviour.
   marketplace source moves to `TemporaLabs/treasury`. The npm package is unchanged: `plugin/` is
   outside its `files` list.
 
+  **Upgrading an install made from `TemporaLabs/treasury-plugin`:** remove the old marketplace
+  first — adding the new one while it is still configured is refused, because both are named
+  `treasury` — then add the new one and reinstall. Removing the marketplace also uninstalls the
+  plugin, so the last step is needed:
+
+  ```bash
+  claude plugin marketplace remove treasury
+  claude plugin marketplace add TemporaLabs/treasury@vX.Y.Z
+  claude plugin install treasury@treasury
+  ```
+
+  Then restart your Claude Code session so the tools connect.
+
 ## [v0.1.0] - 2026-09-18
 
 The first public release. Everything below is what ships in it.
