@@ -84,15 +84,16 @@ jobs:
 
       # Both release channels ship from this tag: npm gets the tarball, the Claude Code plugin is
       # installed from plugin/ at the same tag. A push to a tag runs no CI, so nothing else proves
-      # the plugin's copies and version declarations are right at THIS commit before the one
-      # irreversible act.
-      - name: the plugin's copies and every version declaration agree at this tag
+      # the plugin's copies, the version declarations and the install instructions are right at THIS
+      # commit before the one irreversible act.
+      - name: the plugin's copies, every version declaration and the install instructions agree at this tag
         env:
           TAG: ${{ inputs.tag }}
         run: |
           set -euo pipefail
           bash scripts/sync-plugin.sh --check
           bash scripts/check-versions.sh "${TAG#v}"
+          bash .github/scripts/version-pins.sh "${TAG#v}"
 
       - run: npm ci
 

@@ -525,4 +525,11 @@ describe("D. what gets published is what was attested", () => {
   it("prepack cannot ship a bundle that differs from the attested committed one", () => {
     expect(scripts["prepack"]).toContain("git diff --exit-code -- dist/mcp-server.mjs");
   });
+
+  it("nor third-party notices that differ from the committed ones", () => {
+    // The build also rewrites THIRD_PARTY_NOTICES.md, which is in `files`: a rebuild on the publishing
+    // machine against different dependencies would otherwise ship notices nobody committed.
+    const guarded = (scripts["prepack"] ?? "").split("git diff --exit-code --")[1]?.trim().split(/\s+/) ?? [];
+    expect(guarded).toEqual(expect.arrayContaining(["dist/mcp-server.mjs", "THIRD_PARTY_NOTICES.md"]));
+  });
 });

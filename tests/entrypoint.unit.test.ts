@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeAll, afterAll } from "vitest";
 import { spawn } from "node:child_process";
-import { mkdtempSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
+import { mkdtempSync, readFileSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { pathToFileURL } from "node:url";
@@ -17,6 +17,7 @@ import { pathToFileURL } from "node:url";
  */
 
 const BUNDLE = resolve(__dirname, "../dist/mcp-server.mjs");
+const VERSION = (JSON.parse(readFileSync(resolve(__dirname, "../package.json"), "utf8")) as { version: string }).version;
 const INITIALIZE =
   JSON.stringify({
     jsonrpc: "2.0",
@@ -25,8 +26,8 @@ const INITIALIZE =
     params: { protocolVersion: "2025-06-18", capabilities: {}, clientInfo: { name: "test", version: "0" } },
   }) + "\n";
 
-/** Run `node [...flags] <entry>`, write one initialize request, return what came back. */
-function firstReply(entry: string, flags: string[] = []): Promise<{ stdout: string; stderr: string; code: number | null }> {
+/** Run `node [...flags] <entry>`, write one initialize request (then `more`, if given), return what came back. */
+function firstReply(entry: string, flags: string[] = [], more = ""): Promise<{ stdout: string; stderr: string; code: number | null }> {
   return new Promise((resolvePromise) => {
     const p = spawn("node", [...flags, entry], { stdio: ["pipe", "pipe", "pipe"] });
     let stdout = "";
@@ -38,17 +39,17 @@ function firstReply(entry: string, flags: string[] = []): Promise<{ stdout: stri
       clearTimeout(timer);
       resolvePromise({ stdout, stderr, code });
     });
-    p.stdin.write(INITIALIZE);
+    p.stdin.write(INITIALIZE + more);
     // A started server answers, then waits for more; a module that never started exits on its own.
     // Either way, closing stdin after the answer (or a short grace period) lets the process end.
     setTimeout(() => p.stdin.end(), 1_500);
   });
 }
 
-function serverInfo(stdout: string): { name: string } | undefined {
+function serverInfo(stdout: string): { name: string; version: string } | undefined {
   const line = stdout.split("\n").find((l) => l.trim().startsWith("{"));
   if (!line) return undefined;
-  return (JSON.parse(line) as { result?: { serverInfo?: { name: string } } }).result?.serverInfo;
+  return (JSON.parse(line) as { result?: { serverInfo?: { name: string; version: string } } }).result?.serverInfo;
 }
 
 describe("the bundle starts the server only when it is the entry file", () => {
@@ -78,6 +79,22 @@ describe("the bundle starts the server only when it is the entry file", () => {
     const r = await firstReply(bin);
     expect(serverInfo(r.stdout)?.name).toBe("treasury");
     expect(r.stderr).toBe("");
+  });
+
+  it("run through that symlink with `--preserve-symlinks-main`, it still reads its OWN package.json and registry", async () => {
+    // With the flag, import.meta.url is the symlink's path, not the bundle's. The package.json and
+    // registry beside the bundle must still be the ones read: resolved from the symlink instead,
+    // `../package.json` is a file in whatever directory holds the link (a consumer's node_modules/).
+    const vaults =
+      JSON.stringify({ jsonrpc: "2.0", method: "notifications/initialized" }) + "\n" +
+      JSON.stringify({ jsonrpc: "2.0", id: 2, method: "tools/call", params: { name: "earn_vaults", arguments: {} } }) + "\n";
+    const r = await firstReply(bin, ["--preserve-symlinks-main"], vaults);
+    expect(r.stderr).toBe("");
+    expect(serverInfo(r.stdout)).toEqual({ name: "treasury", version: VERSION });
+    // earn_vaults reads the registry: an answer without isError means ../registry/vaults.json was found
+    const reply = r.stdout.split("\n").filter((l) => l.includes('"id":2')).map((l) => JSON.parse(l) as { result?: { isError?: boolean } })[0];
+    expect(reply?.result).toBeDefined();
+    expect(reply?.result?.isError).not.toBe(true);
   });
 
   it("imported by an unrelated script named `*server.mjs`, it does NOT start: no reply, clean exit", async () => {

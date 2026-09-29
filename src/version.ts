@@ -6,10 +6,13 @@
  *
  * Same resolution trick as registry.ts: this file sits at src/ top level and the bundle at dist/
  * top level, so `../package.json` is the package manifest at the repository root from both.
+ * Resolved from this file's REAL path: under `--preserve-symlinks-main`, `import.meta.url` is the
+ * path of a symlink to the bundle (npm's `.bin/treasury-mcp`), and `../package.json` from there is a
+ * file in whatever directory holds the link.
  */
-import { readFileSync } from "node:fs";
-import { fileURLToPath } from "node:url";
+import { readFileSync, realpathSync } from "node:fs";
+import { fileURLToPath, pathToFileURL } from "node:url";
 
-const PACKAGE_JSON_URL = new URL("../package.json", import.meta.url);
+const PACKAGE_JSON_URL = new URL("../package.json", pathToFileURL(realpathSync(fileURLToPath(import.meta.url))));
 
 export const PACKAGE_VERSION: string = (JSON.parse(readFileSync(fileURLToPath(PACKAGE_JSON_URL), "utf8")) as { version: string }).version;
