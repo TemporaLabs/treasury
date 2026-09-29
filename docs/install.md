@@ -23,6 +23,16 @@ marketplace install copies files and runs no dependency install. **Node 22 or la
 and must be on `PATH`** — without it the server process fails to spawn, and Claude Code reports that
 as a bare `CONNECTION_CLOSED` on any `earn_*` call, with no mention of Node.
 
+**Codex is not supported as a plugin host in this release.** Codex installs the plugin from this
+marketplace, but the server does not start: measured on Codex 0.155.1, Codex does not expand
+`${CLAUDE_PLUGIN_ROOT}` in the launch path. With Codex, install the package as in
+[the stdio section below](#any-agent-runtime--the-mcp-server-over-stdio) and register the bundle by
+its absolute path:
+
+```bash
+codex mcp add treasury -- node <project>/node_modules/@temporalabs/treasury/dist/mcp-server.mjs
+```
+
 ### Upgrading an earlier install
 
 An install made before v0.1.1 used a marketplace with the same name, `treasury`, from a different
