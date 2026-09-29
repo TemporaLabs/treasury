@@ -127,9 +127,7 @@ TREASURY_RPC_BASE=https://... npm run test:fork # anvil fork round trips with im
 
 - **Expect questions.** Reviewers run the change rather than only reading it, and a review usually
   takes more than one round. Approval does not mean merge; a Tempora Labs maintainer merges.
-- **Do not bump versions.** Releases are cut by maintainers, each as a single commit of the release
-  tree; the public repository carries no drafting history, so nothing you see in a release commit's
-  parent is missing — there is none.
+- **Do not bump versions.** Maintainers cut releases ([`docs/release-process.md`](docs/release-process.md)).
 
 ## Security
 

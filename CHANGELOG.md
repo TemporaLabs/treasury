@@ -12,12 +12,15 @@ Pre-1.0, minor versions may change tool names, schemas and behaviour.
   carried byte copies of this repository's bundle, refreshed by hand. The copies in `plugin/` are now
   written by `npm run build` in the same commit and checked by CI, so a tool change and its skill text
   land in one pull request. The install id is unchanged (`treasury@treasury`); the marketplace source
-  is now `TemporaLabs/treasury`. The npm package is unchanged: `plugin/` is outside its `files` list.
+  is now `TemporaLabs/treasury`. The move does not change the npm package's contents: `plugin/` is
+  outside its `files` list.
 - `AGENTS.md`, instructions for coding agents working in this repository (#49).
 
 ### Fixed
 - The package's `treasury-mcp` command now starts the server: the entry check compares the file's
-  identity, not the name it was invoked by (#27, fixes #22).
+  identity, not the name it was invoked by (#27, fixes #22). A script that imports or preloads the
+  bundle no longer starts it, whatever that script is named.
+- The Codex marketplace entry declares an authentication policy Codex accepts (#55).
 - `earn_quote` and `earn_balance` name `instantLiquidity` in their descriptions, and the prepare-tool
   population is derived rather than listed (#29, fixes #17).
 
@@ -28,10 +31,12 @@ Pre-1.0, minor versions may change tool names, schemas and behaviour.
   bundle to its tag (#23, #24).
 
 ### CI
-- The documentation version pins must agree, and on `main` equal the latest release tag (#30).
-- The publish workflow polls the registry for up to ten minutes and warns rather than fails on a
-  timeout (#28).
-- Dependabot no longer proposes TypeScript or `@types/node` majors (#25); GitHub Actions bumped (#20).
+- The documentation version pins must agree, and on `main` equal `package.json`'s version; a release
+  moves them in its own pull request (#30, #55).
+- The publish workflow checks the plugin's copies and every version declaration at the tag (#55),
+  and polls the registry for up to ten minutes, warning rather than failing on a timeout (#28, #55).
+- Dependabot no longer proposes TypeScript or `@types/node` majors (#25); GitHub Actions and
+  development dependencies bumped (#20, #55).
 
 ### Upgrading an earlier Claude Code install
 Remove the old marketplace first — adding the new one while it is still configured is refused,

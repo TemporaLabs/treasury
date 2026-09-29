@@ -63,14 +63,15 @@ command reads the attestation from GitHub's API; it does not need read access to
    cache; the path ends in `dist/mcp-server.mjs`. Record its digest:
 
    ```bash
-   f=~/.claude/plugins/cache/treasury/treasury/*/dist/mcp-server.mjs
-   sha256sum $f
+   # <version> as `claude plugin list` shows it; an upgrade can leave older version folders beside it
+   f=~/.claude/plugins/cache/treasury/treasury/<version>/dist/mcp-server.mjs
+   sha256sum "$f"
    ```
 
 2. Verify it against the public repository and its workflow:
 
    ```bash
-   gh attestation verify $f --repo TemporaLabs/treasury \
+   gh attestation verify "$f" --repo TemporaLabs/treasury \
      --signer-workflow TemporaLabs/treasury/.github/workflows/ci.yml
    ```
 
@@ -85,7 +86,7 @@ command reads the attestation from GitHub's API; it does not need read access to
    attested, but not by this workflow in this repository. Either way: do not run it; reinstall from
    the marketplace and verify again.
 
-Offline: `gh attestation download $f --repo TemporaLabs/treasury` writes a `sha256:….jsonl` bundle you can
+Offline: `gh attestation download "$f" --repo TemporaLabs/treasury` writes a `sha256:….jsonl` bundle you can
 keep and later pass to `gh attestation verify --bundle <file>`; the signature and transparency-log
 inclusion are checked locally, but the trust roots are still fetched from Sigstore/GitHub on first
 use, so "offline" means "without this repository", not "air-gapped".
@@ -97,7 +98,7 @@ with npm provenance: each version is published from `publish.yml` running on Git
 with `id-token: write`, from the release tag, and npm records that fact against the tarball.
 `package.json` is what makes that hold — `repository` names the public repository,
 `TemporaLabs/treasury` (CI fails if it names anything else, because that is the only repository
-provenance can be issued from), `files` limits the tarball to `dist/` and `registry/` (the skill is
+provenance can be issued from), `files` limits the tarball to `dist/`, `registry/` and the licence files (the skill is
 not in it — it ships in `plugin/`, by git tag), `publishConfig.provenance` is on, and `prepack`
 builds so `main`/`types` exist in the tarball — only `dist/*.mjs` is committed, so without that build
 the tarball would carry the bundle and nothing the manifest's own `main`/`types` point at.

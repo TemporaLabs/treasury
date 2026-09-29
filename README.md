@@ -43,9 +43,9 @@ claude plugin marketplace add TemporaLabs/treasury@v0.1.1
 claude plugin install treasury@treasury
 ```
 
-Restart your Claude Code session after installing so the MCP tools connect. Keep the `@v0.1.1` ref
+Restart your Claude Code session after installing so the MCP tools connect. Keep the `TemporaLabs/treasury@v0.1.1` ref
 explicit so the install stays on a release rather than tracking the default branch. Upgrading an
-earlier install? Run `claude plugin marketplace remove treasury` first, then the two lines above
+earlier install? Run `claude plugin marketplace remove treasury` first, then the two `claude plugin` lines above
 ([details](docs/install.md#upgrading-an-earlier-install)).
 
 The plugin is the [`plugin/`](plugin/) folder of this repository: its manifests, the Earn skill, and a
