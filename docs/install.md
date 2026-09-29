@@ -44,6 +44,28 @@ the project; it is the same command every time (`node …/dist/mcp-server.mjs`).
 **Updating:** `claude plugin update` will not refresh a plugin whose version has not changed. To pick
 up a same-version rebuild, `claude plugin uninstall treasury@treasury` then install again.
 
+## Claude Code — the connect plugin (WalletConnect)
+
+`earn` prepares unsigned calls; the **connect** plugin connects your existing wallet over
+WalletConnect and asks it to sign them. It is a separate plugin, so install it alongside `treasury`:
+
+```bash
+# 1. Add the marketplace and install the plugin
+claude plugin marketplace add TemporaLabs/treasury-connect-plugin
+claude plugin install connect@connect
+
+# 2. Restart Claude Code (or reload plugins) so the connect MCP server starts
+# 3. Ask the agent to "connect my wallet" — it shows a WalletConnect link and QR code
+# 4. Open the link in MetaMask, Rabby, OKX Wallet or any WalletConnect wallet and approve on Base
+```
+
+`WALLETCONNECT_PROJECT_ID` is optional: the plugin ships with a default project id (it identifies the
+app to the relay, it is not a secret). Set your own from [cloud.reown.com](https://cloud.reown.com) to
+override it. Connecting only reveals an address; every transaction still needs your wallet's own
+approval, requested fresh each time. Only WalletConnect wallets are supported — there is no email or
+Google login and no new-wallet creation. The `connect` server exposes five tools: `connect_status`,
+`connect_wallet`, `disconnect_wallet`, `switch_wallet` and `connect_send_transaction`.
+
 ## Any agent runtime — the MCP server over stdio
 
 The same bundle is published to npm as `@temporalabs/treasury`. Install it, pinned to the exact

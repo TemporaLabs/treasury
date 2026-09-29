@@ -1,13 +1,19 @@
 /**
- * THIRD_PARTY_NOTICES.md, generated from what the bundle actually inlines.
+ * THIRD_PARTY_NOTICES.md (or CONNECT_THIRD_PARTY_NOTICES.md), generated from what a bundle
+ * actually inlines.
  *
- *   npx tsx scripts/third-party-notices.ts --write   # regenerate (run by `npm run build`)
- *   npx tsx scripts/third-party-notices.ts           # exit 1 if the committed file is stale
+ *   npx tsx scripts/third-party-notices.ts --write                    # mcp-server.mjs (default)
+ *   npx tsx scripts/third-party-notices.ts --write --bundle=connect-server
+ *   npx tsx scripts/third-party-notices.ts [--bundle=connect-server]  # exit 1 if the committed file is stale
  *
- * `dist/mcp-server.mjs` inlines its dependencies, so it is a copy of "substantial portions" of each
- * one and must carry their licence notices. package.json naming a dependency does not put its notice
- * into a standalone bundle. The package set is read from esbuild's own per-module path comments in
- * the bundle, not from package.json, so a dependency that is declared but tree-shaken away is not
+ * This package ships two self-contained bundles (earn's `mcp-server.mjs`, connect's
+ * `connect-server.mjs`), each inlining a DIFFERENT dependency set, so each gets its own notices
+ * file rather than one merged list that would over-claim for whichever plugin ships the other one.
+ *
+ * A bundle inlines its dependencies, so it is a copy of "substantial portions" of each one and must
+ * carry their licence notices. package.json naming a dependency does not put its notice into a
+ * standalone bundle. The package set is read from esbuild's own per-module path comments in the
+ * bundle, not from package.json, so a dependency that is declared but tree-shaken away is not
  * listed and a transitive one that is inlined is. Each entry is the full licence file of the exact
  * installed version.
  *
@@ -18,8 +24,17 @@ import { dirname, resolve } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 
 const pkgDir = resolve(dirname(fileURLToPath(import.meta.url)), "..");
-const BUNDLE = resolve(pkgDir, "dist/mcp-server.mjs");
-const NOTICES = resolve(pkgDir, "THIRD_PARTY_NOTICES.md");
+
+const BUNDLES: Record<string, { bundle: string; notices: string }> = {
+  "mcp-server": { bundle: "dist/mcp-server.mjs", notices: "THIRD_PARTY_NOTICES.md" },
+  "connect-server": { bundle: "dist/connect-server.mjs", notices: "CONNECT_THIRD_PARTY_NOTICES.md" },
+};
+
+function paths(bundleName: string): { BUNDLE: string; NOTICES: string } {
+  const entry = BUNDLES[bundleName];
+  if (!entry) throw new Error(`unknown --bundle=${bundleName}; expected one of ${Object.keys(BUNDLES).join(", ")}`);
+  return { BUNDLE: resolve(pkgDir, entry.bundle), NOTICES: resolve(pkgDir, entry.notices) };
+}
 
 export interface BundledPackage {
   name: string;
@@ -38,22 +53,35 @@ export function bundledPackageDirs(bundle: string): string[] {
 export function readPackage(dir: string): BundledPackage {
   const abs = resolve(pkgDir, dir);
   const pj = JSON.parse(readFileSync(resolve(abs, "package.json"), "utf8")) as { name: string; version: string; license?: string };
-  const file = readdirSync(abs).find((f) => /^(licen[cs]e|copying)(\.(md|txt))?$/i.test(f));
-  if (!file) throw new Error(`${pj.name}@${pj.version} is inlined in the bundle but ships no licence file`);
-  return { name: pj.name, version: pj.version, license: pj.license ?? "UNKNOWN", licenceText: readFileSync(resolve(abs, file), "utf8").trim() };
+  // A dual/multi-licensed package (e.g. "(Apache-2.0 AND MIT)") commonly ships one file PER licence —
+  // LICENSE-APACHE, LICENSE-MIT — rather than one combined file, so every match is collected and
+  // concatenated, not just the first. Sorted for a deterministic, reviewable diff.
+  const files = readdirSync(abs)
+    .filter((f) => /^(licen[cs]e|copying)([-.][\w.]*)?$/i.test(f))
+    .sort();
+  // A handful of real, published packages (measured: uint8arrays@3.1.1) declare a licence in
+  // package.json but include no licence FILE in the published tarball at all. Recording that as a
+  // build failure would block on an upstream omission this repo cannot fix; recording FABRICATED
+  // licence text would misrepresent what the package actually ships. So: say plainly what is and
+  // isn't here, never invent the missing text.
+  const licenceText =
+    files.length === 0
+      ? `No licence file is included in this package's published tarball. Its package.json declares: ${pj.license ?? "UNKNOWN"}.`
+      : files.map((f) => (files.length > 1 ? `--- ${f} ---\n\n${readFileSync(resolve(abs, f), "utf8").trim()}` : readFileSync(resolve(abs, f), "utf8").trim())).join("\n\n");
+  return { name: pj.name, version: pj.version, license: pj.license ?? "UNKNOWN", licenceText };
 }
 
-export function renderNotices(pkgs: BundledPackage[]): string {
+export function renderNotices(pkgs: BundledPackage[], bundleFile: string): string {
   const sorted = [...pkgs].sort((a, b) => a.name.localeCompare(b.name));
   const head = `# Third-party notices
 
-\`dist/mcp-server.mjs\` is a single file that includes the third-party components below. Each
+\`${bundleFile}\` is a single file that includes the third-party components below. Each
 component remains under its own licence, reproduced here in full for the exact version included.
 Tempora Labs' Apache License 2.0 (\`LICENSE\`) applies to Tempora's own code, not to these
 components.
 
-This file is generated by \`scripts/third-party-notices.ts\` from the bundle itself. Do not edit it
-by hand.
+This file is generated by \`scripts/third-party-notices.ts --bundle=${bundleFile.replace(/^dist\//, "").replace(/\.mjs$/, "")}\`
+from the bundle itself. Do not edit it by hand.
 
 | Component | Version | Licence |
 |---|---|---|
@@ -63,15 +91,20 @@ ${sorted.map((p) => `| \`${p.name}\` | ${p.version} | ${p.license} |`).join("\n"
   return head + bodies.join("");
 }
 
-export function expectedNotices(): string {
-  return renderNotices(bundledPackageDirs(readFileSync(BUNDLE, "utf8")).map(readPackage));
+/** `bundleName` defaults to "mcp-server" so the existing no-arg call site keeps its exact behavior. */
+export function expectedNotices(bundleName = "mcp-server"): string {
+  const { BUNDLE } = paths(bundleName);
+  return renderNotices(bundledPackageDirs(readFileSync(BUNDLE, "utf8")).map(readPackage), BUNDLES[bundleName]!.bundle);
 }
 
 function main(): void {
-  const want = expectedNotices();
+  const arg = process.argv.find((a) => a.startsWith("--bundle="));
+  const bundleName = arg ? arg.slice("--bundle=".length) : "mcp-server";
+  const { NOTICES } = paths(bundleName);
+  const want = expectedNotices(bundleName);
   if (process.argv.includes("--write")) {
     writeFileSync(NOTICES, want);
-    console.log("✓ THIRD_PARTY_NOTICES.md written");
+    console.log(`✓ ${BUNDLES[bundleName]!.notices} written`);
     return;
   }
   let have = "";
@@ -81,10 +114,10 @@ function main(): void {
     /* missing is stale */
   }
   if (have !== want) {
-    console.log("✗ THIRD_PARTY_NOTICES.md is stale: run npx tsx scripts/third-party-notices.ts --write");
+    console.log(`✗ ${BUNDLES[bundleName]!.notices} is stale: run npx tsx scripts/third-party-notices.ts --write --bundle=${bundleName}`);
     process.exit(1);
   }
-  console.log("✓ THIRD_PARTY_NOTICES.md matches the bundle");
+  console.log(`✓ ${BUNDLES[bundleName]!.notices} matches the bundle`);
 }
 
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) main();

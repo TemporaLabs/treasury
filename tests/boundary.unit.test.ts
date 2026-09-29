@@ -91,13 +91,24 @@ const pkg = JSON.parse(readFileSync(resolve(pkgRoot, "package.json"), "utf8")) a
 // dependencies below and the devDependencies the tooling graph is checked against.
 const rootPkg = pkg as { devDependencies?: Record<string, string> };
 
-/** The two ways this package is entered: the library root, and the MCP server the plugin runs. */
-const ENTRY_POINTS = ["src/index.ts", "src/mcp/server.ts"];
+/** The three ways this package is entered: the library root, and the two MCP servers the plugins run. */
+const ENTRY_POINTS = ["src/index.ts", "src/mcp/server.ts", "src/mcp/connect-server.ts"];
 
 /** Variable names any audited file may READ. A write (the poisoning runs below) is not a read. */
 // TREASURY_LOGS_FALLBACK: the event scan's fallback endpoint, or `off` to forbid the fallback
 // entirely — an operator who may not reach a third party they did not name.
-const ENV_READS_ALLOWED = ["BASE_RPC_URL", "TREASURY_FORK", "TREASURY_LOGS_FALLBACK", "TREASURY_LOGS_RPC_BASE", "TREASURY_RPC_BASE"];
+// TREASURY_CONNECT_HOME: where the connect skill's local session file and WalletConnect store
+// live; overridable so tests never touch the operator's real config directory.
+// WALLETCONNECT_PROJECT_ID: identifies this app to the WalletConnect relay — not a secret, not a key.
+const ENV_READS_ALLOWED = [
+  "BASE_RPC_URL",
+  "TREASURY_CONNECT_HOME",
+  "TREASURY_FORK",
+  "TREASURY_LOGS_FALLBACK",
+  "TREASURY_LOGS_RPC_BASE",
+  "TREASURY_RPC_BASE",
+  "WALLETCONNECT_PROJECT_ID",
+];
 
 /**
  * Files that may compute an env key instead of writing it literally, and every uppercase string
@@ -116,7 +127,7 @@ const MAY_COMPUTE_ENV_KEY = ["src/client.ts", "tests/client.unit.test.ts"];
  * the same exact-membership shape as the dependency assertion, which is the one rule in this file
  * no reviewer has evaded in nine attempts.
  */
-const BUILTINS_ALLOWED = ["fs", "path", "url", "http", "util", "readline"];
+const BUILTINS_ALLOWED = ["fs", "path", "url", "http", "util", "readline", "os"];
 const BUILTINS_ALLOWED_PER_FILE: Record<string, string[]> = {
   "scripts/roundtrip.ts": ["child_process"], //            spawns the MCP server under test, over stdio
   "tests/fork.test.ts": ["child_process"], //              spawns anvil; anvil holds the keys, this repo never does
@@ -290,9 +301,11 @@ describe("A. the runtime module graph cannot leave this package", () => {
     expect(undeclared).toEqual([]);
   });
 
-  it("the dependency set is EXACTLY these three — membership, so a swap holding the count fails too", () => {
+  it("the dependency set is EXACTLY these five — membership, so a swap holding the count fails too", () => {
     expect(Object.keys(pkg.dependencies ?? {}).sort()).toEqual([
       "@modelcontextprotocol/sdk",
+      "@walletconnect/sign-client",
+      "qrcode",
       "viem",
       "zod",
     ]);
@@ -309,7 +322,14 @@ describe("B. the environment surface, statically and at runtime", () => {
       // This is why moving a name out of the `candidates` array does not move it out of this set.
       if (MAY_COMPUTE_ENV_KEY.includes(rel(f))) for (const lit of envLikeLiterals(f)) names.add(lit);
     }
-    expect([...names].sort()).toEqual(["BASE_RPC_URL", "TREASURY_LOGS_FALLBACK", "TREASURY_LOGS_RPC_BASE", "TREASURY_RPC_BASE"]);
+    expect([...names].sort()).toEqual([
+      "BASE_RPC_URL",
+      "TREASURY_CONNECT_HOME",
+      "TREASURY_LOGS_FALLBACK",
+      "TREASURY_LOGS_RPC_BASE",
+      "TREASURY_RPC_BASE",
+      "WALLETCONNECT_PROJECT_ID",
+    ]);
   });
 
   it("a fund variable in the environment is not used, WHATEVER it is called — the property, not the prefix", () => {

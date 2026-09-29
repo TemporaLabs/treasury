@@ -10,6 +10,7 @@
     "LICENSE",
     "NOTICE",
     "THIRD_PARTY_NOTICES.md",
+    "CONNECT_THIRD_PARTY_NOTICES.md",
     "dist",
     "registry"
   ],
@@ -22,7 +23,8 @@
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
   "bin": {
-    "treasury-mcp": "./dist/mcp-server.mjs"
+    "treasury-mcp": "./dist/mcp-server.mjs",
+    "treasury-connect-mcp": "./dist/connect-server.mjs"
   },
   "exports": {
     ".": {
@@ -34,22 +36,26 @@
     "node": ">=22"
   },
   "scripts": {
-    "prepack": "npm run build && git diff --exit-code -- dist/mcp-server.mjs",
-    "build": "tsc -b && tsup && tsx scripts/third-party-notices.ts --write",
+    "prepack": "npm run build && git diff --exit-code -- dist/mcp-server.mjs dist/connect-server.mjs",
+    "build": "tsc -b && tsup && tsx scripts/third-party-notices.ts --write && tsx scripts/third-party-notices.ts --write --bundle=connect-server",
     "typecheck": "tsc -b && tsc -p tsconfig.scripts.json",
     "test": "tsc -b && tsc -p tsconfig.scripts.json && vitest run",
     "test:fork": "tsc -b && TREASURY_FORK=1 vitest run --testTimeout 300000 tests/fork.test.ts",
     "mcp": "tsx src/mcp/server.ts",
+    "mcp:connect": "tsx src/mcp/connect-server.ts",
     "registry:check": "tsx scripts/registry-check.ts",
-    "notices:check": "tsx scripts/third-party-notices.ts"
+    "notices:check": "tsx scripts/third-party-notices.ts && tsx scripts/third-party-notices.ts --bundle=connect-server"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.20.0",
+    "@walletconnect/sign-client": "^2.23.4",
+    "qrcode": "^1.5.4",
     "viem": "^2.37.0",
     "zod": "^4.1.0"
   },
   "devDependencies": {
     "@types/node": "^22.15.0",
+    "@types/qrcode": "^1.5.6",
     "tsup": "^8.5.0",
     "tsx": "^4.20.0",
     "typescript": "^5.9.0",
