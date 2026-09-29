@@ -17062,7 +17062,7 @@ var init_call = __esm({
 });
 
 // src/mcp/server.ts
-import { realpathSync } from "fs";
+import { realpathSync as realpathSync3 } from "fs";
 import { fileURLToPath as fileURLToPath3 } from "url";
 
 // node_modules/zod/v3/helpers/util.js
@@ -55125,8 +55125,8 @@ function publicRpcHint(chainId) {
 }
 
 // src/registry.ts
-import { readFileSync } from "fs";
-import { fileURLToPath } from "url";
+import { readFileSync, realpathSync } from "fs";
+import { fileURLToPath, pathToFileURL } from "url";
 
 // src/registry-schema.ts
 var address = external_exports.string().refine((s) => isAddress(s, { strict: true }), { message: "not a checksummed EVM address" }).transform((s) => getAddress(s));
@@ -55244,7 +55244,7 @@ var EARN = {
 };
 
 // src/registry.ts
-var REGISTRY_URL = new URL("../registry/vaults.json", import.meta.url);
+var REGISTRY_URL = new URL("../registry/vaults.json", pathToFileURL(realpathSync(fileURLToPath(import.meta.url))));
 var cached2;
 function loadRegistry() {
   if (cached2) return cached2;
@@ -55295,9 +55295,9 @@ function linksFor(vault) {
 }
 
 // src/version.ts
-import { readFileSync as readFileSync2 } from "fs";
-import { fileURLToPath as fileURLToPath2 } from "url";
-var PACKAGE_JSON_URL = new URL("../package.json", import.meta.url);
+import { readFileSync as readFileSync2, realpathSync as realpathSync2 } from "fs";
+import { fileURLToPath as fileURLToPath2, pathToFileURL as pathToFileURL2 } from "url";
+var PACKAGE_JSON_URL = new URL("../package.json", pathToFileURL2(realpathSync2(fileURLToPath2(import.meta.url))));
 var PACKAGE_VERSION = JSON.parse(readFileSync2(fileURLToPath2(PACKAGE_JSON_URL), "utf8")).version;
 
 // src/abi/erc4626.ts
@@ -56263,7 +56263,7 @@ function isEntryPoint() {
   const invoked = process.argv[1];
   if (!invoked) return false;
   try {
-    return realpathSync(invoked) === realpathSync(fileURLToPath3(import.meta.url));
+    return realpathSync3(invoked) === realpathSync3(fileURLToPath3(import.meta.url));
   } catch {
     return false;
   }

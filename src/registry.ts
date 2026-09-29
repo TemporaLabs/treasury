@@ -1,9 +1,10 @@
-import { readFileSync } from "node:fs";
-import { fileURLToPath } from "node:url";
+import { readFileSync, realpathSync } from "node:fs";
+import { fileURLToPath, pathToFileURL } from "node:url";
 import { registrySchema, erc4626Chassis, type Registry, type VaultEntry } from "./registry-schema.js";
 import { EARN } from "./config/earn.js";
 
-const REGISTRY_URL = new URL("../registry/vaults.json", import.meta.url);
+// From this file's real path, not a symlink's: see PACKAGE_JSON_URL in version.ts.
+const REGISTRY_URL = new URL("../registry/vaults.json", pathToFileURL(realpathSync(fileURLToPath(import.meta.url))));
 
 let cached: Registry | undefined;
 
