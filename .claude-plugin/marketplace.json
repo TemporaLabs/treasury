@@ -14,6 +14,14 @@
       "version": "0.1.2",
       "category": "finance",
       "homepage": "https://temporalabs.com"
+    },
+    {
+      "name": "connect",
+      "description": "Agent Treasury by Tempora Labs — wallet connect plugin for AI agents. Ships the connect skill: WalletConnect pairing, session status, disconnect, switch, and relaying one prepared call to the connected wallet for a signature. Holds no keys.",
+      "source": "./connect-plugin",
+      "version": "0.1.2",
+      "category": "finance",
+      "homepage": "https://temporalabs.com"
     }
   ]
 }
