@@ -44,8 +44,9 @@ Anything that lets this package do what it promises never to do, or fail to do w
 
 ## Scope
 
-In scope: everything in this repository — the client source, the skill, the workflows, the
-documentation where it makes a claim the code should honour.
+In scope: everything in this repository — the client source, the workflows, the documentation where
+it makes a claim the code should honour, and the Claude Code plugin in `plugin/`: its manifests, a
+`.mcp.json` that misdirects the plugin's own install or launch, and the `earn` skill text itself.
 
 Out of scope: the vault contracts themselves and the protocols they hold positions in (report those to
 their maintainers; we will pass along anything you send us), the RPC providers, and the agent

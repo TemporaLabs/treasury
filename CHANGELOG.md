@@ -4,6 +4,31 @@ All notable changes to Agent Treasury are recorded here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versions follow [SemVer](https://semver.org/).
 Pre-1.0, minor versions may change tool names, schemas and behaviour.
 
+## [Unreleased]
+
+### Changed
+- **The Claude Code plugin and the `earn` skill now ship from this repository**, in
+  [`plugin/`](plugin/). Up to v0.1.0 they shipped from the separate
+  [TemporaLabs/treasury-plugin](https://github.com/TemporaLabs/treasury-plugin) repository, which
+  carried byte copies of this repository's bundle, refreshed by hand. The copies in `plugin/`
+  are now written by `npm run build` in the same commit and checked by CI, so a tool change and its
+  skill text land in one pull request. The install id is unchanged (`treasury@treasury`); only the
+  marketplace source moves to `TemporaLabs/treasury`. The npm package is unchanged: `plugin/` is
+  outside its `files` list.
+
+  **Upgrading an install made from `TemporaLabs/treasury-plugin`:** remove the old marketplace
+  first — adding the new one while it is still configured is refused, because both are named
+  `treasury` — then add the new one and reinstall. Removing the marketplace also uninstalls the
+  plugin, so the last step is needed:
+
+  ```bash
+  claude plugin marketplace remove treasury
+  claude plugin marketplace add TemporaLabs/treasury@vX.Y.Z
+  claude plugin install treasury@treasury
+  ```
+
+  Then restart your Claude Code session so the tools connect.
+
 ## [v0.1.0] - 2026-09-18
 
 The first public release. Everything below is what ships in it.

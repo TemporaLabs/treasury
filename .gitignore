@@ -6,3 +6,6 @@ dist/*
 !dist/*.mjs
 
 .env
+
+# The skill validator that scripts/lint-skill.sh fetches.
+.cache/
