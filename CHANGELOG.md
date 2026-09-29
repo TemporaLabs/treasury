@@ -4,30 +4,47 @@ All notable changes to Agent Treasury are recorded here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versions follow [SemVer](https://semver.org/).
 Pre-1.0, minor versions may change tool names, schemas and behaviour.
 
-## [Unreleased]
+## [v0.1.1] - 2026-09-29
+
+### Added
+- **The Claude Code plugin and the `earn` skill now ship from this repository**, in
+  [`plugin/`](plugin/) (#53). Up to v0.1.0 they shipped from a separate plugin repository, which
+  carried byte copies of this repository's bundle, refreshed by hand. The copies in `plugin/` are now
+  written by `npm run build` in the same commit and checked by CI, so a tool change and its skill text
+  land in one pull request. The install id is unchanged (`treasury@treasury`); the marketplace source
+  is now `TemporaLabs/treasury`. The npm package is unchanged: `plugin/` is outside its `files` list.
+- `AGENTS.md`, instructions for coding agents working in this repository (#49).
+
+### Fixed
+- The package's `treasury-mcp` command now starts the server: the entry check compares the file's
+  identity, not the name it was invoked by (#27, fixes #22).
+- `earn_quote` and `earn_balance` name `instantLiquidity` in their descriptions, and the prepare-tool
+  population is derived rather than listed (#29, fixes #17).
 
 ### Changed
-- **The Claude Code plugin and the `earn` skill now ship from this repository**, in
-  [`plugin/`](plugin/). Up to v0.1.0 they shipped from the separate
-  [TemporaLabs/treasury-plugin](https://github.com/TemporaLabs/treasury-plugin) repository, which
-  carried byte copies of this repository's bundle, refreshed by hand. The copies in `plugin/`
-  are now written by `npm run build` in the same commit and checked by CI, so a tool change and its
-  skill text land in one pull request. The install id is unchanged (`treasury@treasury`); only the
-  marketplace source moves to `TemporaLabs/treasury`. The npm package is unchanged: `plugin/` is
-  outside its `files` list.
+- The project is named Open Agent Treasury (OAT), the treasury management system for AI agents, with
+  a mascot and a simpler README (#33, #37, #39, #41, #43).
+- The install docs cover the published npm package, use an absolute MCP path, and compare a published
+  bundle to its tag (#23, #24).
 
-  **Upgrading an install made from `TemporaLabs/treasury-plugin`:** remove the old marketplace
-  first — adding the new one while it is still configured is refused, because both are named
-  `treasury` — then add the new one and reinstall. Removing the marketplace also uninstalls the
-  plugin, so the last step is needed:
+### CI
+- The documentation version pins must agree, and on `main` equal the latest release tag (#30).
+- The publish workflow polls the registry for up to ten minutes and warns rather than fails on a
+  timeout (#28).
+- Dependabot no longer proposes TypeScript or `@types/node` majors (#25); GitHub Actions bumped (#20).
 
-  ```bash
-  claude plugin marketplace remove treasury
-  claude plugin marketplace add TemporaLabs/treasury@vX.Y.Z
-  claude plugin install treasury@treasury
-  ```
+### Upgrading an earlier Claude Code install
+Remove the old marketplace first — adding the new one while it is still configured is refused,
+because both are named `treasury` — then add the new one and reinstall. Removing the marketplace also
+uninstalls the plugin, so the last step is needed:
 
-  Then restart your Claude Code session so the tools connect.
+```bash
+claude plugin marketplace remove treasury
+claude plugin marketplace add TemporaLabs/treasury@v0.1.1
+claude plugin install treasury@treasury
+```
+
+Then restart your Claude Code session so the tools connect.
 
 ## [v0.1.0] - 2026-09-18
 
