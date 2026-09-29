@@ -11,7 +11,8 @@ Pre-1.0, minor versions may change tool names, schemas and behaviour.
   `disconnect_wallet`, `switch_wallet`, `connect_send_transaction`) — connects an existing wallet over
   WalletConnect and relays one already-built call to it for a signature. Email and Google login are
   not supported. Built to `dist/connect-server.mjs`; its bundled dependencies are listed in
-  `CONNECT_THIRD_PARTY_NOTICES.md`. See `docs/install.md` for installing the connect plugin.
+  `CONNECT_THIRD_PARTY_NOTICES.md`. The plugin itself (the `connect` skill and a root `.claude-plugin/marketplace.json`) lives in this
+  repository under `connect-plugin/`; `docs/install.md` has the install steps.
 
 ## [v0.1.0] - 2026-09-18
 

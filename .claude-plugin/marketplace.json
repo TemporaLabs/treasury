@@ -1,0 +1,31 @@
+{
+  "name": "connect",
+  "owner": {
+    "name": "Tempora Labs"
+  },
+  "metadata": {
+    "description": "Agent Treasury by Tempora Labs — wallet connect plugin for AI agents. Open source. Connects an existing wallet via WalletConnect for Tempora Labs treasury skills. Never holds a key."
+  },
+  "plugins": [
+    {
+      "name": "connect",
+      "description": "Agent Treasury by Tempora Labs — wallet connect plugin for AI agents. Ships the connect skill: WalletConnect pairing, session status, disconnect, switch, and relaying one prepared call to the connected wallet for a signature. Holds no keys.",
+      "source": "./",
+      "strict": false,
+      "version": "0.1.1",
+      "category": "finance",
+      "homepage": "https://temporalabs.com",
+      "skills": ["./connect-plugin/skills/connect"],
+      "mcpServers": {
+        "connect": {
+          "type": "stdio",
+          "command": "node",
+          "args": ["${CLAUDE_PLUGIN_ROOT}/dist/connect-server.mjs"],
+          "env": {
+            "WALLETCONNECT_PROJECT_ID": "${WALLETCONNECT_PROJECT_ID:-b9f9b9931dc69c3ad8fb02955994191b}"
+          }
+        }
+      }
+    }
+  ]
+}

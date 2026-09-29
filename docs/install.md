@@ -47,11 +47,11 @@ up a same-version rebuild, `claude plugin uninstall treasury@treasury` then inst
 ## Claude Code — the connect plugin (WalletConnect)
 
 `earn` prepares unsigned calls; the **connect** plugin connects your existing wallet over
-WalletConnect and asks it to sign them. It is a separate plugin, so install it alongside `treasury`:
+WalletConnect and asks it to sign them. It is a separate plugin, packaged in this repository under [`connect-plugin/`](../connect-plugin), so install it alongside `treasury`:
 
 ```bash
 # 1. Add the marketplace and install the plugin
-claude plugin marketplace add TemporaLabs/treasury-connect-plugin
+claude plugin marketplace add TemporaLabs/treasury@release/v0.1.1   # use @v0.1.1 once tagged
 claude plugin install connect@connect
 
 # 2. Restart Claude Code (or reload plugins) so the connect MCP server starts
