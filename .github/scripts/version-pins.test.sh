@@ -10,9 +10,9 @@ export GIT_AUTHOR_NAME="Ada Example" GIT_AUTHOR_EMAIL="ada@example.org"
 export GIT_COMMITTER_NAME="Ada Example" GIT_COMMITTER_EMAIL="ada@example.org"
 
 write() { # write <version-for-README> <version-for-docs> <version-for-runbook>
-  printf 'npm install @temporalabs/treasury@%s\nclaude plugin marketplace add TemporaLabs/treasury-plugin@v%s\n' "$1" "$1" > README.md
-  printf 'npm install @temporalabs/treasury@%s\n[skill](https://github.com/TemporaLabs/treasury-plugin/blob/v%s/skills/earn/SKILL.md)\n' "$2" "$2" > docs/install.md
-  printf 'pinned: `TemporaLabs/treasury-plugin@release/v%s` and @temporalabs/treasury@%s\n' "$3" "$3" > docs/runbooks/verify.md
+  printf 'npm install @temporalabs/treasury@%s\nclaude plugin marketplace add TemporaLabs/treasury@v%s\n' "$1" "$1" > README.md
+  printf 'npm install @temporalabs/treasury@%s\n[skill](https://github.com/TemporaLabs/treasury/blob/v%s/plugin/skills/earn/SKILL.md)\n' "$2" "$2" > docs/install.md
+  printf 'pinned: `TemporaLabs/treasury@release/v%s` and @temporalabs/treasury@%s\n' "$3" "$3" > docs/runbooks/verify.md
   git add -A
 }
 expect() { # expect <code> <label> <args...>

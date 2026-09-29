@@ -6,7 +6,7 @@ involves npm. Getting that distinction wrong is the reason this page exists.
 | what ships | from | channel | needs an npm publish? |
 |---|---|---|---|
 | `@temporalabs/treasury` — the library and the MCP server bundle | this repository | **npm registry** | **yes, every release** |
-| the `earn` plugin and skill | this repository's [`plugin/`](../plugin/) folder (up to v0.1.0, the separate `TemporaLabs/treasury-plugin` repository) | **git ref**, via `claude plugin marketplace add` | **no, never** |
+| the `earn` plugin and skill | this repository's [`plugin/`](../plugin/) folder | **git ref**, via `claude plugin marketplace add` | **no, never** |
 
 The plugin is installed by pointing Claude Code at a git ref; there is no registry in the path, so
 a plugin release is a merge and a tag and nothing else. Its `plugin/package.json` keeps
@@ -44,11 +44,7 @@ signal that anything happened.
    `dry_run: false` once it is green.
 6. Update any documentation that names the published version or told readers to vendor the bundle
    by hand — **after** the publish, never in the same change that merely makes publishing possible.
-   A document that says "install from npm" is false until step 5 has actually run. For the first
-   release that ships `plugin/`, this step also moves the Claude Code install lines from
-   `TemporaLabs/treasury-plugin` to `TemporaLabs/treasury`, and carries the upgrade steps from
-   `CHANGELOG.md` (remove the old marketplace, add the new one, reinstall) into
-   [`install.md`](install.md).
+   A document that says "install from npm" is false until step 5 has actually run.
 7. The plugin ships with the same tag: `claude plugin marketplace add TemporaLabs/treasury@vX.Y.Z`
    installs the `plugin/` folder at that tag. Nothing else to publish, and no npm.
 
