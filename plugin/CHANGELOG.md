@@ -7,12 +7,15 @@ The product's own changes are in the repository's [`CHANGELOG.md`](../CHANGELOG.
 ## [Unreleased]
 
 ### Changed
-- **The plugin now ships from `TemporaLabs/treasury`, in its `plugin/` folder.** The manifests, the
-  `earn` skill and its trigger cases moved here unchanged. The server bundle, vault registry and
-  licence files in this folder are copies of the repository's own files, written by `npm run build`
-  in the same commit and checked byte for byte by CI, so there is no release pin and no
-  cross-repository comparison any more. The install id is unchanged (`treasury@treasury`); only the
-  marketplace source moves to `TemporaLabs/treasury`.
+- **The plugin now ships from `TemporaLabs/treasury`, in its `plugin/` folder.** The manifests moved
+  here unchanged apart from their repository URL, and the `earn` skill and its trigger cases moved
+  unchanged. The server bundle, vault registry and licence files in this folder are copies of the
+  repository's own files, written by `npm run build` in the same commit and checked byte for byte by
+  CI; nothing is copied from another repository. The install id is unchanged (`treasury@treasury`);
+  only the marketplace source moves to `TemporaLabs/treasury`.
+- **The plugin keeps running its own copy of the bundle.** The `npx` pin announced in v0.1.0's note
+  below is withdrawn: resolving `@temporalabs/treasury` by name would install the library's runtime
+  dependencies, which the self-contained bundle does not need.
 
 History up to and including v0.1.0 below is from the plugin's earlier repository,
 [TemporaLabs/treasury-plugin](https://github.com/TemporaLabs/treasury-plugin), where it was released.

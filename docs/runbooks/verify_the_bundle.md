@@ -52,8 +52,9 @@ for `dist/mcp-server.mjs` and verifies it against the signer workflow before the
 On a private mirror of this tree the same steps are gated to skip, and the assertion accepts the
 skip only because the repository is private — a skip can never pass as a success on the public
 repository. Whatever repository you are reading this in, the weaker chain is always checkable: the
-commit's `dist/` equals a rebuild of the commit's source (CI's stale-dist step, which you can
-reproduce with `npm ci && npm run build && git diff --exit-code -- dist`).
+commit's `dist/`, and the plugin's copy in `plugin/dist/`, equal a rebuild of the commit's source
+(CI's stale-dist step, which you can reproduce with `npm ci && npm run build` followed by
+`git status --porcelain -- dist plugin/dist`, which must print nothing).
 
 ## Verifying, as a stranger (public repository)
 

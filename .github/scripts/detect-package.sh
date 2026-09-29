@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Decide whether this tree carries the package, for the CI step that gates everything else.
 #
-# 🔴 WHY THIS IS A SCRIPT AND NOT A ONE-LINER. Its answer gates ten steps plus the whole `attest`
+# 🔴 WHY THIS IS A SCRIPT AND NOT A ONE-LINER. Its answer gates most of the CI job's steps plus the whole `attest`
 # job. Written inline as `[ -f package.json ] && echo yes || echo no` it could not fail: a path that
 # moved answered "no", every gated step skipped, and CI went GREEN — because a documents-only
 # version branch legitimately has no package, and nothing could tell that apart from a move.

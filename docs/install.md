@@ -82,9 +82,8 @@ after a Claude Code install, holds the same file if you would rather not install
 The server speaks MCP over stdio and exposes exactly the eight tools in [`tools.md`](tools.md). No
 tool signs or sends: your runtime's own signer takes the calls the `earn_prepare_*` tools return.
 The `earn` skill ships with the plugin, at
-[`plugin/skills/earn/SKILL.md`](../plugin/skills/earn/SKILL.md) in this repository (for v0.1.0,
-[`skills/earn/SKILL.md`](https://github.com/TemporaLabs/treasury-plugin/blob/v0.1.0/skills/earn/SKILL.md)
-in the plugin repository). It is plain Markdown and can be given to any agent as instructions; it tells the agent how to use
+[`plugin/skills/earn/SKILL.md`](../plugin/skills/earn/SKILL.md) in this repository (v0.1.0 shipped it
+from `TemporaLabs/treasury-plugin`). It is plain Markdown and can be given to any agent as instructions; it tells the agent how to use
 these tools and what to refuse.
 
 ## As a library

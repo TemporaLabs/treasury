@@ -30,9 +30,12 @@ signal that anything happened.
 ## The sequence
 
 1. Land the work on `release/vX.Y.Z`.
-2. **Bump the version in `package.json` if it is not already the version being released.** Do this
-   before tagging — the publish workflow refuses a tag that disagrees with `package.json`, which is
-   the guard that stops a release burning the wrong immutable version number.
+2. **Bump the version if it is not already the version being released**, in every place it is
+   declared: `package.json`, `plugin/.claude-plugin/plugin.json`, `plugin/.codex-plugin/plugin.json`
+   and the `treasury` entry in `.claude-plugin/marketplace.json`, then run `npm run build`, which
+   rewrites `plugin/package.json`. `npm run plugin:check` confirms they all agree; CI fails when they
+   do not. Do this before tagging — the publish workflow refuses a tag that disagrees with
+   `package.json`, which is the guard that stops a release burning the wrong immutable version number.
 3. Merge the release pull request into `main`.
 4. Tag the merge commit, annotated: `git tag -a vX.Y.Z -m "…" && git push origin vX.Y.Z`.
 5. Publish to npm: run the **`publish`** workflow, `tag: vX.Y.Z`, **`dry_run: true` first**. It
@@ -41,7 +44,11 @@ signal that anything happened.
    `dry_run: false` once it is green.
 6. Update any documentation that names the published version or told readers to vendor the bundle
    by hand — **after** the publish, never in the same change that merely makes publishing possible.
-   A document that says "install from npm" is false until step 5 has actually run.
+   A document that says "install from npm" is false until step 5 has actually run. For the first
+   release that ships `plugin/`, this step also moves the Claude Code install lines from
+   `TemporaLabs/treasury-plugin` to `TemporaLabs/treasury`, and carries the upgrade steps from
+   `CHANGELOG.md` (remove the old marketplace, add the new one, reinstall) into
+   [`install.md`](install.md).
 7. The plugin ships with the same tag: `claude plugin marketplace add TemporaLabs/treasury@vX.Y.Z`
    installs the `plugin/` folder at that tag. Nothing else to publish, and no npm.
 

@@ -25,7 +25,7 @@ package.json	d["version"]
 plugin/package.json	d["version"]
 plugin/.claude-plugin/plugin.json	d["version"]
 plugin/.codex-plugin/plugin.json	d["version"]
-.claude-plugin/marketplace.json	d["plugins"][0]["version"]
+.claude-plugin/marketplace.json	[p for p in d["plugins"] if p.get("name")=="treasury"][0]["version"]
 EOF
 )
 

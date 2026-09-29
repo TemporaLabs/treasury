@@ -52,4 +52,6 @@ printf 'claude plugin marketplace add TemporaLabs/treasury@v0.1.1\n[skill](https
 expect 0 "the TemporaLabs/treasury@vX spelling is a pin, and agrees" 0.1.1
 sed -i 's#TemporaLabs/treasury@v0.1.1#TemporaLabs/treasury@v0.1.0#' README.md; git add -A
 expect 1 "a lagging TemporaLabs/treasury@vX pin is caught on its own"
+sed -i 's#TemporaLabs/treasury@v0.1.0#TemporaLabs/treasury@v0.1.1#; s#TemporaLabs/treasury/blob/v0.1.1/#TemporaLabs/treasury/blob/v0.1.0/#' README.md; git add -A
+expect 1 "a lagging TemporaLabs/treasury/blob/vX link is caught on its own"
 echo "all cases behaved"

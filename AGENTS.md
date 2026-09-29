@@ -24,7 +24,7 @@ Node.js 22 or later. The fork tier also needs [Foundry](https://getfoundry.sh) f
 
 ```bash
 npm ci                     # never `npm install` — CI fails on a stale lockfile
-npm run build              # tsc, the dist/mcp-server.mjs bundle, and THIRD_PARTY_NOTICES.md
+npm run build              # tsc, the dist/mcp-server.mjs bundle, THIRD_PARTY_NOTICES.md, and the plugin/ copies
 npm run typecheck
 npm test                   # unit tier; live and fork tiers skip themselves without an RPC
 TREASURY_RPC_BASE=https://... npm test           # adds live read-only checks against Base
@@ -34,8 +34,9 @@ npm run registry:check     # reconcile registry/vaults.json against the chain
 
 ## Things that fail CI if forgotten
 
-- **`dist/mcp-server.mjs` is committed.** After any change under `src/`, run `npm run build` and commit
-  the result; CI rebuilds and fails on a difference.
+- **`dist/mcp-server.mjs` and the `plugin/` copies are committed.** After any change under `src/`, or
+  to `registry/vaults.json`, `LICENSE` or `NOTICE`, run `npm run build` and commit the result; CI
+  rebuilds and fails on a difference.
 - **Every commit carries a `Signed-off-by` trailer** matching its author (`git commit -s`). See
   [`DCO.md`](DCO.md).
 - **Every relative link in `docs/` must resolve.**
@@ -63,8 +64,9 @@ npm run registry:check     # reconcile registry/vaults.json against the chain
 - **`plugin/` must never hold a lockfile.** A plugin install runs a dependency install when it finds
   one beside `package.json`.
 - **A change to the skill's `description:` is a behavioural change**: it decides whether the skill is
-  reached at all. Measure it by running the plugin (`claude -p --plugin-dir plugin` from a working
-  directory that is not this repository) and checking which tools the run invoked.
+  reached at all. Measure it by running the plugin (`claude -p --plugin-dir <absolute path to this
+  repository>/plugin`, from a working directory that is not this repository and with no `treasury`
+  plugin installed) and checking which tools the run invoked.
 - `npm run lint:skill` validates the skill against the official skill spec.
 
 ## Pull requests

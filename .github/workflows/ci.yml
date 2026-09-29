@@ -86,10 +86,10 @@ jobs:
             echo "${TARGET}: pins must agree with each other"
             bash .github/scripts/version-pins.sh
           fi
-      - name: the version-pin gate can still go red (12 offline cases)
+      - name: the version-pin gate can still go red (13 offline cases)
         run: bash .github/scripts/version-pins.test.sh
       # The decision lives in .github/scripts/detect-package.sh, with a case-driven proof beside
-      # it — it gates ten steps plus the whole `attest` job, and it has been wrong twice.
+      # it — it gates most of this job's steps plus the whole `attest` job, and it has been wrong twice.
       - name: detect packages (a documents-only version branch has none — a MOVED one is an error)
         id: pk
         run: |
@@ -109,6 +109,15 @@ jobs:
           elif [ -f plugin/.claude-plugin/plugin.json ]; then echo "::error file=plugin/.claude-plugin/plugin.json::the plugin is declared but plugin/skills/earn/SKILL.md is missing"; exit 1
           else echo "present=no" >> "$GITHUB_OUTPUT"; fi
           echo "skill present: $([ -f plugin/skills/earn/SKILL.md ] && echo yes || echo no)" >> "$GITHUB_STEP_SUMMARY"
+      # plugin/ is what a Claude Code install copies. Every file in it that also exists at the root is
+      # a copy made by `npm run build` in the same commit, so the check is byte identity against this
+      # tree: no release pin, nothing fetched. 🔴 It runs BEFORE `npm ci` and the build ON PURPOSE: the
+      # build rewrites these copies, so a check after it reads the build's output, not the commit, and
+      # a commit that deleted a copy would pass. It also pins the plugin's layout (marketplace source,
+      # launch target) and refuses a lockfile or a symlink in plugin/.
+      - name: the plugin folder carries exactly this commit's files
+        if: steps.pk.outputs.present == 'yes'
+        run: bash scripts/sync-plugin.sh --check
       - name: the declared version follows the version branch (release/v0.1.0 ⇒ 0.1.0)
         # The convention was set by hand; this holds it. A PR into vX.Y.Z, or a push to it,
         # fails if package.json declares anything else.
@@ -136,7 +145,7 @@ jobs:
         run: |
           git clone --depth 1 https://github.com/anthropics/claude-plugins-official /tmp/cpo
           python3 /tmp/cpo/plugins/skill-creator/skills/skill-creator/scripts/quick_validate.py plugin/skills/earn
-      - name: bundled MCP server is current (the plugin runs the committed dist/)
+      - name: bundled MCP server is current, and so are the plugin's copies of it
         if: steps.pk.outputs.present == 'yes'
         run: |
           npm run build
@@ -145,8 +154,9 @@ jobs:
           git diff --exit-code --stat -- THIRD_PARTY_NOTICES.md \
             || { echo "::error::THIRD_PARTY_NOTICES.md is stale — run npm run build and commit it"; exit 1; }
           # Only the files the build WRITES into plugin/; the manifests and the skill there are edited by hand.
-          git diff --exit-code --stat -- plugin/dist plugin/registry plugin/LICENSE plugin/NOTICE plugin/THIRD_PARTY_NOTICES.md plugin/package.json \
-            || { echo "::error::plugin/ copies are stale — run npm run build and commit them"; exit 1; }
+          # `git status`, not `git diff`: a copy the commit deleted comes back UNTRACKED, which diff ignores.
+          stale=$(git status --porcelain -- plugin/dist plugin/registry plugin/LICENSE plugin/NOTICE plugin/THIRD_PARTY_NOTICES.md plugin/package.json)
+          [ -z "$stale" ] || { echo "$stale"; echo "::error::plugin/ copies are stale or missing — run npm run build and commit them"; exit 1; }
       # ── Licensing (Apache-2.0). An npm tarball takes what `files` publishes, and a plugin install
       # takes plugin/, so the licence, its NOTICE and the dependency notices must travel INSIDE both.
       # ───────────────────────────────────────────────────────────────────────────────────────────
@@ -244,13 +254,6 @@ jobs:
           if phantom: print("::error::SKILL.md names tools the server does not have:", sorted(phantom))
           sys.exit(1 if (missing or phantom) else 0)
           PY
-      # plugin/ is what a Claude Code install copies. Every file in it that also exists at the root is
-      # a copy made by `npm run build` in the same commit, so the check is byte identity against this
-      # tree: no release pin, nothing fetched. It also refuses a lockfile in plugin/, whose presence
-      # would make every install run a dependency install.
-      - name: the plugin folder carries exactly this commit's files
-        if: steps.pk.outputs.present == 'yes'
-        run: bash scripts/sync-plugin.sh --check
       # A package.json version is a RUNTIME value: the bundle reports the one beside it as
       # serverInfo.version, and the manifests are what the marketplaces advertise.
       - name: every declaration of this repository's own version agrees
@@ -264,8 +267,6 @@ jobs:
           const { readFileSync, statSync } = require("node:fs");
           const sha = (b) => createHash("sha256").update(b).digest("hex");
           const norm = (t) => t.replace(/\s+/g, " ").trim();
-          // Byte-identical to https://www.apache.org/licenses/LICENSE-2.0.txt, so a stranger checks it
-          // with one diff; the normalised hash additionally accepts the same licence laid out differently.
           // The licence is pinned by its TEXT, not its bytes. The repository's LICENSE is
           // GitHub's licence-picker template: 11,357 bytes, sha256 c71d239d…, which differs
           // from the canonical file at apache.org (11,358 bytes, sha256 cfc7749b…) by a single
@@ -292,8 +293,8 @@ jobs:
           const notice = readFileSync("NOTICE", "utf8");
           if (!norm(notice).includes("section 6")) fail.push("NOTICE does not withhold the names by citing section 6");
           if (!/^Copyright 2026 Tempora Labs/m.test(notice)) fail.push("NOTICE carries no copyright line");
-          // Not vacuous: the notices file must actually carry the bundled dependencies' licences, and the
-          // bundle must actually be the bundle, so an emptied or placeholder file fails instead of passing.
+          // Not vacuous: the notices file must actually carry the bundled dependencies' licences, so an
+          // emptied or placeholder file fails instead of passing.
           const notices = readFileSync("THIRD_PARTY_NOTICES.md", "utf8");
           if (statSync("THIRD_PARTY_NOTICES.md").size < 5000) fail.push("THIRD_PARTY_NOTICES.md is too small to be the real notices");
           if (!/MIT|Apache/.test(notices)) fail.push("THIRD_PARTY_NOTICES.md names no dependency licence");
@@ -302,8 +303,9 @@ jobs:
           JS
 
   # ── Bundle provenance ──────────────────────────────────────────────────────────────────────────
-  # What a marketplace install actually runs is plugin/dist/mcp-server.mjs, a byte copy of the
-  # COMMITTED dist/mcp-server.mjs held identical by the plugin-folder step (git install, no npm). `check` proved, on this same commit, that the committed bundle equals a
+  # This job attests the COMMITTED root dist/mcp-server.mjs. A marketplace install runs
+  # plugin/dist/mcp-server.mjs, which the plugin-folder step holds byte-identical to it in the
+  # committed tree, so the same attestation verifies the installed copy by digest (git install, no npm). `check` proved, on this same commit, that the committed bundle equals a
   # rebuild of the committed source (its stale-dist step) — `needs: check` is what carries that
   # across. This job attests THAT file with GitHub's OIDC identity and verifies it back, so a
   # stranger can later run `gh attestation verify` on the file in their plugin cache and get the

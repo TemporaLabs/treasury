@@ -10,7 +10,7 @@ Pre-1.0, minor versions may change tool names, schemas and behaviour.
 - **The Claude Code plugin and the `earn` skill now ship from this repository**, in
   [`plugin/`](plugin/). Up to v0.1.0 they shipped from the separate
   [TemporaLabs/treasury-plugin](https://github.com/TemporaLabs/treasury-plugin) repository, which
-  carried byte copies of this repository's bundle pinned to a release tag. The copies in `plugin/`
+  carried byte copies of this repository's bundle, refreshed by hand. The copies in `plugin/`
   are now written by `npm run build` in the same commit and checked by CI, so a tool change and its
   skill text land in one pull request. The install id is unchanged (`treasury@treasury`); only the
   marketplace source moves to `TemporaLabs/treasury`. The npm package is unchanged: `plugin/` is

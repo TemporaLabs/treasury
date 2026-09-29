@@ -1,10 +1,11 @@
 #!/usr/bin/env bash
-# Offline proof that detect-package.sh answers correctly, and can go RED (10 cases).
+# Offline proof that detect-package.sh answers correctly, and can go RED (13 cases).
 # Run: bash .github/scripts/detect-package.test.sh
 #
-# Case 4 is the one this file exists for: it passed under the previous repair, silently, and a green
-# run meant nothing. Case 6 is its false-positive twin — a stray package.json under node_modules is
-# not a moved package, and a fix that fires on it would break every documents-only branch.
+# The `moved` case is the one this file exists for: it passed under the previous repair, silently, and
+# a green run meant nothing. The `nodemods` case is its false-positive twin — a stray package.json
+# under node_modules is not a moved package, and a fix that fires on it would break every
+# documents-only branch. (Cases are named, not numbered: inserting one renumbers the rest.)
 set -u
 S="$(cd "$(dirname "$0")" && pwd)/detect-package.sh"; pass=0; fail=0
 tmp="$(mktemp -d)"; trap 'rm -rf "$tmp"' EXIT

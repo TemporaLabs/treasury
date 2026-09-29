@@ -26,7 +26,9 @@ manifest=$(printf '{\n  "name": "treasury-plugin",\n  "version": "%s",\n  "priva
 if [ "${1:-}" = "--check" ]; then
   stale=0
   for f in "${FILES[@]}"; do
-    if [ ! -f "plugin/$f" ]; then
+    if [ -L "plugin/$f" ]; then
+      echo "::error file=plugin/$f::is a symlink — a plugin install copies plugin/ alone, so it must be a real file"; stale=1
+    elif [ ! -f "plugin/$f" ]; then
       echo "::error file=plugin/$f::missing — run: bash scripts/sync-plugin.sh"; stale=1
     elif ! cmp -s "$f" "plugin/$f"; then
       echo "::error file=plugin/$f::differs from $f — run: bash scripts/sync-plugin.sh"; stale=1
@@ -34,7 +36,7 @@ if [ "${1:-}" = "--check" ]; then
       echo "  ok  plugin/$f"
     fi
   done
-  if [ "$(cat plugin/package.json 2>/dev/null)" != "$manifest" ]; then
+  if ! cmp -s plugin/package.json <(printf '%s\n' "$manifest"); then
     echo "::error file=plugin/package.json::must be exactly the version-only manifest for $version (no dependencies) — run: bash scripts/sync-plugin.sh"; stale=1
   else
     echo "  ok  plugin/package.json ($version, no dependencies)"
@@ -43,6 +45,23 @@ if [ "${1:-}" = "--check" ]; then
   for lock in package-lock.json npm-shrinkwrap.json bun.lock bun.lockb yarn.lock pnpm-lock.yaml; do
     if [ -e "plugin/$lock" ]; then echo "::error file=plugin/$lock::a lockfile in plugin/ makes every install run a dependency install — remove it"; stale=1; fi
   done
+  # The layout this folder exists for: the marketplace must install plugin/ (not the root, which holds
+  # a lockfile), and the plugin must launch the copy this script checks, not some other file.
+  if ! node -e '
+    const fs = require("node:fs");
+    const bad = [];
+    const cc = JSON.parse(fs.readFileSync(".claude-plugin/marketplace.json", "utf8"));
+    const entry = (cc.plugins || []).find((p) => p.name === "treasury");
+    if (!entry || entry.source !== "./plugin") bad.push(".claude-plugin/marketplace.json: the treasury entry must have source \"./plugin\"");
+    const ag = JSON.parse(fs.readFileSync(".agents/plugins/marketplace.json", "utf8"));
+    const aentry = (ag.plugins || []).find((p) => p.name === "treasury");
+    if (!aentry || !aentry.source || aentry.source.path !== "./plugin") bad.push(".agents/plugins/marketplace.json: the treasury entry must have path \"./plugin\"");
+    const mcp = JSON.parse(fs.readFileSync("plugin/.mcp.json", "utf8"));
+    const args = mcp.mcpServers && mcp.mcpServers.treasury && mcp.mcpServers.treasury.args;
+    if (JSON.stringify(args) !== JSON.stringify(["${CLAUDE_PLUGIN_ROOT}/dist/mcp-server.mjs"])) bad.push("plugin/.mcp.json: the treasury server must launch ${CLAUDE_PLUGIN_ROOT}/dist/mcp-server.mjs");
+    for (const b of bad) console.log("::error::" + b);
+    process.exit(bad.length ? 1 : 0);
+  '; then stale=1; else echo "  ok  marketplace source ./plugin; plugin launches dist/mcp-server.mjs"; fi
   exit "$stale"
 fi
 

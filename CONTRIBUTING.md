@@ -83,7 +83,7 @@ Requires Node.js 22 or later. Fork tests also need [Foundry](https://getfoundry.
 
 ```bash
 npm ci
-npm run build                     # compiles, bundles dist/mcp-server.mjs, regenerates the notices
+npm run build                     # compiles, bundles dist/mcp-server.mjs, regenerates the notices and plugin/
 npm run typecheck
 npm test                          # unit tests
 TREASURY_RPC_BASE=https://... npm test          # adds live read-only checks against Base
@@ -92,9 +92,10 @@ TREASURY_RPC_BASE=https://... npm run test:fork # anvil fork round trips with im
 
 - **Use `npm ci`, not `npm install`.** It fails on a stale lockfile, which is what CI does.
 - **Rebuild the bundle when source changes.** `dist/mcp-server.mjs` is committed,
-  because a plugin install runs no build. After any change under `src/`, run `npm run build` and commit the result;
-  the same build refreshes the plugin's copies in `plugin/`.
-  CI fails on a stale bundle.
+  because a plugin install runs no build. After any change under `src/`, or to `registry/vaults.json`,
+  `LICENSE` or `NOTICE`, run `npm run build` and commit the result; the same build refreshes the
+  plugin's copies in `plugin/`, and `npm run plugin:check` confirms them. CI fails on a stale bundle
+  or copy. The build uses `bash` for that last step, so on Windows run it from Git Bash or WSL.
 - **Say which test tier ran.** Unit tests say nothing about the chain. State in the pull request
   whether you ran unit, live read-only or fork tests.
 - **Tests never need a real key.** A test that moves funds runs on a fork and impersonates the
