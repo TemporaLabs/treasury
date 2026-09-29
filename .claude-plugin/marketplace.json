@@ -11,7 +11,7 @@
       "name": "treasury",
       "description": "Agent Treasury by Tempora Labs — treasury management plugin for AI agents; the agent's own wallet is the account. Ships the earn skill: measured vault registry, simulation-based pre-flight, unsigned deposit/withdraw builders. Holds no keys.",
       "source": "./plugin",
-      "version": "0.1.1",
+      "version": "0.1.2",
       "category": "finance",
       "homepage": "https://temporalabs.com"
     }
