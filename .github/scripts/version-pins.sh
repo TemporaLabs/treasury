@@ -3,7 +3,7 @@
 # version must name ONE version, and on `main` that version must be the latest release tag.
 #
 # Why this exists: the install instructions pin on purpose — `npm install @temporalabs/treasury@X`,
-# `claude plugin marketplace add TemporaLabs/treasury@vX` (or the earlier `treasury-plugin@vX`), a `blob/vX/` link — because a
+# `claude plugin marketplace add TemporaLabs/treasury@vX`, a `blob/vX/` link — because a
 # published version is immutable and a pinned install cannot drift. The cost is that the pins are
 # prose: nothing ties them to package.json (which on a release branch is legitimately AHEAD of the
 # docs until the publish has actually happened, see docs/release-process.md step 6), so six of them
@@ -41,7 +41,7 @@ files=$(git ls-files README.md 'docs/**/*.md' 'docs/*.md' | sort -u)
 
 # file:line:version for every pin, in every spelling the docs use
 pins=$(grep -n -o -E \
-  '@temporalabs/treasury@[0-9]+\.[0-9]+\.[0-9]+|TemporaLabs/treasury(-plugin)?@(release/)?v[0-9]+\.[0-9]+\.[0-9]+|TemporaLabs/treasury(-plugin)?/blob/v[0-9]+\.[0-9]+\.[0-9]+' \
+  '@temporalabs/treasury@[0-9]+\.[0-9]+\.[0-9]+|TemporaLabs/treasury@(release/)?v[0-9]+\.[0-9]+\.[0-9]+|TemporaLabs/treasury/blob/v[0-9]+\.[0-9]+\.[0-9]+' \
   $files | sed -E 's#@(release/)?v?([0-9]+\.[0-9]+\.[0-9]+)$#:\2#; s#/blob/v([0-9]+\.[0-9]+\.[0-9]+)$#:\1#' || true)
 if [ -z "$pins" ]; then
   echo "::error::no version pin matched in README.md or docs/ — the patterns in $0 no longer match the documents, so nothing was checked"

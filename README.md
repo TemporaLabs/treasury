@@ -39,23 +39,22 @@ See the [eight `earn_*` tools](docs/tools.md) for inputs, outputs, and limits.
 
 ```bash
 export TREASURY_RPC_BASE=https://...  # replace with your Base RPC URL
-claude plugin marketplace add TemporaLabs/treasury-plugin@v0.1.0
+claude plugin marketplace add TemporaLabs/treasury@v0.1.1
 claude plugin install treasury@treasury
 ```
 
-Restart your Claude Code session after installing so the MCP tools connect. Before a release is
-tagged, use `@release/v0.1.0` instead of `@v0.1.0`. Keep the ref explicit to avoid tracking a
-default branch.
+Restart your Claude Code session after installing so the MCP tools connect. Keep the `@v0.1.1` ref
+explicit so the install stays on a release rather than tracking the default branch. Upgrading an
+earlier install? Run `claude plugin marketplace remove treasury` first, then the two lines above
+([details](docs/install.md#upgrading-an-earlier-install)).
 
-The plugin's source is the [`plugin/`](plugin/) folder of this repository: its manifests, the Earn
-skill, and a copy of this repository's own server bundle, made in the same commit. v0.1.0 was
-released from `TemporaLabs/treasury-plugin`, which the line above installs; later releases install
-from this repository.
+The plugin is the [`plugin/`](plugin/) folder of this repository: its manifests, the Earn skill, and a
+copy of this repository's own server bundle, made in the same commit.
 
 ### Other MCP hosts
 
 ```bash
-npm install @temporalabs/treasury@0.1.0
+npm install @temporalabs/treasury@0.1.1
 ```
 
 Add the server to your host's MCP configuration, replacing the path and RPC URL:
@@ -72,7 +71,7 @@ Add the server to your host's MCP configuration, replacing the path and RPC URL:
 }
 ```
 
-In v0.1.0, run the bundle by path as shown; the `treasury-mcp` shortcut does not start the server.
+Running the bundle by path, as shown, works for every version; from v0.1.1 the `treasury-mcp` command also starts the server.
 For library usage, host setup, and troubleshooting, see [installation](docs/install.md).
 
 ### Try it

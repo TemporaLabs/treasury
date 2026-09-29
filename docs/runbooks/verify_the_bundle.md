@@ -3,9 +3,7 @@
 Treasury ships as a Claude Code plugin installed **from git**: the marketplace copies this
 repository's `plugin/` folder, and the MCP server that runs is its `dist/mcp-server.mjs` — a byte
 copy of this repository's `dist/mcp-server.mjs`, made in the same commit and checked by CI (2 MB,
-dependencies inlined, no `npm install` on your side). Up to v0.1.0 the plugin shipped from the
-separate [TemporaLabs/treasury-plugin](https://github.com/TemporaLabs/treasury-plugin) repository,
-with the same byte copy.
+dependencies inlined, no `npm install` on your side).
 Nothing about "it came from GitHub" tells you that file was built by this repository's CI from the
 commit it claims. This runbook is how a stranger checks that, with no membership in the org and no
 trust in anyone's word. It is the last mile of "the code is open": open source you cannot tie to the
