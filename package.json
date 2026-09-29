@@ -34,7 +34,7 @@
     "node": ">=22"
   },
   "scripts": {
-    "prepack": "npm run build && git diff --exit-code -- dist/mcp-server.mjs",
+    "prepack": "npm run build && git diff --exit-code -- dist/mcp-server.mjs THIRD_PARTY_NOTICES.md",
     "build": "tsc -b && tsup && tsx scripts/third-party-notices.ts --write && bash scripts/sync-plugin.sh",
     "typecheck": "tsc -b && tsc -p tsconfig.scripts.json",
     "test": "tsc -b && tsc -p tsconfig.scripts.json && vitest run",
