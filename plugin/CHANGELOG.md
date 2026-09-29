@@ -22,8 +22,9 @@ Carries `@temporalabs/treasury` v0.1.1.
 ### Not supported
 - **Codex.** The Codex marketplace entry now declares a policy value Codex accepts (`ON_USE`; the
   earlier `NONE` was refused at install, #55), so Codex installs the plugin, but the server does not
-  start there: Codex does not expand `${CLAUDE_PLUGIN_ROOT}` in `.mcp.json`'s launch path. This was
-  equally true of v0.1.0.
+  start there: measured on Codex 0.155.1, Codex does not expand `${CLAUDE_PLUGIN_ROOT}` in
+  `.mcp.json`'s launch path. In v0.1.0, Codex refused the marketplace entry outright, so the plugin
+  could not be installed in Codex at all.
 
 History up to and including v0.1.0 below is from the plugin's earlier repository,
 [TemporaLabs/treasury-plugin](https://github.com/TemporaLabs/treasury-plugin), where it was released.

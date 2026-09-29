@@ -35,18 +35,18 @@ Pre-1.0, minor versions may change tool names, schemas and behaviour.
 - The documentation version pins must agree, and on `main` equal `package.json`'s version; a release
   moves them in its own pull request (#30, #55).
 - The publish workflow checks the plugin's copies, every version declaration and the install pins at
-  the tag (#55, #57),
-  and polls the registry for up to ten minutes, warning rather than failing on a timeout (#28, #55).
+  the tag, and polls the registry for up to ten minutes, warning rather than failing on a timeout
+  (#28, #55, #57).
+- `prepack` also refuses rebuilt third-party notices that differ from the committed file (#57).
 - Dependabot no longer proposes TypeScript or `@types/node` majors (#25); GitHub Actions and
   development dependencies bumped (#20, #55).
 
-- `prepack` also refuses rebuilt third-party notices that differ from the committed file (#57).
-
 ### Not supported in this release
 - **Codex.** `plugin/` carries Codex manifests and Codex installs the plugin (#55 corrected a policy
-  value Codex refused), but the server does not start there: Codex does not expand
-  `${CLAUDE_PLUGIN_ROOT}` in the launch path. With Codex, run the MCP server over stdio instead
-  ([docs/install.md](docs/install.md#any-agent-runtime--the-mcp-server-over-stdio)).
+  value Codex refused), but the server does not start there: measured on Codex 0.155.1, Codex does
+  not expand `${CLAUDE_PLUGIN_ROOT}` in the launch path. With Codex, register the npm package's
+  bundle by its absolute path with `codex mcp add`
+  ([docs/install.md](docs/install.md#claude-code--the-plugin)).
 
 ### Upgrading an earlier Claude Code install
 Remove the old marketplace first — adding the new one while it is still configured is refused,
