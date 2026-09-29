@@ -2,41 +2,20 @@
 
 All notable changes to the Agent Treasury plugin are recorded here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versions follow [SemVer](https://semver.org/).
+The product's own changes are in the repository's [`CHANGELOG.md`](../CHANGELOG.md).
 
-## [v0.1.1] - 2026-09-25
-
-### Added
-- CI now checks that what this repository carries from the product is byte-identical to the
-  product's own copies, so a stale bundle goes red instead of waiting for someone to notice (#7).
-  `bundle-source.json` names the product ref the carried files came from; `validate` fetches the
-  product at that ref and compares `dist/mcp-server.mjs`, `registry/vaults.json`, `NOTICE` and
-  `THIRD_PARTY_NOTICES.md`. The ref must be a release tag or a full commit SHA — a branch name is
-  refused, since a comparison against something that moves proves nothing the next day — and a fetch
-  that fails is a failure rather than a skip, because a check that passes when it cannot read the
-  other side agrees with everything. A pinned commit must additionally be **reachable** from one of
-  the product's published refs: a commit orphaned by a history rewrite is still served on request,
-  so it fetches and compares clean while naming something no branch or tag can reach, and retrieval
-  therefore had to be checked separately from provenance. `LICENSE` is deliberately not in that
-  list: it is already pinned to the canonical Apache-2.0 text, which is a stronger claim than
-  agreeing with the product.
-
-  What this establishes is that the carried files match the release they *claim*, which is not the
-  same as the claim being current. When the product has tagged something newer, the run says so as a
-  warning and does not fail — the product's release cadence is not this repository's, and a red
-  build on every unrelated pull request the moment the product ships would only teach everyone to
-  ignore the colour.
+## [Unreleased]
 
 ### Changed
-- `@temporalabs/treasury` v0.1.0 is published to npm (2026-09-18), so the v0.1.0 note below no
-  longer describes the registry. What it describes about this repository still holds, and now on
-  purpose rather than as an interim: the plugin keeps carrying `dist/mcp-server.mjs` instead of
-  resolving the package by name, and the `npx` pin that note announces is withdrawn. The carried
-  bundle installs nothing; the package declares the library's runtime dependencies, which resolve to
-  on the order of a hundred packages the MCP server never loads because they are already inlined.
-  Pinning is done by the release tag, which is immutable. The invariant is byte-identity between the
-  carried bundle and the product's release, and it is now enforced in CI rather than asserted (#7).
-  This release carries `TemporaLabs/treasury` `v0.1.0` — its only tagged release at this time; the
-  byte-identity check above is what will catch drift once a newer one exists.
+- **The plugin now ships from `TemporaLabs/treasury`, in its `plugin/` folder.** The manifests, the
+  `earn` skill and its trigger cases moved here unchanged. The server bundle, vault registry and
+  licence files in this folder are copies of the repository's own files, written by `npm run build`
+  in the same commit and checked byte for byte by CI, so there is no release pin and no
+  cross-repository comparison any more. The install id is unchanged (`treasury@treasury`); only the
+  marketplace source moves to `TemporaLabs/treasury`.
+
+History up to and including v0.1.0 below is from the plugin's earlier repository,
+[TemporaLabs/treasury-plugin](https://github.com/TemporaLabs/treasury-plugin), where it was released.
 
 ## [v0.1.0] - 2026-09-18
 

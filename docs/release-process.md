@@ -1,15 +1,16 @@
 # Release process
 
-Two artifacts ship from two repositories, on **two different channels**, and only one of them
+Two artifacts ship from this repository, on **two different channels**, and only one of them
 involves npm. Getting that distinction wrong is the reason this page exists.
 
 | what ships | from | channel | needs an npm publish? |
 |---|---|---|---|
 | `@temporalabs/treasury` — the library and the MCP server bundle | this repository | **npm registry** | **yes, every release** |
-| the `earn` plugin and skill | the plugin repository | **git ref**, via `claude plugin marketplace add` | **no, never** |
+| the `earn` plugin and skill | this repository's [`plugin/`](../plugin/) folder (up to v0.1.0, the separate `TemporaLabs/treasury-plugin` repository) | **git ref**, via `claude plugin marketplace add` | **no, never** |
 
 The plugin is installed by pointing Claude Code at a git ref; there is no registry in the path, so
-a plugin release is a merge and a tag and nothing else. It keeps `"private": true` deliberately.
+a plugin release is a merge and a tag and nothing else. Its `plugin/package.json` keeps
+`"private": true` deliberately, and `plugin/` is outside the npm package's `files` list.
 
 ## 🔴 npm does not update itself, and a published version is permanent
 
@@ -41,7 +42,8 @@ signal that anything happened.
 6. Update any documentation that names the published version or told readers to vendor the bundle
    by hand — **after** the publish, never in the same change that merely makes publishing possible.
    A document that says "install from npm" is false until step 5 has actually run.
-7. Release the plugin separately: merge, tag, and point the marketplace at the new ref. No npm.
+7. The plugin ships with the same tag: `claude plugin marketplace add TemporaLabs/treasury@vX.Y.Z`
+   installs the `plugin/` folder at that tag. Nothing else to publish, and no npm.
 
 ## Why the publish is `workflow_dispatch`, not a tag trigger
 

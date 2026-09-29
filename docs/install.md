@@ -15,10 +15,14 @@ branch; `#<ref>` is equivalent. Prefer a tag — it is immutable. Before a relea
 release branch instead (`TemporaLabs/treasury-plugin@release/v0.1.0`); dropping the suffix entirely
 tracks the plugin repository's default branch.
 
-The plugin is packaged in [TemporaLabs/treasury-plugin](https://github.com/TemporaLabs/treasury-plugin)
-from this repository's releases. It gives Claude Code the `earn` skill and the eight `earn_*` tools. The plugin starts the
-bundled server (`dist/mcp-server.mjs`) with a bare `node` — the bundle is committed, so a marketplace
-install, which copies files and runs no `npm install`, works as-is. **Node 22 or later is required
+The plugin is the [`plugin/`](../plugin/) folder of this repository: its manifests, the `earn` skill,
+and a copy of this repository's own `dist/mcp-server.mjs` and `registry/vaults.json`, made by
+`npm run build` in the same commit. Releases up to v0.1.0 were published from
+[TemporaLabs/treasury-plugin](https://github.com/TemporaLabs/treasury-plugin), which the install line
+above names; later releases install from this repository (`TemporaLabs/treasury@vX.Y.Z`). The plugin
+gives Claude Code the `earn` skill and the eight `earn_*` tools, and starts its copy of the bundled
+server with a bare `node`. `plugin/` carries a version-only `package.json` and no lockfile, so a
+marketplace install copies files and runs no dependency install. **Node 22 or later is required
 and must be on `PATH`** — without it the server process fails to spawn, and Claude Code reports that
 as a bare `CONNECTION_CLOSED` on any `earn_*` call, with no mention of Node.
 
@@ -78,8 +82,9 @@ after a Claude Code install, holds the same file if you would rather not install
 The server speaks MCP over stdio and exposes exactly the eight tools in [`tools.md`](tools.md). No
 tool signs or sends: your runtime's own signer takes the calls the `earn_prepare_*` tools return.
 The `earn` skill ships with the plugin, at
-[`skills/earn/SKILL.md`](https://github.com/TemporaLabs/treasury-plugin/blob/v0.1.0/skills/earn/SKILL.md).
-It is plain Markdown and can be given to any agent as instructions; it tells the agent how to use
+[`plugin/skills/earn/SKILL.md`](../plugin/skills/earn/SKILL.md) in this repository (for v0.1.0,
+[`skills/earn/SKILL.md`](https://github.com/TemporaLabs/treasury-plugin/blob/v0.1.0/skills/earn/SKILL.md)
+in the plugin repository). It is plain Markdown and can be given to any agent as instructions; it tells the agent how to use
 these tools and what to refuse.
 
 ## As a library

@@ -144,8 +144,9 @@ jobs:
             || { echo "::error::dist/mcp-server.mjs is stale — run npm run build and commit it"; exit 1; }
           git diff --exit-code --stat -- THIRD_PARTY_NOTICES.md \
             || { echo "::error::THIRD_PARTY_NOTICES.md is stale — run npm run build and commit it"; exit 1; }
-          git diff --exit-code --stat -- plugin/ \
-            || { echo "::error::plugin/ is stale — run npm run build and commit it"; exit 1; }
+          # Only the files the build WRITES into plugin/; the manifests and the skill there are edited by hand.
+          git diff --exit-code --stat -- plugin/dist plugin/registry plugin/LICENSE plugin/NOTICE plugin/THIRD_PARTY_NOTICES.md plugin/package.json \
+            || { echo "::error::plugin/ copies are stale — run npm run build and commit them"; exit 1; }
       # ── Licensing (Apache-2.0). An npm tarball takes what `files` publishes, and a plugin install
       # takes plugin/, so the licence, its NOTICE and the dependency notices must travel INSIDE both.
       # ───────────────────────────────────────────────────────────────────────────────────────────
@@ -301,8 +302,8 @@ jobs:
           JS
 
   # ── Bundle provenance ──────────────────────────────────────────────────────────────────────────
-  # What a marketplace install actually runs is the COMMITTED dist/mcp-server.mjs
-  # (git install, no npm). `check` proved, on this same commit, that the committed bundle equals a
+  # What a marketplace install actually runs is plugin/dist/mcp-server.mjs, a byte copy of the
+  # COMMITTED dist/mcp-server.mjs held identical by the plugin-folder step (git install, no npm). `check` proved, on this same commit, that the committed bundle equals a
   # rebuild of the committed source (its stale-dist step) — `needs: check` is what carries that
   # across. This job attests THAT file with GitHub's OIDC identity and verifies it back, so a
   # stranger can later run `gh attestation verify` on the file in their plugin cache and get the

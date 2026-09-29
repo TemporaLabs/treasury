@@ -55,12 +55,25 @@ npm run registry:check     # reconcile registry/vaults.json against the chain
 - **Tests that pin a product decision** (the default vault, the listed set) are restated when that
   decision changes, never loosened to survive it.
 
+## The Claude Code plugin (`plugin/`)
+
+- **Never edit the copies in `plugin/` by hand.** `plugin/dist/mcp-server.mjs`,
+  `plugin/registry/vaults.json`, `plugin/LICENSE`, `plugin/NOTICE`, `plugin/THIRD_PARTY_NOTICES.md` and
+  `plugin/package.json` are written by `npm run build`; `npm run plugin:check` fails on a stale one.
+- **`plugin/` must never hold a lockfile.** A plugin install runs a dependency install when it finds
+  one beside `package.json`.
+- **A change to the skill's `description:` is a behavioural change**: it decides whether the skill is
+  reached at all. Measure it by running the plugin (`claude -p --plugin-dir plugin` from a working
+  directory that is not this repository) and checking which tools the run invoked.
+- `npm run lint:skill` validates the skill against the official skill spec.
+
 ## Pull requests
 
 - Target the current `release/vX.Y.Z` branch, not `main`.
 - One change per pull request; a documentation fix found along the way gets its own.
 - Say which test tier ran: unit, live read-only, or fork.
-- Adding, removing or renaming a tool needs the matching change to `SKILL.md` in
-  [TemporaLabs/treasury-plugin](https://github.com/TemporaLabs/treasury-plugin).
+- Adding, removing or renaming a tool needs the matching change to
+  [`plugin/skills/earn/SKILL.md`](plugin/skills/earn/SKILL.md) in the same pull request; CI checks the
+  skill's tool table against the server's real `tools/list`.
 - Security issues go through private vulnerability reporting ([`SECURITY.md`](SECURITY.md)), never a
   public issue.

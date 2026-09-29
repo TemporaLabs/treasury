@@ -1,9 +1,11 @@
 # Verifying the bundle you installed is the one CI built — a runbook
 
-Treasury ships as a Claude Code plugin installed **from git**: the marketplace copies the plugin
-repository, [TemporaLabs/treasury-plugin](https://github.com/TemporaLabs/treasury-plugin), and the
-MCP server that runs is its committed `dist/mcp-server.mjs` — a byte copy of this repository's
-`dist/mcp-server.mjs` (2 MB, dependencies inlined, no `npm install` on your side).
+Treasury ships as a Claude Code plugin installed **from git**: the marketplace copies this
+repository's `plugin/` folder, and the MCP server that runs is its `dist/mcp-server.mjs` — a byte
+copy of this repository's `dist/mcp-server.mjs`, made in the same commit and checked by CI (2 MB,
+dependencies inlined, no `npm install` on your side). Up to v0.1.0 the plugin shipped from the
+separate [TemporaLabs/treasury-plugin](https://github.com/TemporaLabs/treasury-plugin) repository,
+with the same byte copy.
 Nothing about "it came from GitHub" tells you that file was built by this repository's CI from the
 commit it claims. This runbook is how a stranger checks that, with no membership in the org and no
 trust in anyone's word. It is the last mile of "the code is open": open source you cannot tie to the
@@ -74,9 +76,8 @@ command reads the attestation from GitHub's API; it does not need read access to
    ```
 
    Success prints the attestation's subject digest and the commit (`sourceRepositoryRef`,
-   `sourceRepositoryDigest`) that produced it. That commit is in this repository, not the plugin
-   repository: the plugin's release notes name the release of this repository its bundle was copied
-   from, and `claude plugin list` shows which plugin version you have. The verification is by
+   `sourceRepositoryDigest`) that produced it. That commit is in this repository, and
+   `claude plugin list` shows which plugin version you have. The verification is by
    digest, so a byte-identical copy in the plugin cache verifies against this repository's attestation;
    a copy that differs by one byte does not.
 
@@ -98,7 +99,7 @@ with `id-token: write`, from the release tag, and npm records that fact against 
 `package.json` is what makes that hold — `repository` names the public repository,
 `TemporaLabs/treasury` (CI fails if it names anything else, because that is the only repository
 provenance can be issued from), `files` limits the tarball to `dist/` and `registry/` (the skill is
-not in it — it ships from the plugin repository), `publishConfig.provenance` is on, and `prepack`
+not in it — it ships in `plugin/`, by git tag), `publishConfig.provenance` is on, and `prepack`
 builds so `main`/`types` exist in the tarball — only `dist/*.mjs` is committed, so without that build
 the tarball would carry the bundle and nothing the manifest's own `main`/`types` point at.
 

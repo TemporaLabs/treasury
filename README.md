@@ -44,8 +44,13 @@ claude plugin install treasury@treasury
 ```
 
 Restart your Claude Code session after installing so the MCP tools connect. Before a release is
-tagged, use `@release/v0.1.0` instead of `@v0.1.0`. Keep the ref explicit to avoid tracking the
-plugin repository's default branch.
+tagged, use `@release/v0.1.0` instead of `@v0.1.0`. Keep the ref explicit to avoid tracking a
+default branch.
+
+The plugin's source is the [`plugin/`](plugin/) folder of this repository: its manifests, the Earn
+skill, and a copy of this repository's own server bundle, made in the same commit. v0.1.0 was
+released from `TemporaLabs/treasury-plugin`, which the line above installs; later releases install
+from this repository.
 
 ### Other MCP hosts
 
