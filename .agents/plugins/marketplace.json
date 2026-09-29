@@ -1,0 +1,12 @@
+{
+  "name": "treasury",
+  "interface": { "displayName": "Agent Treasury" },
+  "plugins": [
+    {
+      "name": "treasury",
+      "source": { "source": "local", "path": "./plugin" },
+      "policy": { "installation": "AVAILABLE", "authentication": "NONE" },
+      "category": "Finance"
+    }
+  ]
+}

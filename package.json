@@ -35,13 +35,15 @@
   },
   "scripts": {
     "prepack": "npm run build && git diff --exit-code -- dist/mcp-server.mjs",
-    "build": "tsc -b && tsup && tsx scripts/third-party-notices.ts --write",
+    "build": "tsc -b && tsup && tsx scripts/third-party-notices.ts --write && bash scripts/sync-plugin.sh",
     "typecheck": "tsc -b && tsc -p tsconfig.scripts.json",
     "test": "tsc -b && tsc -p tsconfig.scripts.json && vitest run",
     "test:fork": "tsc -b && TREASURY_FORK=1 vitest run --testTimeout 300000 tests/fork.test.ts",
     "mcp": "tsx src/mcp/server.ts",
     "registry:check": "tsx scripts/registry-check.ts",
-    "notices:check": "tsx scripts/third-party-notices.ts"
+    "notices:check": "tsx scripts/third-party-notices.ts",
+    "plugin:check": "bash scripts/sync-plugin.sh --check && bash scripts/check-versions.sh",
+    "lint:skill": "bash scripts/lint-skill.sh"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.20.0",

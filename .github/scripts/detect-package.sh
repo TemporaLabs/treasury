@@ -16,12 +16,10 @@
 #
 # The rule: the package is present, or it is absent AND THERE IS NO PACKAGE ANYWHERE ELSE.
 #
-# 🔴 THE SKILL IS NOT IN `PARTS`, AND ITS ABSENCE IS NOT A MOVE. It used to be, and that was this
-# file asserting a dependency on its own CONSUMER: the plugin reads the product, never the reverse.
-# The skill is the plugin's contract with its host, written against this package's interface, and it
-# ships from the plugin repository. A product tree with no `skills/` is COMPLETE, not half-moved.
-# Nothing in `src/` reads the skill — checked, zero references — so it was never a part of this
-# package, only a file this package's CI happened to validate.
+# 🔴 THE PLUGIN IS NOT IN `PARTS`. It lives in plugin/ and depends on this package, never the
+# reverse: nothing in `src/` reads plugin/ or the skill in it. Whether a tree carries the plugin is
+# decided by its own CI step ("does this tree carry the skill?"), which fails when the plugin is
+# declared without its skill. This file decides only whether the PACKAGE is here.
 set -uo pipefail
 
 PARTS=(package.json src dist/mcp-server.mjs registry/vaults.json)

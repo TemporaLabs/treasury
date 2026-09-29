@@ -46,4 +46,10 @@ git tag v0.1.0; git tag v0.1.1; git tag v0.1.1-rc.1; git tag v0.2.0-alpha; git t
 expect 0 "newest RELEASE tag is v0.1.1 despite v0.2.0-alpha, v0.1.1-rc.1 and v0.10.0-beta.1" --newest-release-tag
 git tag v0.10.0
 expect 1 "v0.10.0 sorts above v0.2.0-alpha AND above v0.1.1 numerically, and the pins now lag it" --newest-release-tag
+# the plugin now installs from this repository: its pins count, and a lagging one is caught
+write 0.1.1 0.1.1 0.1.1
+printf 'claude plugin marketplace add TemporaLabs/treasury@v0.1.1\n[skill](https://github.com/TemporaLabs/treasury/blob/v0.1.1/plugin/skills/earn/SKILL.md)\n' >> README.md; git add -A
+expect 0 "the TemporaLabs/treasury@vX spelling is a pin, and agrees" 0.1.1
+sed -i 's#TemporaLabs/treasury@v0.1.1#TemporaLabs/treasury@v0.1.0#' README.md; git add -A
+expect 1 "a lagging TemporaLabs/treasury@vX pin is caught on its own"
 echo "all cases behaved"
