@@ -23,11 +23,13 @@ as a `429`.
 
 ## Through the plugin
 
-The plugin ([TemporaLabs/treasury-plugin](https://github.com/TemporaLabs/treasury-plugin)) forwards exactly `TREASURY_RPC_BASE` and `TREASURY_LOGS_RPC_BASE` from the host environment — that is
+The plugin (the [`plugin/`](../plugin/) folder of this repository; its server declaration is
+[`plugin/.mcp.json`](../plugin/.mcp.json)) forwards exactly `TREASURY_RPC_BASE` and `TREASURY_LOGS_RPC_BASE` from the host environment — that is
 the contract its manifest honours. The server it spawns also inherits its parent's environment, so
-`TREASURY_LOGS_FALLBACK` reaches it on the plugin path too. When a forwarded variable is unset, Claude Code passes
-the literal placeholder `${TREASURY_RPC_BASE}` — Treasury recognises a placeholder as "not a URL" and
-falls back, so an unset variable is never mistaken for an endpoint.
+`TREASURY_LOGS_FALLBACK` reaches it on the plugin path too. When a forwarded variable is unset, the
+`${VAR:-}` default in `.mcp.json` passes an empty string. Treasury treats an empty value, or an
+unexpanded `${…}` placeholder from a host that does not apply the default, as unset and falls back,
+so an unset variable is never mistaken for an endpoint.
 
 ## `eth_getLogs` windows — why there are two RPC variables
 

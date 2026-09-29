@@ -121,6 +121,7 @@ const BUILTINS_ALLOWED_PER_FILE: Record<string, string[]> = {
   "scripts/roundtrip.ts": ["child_process"], //            spawns the MCP server under test, over stdio
   "tests/fork.test.ts": ["child_process"], //              spawns anvil; anvil holds the keys, this repo never does
   "tests/registry-check.chain.test.ts": ["child_process"], // runs scripts/registry-check.ts against a mock chain
+  "tests/entrypoint.unit.test.ts": ["child_process", "os"], // runs the committed bundle by symlink and by import; tmpdir for the symlink
   "tests/licence.unit.test.ts": ["crypto"], //             pins the sha256 of the canonical Apache-2.0 text
 };
 
@@ -128,6 +129,7 @@ const MAY_SPAWN: Record<string, string[]> = {
   "scripts/roundtrip.ts": ["node", "npx"],
   "tests/fork.test.ts": ["anvil"],
   "tests/registry-check.chain.test.ts": ["npx"],
+  "tests/entrypoint.unit.test.ts": ["node"],
 };
 
 const parse = (file: string) =>
@@ -522,5 +524,12 @@ describe("D. what gets published is what was attested", () => {
 
   it("prepack cannot ship a bundle that differs from the attested committed one", () => {
     expect(scripts["prepack"]).toContain("git diff --exit-code -- dist/mcp-server.mjs");
+  });
+
+  it("nor third-party notices that differ from the committed ones", () => {
+    // The build also rewrites THIRD_PARTY_NOTICES.md, which is in `files`: a rebuild on the publishing
+    // machine against different dependencies would otherwise ship notices nobody committed.
+    const guarded = (scripts["prepack"] ?? "").split("git diff --exit-code --")[1]?.trim().split(/\s+/) ?? [];
+    expect(guarded).toEqual(expect.arrayContaining(["dist/mcp-server.mjs", "THIRD_PARTY_NOTICES.md"]));
   });
 });

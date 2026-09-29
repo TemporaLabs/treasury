@@ -83,7 +83,7 @@ Requires Node.js 22 or later. Fork tests also need [Foundry](https://getfoundry.
 
 ```bash
 npm ci
-npm run build                     # compiles, bundles dist/mcp-server.mjs, regenerates the notices
+npm run build                     # compiles, bundles dist/mcp-server.mjs, regenerates the notices and plugin/
 npm run typecheck
 npm test                          # unit tests
 TREASURY_RPC_BASE=https://... npm test          # adds live read-only checks against Base
@@ -92,8 +92,10 @@ TREASURY_RPC_BASE=https://... npm run test:fork # anvil fork round trips with im
 
 - **Use `npm ci`, not `npm install`.** It fails on a stale lockfile, which is what CI does.
 - **Rebuild the bundle when source changes.** `dist/mcp-server.mjs` is committed,
-  because a plugin install runs no build. After any change under `src/`, run `npm run build` and commit the result.
-  CI fails on a stale bundle.
+  because a plugin install runs no build. After any change under `src/`, or to `registry/vaults.json`,
+  `LICENSE` or `NOTICE`, run `npm run build` and commit the result; the same build refreshes the
+  plugin's copies in `plugin/`, and `npm run plugin:check` confirms them. CI fails on a stale bundle
+  or copy. The build uses `bash` for that last step, so on Windows run it from Git Bash or WSL.
 - **Say which test tier ran.** Unit tests say nothing about the chain. State in the pull request
   whether you ran unit, live read-only or fork tests.
 - **Tests never need a real key.** A test that moves funds runs on a fork and impersonates the
@@ -114,17 +116,18 @@ TREASURY_RPC_BASE=https://... npm run test:fork # anvil fork round trips with im
   request, so it can merge without waiting on the feature's review.
 - **Show that a new test can fail.** Break the behaviour it guards, confirm the test goes red, then
   restore it. A test that passes both ways proves nothing.
-- **The skill lives in the plugin repository.** `SKILL.md`, its trigger queries and its validation
-  ship from [TemporaLabs/treasury-plugin](https://github.com/TemporaLabs/treasury-plugin), which
-  carries the skill and the bundled server together and checks the skill's tool table against the
-  server's real `tools/list`. A change here that adds, removes or renames a tool needs the matching
-  change there; this repository cannot catch that drift, and that repository can.
+- **The skill lives in `plugin/`, beside the server it describes.** The Claude Code plugin is the
+  [`plugin/`](plugin/) folder: its manifests, the `earn` skill
+  ([`plugin/skills/earn/SKILL.md`](plugin/skills/earn/SKILL.md)) and its trigger cases. A change that
+  adds, removes or renames a tool updates the skill in the same pull request; CI checks the skill's
+  tool table against the server's real `tools/list`. The server bundle, registry and licence files
+  in `plugin/` are copies that `npm run build` writes; never edit them by hand. A change to the
+  skill's `description:` decides whether the skill is reached at all, so treat it as a behavioural
+  change and measure it by running the plugin, not by reading it.
 
 - **Expect questions.** Reviewers run the change rather than only reading it, and a review usually
   takes more than one round. Approval does not mean merge; a Tempora Labs maintainer merges.
-- **Do not bump versions.** Releases are cut by maintainers, each as a single commit of the release
-  tree; the public repository carries no drafting history, so nothing you see in a release commit's
-  parent is missing — there is none.
+- **Do not bump versions.** Maintainers cut releases ([`docs/release-process.md`](docs/release-process.md)).
 
 ## Security
 

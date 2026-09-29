@@ -30,7 +30,8 @@ permissions:
 jobs:
   publish:
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    # The resolve poll below alone may take ten minutes; the gates before it need headroom too.
+    timeout-minutes: 25
     permissions:
       contents: read
       # npm provenance is minted from this OIDC identity. Nothing else in this job needs it, and
@@ -81,6 +82,19 @@ jobs:
           node-version: 22
           registry-url: https://registry.npmjs.org
 
+      # Both release channels ship from this tag: npm gets the tarball, the Claude Code plugin is
+      # installed from plugin/ at the same tag. A push to a tag runs no CI, so nothing else proves
+      # the plugin's copies, the version declarations and the install instructions are right at THIS
+      # commit before the one irreversible act.
+      - name: the plugin's copies, every version declaration and the install instructions agree at this tag
+        env:
+          TAG: ${{ inputs.tag }}
+        run: |
+          set -euo pipefail
+          bash scripts/sync-plugin.sh --check
+          bash scripts/check-versions.sh "${TAG#v}"
+          bash .github/scripts/version-pins.sh "${TAG#v}"
+
       - run: npm ci
 
       # The full gate, not a subset: the same suite and typecheck CI runs on every push. A publish
@@ -104,15 +118,33 @@ jobs:
         run: |
           echo "dry_run was true: every gate above passed and nothing was published." >> "$GITHUB_STEP_SUMMARY"
 
-      - name: verify the published version resolves
+      # The registry can take minutes to serve a freshly published scoped package: 0.1.0 was
+      # accepted at once and resolved about 4½ minutes later. The earlier 60-second poll marked that
+      # successful publish as failed, and a re-run of the workflow would then have hard-failed on the
+      # "not already on the registry" gate above. So this step polls for ten minutes and, if the
+      # version has still not resolved, records a WARNING rather than a failure — the publish step
+      # above is the only step whose exit says whether the publish happened. Ten minutes is a chosen
+      # bound, not a fitted one. The trade is deliberate: a persistent cause (wrong package name,
+      # a registry outage) and slow propagation now both end in the same warning after ten minutes,
+      # and the poll cannot tell them apart — nor can it tell a network failure from "not yet";
+      # the warning names the command to run by hand, which settles all of them. Each registry call
+      # is bounded, so one stalled request cannot outlast the job and cancel it.
+      - name: wait for the published version to resolve (advisory — the publish step above is the verdict)
         if: ${{ !inputs.dry_run }}
+        # Advisory all the way down: a stalled registry call must not turn a successful publish red.
+        timeout-minutes: 12
+        continue-on-error: true
         run: |
           set -euo pipefail
           name="$(node -p 'require("./package.json").name')"
           ver="$(node -p 'require("./package.json").version')"
-          for i in $(seq 1 10); do
-            got="$(npm view "${name}@${ver}" version 2>/dev/null || true)"
-            [ "$got" = "$ver" ] && { echo "published ${name}@${ver}" >> "$GITHUB_STEP_SUMMARY"; exit 0; }
-            sleep 6
+          for i in $(seq 1 40); do
+            got="$(timeout 30 npm view "${name}@${ver}" version 2>/dev/null || true)"
+            if [ "$got" = "$ver" ]; then
+              echo "published ${name}@${ver} — resolved after about $(( (i - 1) * 15 ))s" >> "$GITHUB_STEP_SUMMARY"
+              exit 0
+            fi
+            sleep 15
           done
-          echo "::error::${name}@${ver} did not resolve after publish"; exit 1
+          echo "::warning::${name}@${ver} did not resolve within 10 minutes; the publish step succeeded, so check the registry by hand: npm view ${name}@${ver} version"
+          echo "published ${name}@${ver} — NOT yet resolving after 10 minutes; check by hand" >> "$GITHUB_STEP_SUMMARY"

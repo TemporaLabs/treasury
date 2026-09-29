@@ -1,0 +1,13 @@
+{
+  "mcpServers": {
+    "treasury": {
+      "type": "stdio",
+      "command": "node",
+      "args": ["${CLAUDE_PLUGIN_ROOT}/dist/mcp-server.mjs"],
+      "env": {
+        "TREASURY_RPC_BASE": "${TREASURY_RPC_BASE:-}",
+        "TREASURY_LOGS_RPC_BASE": "${TREASURY_LOGS_RPC_BASE:-}"
+      }
+    }
+  }
+}
