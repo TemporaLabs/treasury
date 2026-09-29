@@ -48,7 +48,8 @@ signal that anything happened.
 5. Tag the merge commit, annotated: `git tag -a vX.Y.Z -m "…" && git push origin vX.Y.Z`. A tag push
    runs no workflow.
 6. Publish to npm: run the **`publish`** workflow, `tag: vX.Y.Z`, **`dry_run: true` first**. It
-   checks the plugin's copies and every version declaration at the tag, re-runs the full suite,
+   checks the plugin's copies, every version declaration and the install pins at the tag, re-runs the
+   full suite,
    refuses a tag that disagrees with `package.json`, refuses a version that already exists, and
    refuses a tag that is not an ancestor of `main`. Re-run with `dry_run: false` once it is green.
 7. Verify both channels as a user would.

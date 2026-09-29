@@ -23,6 +23,11 @@ marketplace install copies files and runs no dependency install. **Node 22 or la
 and must be on `PATH`** — without it the server process fails to spawn, and Claude Code reports that
 as a bare `CONNECTION_CLOSED` on any `earn_*` call, with no mention of Node.
 
+**Codex is not supported as a plugin host in this release.** Codex installs the plugin from this
+marketplace, but the server does not start: Codex does not expand `${CLAUDE_PLUGIN_ROOT}` in the
+launch path. With Codex, run the MCP server over stdio instead
+([below](#any-agent-runtime--the-mcp-server-over-stdio)).
+
 ### Upgrading an earlier install
 
 An install made before v0.1.1 used a marketplace with the same name, `treasury`, from a different

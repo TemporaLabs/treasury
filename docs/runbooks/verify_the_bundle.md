@@ -120,9 +120,11 @@ so a version published without provenance passes it silently.
 whatever the publishing machine built rather than the attested committed file — agreeing only while
 the build is byte-deterministic, and disagreeing silently, because both artifacts are "the bundle".
 
-It now cannot. `prepack` is `npm run build && git diff --exit-code -- dist/mcp-server.mjs`: it still
+It now cannot. `prepack` is
+`npm run build && git diff --exit-code -- dist/mcp-server.mjs THIRD_PARTY_NOTICES.md`: it still
 produces the `main`/`types` outputs the tarball needs, and then **refuses** if the rebuild differs by
-a byte from what is committed and attested. Verified by changing a disclosure string in `src/` and
+a byte from what is committed and attested, or if the regenerated third-party notices differ from the
+committed ones. Verified by changing a disclosure string in `src/` and
 running it: exit 1, naming the file; restored, exit 0.
 
 So a publish from any machine ships the attested bytes or does not happen. `publish.yml` runs on the
