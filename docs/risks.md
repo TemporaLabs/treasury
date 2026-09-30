@@ -54,6 +54,7 @@ third party. Review every transaction your signer is asked to sign.
 
 ## What Treasury will not do
 
-It will not sign, send, transfer, hold a key, hold funds, route to a vault outside its registry, retry
-a gated deposit, or present a partial history as a measurement. If a build of "Treasury" does any of
+It will not sign, hold a key, hold funds, send anything you have not approved in your own wallet,
+route to a vault outside its registry, retry a gated deposit, or present a partial history as a
+measurement. If a build of "Treasury" does any of
 these, it is not the official distribution.

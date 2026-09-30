@@ -14,8 +14,8 @@ Open Agent Treasury (OAT) helps agents manage on-chain capital. Its first skill,
 agents inspect Tempora-curated vaults on Base, track USDC positions, and prepare deposits and
 withdrawals. It ships as an agent plugin, an MCP server, and a TypeScript/JavaScript library.
 
-**OAT prepares transactions. Your signer executes them.** It never holds private keys, signs,
-or sends transactions. You decide how much capital an agent may put to work.
+**OAT prepares transactions. Your signer executes them.** It never holds private keys or signs.
+A transaction goes out only from your own wallet, after you approve it there. You decide how much capital an agent may put to work.
 
 > **Experimental — pre-1.0. Real funds, real risk.** Returns are variable, capital is at risk,
 > and withdrawals depend on available liquidity. Review every transaction before signing and
