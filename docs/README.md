@@ -39,5 +39,6 @@ subject per file, facts stated with the block or date they were measured at.
    ERC-4626 interface. What the fund holds, how it allocates, and who operates it are readable on-chain
    and are not modelled here.
 2. **Nothing in this repository holds, reads, derives, or is handed a private key. Nothing signs.
-   Nothing sends.** A test fails the build if any file under the package reads a secret, reaches
-   outside the package, or starts a process.
+   A call reaches the chain only from the operator's own wallet, after the operator approves it
+   there,** and only to a vault in the registry. A test fails the build if any file under the package
+   reads a secret, reaches outside the package, or starts a process.
