@@ -73,7 +73,7 @@ describe("connect()", () => {
   it("throws a clear, actionable error when WALLETCONNECT_PROJECT_ID is unset — never a raw SDK error", async () => {
     delete process.env.WALLETCONNECT_PROJECT_ID;
     const { connect } = await import("../src/wallet-session.js");
-    await expect(connect()).rejects.toThrow(/WALLETCONNECT_PROJECT_ID/);
+    await expect(connect("walletconnect")).rejects.toThrow(/WALLETCONNECT_PROJECT_ID/);
     expect(mockInit).not.toHaveBeenCalled();
   });
 
@@ -81,7 +81,7 @@ describe("connect()", () => {
     const { approval } = deferredApproval();
     mockConnect.mockResolvedValue({ uri: "wc:abc123", approval });
     const { connect } = await import("../src/wallet-session.js");
-    const s = await connect();
+    const s = await connect("walletconnect");
     expect(s).toMatchObject({ status: "awaiting_approval", uri: "wc:abc123" });
     expect((s as { qr: string }).qr).toBe("QR(wc:abc123)");
   });
@@ -90,7 +90,7 @@ describe("connect()", () => {
     const { approval, resolve } = deferredApproval();
     mockConnect.mockResolvedValue({ uri: "wc:abc123", approval });
     const { connect, status } = await import("../src/wallet-session.js");
-    await connect();
+    await connect("walletconnect");
     resolve(session("topic-1", "0x1111111111111111111111111111111111111111"));
     await new Promise((r) => setTimeout(r, 0)); // let the approval().then(...) microtask land
     expect(await status()).toMatchObject({
@@ -105,7 +105,7 @@ describe("connect()", () => {
     const { approval, reject } = deferredApproval();
     mockConnect.mockResolvedValue({ uri: "wc:abc123", approval });
     const { connect, status } = await import("../src/wallet-session.js");
-    await connect();
+    await connect("walletconnect");
     reject(new Error("User rejected the session proposal"));
     await new Promise((r) => setTimeout(r, 0));
     expect(await status()).toMatchObject({ status: "rejected", reason: "User rejected the session proposal" });
@@ -116,11 +116,11 @@ describe("connect()", () => {
     const { approval, resolve } = deferredApproval();
     mockConnect.mockResolvedValue({ uri: "wc:abc123", approval });
     const { connect } = await import("../src/wallet-session.js");
-    await connect();
+    await connect("walletconnect");
     resolve(session("topic-1", "0x2222222222222222222222222222222222222222"));
     await new Promise((r) => setTimeout(r, 0));
     mockConnect.mockClear();
-    const second = await connect();
+    const second = await connect("walletconnect");
     expect(second).toMatchObject({ status: "connected", account: "0x2222222222222222222222222222222222222222" });
     expect(mockConnect).not.toHaveBeenCalled();
   });
@@ -129,7 +129,7 @@ describe("connect()", () => {
     const { approval, resolve } = deferredApproval();
     mockConnect.mockResolvedValue({ uri: "wc:abc123", approval });
     const { connect, status } = await import("../src/wallet-session.js");
-    await connect();
+    await connect("walletconnect");
     resolve({ topic: "topic-1", namespaces: {} });
     await new Promise((r) => setTimeout(r, 0));
     expect(await status()).toMatchObject({ status: "rejected", reason: expect.stringMatching(/no eip155 account/) });
@@ -148,7 +148,7 @@ describe("disconnect()", () => {
     mockConnect.mockResolvedValue({ uri: "wc:abc123", approval });
     mockDisconnect.mockRejectedValue(new Error("relay unreachable"));
     const { connect, disconnect, status } = await import("../src/wallet-session.js");
-    await connect();
+    await connect("walletconnect");
     resolve(session("topic-1", "0x3333333333333333333333333333333333333333"));
     await new Promise((r) => setTimeout(r, 0));
     expect(await disconnect()).toEqual({ disconnected: true });
@@ -171,7 +171,7 @@ describe("sendTransaction()", () => {
     mockConnect.mockResolvedValue({ uri: "wc:abc123", approval });
     mockRequest.mockResolvedValue("0xtxhash");
     const { connect, sendTransaction } = await import("../src/wallet-session.js");
-    await connect();
+    await connect("walletconnect");
     resolve(session("topic-1", "0x5555555555555555555555555555555555555555"));
     await new Promise((r) => setTimeout(r, 0));
 
@@ -189,7 +189,7 @@ describe("sendTransaction()", () => {
     mockConnect.mockResolvedValue({ uri: "wc:abc123", approval });
     mockRequest.mockResolvedValue("0xtxhash");
     const { connect, sendTransaction } = await import("../src/wallet-session.js");
-    await connect();
+    await connect("walletconnect");
     resolve(session("topic-1", "0x6666666666666666666666666666666666666666"));
     await new Promise((r) => setTimeout(r, 0));
 
@@ -203,7 +203,7 @@ describe("sendTransaction()", () => {
     mockConnect.mockResolvedValue({ uri: "wc:abc123", approval });
     mockRequest.mockRejectedValue(new Error("User rejected the request"));
     const { connect, sendTransaction } = await import("../src/wallet-session.js");
-    await connect();
+    await connect("walletconnect");
     resolve(session("topic-1", "0x7777777777777777777777777777777777777777"));
     await new Promise((r) => setTimeout(r, 0));
 
@@ -217,7 +217,7 @@ describe("sendTransaction()", () => {
       mockConnect.mockResolvedValue({ uri: "wc:abc123", approval });
       mockRequest.mockReturnValue(new Promise(() => {})); // never settles
       const { connect, sendTransaction } = await import("../src/wallet-session.js");
-      await connect();
+      await connect("walletconnect");
       resolve(session("topic-1", "0x8888888888888888888888888888888888888888"));
       await vi.advanceTimersByTimeAsync(0);
 
@@ -236,13 +236,13 @@ describe("switchWallet()", () => {
     mockConnect.mockResolvedValueOnce({ uri: "wc:first", approval: first.approval });
     mockDisconnect.mockResolvedValue(undefined);
     const { connect, switchWallet } = await import("../src/wallet-session.js");
-    await connect();
+    await connect("walletconnect");
     first.resolve(session("topic-1", "0x4444444444444444444444444444444444444444"));
     await new Promise((r) => setTimeout(r, 0));
 
     const second = deferredApproval();
     mockConnect.mockResolvedValueOnce({ uri: "wc:second", approval: second.approval });
-    const s = await switchWallet();
+    const s = await switchWallet("walletconnect");
     expect(mockDisconnect).toHaveBeenCalledWith({ topic: "topic-1", reason: { code: 6000, message: "User disconnected" } });
     expect(s).toMatchObject({ status: "awaiting_approval", uri: "wc:second" });
   });

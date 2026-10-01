@@ -17,6 +17,7 @@ import { mkdirSync, readFileSync, writeFileSync, rmSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
 import { isAddress, getAddress, type Address, type Hex } from "viem";
+import { startConnect, startSign, type Handle } from "./browser-session.js";
 
 /**
  * The one shape this module reads off a WalletConnect session — not the full `@walletconnect/types`
@@ -81,14 +82,27 @@ class FileKeyValueStorage {
   }
 }
 
+/** The two ways to sign in: a page in the operator's own browser, or a WalletConnect pairing. */
+export type ConnectMethod = "browser" | "walletconnect";
+
 export type SessionState =
   | { status: "disconnected" }
   | { status: "awaiting_approval"; via: "walletconnect"; uri: string; qr: string; requestedAtIso: string }
+  | { status: "awaiting_approval"; via: "browser"; url: string; opened: boolean; requestedAtIso: string }
   | { status: "connected"; via: "walletconnect"; account: Address; chainId: number; topic: string; connectedAtIso: string }
+  | { status: "connected"; via: "browser"; account: Address; chainId: number; connectedAtIso: string }
   | { status: "rejected"; reason: string; requestedAtIso: string };
 
-/** The one persisted "who is connected" record: a WalletConnect session. */
-export type Persisted = { via: "walletconnect"; topic: string; account: Address; chainId: number; connectedAtIso: string };
+/**
+ * The one persisted "who is connected" record. A WalletConnect session keeps a live channel to the
+ * wallet (`topic`); a browser sign-in keeps only the address, because an extension can be reached
+ * only from inside its own page — every send opens a fresh one-shot page instead.
+ */
+export type Persisted =
+  | { via: "walletconnect"; topic: string; account: Address; chainId: number; connectedAtIso: string }
+  | { via: "browser"; account: Address; chainId: number; connectedAtIso: string };
+
+const connectedState = (p: Persisted): SessionState => ({ status: "connected", ...p });
 
 function ensureDir(): void {
   mkdirSync(CONFIG_DIR, { recursive: true });
@@ -147,6 +161,7 @@ type SignClientInstance = Awaited<ReturnType<typeof SignClient.init>>;
 
 let client: SignClientInstance | undefined;
 let pending: { uri: string; qr: string; requestedAtIso: string } | undefined;
+let pendingBrowser: { url: string; opened: boolean; requestedAtIso: string; handle: Handle<unknown> } | undefined;
 let lastRejection: { reason: string; requestedAtIso: string } | undefined;
 
 async function getClient(): Promise<SignClientInstance> {
@@ -172,10 +187,9 @@ async function getClient(): Promise<SignClientInstance> {
 
 export async function status(): Promise<SessionState> {
   if (pending) return { status: "awaiting_approval", via: "walletconnect", ...pending };
+  if (pendingBrowser) return { status: "awaiting_approval", via: "browser", url: pendingBrowser.url, opened: pendingBrowser.opened, requestedAtIso: pendingBrowser.requestedAtIso };
   const p = readPersisted();
-  if (p) {
-    return { status: "connected", via: "walletconnect", account: p.account, chainId: p.chainId, topic: p.topic, connectedAtIso: p.connectedAtIso };
-  }
+  if (p) return connectedState(p);
   if (lastRejection) {
     const r = lastRejection;
     lastRejection = undefined; // read once, like an unread-notification flag
@@ -189,11 +203,34 @@ export async function status(): Promise<SessionState> {
  * NOT block for the wallet's approval, which can take anywhere from seconds to never. Poll
  * `status()` (the `connect_status` tool) to learn when it resolves to `connected` or `rejected`.
  */
-export async function connect(): Promise<SessionState> {
-  if (pending) return { status: "awaiting_approval", via: "walletconnect", ...pending };
+export async function connect(method: ConnectMethod = "browser", waitMs = 0): Promise<SessionState> {
+  if (pending || pendingBrowser) return status();
   const existing = readPersisted();
-  if (existing) return { status: "connected", via: "walletconnect", account: existing.account, chainId: existing.chainId, topic: existing.topic, connectedAtIso: existing.connectedAtIso };
+  if (existing) return connectedState(existing);
+  return method === "browser" ? connectBrowser(waitMs) : connectWalletConnect();
+}
 
+/**
+ * Opens the one-shot sign-in page and (optionally) waits for the wallet to answer, so the common
+ * case is a single tool call: the tab opens, the operator clicks, this returns `connected`. When the
+ * wait runs out, or no browser can be opened here, it returns `awaiting_approval` with the url.
+ */
+async function connectBrowser(waitMs: number): Promise<SessionState> {
+  const handle = await startConnect();
+  const requestedAtIso = new Date().toISOString();
+  pendingBrowser = { url: handle.url, opened: handle.opened, requestedAtIso, handle: handle as Handle<unknown> };
+  const settled = handle.done.then((r) => {
+    if (pendingBrowser?.requestedAtIso !== requestedAtIso) return; // disconnected or replaced meanwhile
+    pendingBrowser = undefined;
+    if (r.ok) writePersisted({ via: "browser", account: r.value.account, chainId: r.value.chainId, connectedAtIso: new Date().toISOString() });
+    else lastRejection = { reason: r.reason, requestedAtIso };
+  });
+  // A page nobody can see cannot be waited on; hand the url back at once.
+  if (waitMs > 0 && handle.opened) await Promise.race([settled, new Promise((r) => setTimeout(r, waitMs).unref())]);
+  return status();
+}
+
+async function connectWalletConnect(): Promise<SessionState> {
   const c = await getClient();
   const { uri, approval } = await c.connect({
     requiredNamespaces: { eip155: { methods: EIP155_METHODS, chains: [BASE_CAIP2], events: EIP155_EVENTS } },
@@ -225,26 +262,33 @@ export async function connect(): Promise<SessionState> {
 export async function disconnect(): Promise<{ disconnected: boolean }> {
   const existing = readPersisted();
   pending = undefined;
+  const waiting = pendingBrowser;
+  pendingBrowser = undefined;
+  waiting?.handle.close();
   if (!existing) {
     writePersisted(undefined);
     return { disconnected: false };
   }
-  const c = await getClient();
-  try {
-    await c.disconnect({ topic: existing.topic, reason: { code: 6000, message: "User disconnected" } });
-  } catch {
-    /* the wallet may already have dropped the session on its own side; clear our record either way */
+  if (existing.via === "walletconnect") {
+    const c = await getClient();
+    try {
+      await c.disconnect({ topic: existing.topic, reason: { code: 6000, message: "User disconnected" } });
+    } catch {
+      /* the wallet may already have dropped the session on its own side; clear our record either way */
+    }
   }
   writePersisted(undefined);
   return { disconnected: true };
 }
 
-export async function switchWallet(): Promise<SessionState> {
+export async function switchWallet(method: ConnectMethod = "browser", waitMs = 0): Promise<SessionState> {
   await disconnect();
-  return connect();
+  return connect(method, waitMs);
 }
 
-export type SendResult = { status: "submitted"; hash: string } | { status: "rejected"; reason: string };
+export type SendResult =
+  | { status: "submitted"; hash: string; verified?: "matched" | "mismatch" | "unverified"; warning?: string }
+  | { status: "rejected"; reason: string };
 
 /** Bounded so a wallet that never answers doesn't hang the tool call forever; a signature prompt is answered within a couple of minutes or not at all, unlike connect()'s unbounded pairing wait. */
 const SEND_TIMEOUT_MS = 120_000;
@@ -260,6 +304,7 @@ const SEND_TIMEOUT_MS = 120_000;
 export async function sendTransaction(call: { to: Address; data: Hex; value?: Hex }): Promise<SendResult> {
   const existing = readPersisted();
   if (!existing) throw new Error("no wallet is connected — call connect_wallet first, then connect_status until it reports connected");
+  if (existing.via === "browser") return sendViaBrowser(call, existing.account);
   const c = await getClient();
   const request = c.request<string>({
     topic: existing.topic,
@@ -275,4 +320,25 @@ export async function sendTransaction(call: { to: Address; data: Hex; value?: He
   } catch (e) {
     return { status: "rejected", reason: e instanceof Error ? e.message : String(e) };
   }
+}
+
+/** Browser-connected wallets sign inside a one-shot page; the hash it returns is then checked on chain. */
+async function sendViaBrowser(call: { to: Address; data: Hex; value?: Hex }, account: Address): Promise<SendResult> {
+  const handle = await startSign(call, account);
+  if (!handle.opened) {
+    handle.close();
+    throw new Error(
+      "this machine cannot open a browser for the wallet (SSH, no display, or opening is disabled). " +
+        "Switch to a WalletConnect sign-in: call switch_wallet with method \"walletconnect\".",
+    );
+  }
+  const r = await handle.done;
+  if (!r.ok) return { status: "rejected", reason: r.reason };
+  const { hash, verified } = r.value;
+  return {
+    status: "submitted",
+    hash,
+    verified,
+    ...(verified === "mismatch" ? { warning: "the transaction on chain does not match the call that was requested — do not continue; tell the operator" } : {}),
+  };
 }
