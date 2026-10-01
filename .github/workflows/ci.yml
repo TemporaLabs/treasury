@@ -150,6 +150,7 @@ jobs:
         run: |
           git clone --depth 1 https://github.com/anthropics/claude-plugins-official /tmp/cpo
           python3 /tmp/cpo/plugins/skill-creator/skills/skill-creator/scripts/quick_validate.py plugin/skills/earn
+          python3 /tmp/cpo/plugins/skill-creator/skills/skill-creator/scripts/quick_validate.py connect-plugin/skills/connect
       - name: bundled MCP server is current, and so are the plugin's copies of it
         if: steps.pk.outputs.present == 'yes'
         run: |
@@ -158,10 +159,12 @@ jobs:
             || { echo "::error::dist/mcp-server.mjs is stale — run npm run build and commit it"; exit 1; }
           git diff --exit-code --stat -- THIRD_PARTY_NOTICES.md \
             || { echo "::error::THIRD_PARTY_NOTICES.md is stale — run npm run build and commit it"; exit 1; }
+          git diff --exit-code --stat -- dist/connect-server.mjs CONNECT_THIRD_PARTY_NOTICES.md \
+            || { echo "::error::dist/connect-server.mjs or CONNECT_THIRD_PARTY_NOTICES.md is stale — run npm run build and commit them"; exit 1; }
           # Only the files the build WRITES into plugin/; the manifests and the skill there are edited by hand.
           # `git status`, not `git diff`: a copy the commit deleted comes back UNTRACKED, which diff ignores.
-          stale=$(git status --porcelain -- plugin/dist plugin/registry plugin/LICENSE plugin/NOTICE plugin/THIRD_PARTY_NOTICES.md plugin/package.json)
-          [ -z "$stale" ] || { echo "$stale"; echo "::error::plugin/ copies are stale or missing — run npm run build and commit them"; exit 1; }
+          stale=$(git status --porcelain -- plugin/dist plugin/registry plugin/LICENSE plugin/NOTICE plugin/THIRD_PARTY_NOTICES.md plugin/package.json connect-plugin/dist connect-plugin/LICENSE connect-plugin/NOTICE connect-plugin/THIRD_PARTY_NOTICES.md connect-plugin/package.json)
+          [ -z "$stale" ] || { echo "$stale"; echo "::error::plugin/ and connect-plugin/ copies are stale or missing — run npm run build and commit them"; exit 1; }
       # ── Licensing (Apache-2.0). An npm tarball takes what `files` publishes, and a plugin install
       # takes plugin/, so the licence, its NOTICE and the dependency notices must travel INSIDE both.
       # ───────────────────────────────────────────────────────────────────────────────────────────
@@ -258,6 +261,24 @@ jobs:
           if missing: print("::error::SKILL.md never mentions:", sorted(missing))
           if phantom: print("::error::SKILL.md names tools the server does not have:", sorted(phantom))
           sys.exit(1 if (missing or phantom) else 0)
+          PY
+      - name: the connect plugin's server exposes exactly its five tools, and SKILL.md documents them
+        if: steps.pk.outputs.present == 'yes'
+        run: |
+          python3 - <<'PY'
+          import json, re, subprocess, pathlib, sys
+          # The copy the connect plugin actually runs, not the root bundle.
+          p = subprocess.Popen(["node","connect-plugin/dist/connect-server.mjs"], stdin=subprocess.PIPE, stdout=subprocess.PIPE, text=True)
+          def send(o): p.stdin.write(json.dumps(o)+"\n"); p.stdin.flush()
+          send({"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-06-18","capabilities":{},"clientInfo":{"name":"ci","version":"0"}}}); p.stdout.readline()
+          send({"jsonrpc":"2.0","method":"notifications/initialized"})
+          send({"jsonrpc":"2.0","id":2,"method":"tools/list","params":{}})
+          live = {t["name"] for t in json.loads(p.stdout.readline())["result"]["tools"]}
+          p.stdin.close(); p.wait(5)
+          assert live == {"connect_status","connect_wallet","disconnect_wallet","switch_wallet","connect_send_transaction"}, sorted(live)
+          md = pathlib.Path("connect-plugin/skills/connect/SKILL.md").read_text()
+          documented = set(re.findall(r"^\|\s*`([a-z_]+)`", md, re.M))
+          if live != documented: print("::error::SKILL.md tool table differs from the server:", sorted(live ^ documented)); sys.exit(1)
           PY
       # A package.json version is a RUNTIME value: the bundle reports the one beside it as
       # serverInfo.version, and the manifests are what the marketplaces advertise.

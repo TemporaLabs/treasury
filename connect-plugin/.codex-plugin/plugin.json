@@ -1,0 +1,10 @@
+{
+  "name": "connect",
+  "version": "0.1.2",
+  "description": "Agent Treasury by Tempora Labs — wallet connect plugin for AI agents. The connect skill connects an existing wallet via WalletConnect (MetaMask, Rabby, OKX Wallet, or any other WalletConnect-compatible wallet) and relays one already-built call to it for a signature. Never holds a key and never decides what a transaction contains; that is the earn skill's job. Cannot sign or send by itself.",
+  "author": {
+    "name": "Tempora Labs"
+  },
+  "repository": "https://github.com/TemporaLabs/treasury",
+  "skills": "./skills/"
+}

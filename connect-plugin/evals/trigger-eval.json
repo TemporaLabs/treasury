@@ -1,0 +1,22 @@
+[
+  {"query": "connect my wallet", "should_trigger": true},
+  {"query": "I want to earn with 2 USDC but I haven't connected anything yet", "should_trigger": true},
+  {"query": "is my wallet connected right now?", "should_trigger": true},
+  {"query": "disconnect my wallet, I'm done for today", "should_trigger": true},
+  {"query": "switch to a different wallet, I want to use my other MetaMask account", "should_trigger": true},
+  {"query": "connect with Rabby instead of MetaMask", "should_trigger": true},
+  {"query": "scan a QR code to link my OKX wallet", "should_trigger": true},
+  {"query": "what address is currently connected to this agent?", "should_trigger": true},
+  {"query": "the wallet connect thing is stuck on awaiting approval, what do I do", "should_trigger": true},
+  {"query": "log me out of the wallet session", "should_trigger": true},
+  {"query": "deposit 50 USDC into the vault", "should_trigger": false},
+  {"query": "how much is my earn position worth right now", "should_trigger": false},
+  {"query": "sign this transaction for me", "should_trigger": false},
+  {"query": "what's my private key or seed phrase, I forgot it", "should_trigger": false},
+  {"query": "log me in with my email address, send me a code", "should_trigger": false},
+  {"query": "sign in with Google", "should_trigger": false},
+  {"query": "withdraw everything from the vault", "should_trigger": false},
+  {"query": "what's the current APY on the Tempora vault", "should_trigger": false},
+  {"query": "show me the pre-deposit disclosures before I put money in", "should_trigger": false},
+  {"query": "swap 500 USDC to ETH on base", "should_trigger": false}
+]

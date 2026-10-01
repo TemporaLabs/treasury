@@ -1,0 +1,14 @@
+{
+  "mcpServers": {
+    "connect": {
+      "type": "stdio",
+      "command": "node",
+      "args": [
+        "${CLAUDE_PLUGIN_ROOT}/dist/connect-server.mjs"
+      ],
+      "env": {
+        "WALLETCONNECT_PROJECT_ID": "${WALLETCONNECT_PROJECT_ID:-b9f9b9931dc69c3ad8fb02955994191b}"
+      }
+    }
+  }
+}

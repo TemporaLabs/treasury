@@ -4,6 +4,16 @@ All notable changes to Agent Treasury are recorded here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versions follow [SemVer](https://semver.org/).
 Pre-1.0, minor versions may change tool names, schemas and behaviour.
 
+## [v0.1.2] - Unreleased
+
+### Added
+- **The `connect` plugin and MCP server.** `treasury-connect` has five tools (`connect_status`,
+  `connect_wallet`, `disconnect_wallet`, `switch_wallet`, `connect_send_transaction`). It connects an
+  existing wallet over WalletConnect and relays one already-built call to it for a signature. Email
+  and Google login are not supported. The server builds to `dist/connect-server.mjs`, with its bundled
+  dependencies listed in `CONNECT_THIRD_PARTY_NOTICES.md`. The plugin ships from
+  [`connect-plugin/`](connect-plugin/), beside `plugin/`, and installs as `connect@treasury`.
+
 ## [v0.1.1] - 2026-09-29
 
 ### Added

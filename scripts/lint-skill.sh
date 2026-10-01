@@ -16,3 +16,4 @@ if [ ! -f "$CACHE/plugins/skill-creator/skills/skill-creator/scripts/quick_valid
   git clone -q --depth 1 "$VALIDATOR_REPO" "$CACHE"
 fi
 python3 "$CACHE/plugins/skill-creator/skills/skill-creator/scripts/quick_validate.py" plugin/skills/earn
+python3 "$CACHE/plugins/skill-creator/skills/skill-creator/scripts/quick_validate.py" connect-plugin/skills/connect
