@@ -100,9 +100,17 @@ const ENTRY_POINTS = ["src/index.ts", "src/mcp/server.ts", "src/mcp/connect-serv
 // TREASURY_CONNECT_HOME: where the connect skill's local session file and WalletConnect store
 // live; overridable so tests never touch the operator's real config directory.
 // WALLETCONNECT_PROJECT_ID: identifies this app to the WalletConnect relay — not a secret, not a key.
+// DISPLAY, WAYLAND_DISPLAY, SSH_CONNECTION, SSH_TTY, TREASURY_CONNECT_NO_OPEN: read only by
+// src/browser-session.ts to decide whether a browser tab can be opened for the operator here (no
+// display, an SSH session, or an explicit opt-out all mean "do not try"). Presence checks, never sent anywhere.
 const ENV_READS_ALLOWED = [
   "BASE_RPC_URL",
+  "DISPLAY",
+  "SSH_CONNECTION",
+  "SSH_TTY",
   "TREASURY_CONNECT_HOME",
+  "TREASURY_CONNECT_NO_OPEN",
+  "WAYLAND_DISPLAY",
   "TREASURY_FORK",
   "TREASURY_LOGS_FALLBACK",
   "TREASURY_LOGS_RPC_BASE",
@@ -133,10 +141,12 @@ const BUILTINS_ALLOWED_PER_FILE: Record<string, string[]> = {
   "tests/fork.test.ts": ["child_process"], //              spawns anvil; anvil holds the keys, this repo never does
   "tests/registry-check.chain.test.ts": ["child_process"], // runs scripts/registry-check.ts against a mock chain
   "tests/entrypoint.unit.test.ts": ["child_process", "os"], // runs the committed bundle by symlink and by import; tmpdir for the symlink
+  "src/browser-session.ts": ["child_process", "crypto"], // opens the loopback sign-in page in the operator's browser; a 192-bit URL secret and its constant-time compare
   "tests/licence.unit.test.ts": ["crypto"], //             pins the sha256 of the canonical Apache-2.0 text
 };
 
 const MAY_SPAWN: Record<string, string[]> = {
+  "src/browser-session.ts": ["open", "cmd", "xdg-open"], // the OS's own "open this url" command, nothing else
   "scripts/roundtrip.ts": ["node", "npx"],
   "tests/fork.test.ts": ["anvil"],
   "tests/registry-check.chain.test.ts": ["npx"],
@@ -298,7 +308,9 @@ describe("A. the runtime module graph cannot leave this package", () => {
       const name = s.startsWith("@") ? s.split("/").slice(0, 2).join("/") : s.split("/")[0]!;
       return !declared.has(name) && !BUILTINS_ALLOWED.includes(bare(s));
     });
-    expect(undeclared).toEqual([]);
+    // Exact membership, not "none": src/browser-session.ts (and only it — assertion E pins that per
+    // file) reaches child_process to open the sign-in page and crypto for its URL secret.
+    expect(undeclared.sort()).toEqual(["node:child_process", "node:crypto"]);
   });
 
   it("the dependency set is EXACTLY these five — membership, so a swap holding the count fails too", () => {
@@ -324,11 +336,16 @@ describe("B. the environment surface, statically and at runtime", () => {
     }
     expect([...names].sort()).toEqual([
       "BASE_RPC_URL",
+      "DISPLAY",
+      "SSH_CONNECTION",
+      "SSH_TTY",
       "TREASURY_CONNECT_HOME",
+      "TREASURY_CONNECT_NO_OPEN",
       "TREASURY_LOGS_FALLBACK",
       "TREASURY_LOGS_RPC_BASE",
       "TREASURY_RPC_BASE",
       "WALLETCONNECT_PROJECT_ID",
+      "WAYLAND_DISPLAY",
     ]);
   });
 

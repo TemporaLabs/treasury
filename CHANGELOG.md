@@ -13,6 +13,15 @@ Pre-1.0, minor versions may change tool names, schemas and behaviour.
   and Google login are not supported. The server builds to `dist/connect-server.mjs`, with its bundled
   dependencies listed in `CONNECT_THIRD_PARTY_NOTICES.md`. The plugin ships from
   [`connect-plugin/`](connect-plugin/), beside `plugin/`, and installs as `connect@treasury`.
+- **Browser sign-in, alongside WalletConnect.** `connect_wallet` and `switch_wallet` take
+  `method: "browser" | "walletconnect"` (default `browser`) and `wait_seconds`. The browser method opens a
+  one-shot page on `127.0.0.1` where the operator's wallet extension connects and signs a free
+  EIP-4361-style message, verified in the server (EOA and contract wallets); `connect_wallet` waits for it
+  and returns `connected` in one call. WalletConnect is unchanged and remains the method for SSH, remote
+  and mobile-wallet use.
+- **Browser-signed transactions.** For a browser sign-in, `connect_send_transaction` opens a one-shot page
+  showing the decoded call; after the wallet sends, the transaction is looked up on chain and reported as
+  `verified: matched | mismatch | unverified`. `connect_status` reports `via`.
 
 ## [v0.1.1] - 2026-09-29
 

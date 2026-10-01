@@ -37,6 +37,10 @@ const hexArg = (label: string) =>
     .regex(/^0x[0-9a-fA-F]*$/, `must be 0x-prefixed hex (${label})`)
     .transform((s) => s as Hex);
 
+const methodArg = z.enum(["browser", "walletconnect"]).optional().describe('How the operator signs in. "browser" (default) opens a page in their browser and their wallet extension answers there. "walletconnect" returns a pairing uri and qr for a mobile or desktop WalletConnect wallet, and also works over SSH or in a remote session.');
+const waitArg = z.number().int().min(0).max(300).optional().describe("Browser method only: seconds to wait for the operator to finish in the browser before returning (default 90). 0 returns immediately with the url.");
+const DEFAULT_WAIT_S = 90;
+
 const text = (v: unknown) => ({ content: [{ type: "text" as const, text: JSON.stringify(v, null, 2) }] });
 
 /**
@@ -56,6 +60,14 @@ const guarded =
 
 /** Adds the one line every state benefits from repeating, without duplicating it at each call site. */
 function present(s: SessionState) {
+  if (s.status === "awaiting_approval" && s.via === "browser") {
+    return {
+      ...s,
+      instructions: s.opened
+        ? "A browser tab opened. Tell the operator to pick their wallet there and sign the free sign-in message; this needs nothing pasted back. Call connect_status to see whether it finished."
+        : "No browser could be opened on this machine. If the operator is at this machine, give them the url to open in the browser that has their wallet. Otherwise (SSH, remote session) use switch_wallet with method \"walletconnect\".",
+    };
+  }
   if (s.status === "awaiting_approval") {
     return {
       ...s,
@@ -79,7 +91,7 @@ export function buildServer(): McpServer {
     {
       title: "Wallet connection status",
       description:
-        "Reports the current WalletConnect session: `disconnected`, `awaiting_approval` (a connect_wallet pairing is pending — the same uri/qr are returned again), `connected` (an address is known), or `rejected` (declined or timed out — read once, then clears). Call this before assuming a wallet is or isn't connected; nothing here is inferred from prior conversation.",
+        "Reports the current session and how it was made (`via`: browser or walletconnect): `disconnected`, `awaiting_approval` (a connect_wallet sign-in is pending — the same url or uri/qr are returned again), `connected` (an address is known), or `rejected` (declined or timed out — read once, then clears). Call this before assuming a wallet is or isn't connected; nothing here is inferred from prior conversation.",
       inputSchema: {},
     },
     guarded(async () => text(present(await status()))),
@@ -90,10 +102,10 @@ export function buildServer(): McpServer {
     {
       title: "Connect a wallet",
       description:
-        "Starts a WalletConnect pairing for a Base (chain 8453) EIP-155 wallet — MetaMask, Rabby, OKX Wallet, or any other WalletConnect-compatible wallet. Returns immediately with a pairing `uri` and an ASCII `qr` to show the operator; it does NOT wait for approval, which can take anywhere from seconds to never. Poll connect_status afterward. If a wallet is already connected, returns that connected state instead of starting a new pairing — use switch_wallet to replace it.",
-      inputSchema: {},
+        "Signs the operator in with a Base (chain 8453) wallet, by one of two methods. `browser` (default): opens a page in their browser where their wallet extension (MetaMask, Rabby, Coinbase Wallet…) connects and signs a free sign-in message, like `claude login`; waits up to `wait_seconds` and returns `connected` directly. `walletconnect`: returns immediately with a pairing `uri` and ASCII `qr` for a WalletConnect wallet (mobile, or any session where no browser can open); poll connect_status afterward. If a wallet is already connected, returns that state instead — use switch_wallet to replace it.",
+      inputSchema: { method: methodArg, wait_seconds: waitArg },
     },
-    guarded(async () => text(present(await connect()))),
+    guarded(async ({ method, wait_seconds }) => text(present(await connect(method ?? "browser", (wait_seconds ?? DEFAULT_WAIT_S) * 1000)))),
   );
 
   server.registerTool(
@@ -101,7 +113,7 @@ export function buildServer(): McpServer {
     {
       title: "Disconnect the wallet",
       description:
-        "Ends the current WalletConnect session and clears the local record of it. Returns `disconnected: false` if nothing was connected. After this, no address is known until connect_wallet is called again — this server never retains signing authority, so there is nothing else to revoke.",
+        "Ends the current session (either method) and clears the local record of it. Returns `disconnected: false` if nothing was connected. After this, no address is known until connect_wallet is called again — this server never retains signing authority, so there is nothing else to revoke.",
       inputSchema: {},
     },
     guarded(async () => text(await disconnect())),
@@ -112,10 +124,10 @@ export function buildServer(): McpServer {
     {
       title: "Replace the connected wallet",
       description:
-        "Disconnects whatever is currently connected (if anything) and immediately starts a new WalletConnect pairing, exactly like calling disconnect_wallet then connect_wallet. Returns the new `awaiting_approval` state — poll connect_status for the outcome.",
-      inputSchema: {},
+        "Disconnects whatever is currently connected (if anything) and immediately starts a new sign-in, exactly like calling disconnect_wallet then connect_wallet with the same `method` and `wait_seconds`. Use it to move between the browser and WalletConnect methods.",
+      inputSchema: { method: methodArg, wait_seconds: waitArg },
     },
-    guarded(async () => text(present(await switchWallet()))),
+    guarded(async ({ method, wait_seconds }) => text(present(await switchWallet(method ?? "browser", (wait_seconds ?? DEFAULT_WAIT_S) * 1000)))),
   );
 
   server.registerTool(
@@ -123,7 +135,7 @@ export function buildServer(): McpServer {
     {
       title: "Send one call through the connected wallet",
       description:
-        "Relays exactly one unsigned call — `to`, `data`, optional `value` — to the connected WalletConnect wallet and waits (up to 120s) for its own approve/reject prompt. This tool builds nothing: hand it one call at a time from Earn's earn_prepare_deposit/earn_prepare_withdraw envelope, IN ORDER, following that envelope's own signer_rules (destination check, gasAdvice, any precondition). Returns `{status: \"submitted\", hash}` once signed and broadcast — NOT once confirmed; check confirmation with earn_balance or earn_status. Returns `{status: \"rejected\", reason}` if declined, rejected, or nothing happens within the timeout. Throws if nothing is connected — call connect_wallet first.",
+        "Relays exactly one unsigned call — `to`, `data`, optional `value` — to the connected wallet and waits for its own approve/reject prompt (WalletConnect: up to 120s, in the wallet app; browser sign-in: a one-shot page opens in the operator's browser, up to 3 minutes). This tool builds nothing: hand it one call at a time from Earn's earn_prepare_deposit/earn_prepare_withdraw envelope, IN ORDER, following that envelope's own signer_rules (destination check, gasAdvice, any precondition). Returns `{status: \"submitted\", hash}` once signed and broadcast — NOT once confirmed (a browser sign-in also reports `verified`: `matched` means the transaction on chain is exactly the call you passed; `mismatch` means stop and tell the operator); check confirmation with earn_balance or earn_status. Returns `{status: \"rejected\", reason}` if declined, rejected, or nothing happens within the timeout. Throws if nothing is connected — call connect_wallet first.",
       inputSchema: { to: addressArg, data: hexArg("data"), value: hexArg("value").optional() },
     },
     guarded(async ({ to, data, value }) => {

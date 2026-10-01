@@ -13,6 +13,7 @@ from the bundle itself. Do not edit it by hand.
 | `@modelcontextprotocol/sdk` | 1.30.0 | MIT |
 | `@msgpack/msgpack` | 3.1.3 | ISC |
 | `@noble/ciphers` | 1.3.0 | MIT |
+| `@noble/curves` | 1.9.1 | MIT |
 | `@noble/curves` | 1.9.7 | MIT |
 | `@noble/curves` | 1.9.1 | MIT |
 | `@noble/hashes` | 1.8.0 | MIT |
@@ -36,6 +37,7 @@ from the bundle itself. Do not edit it by hand.
 | `@walletconnect/utils` | 2.25.0 | SEE LICENSE IN LICENSE.md |
 | `@walletconnect/window-getters` | 1.0.1 | MIT |
 | `@walletconnect/window-metadata` | 1.0.1 | MIT |
+| `abitype` | 1.2.3 | MIT |
 | `ajv` | 8.20.0 | MIT |
 | `ajv-formats` | 3.0.1 | MIT |
 | `blakejs` | 1.2.1 | MIT |
@@ -48,6 +50,7 @@ from the bundle itself. Do not edit it by hand.
 | `json-schema-traverse` | 1.0.0 | MIT |
 | `multiformats` | 9.9.0 | (Apache-2.0 AND MIT) |
 | `ox` | 0.9.3 | MIT |
+| `ox` | 0.14.45 | MIT |
 | `qrcode` | 1.5.4 | MIT |
 | `tslib` | 1.14.1 | 0BSD |
 | `uint8arrays` | 3.1.1 | MIT |
@@ -99,6 +102,32 @@ The MIT License (MIT)
 
 Copyright (c) 2022 Paul Miller (https://paulmillr.com)
 Copyright (c) 2016 Thomas Pornin <pornin@bolet.org>
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the “Software”), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in
+all copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
+THE SOFTWARE.
+```
+
+## @noble/curves 1.9.1 (MIT)
+
+```text
+The MIT License (MIT)
+
+Copyright (c) 2022 Paul Miller (https://paulmillr.com)
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
 of this software and associated documentation files (the “Software”), to deal
@@ -1013,6 +1042,32 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 ```
 
+## abitype 1.2.3 (MIT)
+
+```text
+MIT License
+
+Copyright (c) 2022-present weth, LLC
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+```
+
 ## ajv 8.20.0 (MIT)
 
 ```text
@@ -1305,6 +1360,32 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
 ```
 
 ## ox 0.9.3 (MIT)
+
+```text
+MIT License
+
+Copyright (c) 2023-present wevm
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+```
+
+## ox 0.14.45 (MIT)
 
 ```text
 MIT License

@@ -43,6 +43,8 @@ describe("tool surface", () => {
     const t = tools() as unknown as Record<string, { inputSchema?: { shape?: Record<string, unknown> } }>;
     const expected: Record<string, string[]> = {
       connect_send_transaction: ["data", "to", "value"],
+      connect_wallet: ["method", "wait_seconds"],
+      switch_wallet: ["method", "wait_seconds"],
     };
     for (const n of Object.keys(t)) {
       const props = Object.keys(t[n]!.inputSchema?.shape ?? {}).sort();
