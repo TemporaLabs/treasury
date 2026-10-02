@@ -127,6 +127,10 @@ describe("the shipped registry", () => {
     expect(() => resolveVault(undefined, "solana")).toThrow(/unknown chain "solana"; chains with a vault: base, arbitrum/);
     expect(() => resolveVault("tlCashPlusUSDC2", "Base")).toThrow(/unknown chain "Base"/); // exact keys, no case-folding guess
     expect(() => resolveVault(undefined, " arbitrum")).toThrow(/unknown chain " arbitrum"/);
+    // exact keys: a prefix or a longer name is not the chain
+    for (const k of ["arb", "arbitrum-sepolia", "base-sepolia", "bas"]) expect(() => resolveVault(undefined, k), k).toThrow(/unknown chain/);
+    expect(chainIdForKey("arbitrum-sepolia")).toBeUndefined();
+    expect(chainIdForKey("arb")).toBeUndefined();
     // An EMPTY string is an omitted argument, for `chain` exactly as it always was for `vault`: a
     // host that sends "" for every optional it did not fill gets the default, not a refusal.
     expect(resolveVault("", "")).toBe(base);
