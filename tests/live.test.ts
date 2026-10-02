@@ -196,6 +196,9 @@ liveArbitrum("preflight, quotes and position against live Arbitrum One (read-onl
     const r = await preflightDeposit({ vault: vault(), depositor: STRANGER, client: makePublicClient(8453, PUBLIC_RPC[8453]) as never });
     expect(r.status, JSON.stringify(r, null, 2)).toBe("UNRESOLVED");
     expect(r.canDeposit).toBe(false);
+    // The finding is what distinguishes this from "nothing answered" (a refused port gives the same
+    // status): the chain ANSWERED, and said the address holds no contract.
+    expect(r.findings.at(-1)).toMatch(/returned no data \("0x"\)/);
   });
 
   it("quote_deposit on the Arbitrum default: expected shares in ITS ticker, and no rate quoted", async () => {
@@ -216,7 +219,7 @@ liveArbitrum("preflight, quotes and position against live Arbitrum One (read-onl
     expect(q.canProceed).toBe(false);
   });
 
-  it("a real position's whole history reconciles from the vault's deployment block, and the whole position is exitable", async () => {
+  it("a real position's whole history reconciles from the vault's deployment block", async () => {
     // As on Base: the account with history is whoever the chain says OWNS the vault — read from the
     // contract, never written here. The fallback is Arbitrum's own public endpoint.
     const owner = await client.readContract({ address: vault().address, abi: parseAbi(["function owner() view returns (address)"]), functionName: "owner" });
