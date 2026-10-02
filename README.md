@@ -29,8 +29,8 @@ A transaction goes out only from your own wallet, after you approve it there. Yo
 - **Prepare a withdrawal:** check how much is withdrawable now and build unsigned calls.
 
 Earn currently supports **USDC in, USDC out** through Tempora's ERC-4626 vaults on Base and
-Arbitrum One. Base is the default; the agent asks which chain when you have not said, and the USDC
-has to be on that chain already.
+Arbitrum One. Base is the default chain, and Test 2B its default vault; the agent asks which chain when
+you have not said, and the USDC has to be on that chain already. See [Vaults](#vaults).
 See the [eight `earn_*` tools](docs/tools.md) for inputs, outputs, and limits.
 
 ## Quick start
@@ -83,21 +83,36 @@ Ask your agent:
 
 > Show me the available vaults and their risks. Then prepare a 25 USDC deposit into the default vault.
 
+To try the demo vault or another chain, name it: *“…into the demo vault”*, or *“…on Arbitrum”*.
+
 OAT returns unsigned calls for your signer to review and execute. Preparing a deposit moves no money.
 Later, ask: **“What is my position worth, and how much can I withdraw now?”**
 
 ## Vaults
 
-The default, **Cash Plus USDC (Test 2B)**, is on Base, uses Morpho Vault V2 and is open to any account. Its cash-like leg is a savings-rate token, not a lending vault. Morpho's own app has no page for it, so verify it on [BaseScan](https://basescan.org/address/0x91BcEbA5feCB9E92d80F1845B55cC56621E9352F).
+By default, Earn deposits into **Cash Plus USDC (Test 2B)** on Base. There are other options, and a demo.
 
-**Cash Plus USDC (Test 2)**, also on Base, is the demo vault: open to any account, and chosen by naming it. Its [Morpho page](https://app.morpho.org/base/vault/0x040fCA12673778FEED5DA7b2ccFbbAb0cc0134Cf/tempora-labs-cash-plus-usdc-test-2#overview) gives a visual overview.
+| | vault | chain | choose it by |
+|---|---|---|---|
+| **Default** | **Cash Plus USDC (Test 2B)** | Base | naming nothing, or `chain: "base"` |
+| **Demo** | **Cash Plus USDC (Test 2)** | Base | `vault: "tlCashPlusUSDC2"` |
+| Option | **Cash Plus USDC (Test 2C)** | Arbitrum One | `chain: "arbitrum"` |
+| Option | **Cash Plus USDC (Test 2A)** | Base | `vault: "tlCashPlusUSDC2A"` (whitelist only) |
 
-**Cash Plus USDC (Test 2A)**, also on Base, uses IPOR Fusion and requires whitelist access.
+- **Test 2B, the default.** A Morpho Vault V2 on Base, open to any account. Its cash-like leg is a
+  savings-rate token rather than a lending vault. [BaseScan](https://basescan.org/address/0x91BcEbA5feCB9E92d80F1845B55cC56621E9352F);
+  Morpho's own app has no page for it.
+- **Test 2, the demo.** The same kind of vault, and the one to show people: it has a page on Morpho's
+  app, [here](https://app.morpho.org/base/vault/0x040fCA12673778FEED5DA7b2ccFbbAb0cc0134Cf/tempora-labs-cash-plus-usdc-test-2#overview).
+  Its cash-like leg is a lending vault. Open to any account, but an agent uses it only when it is named.
+- **Test 2C, Arbitrum One.** A Morpho Vault V2 over native USDC, open to any account.
+  [Arbiscan](https://arbiscan.io/address/0x4057a63953142Ac2b3E5dB1954Fc14d578662587). The USDC has to
+  be on Arbitrum already; OAT does not bridge.
+- **Test 2A.** IPOR Fusion, listed so an admitted account can read and exit its position.
 
-**Cash Plus USDC (Test 2C)** is the default on Arbitrum One: Morpho Vault V2 over native USDC, open to
-any account. Ask for it by chain ("deposit on Arbitrum") or by name.
+When you have not said which chain, the agent shows these and asks before it prepares a deposit.
 
-All three are experimental vaults using real USDC, not bank savings accounts. None currently has a
+All of them are experimental vaults using real USDC, not bank savings accounts. None currently has a
 lock-up, but liquidity can limit withdrawals.
 
 Tempora Labs curates these vaults and can set fees. OAT offers Tempora's vaults; it does not compare

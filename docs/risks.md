@@ -21,7 +21,7 @@ third party. Review every transaction your signer is asked to sign.
   guaranteed. Yield figures are measurements of the past, labelled by their source, never a promise.
 - **Third-party protocol risk.** The vault holds positions in other protocols' contracts, each with
   its own smart-contract, custody and mechanism risk that Tempora does not control. One of the
-  Base default's positions lends against a stablecoin whose Morpho oracle is fixed at par; a depeg is not
+  demo vault's (Test 2) positions lends against a stablecoin whose Morpho oracle is fixed at par; a depeg is not
   priced by the fund's loss model. Read the vault's positions on-chain before a first deposit.
 - **Liquidity.** A withdrawal is served from the vault's liquid balance and then by unwinding its
   positions. Under stress, part of a position may not be withdrawable immediately. `earn_balance`
@@ -29,10 +29,10 @@ third party. Review every transaction your signer is asked to sign.
 - **Access.** A whitelist-gated vault admits deposits only from accounts the fund has admitted.
   Withdrawals are public. Admission can be granted and, in principle, revoked, by the fund.
 - **Fees.** A vault's curator can set a management fee and a performance fee; both are readable
-  on-chain. The Base default sets none today (measured at block 51,372,415). Its fee timelocks are 0
-  (measured at block 51,404,161), so the curator can introduce a fee without notice; read both fees
-  before depositing. The same holds for the Arbitrum One default (both measured at block 511,070,816).
-- **Each chain's default is Tempora's.** It is offered because Tempora curates it, and can set fees on it, not
+  on-chain. None of the listed Morpho vaults sets one today, and their fee timelocks are 0, so the
+  curator can introduce a fee without notice; read both fees before depositing. Each vault's row in
+  [`vaults.md`](vaults.md) carries the block it was measured at.
+- **Every vault here, the defaults and the demo, is Tempora's.** It is offered because Tempora curates it, and can set fees on it, not
   because it is the best-yielding vault available.
 
 ## The client
