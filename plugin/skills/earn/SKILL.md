@@ -104,8 +104,8 @@ bridge. **Which chain is the operator's decision. Ask; do not pick.**
 ## Opening an account and depositing
 
 1. **Settle the chain first (above), then the vault.** If the operator names no vault, use that
-   chain's default (`earn_vaults` → `chains[].default`; today Tempora Labs Cash Plus USDC (Test 2) on
-   Base and Tempora Labs Cash Plus USDC (Test 2C) on Arbitrum One, both open to any account). Every listed vault is a Tempora vault.
+   chain's default (`earn_vaults` → `chains[].default`; today Tempora Labs Cash Plus USDC (Test 2B) on
+   Base and Tempora Labs Cash Plus USDC (Test 2C) on Arbitrum One, both open to any account; Test 2 on Base is the demo vault, used only when it is named). Every listed vault is a Tempora vault.
    Read that chain's `defaultAccess` (`chains[].defaultAccess`; the top-level one is the default
    chain's): when it is `"whitelist"`, run `earn_status` for the account first, and if
    it returns `WHITELIST_GATED`, **tell the operator the account is not admitted to that vault and that

@@ -86,7 +86,7 @@ describe("earn_vaults — Tempora vaults only, and the access of each is reporte
       depositable: string[];
       vaults: { backend: string }[];
     };
-    expect(out.default).toBe("tlCashPlusUSDC2");
+    expect(out.default).toBe("tlCashPlusUSDC2B");
     expect(out.defaultAccess).toBe("open");
     // This file runs on the fixture registry (shipped rows + synthetic ones), so assert membership,
     // not the exact set — registry.test.ts pins the exact shipped set.
@@ -129,7 +129,7 @@ describe("earn_vaults — Tempora vaults only, and the access of each is reporte
     };
     expect(out.defaultChain).toBe("base");
     expect(out.chains.map((c) => [c.chain, c.chainId, c.name, c.default, c.defaultAccess])).toEqual([
-      ["base", 8453, "Base", "tlCashPlusUSDC2", "open"],
+      ["base", 8453, "Base", "tlCashPlusUSDC2B", "open"],
       ["arbitrum", 42161, "Arbitrum One", "tlCashPlusUSDC2C", "open"],
     ]);
     // the global default is the default CHAIN's default — the two fields cannot disagree
@@ -152,7 +152,7 @@ describe("earn_vaults — Tempora vaults only, and the access of each is reporte
  * any assertion on the label and send an operator's signer to the wrong chain's addresses.
  */
 describe("`chain` selects the vault, and the calls are built for that chain's contracts", () => {
-  const BASE_VAULT = "0x040fCA12673778FEED5DA7b2ccFbbAb0cc0134Cf";
+  const BASE_VAULT = "0x91BcEbA5feCB9E92d80F1845B55cC56621E9352F"; // Test 2B, the Base default
   const BASE_USDC = "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913";
   const ARB_VAULT = "0x4057a63953142Ac2b3E5dB1954Fc14d578662587";
   const ARB_USDC = "0xaf88d065e77c8cC2239327C5EDb3A432268e5831";
@@ -160,13 +160,16 @@ describe("`chain` selects the vault, and the calls are built for that chain's co
   const deposit = async (extra: Record<string, unknown>) =>
     payload(await tools()["earn_prepare_deposit"]!.handler({ amount_usdc: "25", receiver: RECEIVER, account: RECEIVER, ...extra }, {})) as Envelope;
 
-  it("neither chain nor vault → Base, exactly as before there was a second chain", async () => {
+  it("neither chain nor vault → Base's default (Test 2B), and the demo vault only when named", async () => {
     const out = await deposit({});
     expect([out.chain, out.chainId]).toEqual(["base", 8453]);
     expect(out.calls.map((c) => [c.chainId, c.to])).toEqual([
       [8453, BASE_USDC], // approve, on the asset
       [8453, BASE_VAULT], // deposit, on the vault
     ]);
+    // the demo vault, by name: the same chain and asset, a different vault
+    const demo = await deposit({ vault: "tlCashPlusUSDC2" });
+    expect([demo.chain, demo.calls.map((c) => c.to)]).toEqual(["base", [BASE_USDC, "0x040fCA12673778FEED5DA7b2ccFbbAb0cc0134Cf"]]);
   });
 
   it("chain: arbitrum → the Arbitrum default, its own USDC, chainId 42161 on every call", async () => {

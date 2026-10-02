@@ -28,6 +28,10 @@ Pre-1.0, minor versions may change tool names, schemas and behaviour.
 - The event scan reads Infura's range refusal (`range N exceeds limit of 10000`) as a window.
 
 ### Changed
+- **Tempora Labs Cash Plus USDC (Test 2B) is the default on Base**, and Test 2 becomes the demo
+  vault: still listed, open and depositable, chosen by naming it. Test 2B's cash-like leg is a
+  savings-rate token, not a lending vault (#47). Morpho's app has no page for it, so it carries no
+  `app` link, and `src/links.ts` now offers one only for vaults Morpho is known to list.
 - The registry marks one default vault **per chain** (it was one in total), and
   `src/config/earn.ts` names them in `defaultVaultByChain`, with `defaultChain` beside it.
 - `TREASURY_LOGS_FALLBACK` set to a URL names a Base endpoint: on Arbitrum One a set variable means

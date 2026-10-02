@@ -55310,8 +55310,9 @@ var EARN = {
   /**
    * The default vault on each chain, by chain key.
    *
-   * `base`: Tempora Labs Cash Plus USDC (Test 2) — a Morpho Vault V2, the Tempora vault this client
-   * offers when nothing is named. Deposits are OPEN to any account (measured by a simulated stranger
+   * `base`: Tempora Labs Cash Plus USDC (Test 2B) — a Morpho Vault V2, the Tempora vault this client
+   * offers when nothing is named. Tempora Labs Cash Plus USDC (Test 2), also on Base, is the DEMO
+   * vault: listed and open, selected by naming it. Deposits are OPEN to any account (measured by a simulated stranger
    * deposit; `earn_vaults` reports `defaultAccess: "open"`). The whitelist-gated sibling, Cash Plus
    * USDC (Test 2A), stays listed as `tlCashPlusUSDC2A` and is refused per account by the pre-flight.
    *
@@ -55321,11 +55322,11 @@ var EARN = {
    * `Record<ChainKey, …>`: a chain added to `CHAIN_INFO` without a default here does not compile.
    */
   defaultVaultByChain: {
-    base: "tlCashPlusUSDC2",
+    base: "tlCashPlusUSDC2B",
     arbitrum: "tlCashPlusUSDC2C"
   },
   /** The round-trip target. The same vault as the default; open, so the fork tier deposits from the whale directly. */
-  roundTripVault: "tlCashPlusUSDC2",
+  roundTripVault: "tlCashPlusUSDC2B",
   /** USDC, as a decimal string — the amount `scripts/roundtrip.ts` prepares by default. Never a float. */
   roundTripAmountUsdc: "0.05",
   /** Fixtures the fork and live tiers share. */
@@ -55420,8 +55421,9 @@ var EXPLORER = {
   42161: "https://arbiscan.io/address/"
 };
 var MORPHO_APP_CHAIN = { 8453: "base" };
+var MORPHO_LISTED = /* @__PURE__ */ new Set(["0x040fCA12673778FEED5DA7b2ccFbbAb0cc0134Cf"]);
 var APP = {
-  "morpho-v2": (chainId, address2) => MORPHO_APP_CHAIN[chainId] ? `https://app.morpho.org/${MORPHO_APP_CHAIN[chainId]}/vault/${address2}` : void 0
+  "morpho-v2": (chainId, address2) => MORPHO_APP_CHAIN[chainId] && MORPHO_LISTED.has(address2) ? `https://app.morpho.org/${MORPHO_APP_CHAIN[chainId]}/vault/${address2}` : void 0
 };
 function linksFor(vault) {
   const explorer = EXPLORER[vault.chainId];

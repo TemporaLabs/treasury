@@ -88,9 +88,9 @@ Later, ask: **“What is my position worth, and how much can I withdraw now?”*
 
 ## Vaults
 
-The default, **Cash Plus USDC (Test 2)**, is on Base, uses Morpho Vault V2 and is open to any account.
+The default, **Cash Plus USDC (Test 2B)**, is on Base, uses Morpho Vault V2 and is open to any account. Its cash-like leg is a savings-rate token, not a lending vault. Morpho's own app has no page for it, so verify it on [BaseScan](https://basescan.org/address/0x91BcEbA5feCB9E92d80F1845B55cC56621E9352F).
 
-Explore the default vault in the [Morpho dashboard](https://app.morpho.org/base/vault/0x040fCA12673778FEED5DA7b2ccFbbAb0cc0134Cf/tempora-labs-cash-plus-usdc-test-2#overview) for a visual overview.
+**Cash Plus USDC (Test 2)**, also on Base, is the demo vault: open to any account, and chosen by naming it. Its [Morpho page](https://app.morpho.org/base/vault/0x040fCA12673778FEED5DA7b2ccFbbAb0cc0134Cf/tempora-labs-cash-plus-usdc-test-2#overview) gives a visual overview.
 
 **Cash Plus USDC (Test 2A)**, also on Base, uses IPOR Fusion and requires whitelist access.
 

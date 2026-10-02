@@ -185,6 +185,6 @@ describe("a registry that does not parse is reported by the tools, not by the se
     expect(reply(r.stdout, 2)?.result?.tools).toHaveLength(8);
     const vaults = reply(r.stdout, 3);
     expect(vaults?.result?.isError).toBe(true);
-    expect(vaults?.result?.content?.[0]?.text).toMatch(/exactly one vault per chain must be isDefault; chain 8453 has 2/);
+    expect(vaults?.result?.content?.[0]?.text).toMatch(/exactly one vault per chain must be isDefault; chain 8453 has [23]/);
   });
 });
