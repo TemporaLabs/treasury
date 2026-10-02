@@ -9,6 +9,7 @@
   {"query": "park the treasury's stablecoins somewhere yield-bearing but keep same-day liquidity. base chain. not looking to trade anything", "should_trigger": true},
   {"query": "before my agent deposits into the fund can you show me whatever disclosures/risk stuff it's supposed to see first", "should_trigger": true},
   {"query": "earn yield on idle usdc in the bot's wallet — build the txs and i'll sign them in rabby", "should_trigger": true},
+  {"query": "the agent's usdc is all on arbitrum, not base. is there a tempora vault there it can deposit into, and can you prep the deposit for 0x51c0...? i'll sign", "should_trigger": true},
   {"query": "swap 500 USDC to ETH on base at the best rate, i need gas for the agent", "should_trigger": false},
   {"query": "the vault allocator is proposing 35% into a single market — can you check the concentration limit and why it didn't bind", "should_trigger": false},
   {"query": "deploy a new vault for a new strategy, set up its admin roles and the fee package", "should_trigger": false},

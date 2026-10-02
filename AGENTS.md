@@ -4,15 +4,20 @@ Instructions for coding agents working in this repository. People should start w
 [`CONTRIBUTING.md`](CONTRIBUTING.md); it is the fuller guide for people, and wins if the two ever
 disagree.
 
-Treasury is a depositor client for ERC-4626 vaults on Base: a vault registry, pre-flight checks, and
+Treasury is a depositor client for ERC-4626 vaults on Base and Arbitrum One: a vault registry, pre-flight checks, and
 builders for **unsigned** deposit and withdraw calls, served as a library and as an MCP server.
 
 ## Two rules that decide every review
 
-1. **Nothing holds, reads, derives or is handed a private key. Nothing signs. Nothing sends.**
-   Treasury prepares unsigned calls; the operator supplies the signer. Do not add a `sign`, `send` or
-   `transfer` tool, a wallet client, or a private-key variable — that is a design change, not a pull
-   request. CI starts the bundled server and fails if `tools/list` offers any such tool.
+1. **Nothing holds, reads, derives or is handed a private key. Nothing signs. A call reaches the
+   chain only from the operator's own wallet, after the operator approves it there.** The earn
+   server prepares unsigned calls and never sends. A wallet connection (WalletConnect) may hand a
+   prepared call to the operator's connected wallet, which shows it and asks for approval every
+   time. That relay never builds or alters a call, and it refuses any call whose destination is
+   not a vault in `registry/vaults.json` or that vault's asset (the approval to it). Do not add a
+   private-key variable, a local signer, a tool that signs, or a relay that accepts an arbitrary
+   destination: that is a design change, not a pull request. CI starts the bundled earn server and
+   fails if `tools/list` offers any tool beyond its eight.
 2. **The client knows only the chain.** It has a vault address and an RPC endpoint, nothing else.
    `tests/boundary.unit.test.ts` parses every audited file and fails on any import, `require`, child
    process or path that reaches outside this repository's allowlist. Do not weaken that test to make
@@ -31,6 +36,10 @@ TREASURY_RPC_BASE=https://... npm test           # adds live read-only checks ag
 TREASURY_RPC_BASE=https://... npm run test:fork  # anvil fork round trips, impersonated accounts
 npm run registry:check     # reconcile registry/vaults.json against the chain
 ```
+
+Each chain's live and fork tiers run when that chain's RPC variable is set: add
+`TREASURY_RPC_ARBITRUM=https://...` to the same commands for Arbitrum One. `registry:check` reads
+each row on its own chain and reports a chain it could not reach as not checked.
 
 ## Things that fail CI if forgotten
 

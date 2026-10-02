@@ -4,6 +4,50 @@ All notable changes to Agent Treasury are recorded here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versions follow [SemVer](https://semver.org/).
 Pre-1.0, minor versions may change tool names, schemas and behaviour.
 
+## [v0.1.2] - Unreleased
+
+### Added
+- **Earn on more than one chain: Arbitrum One joins Base** (#62). Every tool that takes `vault` also
+  takes `chain` (`"base"` or `"arbitrum"`). Base stays the default: a call that names neither a chain
+  nor a vault behaves as before. Naming a chain alone uses that chain's default vault; a `vault` and
+  a `chain` that disagree are refused. Results name the chain, and a prepared envelope carries
+  `chain` and `chainId` ahead of its calls.
+- **Tempora Labs Cash Plus USDC (Test 2C)**, `tlCashPlusUSDC2C`, the default vault on Arbitrum One: a
+  Morpho Vault V2 over native USDC, measured open to any account at block 511,070,816.
+- `earn_vaults` returns `chains` — the chains a deposit can go to, the default first, each with its
+  default vault — and `defaultChain`. The `earn` skill has the agent ask the operator which chain
+  before preparing a deposit when they have not said, and never for a withdrawal or a balance.
+- `TREASURY_RPC_ARBITRUM` and `TREASURY_LOGS_RPC_ARBITRUM` (and the alias `ARBITRUM_RPC_URL`). A chain
+  reads only its own variables, and the plugin forwards the two `TREASURY_*` ones.
+- **An endpoint for the wrong chain is named, not guessed at.** `earn_status` takes `chain`, and
+  reports `rpc: "wrong_chain"` with `rpcChainId` when a configured endpoint answers for a different
+  chain, `chainVerified: false` when it would not say, and `logsRpc` for a separate logs endpoint.
+  A pre-flight, a quote or a balance through such an endpoint is refused, naming the variable.
+- A signer rule, first in `signer_rules`: send each call on the chain its `chainId` names. The
+  envelope's `next_step` opens by naming the chain.
+- The event scan reads Infura's range refusal (`range N exceeds limit of 10000`) as a window.
+
+### Changed
+- **Tempora Labs Cash Plus USDC (Test 2B) is the default on Base**, and Test 2 becomes the demo
+  vault: still listed, open and depositable, chosen by naming it. Test 2B's cash-like leg is a
+  savings-rate token, not a lending vault (#47). Morpho's app has no page for it, so it carries no
+  `app` link, and `src/links.ts` now offers one only for vaults Morpho is known to list.
+- The registry marks one default vault **per chain** (it was one in total), and
+  `src/config/earn.ts` names them in `defaultVaultByChain`, with `defaultChain` beside it.
+- `TREASURY_LOGS_FALLBACK` set to a URL names a Base endpoint: on Arbitrum One a set variable means
+  no fallback. Unset, each chain falls back to its own public endpoint.
+- `scripts/registry-check.ts` reads each row on its own chain, and reports a chain whose endpoint
+  did not answer, or answered for another chain, as not checked.
+- A vault's explorer link is its chain's (Arbiscan on Arbitrum One). A chain with no explorer on
+  record now fails loudly instead of producing a broken link.
+- A registry with no vault on the default chain is refused when it is loaded, with the cause named.
+
+### Fixed
+- A chain's own name in an RPC URL (`…/arbitrum/<key>`) is no longer treated as a secret, so an
+  error that names the chain is not masked.
+- `scripts/registry-check.ts` reports a failed `eth_getCode` as not checked, through the same
+  redaction as every other read; it used to escape as an uncaught error.
+
 ## [v0.1.1] - 2026-09-29
 
 ### Added
