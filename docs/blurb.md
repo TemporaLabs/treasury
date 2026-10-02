@@ -1,0 +1,121 @@
+# Open Agent Treasury (OAT)
+
+**The open-source treasury management system for AI agents.** Built by Tempora Labs. Apache-2.0.
+Current release: **v0.1.1** (29 September 2026).
+
+Open Agent Treasury gives an AI agent a safe way to manage on-chain capital. The agent reads the
+chain directly, works out what it wants to do, and hands back unsigned transactions. A human, or
+the agent's own signer, reviews and signs them. OAT never holds a private key, never signs, never
+sends, and sends no telemetry.
+
+## The first skill: Earn
+
+Earn puts idle USDC to work in Tempora-curated vaults on Base. With it, an agent can:
+
+- **Inspect vaults:** assets, fees, deposit access, and links to verify each contract independently.
+- **Prepare a deposit:** review the terms, simulate access, then build unsigned calls.
+- **Track a position:** its value, deposits and earnings, read from on-chain records.
+- **Prepare a withdrawal:** check what is withdrawable right now, then build unsigned calls.
+
+Earn is USDC in, USDC out. It has eight `earn_*` tools, split into READ tools that return facts
+from the chain and PREPARE tools that return unsigned calls. Nothing else. CI asserts the exact
+tool list on every build, so a signing or sending tool cannot slip in.
+
+## The default vault
+
+Earn deposits into **Tempora Labs Cash Plus USDC (Test 2)** by default, a Morpho Vault V2 on Base
+that any account can deposit into. Over the last seven days it has earned about **4.4% APY**,
+measured from its on-chain share price; Morpho's dashboard shows 4.3%.
+
+Vault page: https://app.morpho.org/base/vault/0x040fCA12673778FEED5DA7b2ccFbbAb0cc0134Cf
+
+The vault is small by design: it is a test vault, seeded with a few dollars so the product can be
+exercised end to end with real USDC. Tempora is adding to it as testing continues, and its size will
+grow from here. Check the vault page for the current total.
+
+> **Both the software and the vault are in testing.** Real USDC, real risk, pre-1.0. Returns are
+> variable, and withdrawals depend on available liquidity. Review every transaction before signing
+> and keep deposits small. OAT reports what your position is worth and what it earned; it does not
+> promise a yield.
+
+## Install the skill
+
+**Requires Node.js 22 or later.** Use a keyed Base RPC: the public endpoint rate-limits quickly.
+
+### Claude Code
+
+```bash
+export TREASURY_RPC_BASE=https://...   # your Base RPC URL
+claude plugin marketplace add TemporaLabs/treasury@v0.1.1
+claude plugin install treasury@treasury
+```
+
+Restart Claude Code so the tools connect. The plugin ships from the `plugin/` folder of the main
+repository as of v0.1.1. If you installed from the earlier `treasury-plugin` repository, run
+`claude plugin marketplace remove treasury` first, then the two lines above.
+
+### Any MCP host
+
+```bash
+npm install @temporalabs/treasury@0.1.1
+```
+
+Then add the server to your host's MCP configuration:
+
+```json
+{
+  "mcpServers": {
+    "treasury": {
+      "command": "node",
+      "args": ["<project>/node_modules/@temporalabs/treasury/dist/mcp-server.mjs"],
+      "env": { "TREASURY_RPC_BASE": "https://..." }
+    }
+  }
+}
+```
+
+The same package works as a TypeScript/JavaScript library.
+
+### Try it
+
+Ask your agent:
+
+> Show me the available vaults and their risks. Then prepare a 25 USDC deposit into the default vault.
+
+The agent returns unsigned calls for your signer. Preparing a deposit moves no money. Later:
+
+> What is my position worth, and how much can I withdraw now?
+
+## For agents reading this
+
+- Every tool that takes a vault takes its ERC-20 ticker (`tlCashPlusUSDC2` is the default); every
+  tool that takes an address takes it as `account`.
+- Amounts are decimal USDC strings. Shares are exact strings and never cross the boundary as numbers.
+- `earn_vaults` returns a `warning` for each vault. Show it to the operator before any deposit.
+- A deposit is two calls, `approve` then `deposit`, returned in order with signer rules attached.
+- Whether a balance is surplus is the operator's decision. A balance in the wallet is not
+  permission to deposit it.
+
+## Security
+
+- **No keys, no custody:** the operator's wallet holds the position. Only its signer can move funds.
+- **Direct RPC:** no Tempora service in the request path, no telemetry. Keyed RPC URLs are redacted
+  from every output.
+- **Verifiable builds:** CI checks the committed bundle, and each npm release carries provenance.
+- Vulnerabilities go through private reporting, not public issues.
+
+## What is next
+
+The v0.1.2 cycle is open. In development: a wallet connection so an agent can hand its prepared
+transactions to the operator's own wallet for approval, with no copy-paste; and deposits on more
+chains, starting with Arbitrum. More yield configurations across the risk/return spectrum are
+coming.
+
+## Links
+
+- Source: https://github.com/TemporaLabs/treasury
+- Plugin and the Earn skill: https://github.com/TemporaLabs/treasury/tree/main/plugin
+- npm: https://www.npmjs.com/package/@temporalabs/treasury
+- Release notes: https://github.com/TemporaLabs/treasury/releases/tag/v0.1.1
+- Docs: tools, configuration, risks, security model: https://github.com/TemporaLabs/treasury/tree/main/docs
+- Licence: Apache-2.0. Forks must not claim to be the official distribution.
