@@ -89,10 +89,10 @@ for (const chainId of [...new Set(reg.vaults.map((v) => v.chainId))]) {
 }
 const reached = [...chainState.entries()].filter(([, st]) => "client" in st) as [SupportedChainId, { client: PublicClient; block: bigint }][];
 if (reached.length === 0) {
-  // No endpoint answered, so NOTHING was checked. Never a claim about the registry.
-  console.error(`no endpoint answered — NOTHING was checked, and this says nothing about the registry.`);
+  // No endpoint could be used, so NOTHING was checked. Never a claim about the registry.
+  console.error(`no endpoint could be used — NOTHING was checked, and this says nothing about the registry.`);
   for (const [, st] of chainState) if ("unreachable" in st) console.error(`  ${st.unreachable}`);
-  console.error(`\nRetry, or point ${[...chainState.keys()].map((id) => CHAIN_INFO[id].rpcEnv[0]).join(" / ")} at a reachable endpoint.`);
+  console.error(`\nRetry, or point ${[...chainState.keys()].map((id) => CHAIN_INFO[id].rpcEnv[0]).join(" / ")} at a reachable endpoint for its own chain.`);
   process.exit(1);
 }
 console.log(
@@ -106,7 +106,15 @@ for (const v of reg.vaults) {
     continue;
   }
   const client = st.client;
-  const code = await client.getCode({ address: v.address });
+  // `getCode` is a read like any other: it can fail in TRANSPORT, and an unhandled throw here
+  // printed the endpoint's full URL (see the file header — every error path goes through `why`).
+  let code: string | undefined;
+  try {
+    code = await client.getCode({ address: v.address });
+  } catch (e) {
+    cannotCheck(`${v.symbol}: every check`, why(e));
+    continue;
+  }
   if (!code || code === "0x") {
     fail(`${v.symbol}: no contract at ${v.address}`);
     continue;
@@ -115,13 +123,17 @@ for (const v of reg.vaults) {
   // drops a first deposit. The chain settles it in two reads: code AT that block, none the block before.
   if (v.deployedAtBlock !== undefined) {
     const at = BigInt(v.deployedAtBlock);
-    const [there, before] = await Promise.all([
-      client.getCode({ address: v.address, blockNumber: at }),
-      at > 0n ? client.getCode({ address: v.address, blockNumber: at - 1n }) : Promise.resolve(undefined),
-    ]);
-    if (!there || there === "0x") fail(`${v.symbol}: deployedAtBlock ${at} has no code at ${v.address}`);
-    else if (before && before !== "0x") fail(`${v.symbol}: deployedAtBlock ${at} is LATE — code already exists at ${at - 1n}`);
-    else ok(`${v.symbol}: deployedAtBlock ${at} is the first block with code`);
+    try {
+      const [there, before] = await Promise.all([
+        client.getCode({ address: v.address, blockNumber: at }),
+        at > 0n ? client.getCode({ address: v.address, blockNumber: at - 1n }) : Promise.resolve(undefined),
+      ]);
+      if (!there || there === "0x") fail(`${v.symbol}: deployedAtBlock ${at} has no code at ${v.address}`);
+      else if (before && before !== "0x") fail(`${v.symbol}: deployedAtBlock ${at} is LATE — code already exists at ${at - 1n}`);
+      else ok(`${v.symbol}: deployedAtBlock ${at} is the first block with code`);
+    } catch (e) {
+      cannotCheck(`${v.symbol}: deployedAtBlock ${at}`, why(e));
+    }
   }
   try {
     const dec = await client.readContract({ address: v.address, abi: erc4626Abi, functionName: "decimals" });

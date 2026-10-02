@@ -486,6 +486,9 @@ export async function getPosition(args: PositionArgs): Promise<Position> {
   // The notes name the variable an operator would set, and that differs by chain.
   const chain = CHAIN_INFO[vault.chainId];
   const logsEnv = chain.logsRpcEnv;
+  // TREASURY_LOGS_FALLBACK can NAME a fallback on Base only; elsewhere it can only forbid one.
+  const fallbackNamedBy =
+    vault.chainId === 8453 ? `TREASURY_LOGS_FALLBACK, ${chain.name}'s public endpoint by default` : `${chain.name}'s public endpoint; TREASURY_LOGS_FALLBACK=off forbids it`;
   return {
     vault: vault.symbol,
     principal,
@@ -510,7 +513,7 @@ export async function getPosition(args: PositionArgs): Promise<Position> {
       ...(providerWindow !== undefined ? { providerWindow: providerWindow.toString() } : {}),
       source,
       wholeHistory,
-      note: (handover && !scanFailure ? `the configured logs RPC could not cover this range (${handover}), so the fallback endpoint (TREASURY_LOGS_FALLBACK, ${chain.name}'s public endpoint by default) served the scan. ` : "") + (scanFailure
+      note: (handover && !scanFailure ? `the configured logs RPC could not cover this range (${handover}), so the fallback endpoint (${fallbackNamedBy}) served the scan. ` : "") + (scanFailure
         ? `event scan FAILED (${scanFailure}): the provider's eth_getLogs error was not one this client can size a window from, so no history was read — basis and yield are unknown, not zero. Set ${logsEnv} to a provider with a known window (Alchemy, Infura, ${chain.name} public), or use the agent's own deposit receipts.`
         : wholeHistory
           ? "the scan covered every block from the vault's deployment, and shares in − shares out reconciles to the balance: the basis covers this position's whole history"

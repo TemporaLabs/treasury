@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeAll, afterAll } from "vitest";
 import { spawn } from "node:child_process";
-import { mkdtempSync, readFileSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
+import { copyFileSync, mkdirSync, mkdtempSync, readFileSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { pathToFileURL } from "node:url";
@@ -114,5 +114,77 @@ describe("the bundle starts the server only when it is the entry file", () => {
     expect(r.stdout).toBe("");
     expect(r.stderr).toBe("");
     expect(r.code).toBe(0);
+  });
+});
+
+/**
+ * The server builds its tool schemas from the registry (the `chain` argument lists the chains that
+ * have a vault). A registry that does not parse must not stop it from STARTING: a host shows a
+ * server that died at launch as a closed connection with no reason, while a server that starts can
+ * say which registry rule was broken. Run against a copy of the committed bundle beside a registry
+ * that breaks the one-default-per-chain rule.
+ */
+describe("a registry that does not parse is reported by the tools, not by the server failing to start", () => {
+  let dir: string;
+  const layout = (registry: unknown): string => {
+    const root = mkdtempSync(join(tmpdir(), "treasury-badreg-"));
+    mkdirSync(join(root, "dist"));
+    mkdirSync(join(root, "registry"));
+    copyFileSync(BUNDLE, join(root, "dist/mcp-server.mjs"));
+    copyFileSync(resolve(__dirname, "../package.json"), join(root, "package.json"));
+    writeFileSync(join(root, "registry/vaults.json"), JSON.stringify(registry));
+    return root;
+  };
+  const shipped = () => JSON.parse(readFileSync(resolve(__dirname, "../registry/vaults.json"), "utf8")) as { vaults: { chainId: number; isDefault: boolean }[] };
+  const call =
+    JSON.stringify({ jsonrpc: "2.0", method: "notifications/initialized" }) + "\n" +
+    JSON.stringify({ jsonrpc: "2.0", id: 2, method: "tools/list", params: {} }) + "\n" +
+    JSON.stringify({ jsonrpc: "2.0", id: 3, method: "tools/call", params: { name: "earn_vaults", arguments: {} } }) + "\n";
+  const reply = (stdout: string, id: number) =>
+    stdout.split("\n").filter((l) => l.includes(`"id":${id}`)).map((l) => JSON.parse(l) as { result?: { isError?: boolean; tools?: unknown[]; content?: { text: string }[] } })[0];
+
+  afterAll(() => {
+    if (dir) rmSync(dir, { recursive: true, force: true });
+  });
+
+  it("control: the same layout with the SHIPPED registry starts and lists the vaults", async () => {
+    const root = layout(shipped());
+    try {
+      const r = await firstReply(join(root, "dist/mcp-server.mjs"), [], call);
+      expect(serverInfo(r.stdout)?.name).toBe("treasury");
+      expect(reply(r.stdout, 3)?.result?.isError).not.toBe(true);
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
+  });
+
+  it("no vault on the default chain: the schema alone accepts it, so the LOAD refuses it and names the cause", async () => {
+    // One default per chain that HAS a vault is all the schema can hold. An Arbitrum-only registry
+    // passes it — and then the discovery call would fail with an error about a chain nobody asked for.
+    const arbOnly = shipped();
+    arbOnly.vaults = arbOnly.vaults.filter((v) => v.chainId === 42161);
+    expect(arbOnly.vaults.length, "premise: the shipped registry has a vault on a second chain").toBeGreaterThan(0);
+    const root = layout(arbOnly);
+    try {
+      const r = await firstReply(join(root, "dist/mcp-server.mjs"), [], call);
+      expect(serverInfo(r.stdout)?.name, `the server did not start: ${r.stderr}`).toBe("treasury");
+      const vaults = reply(r.stdout, 3);
+      expect(vaults?.result?.isError).toBe(true);
+      expect(vaults?.result?.content?.[0]?.text).toMatch(/the registry has no vault on Base, which config\/earn\.ts names as the default chain/);
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
+  });
+
+  it("two defaults on one chain: the server still starts and lists its tools, and the tool names the broken rule", async () => {
+    const bad = shipped();
+    for (const v of bad.vaults) if (v.chainId === 8453) v.isDefault = true; // two Base defaults
+    dir = layout(bad);
+    const r = await firstReply(join(dir, "dist/mcp-server.mjs"), [], call);
+    expect(serverInfo(r.stdout)?.name, `the server did not start: ${r.stderr}`).toBe("treasury");
+    expect(reply(r.stdout, 2)?.result?.tools).toHaveLength(8);
+    const vaults = reply(r.stdout, 3);
+    expect(vaults?.result?.isError).toBe(true);
+    expect(vaults?.result?.content?.[0]?.text).toMatch(/exactly one vault per chain must be isDefault; chain 8453 has 2/);
   });
 });

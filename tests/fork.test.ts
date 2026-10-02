@@ -40,6 +40,8 @@ const NETS = [
     whale: EARN.fixtures.usdcWhale as Address,
     roundTrip: EARN.roundTripVault as string,
     gated: "tlCashPlusUSDC2A" as string | undefined,
+    /** ~16 s behind head at Base's 2 s blocks. */
+    pinBehind: 8n,
   },
   {
     key: "arbitrum",
@@ -49,6 +51,8 @@ const NETS = [
     whale: EARN.fixtures.usdcWhaleArbitrum as Address,
     roundTrip: EARN.defaultVaultByChain.arbitrum as string,
     gated: undefined as string | undefined,
+    /** The same ~16 s at Arbitrum One's ~0.25 s blocks: 8 blocks there is two seconds, inside replica lag. */
+    pinBehind: 64n,
   },
 ] as const;
 
@@ -105,7 +109,7 @@ async function sendBuffered(to: Address, data: `0x${string}`, from: Address = WH
     // from replicas that have not yet seen the very latest block, which surfaces as a spurious
     // revert mid-test. Blocks a little behind head exist everywhere.
     const head = await createPublicClient({ chain: net.chain, transport: http(upstream!) }).getBlockNumber();
-    const pinned = head - 8n;
+    const pinned = head - net.pinBehind;
     anvil = spawn(
       "anvil",
       ["--fork-url", upstream!, "--fork-block-number", pinned.toString(), "--port", String(PORT), "--silent", "--no-rate-limit"],

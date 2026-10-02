@@ -23,12 +23,14 @@
  * stale the moment the whitelist changes. An address is never a key either way (CONTRIBUTING.md, the first rule).
  */
 
+import type { ChainKey } from "../client.js";
+
 /** A vault's ERC-20 ticker — resolved via `getVault`, so a typo fails at load, not at a call site. */
 export type VaultSymbol = string;
 
 export const EARN = {
-  /** The chain used when a caller names neither a chain nor a vault. A `ChainKey` (`src/client.ts`). */
-  defaultChain: "base",
+  /** The chain used when a caller names neither a chain nor a vault. */
+  defaultChain: "base" satisfies ChainKey,
 
   /**
    * The default vault on each chain, by chain key.
@@ -40,11 +42,13 @@ export const EARN = {
    *
    * `arbitrum`: Tempora Labs Cash Plus USDC (Test 2C) — a Morpho Vault V2 on Arbitrum One, open to
    * any account by the same measurement.
+   *
+   * `Record<ChainKey, …>`: a chain added to `CHAIN_INFO` without a default here does not compile.
    */
   defaultVaultByChain: {
     base: "tlCashPlusUSDC2",
     arbitrum: "tlCashPlusUSDC2C",
-  } satisfies Record<string, VaultSymbol>,
+  } satisfies Record<ChainKey, VaultSymbol>,
 
   /** The round-trip target. The same vault as the default; open, so the fork tier deposits from the whale directly. */
   roundTripVault: "tlCashPlusUSDC2" satisfies VaultSymbol,

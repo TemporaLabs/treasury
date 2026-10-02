@@ -14,13 +14,17 @@ Pre-1.0, minor versions may change tool names, schemas and behaviour.
   `chain` and `chainId` ahead of its calls.
 - **Tempora Labs Cash Plus USDC (Test 2C)**, `tlCashPlusUSDC2C`, the default vault on Arbitrum One: a
   Morpho Vault V2 over native USDC, measured open to any account at block 511,070,816.
-- `earn_vaults` returns `chains`: the chains a deposit can go to, the default first, each with its
-  default vault. The `earn` skill has the agent ask the operator which chain before preparing a
-  deposit when they have not said, and never for a withdrawal or a balance.
+- `earn_vaults` returns `chains` — the chains a deposit can go to, the default first, each with its
+  default vault — and `defaultChain`. The `earn` skill has the agent ask the operator which chain
+  before preparing a deposit when they have not said, and never for a withdrawal or a balance.
 - `TREASURY_RPC_ARBITRUM` and `TREASURY_LOGS_RPC_ARBITRUM` (and the alias `ARBITRUM_RPC_URL`). A chain
-  reads only its own variables. `earn_status` takes `chain`, and reports `rpc: "wrong_chain"` when a
-  configured endpoint answers for a different chain.
-- A signer rule, first in `signer_rules`: send each call on the chain its `chainId` names.
+  reads only its own variables, and the plugin forwards the two `TREASURY_*` ones.
+- **An endpoint for the wrong chain is named, not guessed at.** `earn_status` takes `chain`, and
+  reports `rpc: "wrong_chain"` with `rpcChainId` when a configured endpoint answers for a different
+  chain, `chainVerified: false` when it would not say, and `logsRpc` for a separate logs endpoint.
+  A pre-flight, a quote or a balance through such an endpoint is refused, naming the variable.
+- A signer rule, first in `signer_rules`: send each call on the chain its `chainId` names. The
+  envelope's `next_step` opens by naming the chain.
 - The event scan reads Infura's range refusal (`range N exceeds limit of 10000`) as a window.
 
 ### Changed
@@ -32,6 +36,13 @@ Pre-1.0, minor versions may change tool names, schemas and behaviour.
   did not answer, or answered for another chain, as not checked.
 - A vault's explorer link is its chain's (Arbiscan on Arbitrum One). A chain with no explorer on
   record now fails loudly instead of producing a broken link.
+- A registry with no vault on the default chain is refused when it is loaded, with the cause named.
+
+### Fixed
+- A chain's own name in an RPC URL (`…/arbitrum/<key>`) is no longer treated as a secret, so an
+  error that names the chain is not masked.
+- `scripts/registry-check.ts` reports a failed `eth_getCode` as not checked, through the same
+  redaction as every other read; it used to escape as an uncaught error.
 
 ## [v0.1.1] - 2026-09-29
 

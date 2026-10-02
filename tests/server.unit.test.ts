@@ -16,11 +16,15 @@ import { EARN } from "../src/config/earn.js";
 import { readFileSync } from "node:fs";
 import { FIXTURE, useFixtureRegistry, useShippedRegistry } from "./fixtures/registry.js";
 import { defaultVault } from "../src/registry.js";
+import { __forgetEndpointChainsForTests } from "../src/client.js";
 
 // The unit tiers exercise code paths (18-decimal shares, an open vault) that the shipped
 // registry does not offer; `fixtures/registry.ts` explains why they are synthetic.
 beforeAll(() => useFixtureRegistry());
 afterAll(() => useShippedRegistry());
+// An endpoint's chain is remembered per URL for the life of a process. Every mock here is a fresh
+// local port, and the OS reuses ports: forget between tests so one mock never answers for the next.
+afterEach(() => __forgetEndpointChainsForTests());
 
 type Handler = (a: unknown, extra: unknown) => Promise<{ content: { type: string; text: string }[] }>;
 type Registered = Record<string, { handler: Handler; inputSchema?: { shape?: Record<string, unknown> } }>;
@@ -438,6 +442,7 @@ describe("earn_status health is per chain, and names an endpoint that answers fo
       req.on("data", (c) => (b += c));
       req.on("end", () => {
         const r = JSON.parse(b) as { id: number; method: string };
+        if (r.method === "eth_chainId" && chainIdHex === "hang") return; // never answers this one method
         const result = r.method === "eth_blockNumber" ? "0x1e7a1f00" : r.method === "eth_chainId" ? chainIdHex : "0x" + "0".repeat(64);
         res.writeHead(200, { "content-type": "application/json" });
         res.end(JSON.stringify({ jsonrpc: "2.0", id: r.id, result }));
@@ -445,7 +450,14 @@ describe("earn_status health is per chain, and names an endpoint that answers fo
     });
     await new Promise<void>((r) => srv.listen(0, "127.0.0.1", r));
     const { port } = srv.address() as { port: number };
-    return { url: `http://127.0.0.1:${port}/v2/ARBKEY${port}`, close: () => new Promise<void>((r) => srv.close(() => r())) };
+    return {
+      url: `http://127.0.0.1:${port}/v2/ARBKEY${port}`,
+      close: () =>
+        new Promise<void>((r) => {
+          srv.closeAllConnections(); // a hung request must not keep the server (and the test) open
+          srv.close(() => r());
+        }),
+    };
   };
   afterEach(() => {
     delete process.env["TREASURY_RPC_ARBITRUM"];
@@ -480,17 +492,173 @@ describe("earn_status health is per chain, and names an endpoint that answers fo
     }
   });
 
-  it("the same variable pointed at an endpoint that IS Arbitrum → rpc: ok (the control for the test above)", async () => {
+  it("the same variable pointed at an endpoint that IS Arbitrum → rpc: ok, chainVerified: true (the control for the test above)", async () => {
     const arbEndpoint = await startChain("0xa4b1"); // answers for 42161
     try {
       process.env["TREASURY_RPC_ARBITRUM"] = arbEndpoint.url;
       const out = await health({ chain: "arbitrum" });
       expect(out.rpc).toBe("ok");
+      expect(out.chainVerified).toBe(true);
       expect(out.rpcChainId).toBeUndefined();
       expect(out.latestBlock).toBe(String(0x1e7a1f00));
+      expect(out.logsRpc, "no separate logs endpoint is configured, so none is reported").toBeUndefined();
     } finally {
       await arbEndpoint.close();
     }
+  });
+
+  it("🔴 an endpoint that answers a block but will not say its chain is `ok` with chainVerified: FALSE — and does not hold the answer up", async () => {
+    // "ok" used to mean "the chain check passed". When eth_chainId errors, is rate-limited or hangs
+    // while the block read answers, it means only "it answered" — and says so. The probe is bounded:
+    // an endpoint that never answers eth_chainId must not make health wait out the transport's 10 s.
+    const mute = await startChain("hang");
+    try {
+      process.env["TREASURY_RPC_ARBITRUM"] = mute.url;
+      const t0 = Date.now();
+      const out = await health({ chain: "arbitrum" });
+      expect(out.rpc).toBe("ok");
+      expect(out.chainVerified).toBe(false);
+      expect(out.latestBlock).toBe(String(0x1e7a1f00));
+      expect(Date.now() - t0).toBeLessThan(7_000);
+    } finally {
+      await mute.close();
+    }
+  }, 15_000);
+
+  it("an unconfigured chain is not asked, and claims nothing about verification", async () => {
+    // Unconfigured means the chain's public endpoint, which is this client's own constant. Asserted
+    // on the refused-port path of the OTHER variable so the unit tier never reaches the network:
+    // the property is that `chainVerified` appears only for a configured endpoint.
+    process.env["TREASURY_RPC_ARBITRUM"] = "http://127.0.0.1:9/v2/ARBKEY_abc12345";
+    const out = await health({ chain: "arbitrum" });
+    expect(out.rpc).toBe("unreachable");
+    expect(out).not.toHaveProperty("chainVerified"); // nothing answered, so nothing is claimed either way
+  });
+
+  it("a SEPARATE logs endpoint is checked too, and reported beside the main verdict", async () => {
+    // `earn_balance` reads through the logs variable. Health used to check only the general RPC, so
+    // the tool documented as the misconfiguration check passed while every balance read failed.
+    const arbEndpoint = await startChain("0xa4b1");
+    const baseEndpoint = await startChain("0x2105");
+    try {
+      process.env["TREASURY_RPC_ARBITRUM"] = arbEndpoint.url;
+      process.env["TREASURY_LOGS_RPC_ARBITRUM"] = baseEndpoint.url; // the logs variable, on the wrong chain
+      const bad = await health({ chain: "arbitrum" });
+      expect([bad.rpc, bad.logsRpc, bad.logsRpcSource, bad.logsRpcChainId]).toEqual(["ok", "wrong_chain", "TREASURY_LOGS_RPC_ARBITRUM", 8453]);
+      process.env["TREASURY_LOGS_RPC_ARBITRUM"] = arbEndpoint.url + "/logs"; // a second endpoint on the right chain
+      const good = await health({ chain: "arbitrum" });
+      expect([good.rpc, good.logsRpc, good.logsRpcSource]).toEqual(["ok", "ok", "TREASURY_LOGS_RPC_ARBITRUM"]);
+      expect(good.logsRpcChainId).toBeUndefined();
+      expect(JSON.stringify([bad, good])).not.toMatch(/ARBKEY|127\.0\.0\.1/);
+    } finally {
+      delete process.env["TREASURY_LOGS_RPC_ARBITRUM"];
+      await arbEndpoint.close();
+      await baseEndpoint.close();
+    }
+  });
+});
+
+/**
+ * Through an endpoint for another chain, a vault's address has no contract, so every read fails
+ * with "returned no data … the address is not a contract" — loud, and naming the wrong thing. Each
+ * RPC-touching tool reports the endpoint instead, by the name of the variable that holds it.
+ */
+describe("every tool that reads the chain names an endpoint that answers for the wrong one", () => {
+  const startChain = async (chainIdHex: string) => {
+    const srv = createServer((req, res) => {
+      let b = "";
+      req.on("data", (c) => (b += c));
+      req.on("end", () => {
+        const r = JSON.parse(b) as { id: number; method: string };
+        // eth_call answers "0x": what a chain says about an address with no contract on it
+        const result = r.method === "eth_blockNumber" ? "0x1e7a1f00" : r.method === "eth_chainId" ? chainIdHex : r.method === "eth_getLogs" ? [] : "0x";
+        res.writeHead(200, { "content-type": "application/json" });
+        res.end(JSON.stringify({ jsonrpc: "2.0", id: r.id, result }));
+      });
+    });
+    await new Promise<void>((r) => srv.listen(0, "127.0.0.1", r));
+    const { port } = srv.address() as { port: number };
+    return { url: `http://127.0.0.1:${port}/v2/ARBKEY${port}`, close: () => new Promise<void>((r) => srv.close(() => r())) };
+  };
+  const VARS = ["TREASURY_RPC_ARBITRUM", "TREASURY_LOGS_RPC_ARBITRUM", "TREASURY_RPC_BASE", "TREASURY_LOGS_RPC_BASE", "TREASURY_LOGS_FALLBACK"];
+  afterEach(() => {
+    for (const k of VARS) delete process.env[k];
+  });
+  const WRONG = /the endpoint in TREASURY_RPC_ARBITRUM answers for chain 8453, not Arbitrum One \(42161\)/;
+
+  it("pre-flight, quote (both directions) and balance on Arbitrum, through a Base endpoint → the variable is named, not the vault", async () => {
+    const baseEndpoint = await startChain("0x2105");
+    try {
+      process.env["TREASURY_RPC_ARBITRUM"] = baseEndpoint.url;
+      const t = tools();
+      const a = { chain: "arbitrum", account: RECEIVER, amount_usdc: "1" };
+      await expect(t["earn_status"]!.handler(a, {})).rejects.toThrow(WRONG);
+      await expect(t["earn_quote"]!.handler({ ...a, direction: "deposit" }, {})).rejects.toThrow(WRONG);
+      await expect(t["earn_quote"]!.handler({ ...a, direction: "withdraw" }, {})).rejects.toThrow(WRONG);
+      await expect(t["earn_balance"]!.handler(a, {})).rejects.toThrow(WRONG);
+      // and the refusal carries neither the key nor the host
+      const err = await t["earn_balance"]!.handler(a, {}).then(() => "", (e: Error) => e.message);
+      expect(err).not.toMatch(/ARBKEY|127\.0\.0\.1/);
+    } finally {
+      await baseEndpoint.close();
+    }
+  });
+
+  it("the control: the same calls through an endpoint that IS Arbitrum are NOT reported as a wrong chain", async () => {
+    const arbEndpoint = await startChain("0xa4b1");
+    try {
+      process.env["TREASURY_RPC_ARBITRUM"] = arbEndpoint.url;
+      // The mock answers "0x" to every read, so these still fail — as themselves. What must not
+      // happen is the wrong-chain sentence, which would be a false accusation of the endpoint.
+      const out = payload(await tools()["earn_status"]!.handler({ chain: "arbitrum", account: RECEIVER }, {})) as { status: string };
+      expect(out.status).toBe("UNRESOLVED");
+      const err = await tools()["earn_balance"]!.handler({ chain: "arbitrum", account: RECEIVER }, {}).then(() => "no error", (e: Error) => e.message);
+      expect(err).not.toMatch(/answers for chain/);
+      expect(err).toMatch(/returned no data/);
+    } finally {
+      await arbEndpoint.close();
+    }
+  });
+
+  it("earn_balance checks the LOGS endpoint it actually reads through, and a fallback the operator named", async () => {
+    const arbEndpoint = await startChain("0xa4b1");
+    const baseEndpoint = await startChain("0x2105");
+    try {
+      // the general RPC is right; the logs variable is on the wrong chain
+      process.env["TREASURY_RPC_ARBITRUM"] = arbEndpoint.url;
+      process.env["TREASURY_LOGS_RPC_ARBITRUM"] = baseEndpoint.url;
+      await expect(tools()["earn_balance"]!.handler({ chain: "arbitrum", account: RECEIVER }, {})).rejects.toThrow(
+        /the endpoint in TREASURY_LOGS_RPC_ARBITRUM answers for chain 8453, not Arbitrum One/,
+      );
+      // On Base, a fallback URL that is an ARBITRUM endpoint: it would answer an event scan with an
+      // empty list, and an empty scan reads as a history that was covered in full.
+      for (const k of VARS) delete process.env[k];
+      process.env["TREASURY_RPC_BASE"] = baseEndpoint.url;
+      process.env["TREASURY_LOGS_FALLBACK"] = arbEndpoint.url;
+      await expect(tools()["earn_balance"]!.handler({ vault: FIXTURE.morphoOpen, account: RECEIVER }, {})).rejects.toThrow(
+        /the endpoint in TREASURY_LOGS_FALLBACK answers for chain 42161, not Base \(8453\)/,
+      );
+    } finally {
+      await arbEndpoint.close();
+      await baseEndpoint.close();
+    }
+  });
+
+  it("a chain's own name in the RPC URL is not masked out of a refusal that names the chain", async () => {
+    // Providers put the chain in the path or the host. The redactor registers long URL segments as
+    // secrets; "arbitrum" is 8 characters, and the refusal read `is on base, not <redacted>`.
+    process.env["TREASURY_RPC_ARBITRUM"] = "http://127.0.0.1:9/arbitrum/KEYabcdef123456";
+    const t = tools(); // buildServer registers the secrets
+    const err = await t["earn_prepare_deposit"]!
+      .handler({ vault: "tlCashPlusUSDC2", chain: "arbitrum", account: RECEIVER, receiver: RECEIVER, amount_usdc: "1" }, {})
+      .then(() => "no error", (e: Error) => e.message);
+    expect(err).toMatch(/is on base, not arbitrum/);
+    expect(err).toMatch(/pick a vault on arbitrum \(tlCashPlusUSDC2C\)/);
+    expect(err).not.toMatch(/<redacted>/);
+    const unknown = await t["earn_prepare_deposit"]!
+      .handler({ chain: "solana", account: RECEIVER, receiver: RECEIVER, amount_usdc: "1" }, {})
+      .then(() => "no error", (e: Error) => e.message);
+    expect(unknown).toMatch(/chains with a vault: base, arbitrum/);
   });
 });
 

@@ -3,8 +3,8 @@
  * An agent skill IS a distribution surface, so `earn_terms` returns these verbatim and the
  * skill instructs the agent to show them and get an explicit acknowledgement before building a
  * first deposit. They are written for the vaults this registry actually offers — Tempora test
- * vaults on ERC-4626 chassis on Base — and say what is true of those, not of a fund that has not
- * launched. Change them when the offering changes, and nowhere else.
+ * vaults on ERC-4626 chassis, on Base and on Arbitrum One — and say what is true of those, not of a
+ * fund that has not launched. Change them when the offering changes, and nowhere else.
  */
 export const DISCLOSURES = {
   source: "Agent Treasury — pre-deposit disclosures, 2026-09-15",

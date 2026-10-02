@@ -20,10 +20,11 @@ import type { VaultEntry } from "./registry-schema.js";
  * used to interpolate `undefined` into the URL — `undefined0x040f…` — which is a well-formed string,
  * so nothing threw and the caller received a link that goes nowhere. That was unreachable only
  * while the registry schema pinned one chain. It now accepts several, so the safety is the throw:
- * a chain added to the schema without a row here fails the first `earn_vaults` call, and
+ * a chain added to the schema without a row here does not compile (the map is typed by the schema's
+ * own chain ids), and a value that reaches here from outside the schema throws.
  * `registry.test.ts` builds a link for every chain the schema accepts.
  */
-const EXPLORER: Record<number, string> = {
+const EXPLORER: Record<VaultEntry["chainId"], string> = {
   8453: "https://basescan.org/address/",
   42161: "https://arbiscan.io/address/",
 };

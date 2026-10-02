@@ -240,6 +240,20 @@ describe("registry-check reconciles against the CHAIN and nothing else", () => {
     expect(r.out).not.toContain(mock.url);
   }, 180_000);
 
+  it("eth_getCode refused by the ENDPOINT → 'not checked', and the URL is not echoed", async () => {
+    // getCode is the first read of every row and was the one read with no handler: a transport
+    // failure there escaped as an uncaught error that printed the endpoint's full URL.
+    const mock = await startMock(undefined, undefined, { selector: "eth_getCode" });
+    mocks.push(mock.close);
+    const r = await run(mock.url);
+    expect(r.status).toBe(1);
+    expect(r.out).toContain("NOT CHECKED");
+    expect(r.out).not.toContain("the chain is right; fix the row");
+    expect(r.out).not.toMatch(/^✗/m);
+    expect(r.out, "the endpoint must never be echoed on an error path").not.toContain(mock.url);
+    expect(r.out).not.toMatch(/HttpRequestError|at async|node:internal/); // a handled failure, not a crash
+  }, 180_000);
+
   it("a deployedAtBlock that is one block LATE → exit 1, naming that row", async () => {
     // The field `earn_balance` scans from. One block late silently drops a first deposit, and no
     // other check in this script would notice: symbol, decimals and asset all still agree.

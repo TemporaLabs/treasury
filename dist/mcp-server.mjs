@@ -55128,8 +55128,10 @@ function rpcSourceForEnv(chainId) {
 }
 function resolvedRpcSecrets() {
   const out = /* @__PURE__ */ new Set();
+  const chainWords = new Set(supportedChainIds.map((id) => CHAIN_INFO[id].key));
   const add = (v) => {
     if (!v || v.length < 8) return;
+    if (chainWords.has(v.toLowerCase())) return;
     out.add(v);
     try {
       const decoded = decodeURIComponent(v);
@@ -55164,13 +55166,35 @@ function publicRpcHint(chainId) {
   const info = CHAIN_INFO[chainId];
   return `No RPC was configured for ${info.name}, so this used the public endpoint (${new URL(info.publicRpc).hostname}), which rate-limits after a handful of calls \u2014 that is the most likely cause of the failure above, not the vault. Set ${info.rpcEnv[0]} to a keyed ${info.name} RPC URL (Alchemy, Infura, QuickNode or your own node) and retry. Reads like the vault list and the disclosures work without one; quotes, pre-flight and position history generally do not.`;
 }
-async function rpcChainMismatch(client, chainId) {
+var CHAIN_PROBE_MS = 3e3;
+var reportedChain = /* @__PURE__ */ new Map();
+async function endpointChainId(client, rpcUrl, timeoutMs = CHAIN_PROBE_MS) {
+  const known = reportedChain.get(rpcUrl);
+  if (known !== void 0) return known;
+  let timer;
+  const timedOut = new Promise((r) => {
+    timer = setTimeout(() => r(void 0), timeoutMs);
+    timer.unref?.();
+  });
   try {
-    const got = await client.getChainId();
-    return got === chainId ? void 0 : got;
-  } catch {
-    return void 0;
+    const got = await Promise.race([client.getChainId().catch(() => void 0), timedOut]);
+    if (got !== void 0) reportedChain.set(rpcUrl, got);
+    return got;
+  } finally {
+    if (timer !== void 0) clearTimeout(timer);
   }
+}
+async function firstEndpointOnWrongChain(chainId, endpoints) {
+  const asked = endpoints.filter((e) => e.url !== PUBLIC_RPC[chainId]);
+  const said = await Promise.all(asked.map((e) => endpointChainId(e.client, e.url)));
+  for (const [i, id] of said.entries()) {
+    if (id !== void 0 && id !== chainId) return { source: asked[i].source, answersFor: id };
+  }
+  return void 0;
+}
+function logsRpcSourceForEnv(chainId) {
+  const k = CHAIN_INFO[chainId].logsRpcEnv;
+  return rpcUrlFromEnvValue(process.env[k]) ? { source: k, configured: true } : rpcSourceForEnv(chainId);
 }
 
 // src/registry.ts
@@ -55281,7 +55305,7 @@ var registrySchema = external_exports.object({
 
 // src/config/earn.ts
 var EARN = {
-  /** The chain used when a caller names neither a chain nor a vault. A `ChainKey` (`src/client.ts`). */
+  /** The chain used when a caller names neither a chain nor a vault. */
   defaultChain: "base",
   /**
    * The default vault on each chain, by chain key.
@@ -55293,6 +55317,8 @@ var EARN = {
    *
    * `arbitrum`: Tempora Labs Cash Plus USDC (Test 2C) — a Morpho Vault V2 on Arbitrum One, open to
    * any account by the same measurement.
+   *
+   * `Record<ChainKey, …>`: a chain added to `CHAIN_INFO` without a default here does not compile.
    */
   defaultVaultByChain: {
     base: "tlCashPlusUSDC2",
@@ -55322,7 +55348,12 @@ var cached2;
 function loadRegistry() {
   if (cached2) return cached2;
   const raw = JSON.parse(readFileSync(fileURLToPath(REGISTRY_URL), "utf8"));
-  cached2 = registrySchema.parse(raw);
+  const parsed = registrySchema.parse(raw);
+  const chainId = defaultChainId();
+  if (!parsed.vaults.some((v) => v.chainId === chainId)) {
+    throw new Error(`the registry has no vault on ${CHAIN_INFO[chainId].name}, which config/earn.ts names as the default chain; add one or change defaultChain`);
+  }
+  cached2 = parsed;
   return cached2;
 }
 function listVaults() {
@@ -55350,7 +55381,7 @@ function defaultVault(chainId = defaultChainId()) {
   const key = CHAIN_INFO[chainId].key;
   const named = EARN.defaultVaultByChain[key];
   const marked = loadRegistry().vaults.find((x) => x.chainId === chainId && x.isDefault);
-  if (named === void 0 || marked === void 0) {
+  if (marked === void 0) {
     throw new Error(`no vault is offered on ${CHAIN_INFO[chainId].name}; chains with a vault: ${offeredChains().map((c) => c.key).join(", ")}`);
   }
   if (marked.symbol !== named) {
@@ -55360,7 +55391,7 @@ function defaultVault(chainId = defaultChainId()) {
 }
 function resolveVault(symbol2, chain) {
   let chainId;
-  if (chain !== void 0) {
+  if (chain) {
     chainId = chainIdForKey(chain);
     const offered = offeredChains();
     if (chainId === void 0 || !offered.some((c) => c.chainId === chainId)) {
@@ -55906,6 +55937,7 @@ async function getPosition(args) {
   const fmtA = (x) => `${formatAmount(x, vault.asset.decimals)} ${vault.asset.symbol}`;
   const chain = CHAIN_INFO[vault.chainId];
   const logsEnv = chain.logsRpcEnv;
+  const fallbackNamedBy = vault.chainId === 8453 ? `TREASURY_LOGS_FALLBACK, ${chain.name}'s public endpoint by default` : `${chain.name}'s public endpoint; TREASURY_LOGS_FALLBACK=off forbids it`;
   return {
     vault: vault.symbol,
     principal,
@@ -55930,7 +55962,7 @@ async function getPosition(args) {
       ...providerWindow !== void 0 ? { providerWindow: providerWindow.toString() } : {},
       source,
       wholeHistory,
-      note: (handover && !scanFailure ? `the configured logs RPC could not cover this range (${handover}), so the fallback endpoint (TREASURY_LOGS_FALLBACK, ${chain.name}'s public endpoint by default) served the scan. ` : "") + (scanFailure ? `event scan FAILED (${scanFailure}): the provider's eth_getLogs error was not one this client can size a window from, so no history was read \u2014 basis and yield are unknown, not zero. Set ${logsEnv} to a provider with a known window (Alchemy, Infura, ${chain.name} public), or use the agent's own deposit receipts.` : wholeHistory ? "the scan covered every block from the vault's deployment, and shares in \u2212 shares out reconciles to the balance: the basis covers this position's whole history" : capped ? `the scan was CUT SHORT \u2014 ${block - fromBlock + 1n} of the ${block - (deployed ?? 0n) + 1n} blocks since deployment, at the provider's ${providerWindow ?? "?"}-block eth_getLogs window and ${timedOut ? `a ${Math.round((args.budgetMs ?? 3e4) / 1e3)}s time budget` : `${maxReq} requests`}; covering the rest needs about ${providerWindow ? (block - (deployed ?? 0n) + providerWindow) / providerWindow : BigInt(maxReq)} requests per event. ${complete ? "Shares in \u2212 shares out happens to reconcile over that window, which an empty window does vacuously \u2014 it is NOT evidence the history was covered." : "Basis and yield are unknown, not bounds."} Set ${logsEnv} to a provider with a wide eth_getLogs range${timedOut ? "" : ", raise max_log_requests"}, or use the agent's own deposit receipts.` : complete ? `shares in \u2212 shares out reconciles over the ${block - fromBlock + 1n} blocks scanned, but the scan started at block ${fromBlock}${deployed === void 0 ? " and the registry does not record when this vault was deployed" : `, after the vault's deployment block ${deployed}`} \u2014 deposits and withdrawals before it cancel out unseen, so this is a WINDOW, NOT the whole history. Omit lookback_blocks to scan from deployment.` : "shares in \u2212 shares out \u2260 balance: history predates the window or shares moved by transfer \u2014 basis and yield are unknown, not totals")
+      note: (handover && !scanFailure ? `the configured logs RPC could not cover this range (${handover}), so the fallback endpoint (${fallbackNamedBy}) served the scan. ` : "") + (scanFailure ? `event scan FAILED (${scanFailure}): the provider's eth_getLogs error was not one this client can size a window from, so no history was read \u2014 basis and yield are unknown, not zero. Set ${logsEnv} to a provider with a known window (Alchemy, Infura, ${chain.name} public), or use the agent's own deposit receipts.` : wholeHistory ? "the scan covered every block from the vault's deployment, and shares in \u2212 shares out reconciles to the balance: the basis covers this position's whole history" : capped ? `the scan was CUT SHORT \u2014 ${block - fromBlock + 1n} of the ${block - (deployed ?? 0n) + 1n} blocks since deployment, at the provider's ${providerWindow ?? "?"}-block eth_getLogs window and ${timedOut ? `a ${Math.round((args.budgetMs ?? 3e4) / 1e3)}s time budget` : `${maxReq} requests`}; covering the rest needs about ${providerWindow ? (block - (deployed ?? 0n) + providerWindow) / providerWindow : BigInt(maxReq)} requests per event. ${complete ? "Shares in \u2212 shares out happens to reconcile over that window, which an empty window does vacuously \u2014 it is NOT evidence the history was covered." : "Basis and yield are unknown, not bounds."} Set ${logsEnv} to a provider with a wide eth_getLogs range${timedOut ? "" : ", raise max_log_requests"}, or use the agent's own deposit receipts.` : complete ? `shares in \u2212 shares out reconciles over the ${block - fromBlock + 1n} blocks scanned, but the scan started at block ${fromBlock}${deployed === void 0 ? " and the registry does not record when this vault was deployed" : `, after the vault's deployment block ${deployed}`} \u2014 deposits and withdrawals before it cancel out unseen, so this is a WINDOW, NOT the whole history. Omit lookback_blocks to scan from deployment.` : "shares in \u2212 shares out \u2260 balance: history predates the window or shares moved by transfer \u2014 basis and yield are unknown, not totals")
     },
     measuredAtBlock: Number(block)
   };
@@ -56124,9 +56156,17 @@ var addressArg = external_exports.string().refine((s) => isAddress(s), "must be 
 var amountArg = external_exports.string().regex(/^\d+(\.\d+)?$/, 'plain decimal USDC amount, e.g. "25" or "12.5"');
 var vaultArg = external_exports.string().optional().describe("the vault's ERC-20 ticker, e.g. tlCashPlusUSDC2 (earn_vaults lists them); omit for the default vault of `chain`, or of the default chain when `chain` is omitted too");
 var accountArg = addressArg.describe("the account whose shares these are \u2014 the depositor, the owner, the holder");
-var chainArg = () => external_exports.string().optional().describe(
-  `which chain: ${offeredChains().map((c) => `"${c.key}"`).join(" or ")}. Omit for ${CHAIN_INFO[defaultChainId()].key} (the default), or when \`vault\` already names a vault. If the operator has not said which chain to deposit on, ASK them before preparing a deposit. A \`vault\` that is on a different chain than \`chain\` is refused.`
-);
+var chainArg = () => {
+  let offered;
+  try {
+    offered = offeredChains().map((c) => c.key);
+  } catch {
+    offered = supportedChainIds.map((id) => CHAIN_INFO[id].key);
+  }
+  return external_exports.string().optional().describe(
+    `which chain: ${offered.map((k) => `"${k}"`).join(" or ")}. Omit for ${CHAIN_INFO[defaultChainId()].key} (the default), or when \`vault\` already names a vault. If the operator has not said which chain to deposit on, ASK them before preparing a deposit. A \`vault\` that is on a different chain than \`chain\` is refused.`
+  );
+};
 function supportedVault(symbol2, chain) {
   const vault = resolveVault(symbol2, chain);
   if (!isSupportedChainId(vault.chainId)) throw new Error(`chain ${vault.chainId} unsupported`);
@@ -56134,7 +56174,27 @@ function supportedVault(symbol2, chain) {
 }
 function clientFor(symbol2, chain) {
   const vault = supportedVault(symbol2, chain);
-  return { vault, client: makePublicClient(vault.chainId, rpcUrlFromEnv(vault.chainId)) };
+  const url2 = rpcUrlFromEnv(vault.chainId);
+  const client = makePublicClient(vault.chainId, url2);
+  return { vault, client, endpoints: [{ client, url: url2, source: rpcSourceForEnv(vault.chainId).source }] };
+}
+async function wrongChainReason(vault, endpoints) {
+  const wrong = await firstEndpointOnWrongChain(vault.chainId, endpoints);
+  if (wrong === void 0) return void 0;
+  const info = CHAIN_INFO[vault.chainId];
+  return `the endpoint in ${wrong.source} answers for chain ${wrong.answersFor}, not ${info.name} (${vault.chainId}). It must be an endpoint for ${info.name}; until it is, no read for this chain can be trusted.`;
+}
+async function onItsChain(vault, endpoints, work) {
+  const [reason, settled] = await Promise.all([
+    wrongChainReason(vault, endpoints),
+    work().then(
+      (value) => ({ ok: true, value }),
+      (error62) => ({ ok: false, error: error62 })
+    )
+  ]);
+  if (reason !== void 0) throw new Error(reason);
+  if (!settled.ok) throw settled.error;
+  return settled.value;
 }
 var onChain = (vault) => ({ chain: CHAIN_INFO[vault.chainId].key, chainId: vault.chainId });
 function hintChain(args) {
@@ -56255,14 +56315,14 @@ function buildServer() {
     "earn_status",
     {
       title: "Server health, or a deposit pre-flight verdict",
-      description: "With NO `account`: is the server up and the chain's RPC reachable \u2014 chain, chain id, latest block, registry version, and which env var supplied the RPC (never the URL). Each chain has its own RPC, so pass `chain` to check the one you are about to use; `rpc` is `ok`, `unreachable`, or `wrong_chain` when the configured endpoint answers for a different chain. With `account`: simulates deposit() from that address and reports OPEN_READY, NEEDS_APPROVAL, WHITELIST_GATED, REVERTED_OTHER, REFUSED_BY_CLIENT or UNRESOLVED, never trusting maxDeposit(). The `mode` field says which answer you got.",
+      description: "With NO `account`: is the server up and the chain's RPC reachable \u2014 chain, chain id, latest block, registry version, and which env var supplied the RPC (never the URL). Each chain has its own RPC, so pass `chain` to check the one you are about to use; `rpc` is `ok`, `unreachable`, or `wrong_chain` when the configured endpoint answers for a different chain. `chainVerified: false` beside `ok` means the endpoint answered but did not say which chain it is. When a separate logs RPC is set, `logsRpc` reports it the same way. With `account`: simulates deposit() from that address and reports OPEN_READY, NEEDS_APPROVAL, WHITELIST_GATED, REVERTED_OTHER, REFUSED_BY_CLIENT or UNRESOLVED, never trusting maxDeposit(). The `mode` field says which answer you got.",
       inputSchema: { vault: vaultArg, chain, account: accountArg.optional(), amount_usdc: amountArg.optional() }
     },
     guarded(async ({ vault: symbol2, chain: chain2, account, amount_usdc }) => {
       if (account !== void 0) {
-        const { vault: vault2, client } = clientFor(symbol2, chain2);
+        const { vault: vault2, client, endpoints } = clientFor(symbol2, chain2);
         const args = amount_usdc === void 0 ? { vault: vault2, depositor: account, client } : { vault: vault2, depositor: account, client, assetsHuman: amount_usdc };
-        const verdict = await preflightDeposit(args);
+        const verdict = await onItsChain(vault2, endpoints, () => preflightDeposit(args));
         return text({ ...verdict, mode: "preflight", account, ...onChain(vault2), ...commitsMoney(vault2) }, vault2.chainId);
       }
       const partial2 = symbol2 !== void 0 ? { requested: "preflight", missing: ["account"] } : {};
@@ -56279,22 +56339,37 @@ function buildServer() {
         rpcConfigured: src.configured
       };
       try {
-        const client = makePublicClient(vault.chainId, rpcUrlFromEnv(vault.chainId));
-        const [mismatch, latest] = await Promise.all([src.configured ? rpcChainMismatch(client, vault.chainId) : Promise.resolve(void 0), client.getBlockNumber()]);
-        if (mismatch !== void 0) {
-          const info = CHAIN_INFO[vault.chainId];
+        const info = CHAIN_INFO[vault.chainId];
+        const url2 = rpcUrlFromEnv(vault.chainId);
+        const client = makePublicClient(vault.chainId, url2);
+        const logsSrc = logsRpcSourceForEnv(vault.chainId);
+        const logsUrl = logsRpcUrlFromEnv(vault.chainId);
+        const separateLogs = logsUrl !== url2;
+        const [said, logsSaid, latest] = await Promise.all([
+          src.configured ? endpointChainId(client, url2) : Promise.resolve(void 0),
+          separateLogs ? endpointChainId(makePublicClient(vault.chainId, logsUrl), logsUrl) : Promise.resolve(void 0),
+          client.getBlockNumber()
+        ]);
+        const logs = separateLogs ? {
+          logsRpcSource: logsSrc.source,
+          logsRpc: logsSaid === void 0 ? "unreachable" : logsSaid === vault.chainId ? "ok" : "wrong_chain",
+          ...logsSaid !== void 0 && logsSaid !== vault.chainId ? { logsRpcChainId: logsSaid } : {}
+        } : {};
+        if (said !== void 0 && said !== vault.chainId) {
           return text(
             {
               ...base2,
               rpc: "wrong_chain",
-              rpcChainId: mismatch,
+              rpcChainId: said,
               latestBlock: null,
-              reason: `the endpoint in ${src.source} answers for chain ${mismatch}, not ${info.name} (${vault.chainId}). Point ${info.rpcEnv[0]} at a ${info.name} endpoint; until then every read for this chain is wrong.`
+              reason: `the endpoint in ${src.source} answers for chain ${said}, not ${info.name} (${vault.chainId}). Point ${info.rpcEnv[0]} at an endpoint for ${info.name}; until then no read for this chain can be trusted.`,
+              ...logs
             },
             vault.chainId
           );
         }
-        return text({ ...base2, rpc: "ok", latestBlock: latest.toString() }, vault.chainId);
+        const verified = src.configured ? { chainVerified: said === vault.chainId } : {};
+        return text({ ...base2, rpc: "ok", ...verified, latestBlock: latest.toString(), ...logs }, vault.chainId);
       } catch (e) {
         const reason = redactEndpoints(e instanceof Error ? e.message : String(e));
         return text({ ...base2, rpc: "unreachable", latestBlock: null, reason }, vault.chainId);
@@ -56315,19 +56390,19 @@ function buildServer() {
       }
     },
     guarded(async ({ vault: symbol2, chain: chain2, account, amount_usdc, direction }) => {
-      const { vault, client } = clientFor(symbol2, chain2);
+      const { vault, client, endpoints } = clientFor(symbol2, chain2);
       if (direction === "deposit") {
         return text(
           {
             direction: "deposit",
             ...onChain(vault),
             ...commitsMoney(vault),
-            ...await quoteDeposit({ vault, depositor: account, assetsHuman: amount_usdc, client })
+            ...await onItsChain(vault, endpoints, () => quoteDeposit({ vault, depositor: account, assetsHuman: amount_usdc, client }))
           },
           vault.chainId
         );
       }
-      return text({ direction: "withdraw", ...onChain(vault), ...await quoteWithdraw({ vault, owner: account, assetsHuman: amount_usdc, client }) }, vault.chainId);
+      return text({ direction: "withdraw", ...onChain(vault), ...await onItsChain(vault, endpoints, () => quoteWithdraw({ vault, owner: account, assetsHuman: amount_usdc, client })) }, vault.chainId);
     })
   );
   server.registerTool(
@@ -56392,14 +56467,20 @@ function buildServer() {
       const client = makePublicClient(vault.chainId, logsUrl);
       const fallbackUrl = logsFallbackUrlFromEnv(vault.chainId, logsUrl);
       const fallbackClient = fallbackUrl === void 0 ? void 0 : makePublicClient(vault.chainId, fallbackUrl);
-      const position = await getPosition({
+      const endpoints = [{ client, url: logsUrl, source: logsRpcSourceForEnv(vault.chainId).source }];
+      if (fallbackClient && fallbackUrl !== void 0) endpoints.push({ client: fallbackClient, url: fallbackUrl, source: "TREASURY_LOGS_FALLBACK" });
+      const position = await onItsChain(
         vault,
-        principal: account,
-        client,
-        ...fallbackClient ? { fallbackClient } : {},
-        ...lookback_blocks === void 0 ? {} : { lookbackBlocks: BigInt(lookback_blocks) },
-        ...max_log_requests === void 0 ? {} : { maxLogRequests: max_log_requests }
-      });
+        endpoints,
+        () => getPosition({
+          vault,
+          principal: account,
+          client,
+          ...fallbackClient ? { fallbackClient } : {},
+          ...lookback_blocks === void 0 ? {} : { lookbackBlocks: BigInt(lookback_blocks) },
+          ...max_log_requests === void 0 ? {} : { maxLogRequests: max_log_requests }
+        })
+      );
       return text({ ...onChain(vault), ...position }, vault.chainId);
     })
   );

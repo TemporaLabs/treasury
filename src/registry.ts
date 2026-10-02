@@ -13,7 +13,15 @@ let cached: Registry | undefined;
 export function loadRegistry(): Registry {
   if (cached) return cached;
   const raw = JSON.parse(readFileSync(fileURLToPath(REGISTRY_URL), "utf8")) as unknown;
-  cached = registrySchema.parse(raw);
+  const parsed = registrySchema.parse(raw);
+  // The schema holds one default per chain THAT HAS A VAULT, so it cannot see a registry with no
+  // vault on the default chain at all — and then the discovery call itself is what fails, with an
+  // error about a chain nobody asked for. Refuse the file here, where the cause can be named.
+  const chainId = defaultChainId();
+  if (!parsed.vaults.some((v) => v.chainId === chainId)) {
+    throw new Error(`the registry has no vault on ${CHAIN_INFO[chainId].name}, which config/earn.ts names as the default chain; add one or change defaultChain`);
+  }
+  cached = parsed;
   return cached;
 }
 
@@ -72,9 +80,9 @@ export function offeredChains(): { key: ChainKey; chainId: SupportedChainId; nam
  */
 export function defaultVault(chainId: SupportedChainId = defaultChainId()): VaultEntry {
   const key = CHAIN_INFO[chainId].key;
-  const named = (EARN.defaultVaultByChain as Record<string, string | undefined>)[key];
+  const named: string = EARN.defaultVaultByChain[key];
   const marked = loadRegistry().vaults.find((x) => x.chainId === chainId && x.isDefault);
-  if (named === undefined || marked === undefined) {
+  if (marked === undefined) {
     throw new Error(`no vault is offered on ${CHAIN_INFO[chainId].name}; chains with a vault: ${offeredChains().map((c) => c.key).join(", ")}`);
   }
   if (marked.symbol !== named) {
@@ -95,7 +103,9 @@ export function defaultVault(chainId: SupportedChainId = defaultChainId()): Vaul
  */
 export function resolveVault(symbol?: string, chain?: string): VaultEntry {
   let chainId: SupportedChainId | undefined;
-  if (chain !== undefined) {
+  // An EMPTY string is an omitted argument, for `chain` exactly as for `vault` (`!symbol` below):
+  // a host that sends "" for every optional it did not fill must get the default, not a refusal.
+  if (chain) {
     chainId = chainIdForKey(chain);
     const offered = offeredChains();
     if (chainId === undefined || !offered.some((c) => c.chainId === chainId)) {

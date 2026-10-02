@@ -126,6 +126,12 @@ describe("the shipped registry", () => {
     // an unknown chain names the ones that exist, and is never read as "the default chain"
     expect(() => resolveVault(undefined, "solana")).toThrow(/unknown chain "solana"; chains with a vault: base, arbitrum/);
     expect(() => resolveVault("tlCashPlusUSDC2", "Base")).toThrow(/unknown chain "Base"/); // exact keys, no case-folding guess
+    expect(() => resolveVault(undefined, " arbitrum")).toThrow(/unknown chain " arbitrum"/);
+    // An EMPTY string is an omitted argument, for `chain` exactly as it always was for `vault`: a
+    // host that sends "" for every optional it did not fill gets the default, not a refusal.
+    expect(resolveVault("", "")).toBe(base);
+    expect(resolveVault("tlCashPlusUSDC2C", "")).toBe(arb);
+    expect(resolveVault("", "arbitrum")).toBe(arb);
   });
 
   it("the schema accepts exactly the chains the client supports, and every one has a table row and an explorer link", () => {

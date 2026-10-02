@@ -164,9 +164,9 @@ export function rpcUrlFromEnvValue(v: string | undefined): string | undefined {
  * preferred for log scans (providers cap eth_getLogs ranges very differently: Alchemy free 10 blocks,
  * Base public 2,000, Infura 10,000 on Arbitrum) — see `position.ts`.
  *
- * 🔴 A chain reads ONLY its own variables. An Arbitrum call never falls back to a Base endpoint: the
- * same address on the wrong chain answers with empty data, which reads as "no position" rather than
- * as a misconfiguration.
+ * 🔴 A chain reads ONLY its own variables. An Arbitrum call never falls back to a Base endpoint: a
+ * vault's address has no contract on the other chain, so reads fail with "returned no data" — which
+ * reads as a broken vault rather than as a misconfiguration.
  */
 export function rpcUrlFromEnv(chainId: SupportedChainId): string {
   for (const k of CHAIN_INFO[chainId].rpcEnv) {
@@ -245,8 +245,15 @@ export function resolvedRpcSecrets(): string[] {
   // `sk-Live_a%2Bb%2Fc%3Dd9f8e7`, only that was registered, and the plain key leaked. The earlier
   // test missed it because `SECRETKEY123` percent-encodes to ITSELF — the transformation was the
   // identity function, so the test could not tell the two forms apart.
+  // 🔴 A chain's own key is NOT a secret, and it is long enough to be taken for one. Providers put
+  // the chain in the URL — `rpc.example/arbitrum/<key>`, `arbitrum.example.org` — and a path segment
+  // or first host label of 8+ characters is registered below. "arbitrum" is exactly 8, so with such a
+  // URL configured every refusal that names the chain read `chains with a vault: base, <redacted>`
+  // (measured in review). "base" is 4 characters, which is why one chain never showed it.
+  const chainWords = new Set<string>(supportedChainIds.map((id) => CHAIN_INFO[id].key));
   const add = (v: string | undefined) => {
     if (!v || v.length < 8) return;
+    if (chainWords.has(v.toLowerCase())) return;
     out.add(v);
     try {
       const decoded = decodeURIComponent(v);
@@ -309,20 +316,75 @@ export function publicRpcHint(chainId: SupportedChainId): string | undefined {
   );
 }
 
+/** How long a chain-identity probe may take before the endpoint counts as "did not say". */
+export const CHAIN_PROBE_MS = 3_000;
+
+/** Endpoints that have already said which chain they are. An endpoint does not change chain. */
+const reportedChain = new Map<string, number>();
+
 /**
- * Does this endpoint answer for the chain the caller thinks it does? Returns the chain id the
- * endpoint reported when it is the WRONG one, and `undefined` when it matches — or when the
- * endpoint did not answer, which is a transport failure for the caller's own read to report.
+ * Which chain does this endpoint say it is? `undefined` when it did not say within
+ * `CHAIN_PROBE_MS` — an error, a rate limit, a hang — which is NOT a statement about the chain: the
+ * caller reports that as "not verified", never as a match and never as a mismatch.
  *
  * It exists because two chains mean two RPC variables, and the likeliest mistake is one pointed at
- * the other chain. Nothing then errors usefully: a vault's address has no code there, so reads come
- * back as empty data and the failure reads as a broken vault or an empty position.
+ * the other chain. Nothing then errors usefully: a vault's address has no code there, so reads fail
+ * with "returned no data" and the failure reads as a broken vault.
+ *
+ * Bounded on purpose. The transport's own deadline is 10 s and a rate-limited `eth_chainId` is waited
+ * out for all of it, which would make a health check that already has its answer wait ten seconds
+ * for a second one (measured in review). An answer is remembered per endpoint URL, so a process asks
+ * each endpoint once.
  */
-export async function rpcChainMismatch(client: ReadClient, chainId: SupportedChainId): Promise<number | undefined> {
+export async function endpointChainId(client: ReadClient, rpcUrl: string, timeoutMs: number = CHAIN_PROBE_MS): Promise<number | undefined> {
+  const known = reportedChain.get(rpcUrl);
+  if (known !== undefined) return known;
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const timedOut = new Promise<undefined>((r) => {
+    timer = setTimeout(() => r(undefined), timeoutMs);
+    timer.unref?.();
+  });
   try {
-    const got = await client.getChainId();
-    return got === chainId ? undefined : got;
-  } catch {
-    return undefined;
+    const got = await Promise.race([client.getChainId().catch(() => undefined), timedOut]);
+    if (got !== undefined) reportedChain.set(rpcUrl, got);
+    return got;
+  } finally {
+    if (timer !== undefined) clearTimeout(timer);
   }
+}
+
+/** An endpoint a tool is about to read through, and the NAME of the variable that supplied it. */
+export interface Endpoint {
+  client: ReadClient;
+  url: string;
+  source: string;
+}
+
+/**
+ * The first of these endpoints that answers for a chain other than `chainId`, or `undefined`.
+ * A chain's public endpoint is never asked: it is this client's own constant, so the question
+ * would be a request to a third party with a known answer. An endpoint that does not say is not a
+ * mismatch.
+ */
+export async function firstEndpointOnWrongChain(chainId: SupportedChainId, endpoints: Endpoint[]): Promise<{ source: string; answersFor: number } | undefined> {
+  const asked = endpoints.filter((e) => e.url !== PUBLIC_RPC[chainId]);
+  const said = await Promise.all(asked.map((e) => endpointChainId(e.client, e.url)));
+  for (const [i, id] of said.entries()) {
+    if (id !== undefined && id !== chainId) return { source: asked[i]!.source, answersFor: id };
+  }
+  return undefined;
+}
+
+/** TEST SEAM — forgets what every endpoint said, so one test's mock port cannot answer for the next. NOT re-exported from index.ts. */
+export function __forgetEndpointChainsForTests(): void {
+  reportedChain.clear();
+}
+
+/**
+ * Which variable supplied the endpoint `earn_balance` scans events through — the chain's logs
+ * variable when it resolves, otherwise whatever supplied the general RPC. The NAME only.
+ */
+export function logsRpcSourceForEnv(chainId: SupportedChainId): { source: string; configured: boolean } {
+  const k = CHAIN_INFO[chainId].logsRpcEnv;
+  return rpcUrlFromEnvValue(process.env[k]) ? { source: k, configured: true } : rpcSourceForEnv(chainId);
 }

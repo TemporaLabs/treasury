@@ -30,8 +30,9 @@ on the plugin path too. A keyed URL is a secret: tool output never repeats it �
 without the endpoint.
 
 `earn_status` with `chain` checks that chain's RPC. 🔴 **`rpc: "wrong_chain"` means the variable for
-that chain holds an endpoint for a different one** — say so and stop; every read through it would
-come back empty and look like an empty position or a broken vault.
+that chain holds an endpoint for a different one** — say so and stop. The same refusal comes back
+from a quote, a pre-flight or a balance (*"the endpoint in … answers for chain N"*): it is a setup
+problem to report, naming the variable, and never a verdict about the vault or the position.
 
 `earn_balance` reads history through `eth_getLogs`, starting at the vault's deployment block.
 🔴 **Read `scan.wholeHistory`, not `scan.complete`.** `complete` only says shares in − shares out
@@ -89,6 +90,10 @@ bridge. **Which chain is the operator's decision. Ask; do not pick.**
   their USDC is, that is the answer for the rest of the task.
 - **Never ask for a withdrawal, a balance or a quote on an existing position.** A position is on
   the chain its vault is on. Name the vault and the tools use the right chain.
+- **If no vault was named and you do not already know which vault holds the position, find out
+  before you answer.** A tool called with neither `vault` nor `chain` reads the default chain's
+  default vault, and "no position there" says nothing about the others. Call `earn_balance` for each
+  listed vault first. If more than one holds shares and the request is to withdraw, ask which position.
 - **"The default" with no chain named means the default chain's default vault** — only when the
   operator says to use the default, not as a way to skip the question.
 - **An account's positions on different chains are separate.** To report everything an account
@@ -101,7 +106,8 @@ bridge. **Which chain is the operator's decision. Ask; do not pick.**
 1. **Settle the chain first (above), then the vault.** If the operator names no vault, use that
    chain's default (`earn_vaults` → `chains[].default`; today Tempora Labs Cash Plus USDC (Test 2) on
    Base and Tempora Labs Cash Plus USDC (Test 2C) on Arbitrum One, both open to any account). Every listed vault is a Tempora vault.
-   Read `defaultAccess`: when it is `"whitelist"`, run `earn_status` for the account first, and if
+   Read that chain's `defaultAccess` (`chains[].defaultAccess`; the top-level one is the default
+   chain's): when it is `"whitelist"`, run `earn_status` for the account first, and if
    it returns `WHITELIST_GATED`, **tell the operator the account is not admitted to that vault and that
    admission is a fund-side action — do not offer a substitute and do not retry.** A listed vault that
    is not the default may be gated even when the default is open.

@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it } from "vitest";
-import { CHAIN_INFO, chainIdForKey, logsFallbackUrlFromEnv, logsRpcUrlFromEnv, makePublicClient, makeRateLimitedFetch, PUBLIC_RPC, publicRpcHint, resolvedRpcSecrets, RPC_TIMEOUT_MS, rpcChainMismatch, rpcSourceForEnv, rpcUrlFromEnv, supportedChainIds } from "../src/client.js";
+import { CHAIN_INFO, chainIdForKey, logsFallbackUrlFromEnv, logsRpcUrlFromEnv, makePublicClient, makeRateLimitedFetch, PUBLIC_RPC, publicRpcHint, resolvedRpcSecrets, RPC_TIMEOUT_MS, endpointChainId, firstEndpointOnWrongChain, __forgetEndpointChainsForTests, logsRpcSourceForEnv, rpcSourceForEnv, rpcUrlFromEnv, supportedChainIds } from "../src/client.js";
 import { createServer } from "node:http";
 
 const KEYS = ["TREASURY_RPC_BASE", "TREASURY_LOGS_RPC_BASE", "BASE_RPC_URL", "TREASURY_RPC_ARBITRUM", "TREASURY_LOGS_RPC_ARBITRUM", "ARBITRUM_RPC_URL"] as const;
@@ -416,36 +416,141 @@ describe("logsFallbackUrlFromEnv on a second chain — TREASURY_LOGS_FALLBACK na
   });
 });
 
-describe("rpcChainMismatch — does the endpoint answer for the chain the caller thinks it does", () => {
-  const serve = async (reply: (method: string) => unknown, status = 200) => {
+describe("endpointChainId — which chain does the endpoint say it is", () => {
+  /** `chainReply` answers eth_chainId: a hex id, "hang" to never answer, or "error" for a JSON-RPC error. */
+  const serve = async (chainReply: string) => {
+    let chainIdCalls = 0;
     const srv = createServer((req, res) => {
       let b = "";
       req.on("data", (c) => (b += c));
       req.on("end", () => {
         const r = JSON.parse(b) as { id: number; method: string };
-        res.writeHead(status, { "content-type": "application/json" });
-        res.end(JSON.stringify({ jsonrpc: "2.0", id: r.id, result: reply(r.method) }));
+        if (r.method === "eth_chainId") {
+          chainIdCalls++;
+          if (chainReply === "hang") return; // never answers
+          if (chainReply === "error") {
+            res.writeHead(200, { "content-type": "application/json" });
+            res.end(JSON.stringify({ jsonrpc: "2.0", id: r.id, error: { code: -32000, message: "method not available" } }));
+            return;
+          }
+        }
+        res.writeHead(200, { "content-type": "application/json" });
+        res.end(JSON.stringify({ jsonrpc: "2.0", id: r.id, result: r.method === "eth_chainId" ? chainReply : "0x1" }));
       });
     });
     await new Promise<void>((r) => srv.listen(0, "127.0.0.1", r));
     const { port } = srv.address() as { port: number };
-    return { url: `http://127.0.0.1:${port}`, close: () => new Promise<void>((r) => srv.close(() => r())) };
+    return { url: `http://127.0.0.1:${port}`, calls: () => chainIdCalls, close: () => new Promise<void>((r) => { srv.closeAllConnections(); srv.close(() => r()); }) };
   };
-  it("returns the endpoint's chain id when it is the wrong one, and undefined when it matches", async () => {
-    const baseEndpoint = await serve(() => "0x2105");
+  afterEach(() => __forgetEndpointChainsForTests());
+
+  it("returns what the endpoint says — whatever chain the CLIENT was built for", async () => {
+    const baseEndpoint = await serve("0x2105");
     try {
-      expect(await rpcChainMismatch(makePublicClient(42161, baseEndpoint.url), 42161)).toBe(8453);
-      expect(await rpcChainMismatch(makePublicClient(8453, baseEndpoint.url), 8453)).toBeUndefined();
+      // an Arbitrum client on a Base endpoint: the endpoint's answer, not the client's assumption
+      expect(await endpointChainId(makePublicClient(42161, baseEndpoint.url), baseEndpoint.url)).toBe(8453);
     } finally {
       await baseEndpoint.close();
     }
   });
-  it("an endpoint that does not answer is NOT a mismatch — that is the caller's own read to report", async () => {
-    const dead = await serve(() => "0x2105", 500);
+
+  it("an endpoint that answers with an error did not SAY — undefined, never a match and never a mismatch", async () => {
+    const mute = await serve("error");
     try {
-      expect(await rpcChainMismatch(makePublicClient(42161, dead.url), 42161)).toBeUndefined();
+      expect(await endpointChainId(makePublicClient(42161, mute.url), mute.url)).toBeUndefined();
     } finally {
-      await dead.close();
+      await mute.close();
     }
+  });
+
+  it("🔴 is bounded: an endpoint that never answers eth_chainId costs the probe's own deadline, not the transport's 10 s", async () => {
+    const slow = await serve("hang");
+    try {
+      const t0 = Date.now();
+      expect(await endpointChainId(makePublicClient(42161, slow.url), slow.url, 300)).toBeUndefined();
+      const elapsed = Date.now() - t0;
+      expect(elapsed).toBeGreaterThanOrEqual(250);
+      expect(elapsed).toBeLessThan(2_000); // the transport deadline is RPC_TIMEOUT_MS
+      expect(RPC_TIMEOUT_MS).toBeGreaterThan(2_000); // …which is what makes the line above a bound
+    } finally {
+      await slow.close();
+    }
+  });
+
+  it("asks each endpoint ONCE per process — and does not remember a non-answer", async () => {
+    const arb = await serve("0xa4b1");
+    const mute = await serve("error");
+    try {
+      const c = makePublicClient(42161, arb.url);
+      expect(await endpointChainId(c, arb.url)).toBe(42161);
+      expect(await endpointChainId(c, arb.url)).toBe(42161);
+      expect(arb.calls()).toBe(1);
+      const m = makePublicClient(42161, mute.url);
+      await endpointChainId(m, mute.url);
+      await endpointChainId(m, mute.url);
+      expect(mute.calls()).toBe(2); // a failure is asked again next time
+    } finally {
+      await arb.close();
+      await mute.close();
+    }
+  });
+});
+
+describe("firstEndpointOnWrongChain — which configured endpoint is on another chain", () => {
+  afterEach(() => __forgetEndpointChainsForTests());
+  /** A stand-in client that says it is `id` (or throws), and counts how often it was asked. */
+  const fake = (id: number | "throws") => {
+    const c = { asked: 0, getChainId: async () => { c.asked++; if (id === "throws") throw new Error("no answer"); return id; } };
+    return c;
+  };
+  it("names the first endpoint that answers for another chain, by its variable — and skips ones that match or do not say", async () => {
+    const ok = fake(42161), mute = fake("throws"), wrong = fake(8453);
+    const found = await firstEndpointOnWrongChain(42161, [
+      { client: ok as never, url: "https://a.invalid/1", source: "TREASURY_RPC_ARBITRUM" },
+      { client: mute as never, url: "https://a.invalid/2", source: "TREASURY_LOGS_RPC_ARBITRUM" },
+      { client: wrong as never, url: "https://a.invalid/3", source: "TREASURY_LOGS_FALLBACK" },
+    ]);
+    expect(found).toEqual({ source: "TREASURY_LOGS_FALLBACK", answersFor: 8453 });
+    expect(await firstEndpointOnWrongChain(42161, [{ client: ok as never, url: "https://a.invalid/1", source: "TREASURY_RPC_ARBITRUM" }])).toBeUndefined();
+  });
+  it("never asks a chain's own public endpoint — it is this client's constant, and the question is a third-party request with a known answer", async () => {
+    const pub = fake(8453); // would be reported as wrong if it were asked
+    expect(await firstEndpointOnWrongChain(42161, [{ client: pub as never, url: PUBLIC_RPC[42161], source: "public default" }])).toBeUndefined();
+    expect(pub.asked).toBe(0);
+    // the control: the same stand-in under any other URL IS asked, and is reported
+    expect(await firstEndpointOnWrongChain(42161, [{ client: pub as never, url: "https://not-the-public-one.invalid", source: "X" }])).toEqual({ source: "X", answersFor: 8453 });
+    expect(pub.asked).toBe(1);
+  });
+});
+
+describe("logsRpcSourceForEnv — the NAME of the variable the event scan reads through", () => {
+  it("the chain's logs variable when it resolves, otherwise whatever supplied the general RPC", () => {
+    clearAll();
+    expect(logsRpcSourceForEnv(42161)).toEqual({ source: "public default", configured: false });
+    process.env.TREASURY_RPC_ARBITRUM = "https://arb.example.invalid/v2/ARBKEY1234";
+    expect(logsRpcSourceForEnv(42161)).toEqual({ source: "TREASURY_RPC_ARBITRUM", configured: true });
+    process.env.TREASURY_LOGS_RPC_ARBITRUM = "https://arblogs.example.invalid/v2/ARBKEY5678";
+    expect(logsRpcSourceForEnv(42161)).toEqual({ source: "TREASURY_LOGS_RPC_ARBITRUM", configured: true });
+    expect(logsRpcSourceForEnv(8453)).toEqual({ source: "public default", configured: false }); // Base is untouched by Arbitrum's
+  });
+});
+
+describe("resolvedRpcSecrets — a chain's own name in the URL is not a secret", () => {
+  // Providers put the chain in the URL. A path segment or first host label of 8+ characters is
+  // registered as a secret, and "arbitrum" is exactly 8: with such a URL every refusal naming the
+  // chain read `chains with a vault: base, <redacted>` (measured in review, three provider shapes).
+  for (const url of ["https://rpc.provider.invalid/arbitrum/KEYabcdef123456", "https://arbitrum.gateway.provider.invalid/KEYabcdef123456", "https://ARBITRUM.provider.invalid/v1/KEYabcdef123456"]) {
+    it(`${url.replace("KEYabcdef123456", "<key>")}: the key is registered, the chain name is not`, () => {
+      clearAll();
+      process.env.TREASURY_RPC_ARBITRUM = url;
+      const s = resolvedRpcSecrets();
+      expect(s).toContain("KEYabcdef123456"); // the control: the redactor still has the real secret
+      expect(s.map((x) => x.toLowerCase())).not.toContain("arbitrum");
+    });
+  }
+  it("a longer segment that merely CONTAINS the chain name is still registered", () => {
+    clearAll();
+    process.env.TREASURY_RPC_ARBITRUM = "https://rpc.provider.invalid/arbitrum-KEYabcdef123456";
+    expect(resolvedRpcSecrets()).toContain("arbitrum-KEYabcdef123456");
   });
 });

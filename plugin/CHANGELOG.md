@@ -4,6 +4,19 @@ All notable changes to the Agent Treasury plugin are recorded here. The format f
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versions follow [SemVer](https://semver.org/).
 The product's own changes are in the repository's [`CHANGELOG.md`](../CHANGELOG.md).
 
+## [v0.1.2] - Unreleased
+
+Carries `@temporalabs/treasury` v0.1.2.
+
+### Added
+- **The `earn` skill works on more than one chain.** Its description now names Base and Arbitrum,
+  and it has a section on choosing the chain: the agent asks the operator which chain before
+  preparing a deposit when they have not said, and reads every listed vault before answering a
+  balance or withdrawal question that names none.
+- The plugin forwards `TREASURY_RPC_ARBITRUM` and `TREASURY_LOGS_RPC_ARBITRUM` to the server, beside
+  the two Base variables.
+- A trigger case for a deposit on Arbitrum.
+
 ## [v0.1.1] - 2026-09-29
 
 Carries `@temporalabs/treasury` v0.1.1.

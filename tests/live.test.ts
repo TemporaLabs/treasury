@@ -11,7 +11,7 @@ import { describe, it, expect } from "vitest";
 import { erc4626Abi } from "../src/abi/erc4626.js";
 import { type VaultEntry } from "../src/registry-schema.js";
 import { parseAbi } from "viem";
-import { makePublicClient, rpcChainMismatch, rpcUrlFromEnv, PUBLIC_RPC } from "../src/client.js";
+import { makePublicClient, endpointChainId, rpcUrlFromEnv, PUBLIC_RPC } from "../src/client.js";
 import { preflightDeposit } from "../src/preflight.js";
 import { quoteDeposit, quoteWithdraw } from "../src/quote.js";
 import { getPosition } from "../src/position.js";
@@ -173,10 +173,10 @@ liveArbitrum("preflight, quotes and position against live Arbitrum One (read-onl
   const vault = () => defaultVault(42161);
 
   it("the configured endpoint IS Arbitrum One — and the check that says so can say otherwise", async () => {
-    expect(await rpcChainMismatch(client, 42161)).toBeUndefined();
-    // The control: the SAME endpoint, asked whether it is Base, must report the mismatch. Without
-    // this arm, a check that always returned undefined would pass the line above.
-    expect(await rpcChainMismatch(makePublicClient(8453, rpcUrlFromEnv(42161)), 8453)).toBe(42161);
+    expect(await endpointChainId(client, rpcUrlFromEnv(42161))).toBe(42161);
+    // The control: Base's public endpoint through the same function says 8453. Without this arm, a
+    // probe that always returned 42161 would pass the line above.
+    expect(await endpointChainId(makePublicClient(8453, PUBLIC_RPC[8453]), PUBLIC_RPC[8453])).toBe(8453);
   });
 
   it("the Arbitrum default (Morpho V2, open) classifies NEEDS_APPROVAL from a stranger while maxDeposit() reads 0", async () => {

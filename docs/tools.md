@@ -20,8 +20,10 @@ A vault is on one chain. Every tool that takes `vault` also takes `chain`: `"bas
 | given | omitted | that vault, on the chain it is on |
 | given | given | that vault — **refused** if it is on a different chain; the error names the chain the vault is on and the vaults on the chain that was asked for |
 
-An unknown chain name is refused, with the list of chains that have a vault. Nothing is resolved by
-guessing: the two readings of a mismatch are different contracts on different chains.
+An unknown chain name is refused, with the list of chains that have a vault. Names are exact:
+`"Arbitrum"` and `"42161"` are refused. An empty string counts as omitted, for `chain` as for
+`vault`. Nothing is resolved by guessing: the two readings of a mismatch are different contracts on
+different chains.
 
 Every result that names a vault carries `chain` and `chainId`. On a prepared envelope they come
 before the calls, and every call inside carries the same `chainId`: a call is correct on that chain
@@ -87,9 +89,17 @@ about to use. `rpc` is one of:
 
 | `rpc` | meaning |
 |---|---|
-| `ok` | the endpoint answered, and for a configured endpoint, answered for this chain |
+| `ok` | the endpoint answered. For a configured endpoint, `chainVerified` says whether it also said it is this chain: `false` means it answered a block number and would not say which chain it is |
 | `unreachable` | the endpoint did not answer; `reason` says why, without the URL |
-| `wrong_chain` | the configured endpoint answers for a different chain (`rpcChainId`). Every read through it would return empty data. Point the variable `reason` names at an endpoint for this chain |
+| `wrong_chain` | the configured endpoint answers for a different chain (`rpcChainId`). Reads through it fail with "returned no data", because the vault has no contract there. Point the variable `reason` names at an endpoint for this chain |
+
+When a separate logs endpoint is configured (`TREASURY_LOGS_RPC_BASE`, `TREASURY_LOGS_RPC_ARBITRUM`),
+the result also carries `logsRpc` (`ok`, `wrong_chain` or `unreachable`) and `logsRpcSource`: that is
+the endpoint `earn_balance` reads through, and it can be wrong on its own.
+
+The same check runs inside every tool that reads the chain. With `account`, `earn_status` — like
+`earn_quote` and `earn_balance` — refuses with *"the endpoint in `<variable>` answers for chain N,
+not …"* instead of returning a verdict read from the wrong chain.
 
 With `account`, the access verdict for that account from a **simulated `deposit()`**:
 

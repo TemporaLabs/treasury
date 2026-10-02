@@ -5,8 +5,8 @@ test pins the exact set — the seven here plus `TREASURY_FORK`, a switch only t
 never the shipped code — so a variable read anywhere else in the package fails the build.
 
 **Each chain has its own variables, and a chain reads only its own.** An Arbitrum call never falls
-back to a Base endpoint: the same address read on the wrong chain answers with empty data, which
-looks like an empty position, not like a misconfiguration.
+back to a Base endpoint: a vault's address has no contract on the other chain, so reads there fail
+with "returned no data", which looks like a broken vault, not like a misconfiguration.
 
 | variable | purpose | unset |
 |---|---|---|
@@ -20,7 +20,11 @@ looks like an empty position, not like a misconfiguration.
 
 **Check a chain's RPC with `earn_status` and `chain`.** It reports which variable supplied the
 endpoint, and `rpc: "wrong_chain"` when that endpoint answers for a different chain — the likeliest
-mistake once there are two variables.
+mistake once there are two variables. A separate logs endpoint is reported beside it as `logsRpc`.
+The tools that read the chain make the same check on every call: a pre-flight, a quote or a balance
+through an endpoint for the wrong chain is refused, and the refusal names the variable that holds
+it. An endpoint is asked which chain it is once per process, with a three-second limit; one that
+does not say is reported as `chainVerified: false`, not as a match.
 
 **A keyed RPC URL is a secret.** Treasury treats it as one: no tool output, no error, no health check
 ever repeats it. `earn_status` reports *which variable* supplied the RPC, never its value.

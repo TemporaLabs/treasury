@@ -11,7 +11,7 @@
  *   earn_vaults    earn_terms     earn_quote (direction)   earn_status (no args = health)
  *   earn_balance   earn_claim     earn_prepare_deposit     earn_prepare_withdraw
  *
- * Two contracts worth stating here because they are easy to erode:
+ * Three contracts worth stating here because they are easy to erode:
  *
  * 1. `earn_prepare_*` return an ENVELOPE, `{ requires_signature, status: "unsigned", calls }`,
  *    not a bare array. This cannot stop a model reporting "deposited" — nothing at this boundary
@@ -34,7 +34,7 @@ import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js"
 import { z } from "zod";
 import { redactEndpoints, registerSecretSource } from "../redact.js";
 import { isAddress, getAddress } from "viem";
-import { CHAIN_INFO, isSupportedChainId, makePublicClient, rpcUrlFromEnv, logsRpcUrlFromEnv, rpcSourceForEnv, resolvedRpcSecrets, publicRpcHint, logsFallbackUrlFromEnv, rpcChainMismatch, type SupportedChainId } from "../client.js";
+import { CHAIN_INFO, isSupportedChainId, makePublicClient, rpcUrlFromEnv, logsRpcUrlFromEnv, rpcSourceForEnv, logsRpcSourceForEnv, resolvedRpcSecrets, publicRpcHint, logsFallbackUrlFromEnv, endpointChainId, firstEndpointOnWrongChain, supportedChainIds, type Endpoint, type SupportedChainId } from "../client.js";
 import { defaultChainId, defaultVault, depositableVaults, listVaults, loadRegistry, offeredChains, resolveVault } from "../registry.js";
 import { linksFor } from "../links.js";
 import type { VaultEntry } from "../registry-schema.js";
@@ -56,17 +56,33 @@ const accountArg = addressArg.describe("the account whose shares these are — t
 /**
  * `chain`, as every vault-taking tool accepts it: one of the chains that have a vault in the
  * registry, so a caller cannot name a chain there is nothing to do on. Built per server because the
- * list comes from the registry. The schema is a plain string so that an unknown name reaches
- * `resolveVault`, whose error lists the chains that are offered — a zod enum error would not.
+ * list comes from the registry.
+ *
+ * The schema is a plain string rather than an enum, for three reasons: the set of chains comes from
+ * the registry, which can be swapped after this schema is built; `vault` and `chain` are settled
+ * together in ONE place (`resolveVault`), so there is one refusal path to test; and that refusal
+ * says what to do next — which chain the vault is on, and which vaults the named chain has.
+ *
+ * 🔴 It must not throw. This runs while the server is being BUILT, and it reads the registry: a
+ * registry that does not parse would stop the server from starting at all, and a host shows that as
+ * a closed connection with no reason. Falling back to every supported chain lets the server start,
+ * and each tool then reports the registry's own violation by name, as it did before `chain` existed.
  */
-const chainArg = () =>
-  z
+const chainArg = () => {
+  let offered: string[];
+  try {
+    offered = offeredChains().map((c) => c.key);
+  } catch {
+    offered = supportedChainIds.map((id) => CHAIN_INFO[id].key);
+  }
+  return z
     .string()
     .optional()
     .describe(
-      `which chain: ${offeredChains().map((c) => `"${c.key}"`).join(" or ")}. Omit for ${CHAIN_INFO[defaultChainId()].key} (the default), or when \`vault\` already names a vault. ` +
+      `which chain: ${offered.map((k) => `"${k}"`).join(" or ")}. Omit for ${CHAIN_INFO[defaultChainId()].key} (the default), or when \`vault\` already names a vault. ` +
         "If the operator has not said which chain to deposit on, ASK them before preparing a deposit. A `vault` that is on a different chain than `chain` is refused.",
     );
+};
 
 function supportedVault(symbol?: string, chain?: string) {
   const vault = resolveVault(symbol, chain);
@@ -76,7 +92,39 @@ function supportedVault(symbol?: string, chain?: string) {
 
 function clientFor(symbol?: string, chain?: string) {
   const vault = supportedVault(symbol, chain);
-  return { vault, client: makePublicClient(vault.chainId, rpcUrlFromEnv(vault.chainId)) };
+  const url = rpcUrlFromEnv(vault.chainId);
+  const client = makePublicClient(vault.chainId, url);
+  return { vault, client, endpoints: [{ client, url, source: rpcSourceForEnv(vault.chainId).source }] };
+}
+
+/** The sentence for the first endpoint that answers for a chain other than the vault's, or `undefined`. */
+async function wrongChainReason(vault: VaultEntry, endpoints: Endpoint[]): Promise<string | undefined> {
+  const wrong = await firstEndpointOnWrongChain(vault.chainId, endpoints);
+  if (wrong === undefined) return undefined;
+  const info = CHAIN_INFO[vault.chainId];
+  return `the endpoint in ${wrong.source} answers for chain ${wrong.answersFor}, not ${info.name} (${vault.chainId}). It must be an endpoint for ${info.name}; until it is, no read for this chain can be trusted.`;
+}
+
+/**
+ * Runs a tool's reads WHILE checking that each configured endpoint answers for the vault's chain.
+ * A mismatch is reported INSTEAD of whatever the reads returned or threw.
+ *
+ * Why instead: through an endpoint for another chain, the vault's address has no contract, so the
+ * reads fail with "returned no data … the address is not a contract" (measured in review, on every
+ * RPC-touching tool, in both directions). That is loud, and it names the wrong thing: it reads as a
+ * broken vault. The check runs alongside the reads, so it adds no round trip to a healthy call.
+ */
+async function onItsChain<T>(vault: VaultEntry, endpoints: Endpoint[], work: () => Promise<T>): Promise<T> {
+  const [reason, settled] = await Promise.all([
+    wrongChainReason(vault, endpoints),
+    work().then(
+      (value) => ({ ok: true as const, value }),
+      (error: unknown) => ({ ok: false as const, error }),
+    ),
+  ]);
+  if (reason !== undefined) throw new Error(reason);
+  if (!settled.ok) throw settled.error;
+  return settled.value;
 }
 
 /** Which chain a response is about — the name a caller passes back as `chain`, and the id a signer checks. */
@@ -264,14 +312,14 @@ export function buildServer(): McpServer {
     {
       title: "Server health, or a deposit pre-flight verdict",
       description:
-        "With NO `account`: is the server up and the chain's RPC reachable — chain, chain id, latest block, registry version, and which env var supplied the RPC (never the URL). Each chain has its own RPC, so pass `chain` to check the one you are about to use; `rpc` is `ok`, `unreachable`, or `wrong_chain` when the configured endpoint answers for a different chain. With `account`: simulates deposit() from that address and reports OPEN_READY, NEEDS_APPROVAL, WHITELIST_GATED, REVERTED_OTHER, REFUSED_BY_CLIENT or UNRESOLVED, never trusting maxDeposit(). The `mode` field says which answer you got.",
+        "With NO `account`: is the server up and the chain's RPC reachable — chain, chain id, latest block, registry version, and which env var supplied the RPC (never the URL). Each chain has its own RPC, so pass `chain` to check the one you are about to use; `rpc` is `ok`, `unreachable`, or `wrong_chain` when the configured endpoint answers for a different chain. `chainVerified: false` beside `ok` means the endpoint answered but did not say which chain it is. When a separate logs RPC is set, `logsRpc` reports it the same way. With `account`: simulates deposit() from that address and reports OPEN_READY, NEEDS_APPROVAL, WHITELIST_GATED, REVERTED_OTHER, REFUSED_BY_CLIENT or UNRESOLVED, never trusting maxDeposit(). The `mode` field says which answer you got.",
       inputSchema: { vault: vaultArg, chain, account: accountArg.optional(), amount_usdc: amountArg.optional() },
     },
     guarded(async ({ vault: symbol, chain, account, amount_usdc }) => {
       if (account !== undefined) {
-        const { vault, client } = clientFor(symbol, chain);
+        const { vault, client, endpoints } = clientFor(symbol, chain);
         const args = amount_usdc === undefined ? { vault, depositor: account, client } : { vault, depositor: account, client, assetsHuman: amount_usdc };
-        const verdict = await preflightDeposit(args);
+        const verdict = await onItsChain(vault, endpoints, () => preflightDeposit(args));
         // spread FIRST so the discriminant cannot be overwritten by a field of the same name
         return text({ ...verdict, mode: "preflight", account, ...onChain(vault), ...commitsMoney(vault) }, vault.chainId);
       }
@@ -306,25 +354,46 @@ export function buildServer(): McpServer {
       // 🔴 The health path RETURNS a verdict when the RPC is unreachable. It must never throw: a
       // tool that throws on a dead RPC answers nothing, which is the whole point of having it.
       try {
-        const client = makePublicClient(vault.chainId, rpcUrlFromEnv(vault.chainId));
+        const info = CHAIN_INFO[vault.chainId];
+        const url = rpcUrlFromEnv(vault.chainId);
+        const client = makePublicClient(vault.chainId, url);
         // Two chains mean two RPC variables, and one pointed at the other chain is the likeliest
-        // mistake. Asked only of an endpoint the operator configured, and alongside the block read so
-        // a dead endpoint costs no extra wait.
-        const [mismatch, latest] = await Promise.all([src.configured ? rpcChainMismatch(client, vault.chainId) : Promise.resolve(undefined), client.getBlockNumber()]);
-        if (mismatch !== undefined) {
-          const info = CHAIN_INFO[vault.chainId];
+        // mistake. Asked only of an endpoint the operator configured, alongside the block read, and
+        // bounded — so a healthy answer is never held up waiting for a second one.
+        const logsSrc = logsRpcSourceForEnv(vault.chainId);
+        const logsUrl = logsRpcUrlFromEnv(vault.chainId);
+        const separateLogs = logsUrl !== url;
+        const [said, logsSaid, latest] = await Promise.all([
+          src.configured ? endpointChainId(client, url) : Promise.resolve(undefined),
+          separateLogs ? endpointChainId(makePublicClient(vault.chainId, logsUrl), logsUrl) : Promise.resolve(undefined),
+          client.getBlockNumber(),
+        ]);
+        // The endpoint `earn_balance` scans through is a different variable, and it can be wrong on
+        // its own. Reported beside the main verdict, only when it IS a separate endpoint.
+        const logs = separateLogs
+          ? {
+              logsRpcSource: logsSrc.source,
+              logsRpc: logsSaid === undefined ? "unreachable" : logsSaid === vault.chainId ? "ok" : "wrong_chain",
+              ...(logsSaid !== undefined && logsSaid !== vault.chainId ? { logsRpcChainId: logsSaid } : {}),
+            }
+          : {};
+        if (said !== undefined && said !== vault.chainId) {
           return text(
             {
               ...base,
               rpc: "wrong_chain",
-              rpcChainId: mismatch,
+              rpcChainId: said,
               latestBlock: null,
-              reason: `the endpoint in ${src.source} answers for chain ${mismatch}, not ${info.name} (${vault.chainId}). Point ${info.rpcEnv[0]} at a ${info.name} endpoint; until then every read for this chain is wrong.`,
+              reason: `the endpoint in ${src.source} answers for chain ${said}, not ${info.name} (${vault.chainId}). Point ${info.rpcEnv[0]} at an endpoint for ${info.name}; until then no read for this chain can be trusted.`,
+              ...logs,
             },
             vault.chainId,
           );
         }
-        return text({ ...base, rpc: "ok", latestBlock: latest.toString() }, vault.chainId);
+        // `chainVerified` is the difference between "it answered, and for this chain" and "it
+        // answered a block number, and did not say which chain". Present only for a configured endpoint.
+        const verified = src.configured ? { chainVerified: said === vault.chainId } : {};
+        return text({ ...base, rpc: "ok", ...verified, latestBlock: latest.toString(), ...logs }, vault.chainId);
       } catch (e) {
         const reason = redactEndpoints(e instanceof Error ? e.message : String(e));
         return text({ ...base, rpc: "unreachable", latestBlock: null, reason }, vault.chainId);
@@ -347,7 +416,7 @@ export function buildServer(): McpServer {
       },
     },
     guarded(async ({ vault: symbol, chain, account, amount_usdc, direction }) => {
-      const { vault, client } = clientFor(symbol, chain);
+      const { vault, client, endpoints } = clientFor(symbol, chain);
       // 🔴 The tag is emitted from INSIDE each branch, beside the fields that branch produces —
       // never `{ direction, ...quote }` from the input argument. Measured in review: with the tag
       // taken from the input, swapping these two branches left `tsc -b` clean and all 61 tests
@@ -362,12 +431,12 @@ export function buildServer(): McpServer {
             direction: "deposit" as const,
             ...onChain(vault),
             ...commitsMoney(vault),
-            ...(await quoteDeposit({ vault, depositor: account, assetsHuman: amount_usdc, client })),
+            ...(await onItsChain(vault, endpoints, () => quoteDeposit({ vault, depositor: account, assetsHuman: amount_usdc, client }))),
           },
           vault.chainId,
         );
       }
-      return text({ direction: "withdraw" as const, ...onChain(vault), ...(await quoteWithdraw({ vault, owner: account, assetsHuman: amount_usdc, client })) }, vault.chainId);
+      return text({ direction: "withdraw" as const, ...onChain(vault), ...(await onItsChain(vault, endpoints, () => quoteWithdraw({ vault, owner: account, assetsHuman: amount_usdc, client }))) }, vault.chainId);
     }),
   );
 
@@ -444,14 +513,21 @@ export function buildServer(): McpServer {
       // `server.unit.test.ts` is what fails now).
       const fallbackUrl = logsFallbackUrlFromEnv(vault.chainId, logsUrl);
       const fallbackClient = fallbackUrl === undefined ? undefined : makePublicClient(vault.chainId, fallbackUrl);
-      const position = await getPosition({
-        vault,
-        principal: account,
-        client,
-        ...(fallbackClient ? { fallbackClient } : {}),
-        ...(lookback_blocks === undefined ? {} : { lookbackBlocks: BigInt(lookback_blocks) }),
-        ...(max_log_requests === undefined ? {} : { maxLogRequests: max_log_requests }),
-      });
+      // Every endpoint this read can go through: the logs RPC, and the fallback when the operator
+      // named one. A fallback on the wrong chain answers an event scan with an EMPTY list, which
+      // would be reported as a history that was read in full.
+      const endpoints: Endpoint[] = [{ client, url: logsUrl, source: logsRpcSourceForEnv(vault.chainId).source }];
+      if (fallbackClient && fallbackUrl !== undefined) endpoints.push({ client: fallbackClient, url: fallbackUrl, source: "TREASURY_LOGS_FALLBACK" });
+      const position = await onItsChain(vault, endpoints, () =>
+        getPosition({
+          vault,
+          principal: account,
+          client,
+          ...(fallbackClient ? { fallbackClient } : {}),
+          ...(lookback_blocks === undefined ? {} : { lookbackBlocks: BigInt(lookback_blocks) }),
+          ...(max_log_requests === undefined ? {} : { maxLogRequests: max_log_requests }),
+        }),
+      );
       return text({ ...onChain(vault), ...position }, vault.chainId);
     }),
   );

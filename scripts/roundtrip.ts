@@ -105,8 +105,8 @@ function check(cond: boolean, what: string, detail?: unknown): void {
   if (!cond) failures++;
 }
 type Precondition = { read: string; contract: string; owner: string; spender: string; minimum: string; why: string };
-type Call = { to: string; data: `0x${string}`; value: string; description: string; step: number; of: number; precondition?: Precondition };
-type Envelope = { requires_signature: boolean; status: string; next_step: string; calls: Call[] };
+type Call = { chainId: number; to: string; data: `0x${string}`; value: string; description: string; step: number; of: number; precondition?: Precondition };
+type Envelope = { requires_signature: boolean; status: string; chain: string; chainId: number; next_step: string; calls: Call[] };
 const decode = (c: Call) => decodeFunctionData({ abi: erc4626Abi, data: c.data });
 
 // ---- the eight steps ----------------------------------------------------------------------------
@@ -153,6 +153,7 @@ console.log("\n6. earn_prepare_deposit — the ALLOCATE leg (shares land on the 
 const dep = await tool<Envelope>("earn_prepare_deposit", { vault, account, amount_usdc: amount, receiver: account });
 check(dep.requires_signature === true && dep.status === "unsigned", "envelope: requires_signature=true, status=unsigned", dep);
 check(dep.calls.length === 2, "two calls: approve, then deposit", dep.calls.map((c) => c.description));
+check(dep.chainId === row.chainId && dep.calls.every((c) => c.chainId === row.chainId), `the envelope and every call are for chain ${row.chainId} (${row.chain})`, { envelope: dep.chainId, calls: dep.calls.map((c) => c.chainId) });
 const raw = parseUnits(amount, 6);
 {
   const [a, d] = dep.calls.map(decode);
@@ -174,6 +175,7 @@ console.log("\n7. earn_prepare_withdraw — the DEALLOCATE leg");
 const wd = await tool<Envelope>("earn_prepare_withdraw", { vault, account, receiver, amount_usdc: amount });
 check(wd.requires_signature === true && wd.status === "unsigned", "envelope: requires_signature=true, status=unsigned", wd);
 check(wd.calls.length === 1, "one call", wd.calls.map((c) => c.description));
+check(wd.chainId === row.chainId && wd.calls.every((c) => c.chainId === row.chainId), `the envelope and its call are for chain ${row.chainId} (${row.chain})`, { envelope: wd.chainId, calls: wd.calls.map((c) => c.chainId) });
 {
   const w = decode(wd.calls[0]!);
   check(w.functionName === "withdraw", "withdraw(assets, receiver, owner)", w);

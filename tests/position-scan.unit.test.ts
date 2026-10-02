@@ -403,7 +403,14 @@ describe("getPosition on a vault that is not on Base", () => {
     const fallback = infura(ARB_DEPLOYED + 7n);
     const pos = await getPosition({ vault: arb, principal: ACCOUNT, client: primary, fallbackClient: fallback.client });
     expect(pos.scan.source).toBe("fallback");
-    expect(pos.scan.note).toContain("Arbitrum One's public endpoint by default");
+    // On Arbitrum the variable cannot NAME the fallback (a URL there is a Base endpoint) — it can
+    // only forbid one, and the note says exactly that.
+    expect(pos.scan.note).toContain("the fallback endpoint (Arbitrum One's public endpoint; TREASURY_LOGS_FALLBACK=off forbids it) served the scan");
     expect(pos.scan.note).not.toMatch(/Base's public endpoint/);
+    // and on Base it still names the variable that can choose it
+    const basePrimary = provider({ fail: PUBLICNODE_ARCHIVE });
+    const baseFallback = provider({ window: 2_000n, depositBlock: DEPLOYED + 5n });
+    const basePos = await getPosition({ vault: VAULT, principal: ACCOUNT, client: basePrimary.client, fallbackClient: baseFallback.client, maxLogRequests: 100 });
+    expect(basePos.scan.note).toContain("the fallback endpoint (TREASURY_LOGS_FALLBACK, Base's public endpoint by default) served the scan");
   });
 });

@@ -80,10 +80,20 @@ Tempora vaults. Proposing a new destination needs Tempora Labs' agreement; say s
 A row is a set of measurements. `scripts/registry-check.ts` reconciles each one against the chain it
 is on, and the pull request should say which block it was measured at.
 
-A vault on a chain Treasury does not support yet needs that chain added first: its entry in `chains`
-and `CHAIN_INFO` (`src/client.ts`), its literal in the registry schema, its explorer in `src/links.ts`,
-and its RPC variables in the plugin's `.mcp.json` and in [`docs/configuration.md`](docs/configuration.md).
-Each chain has exactly one vault marked `isDefault`, named in `src/config/earn.ts`.
+A vault on a chain Treasury does not support yet needs that chain added first:
+
+- its entry in `chains` and `CHAIN_INFO` (`src/client.ts`), its literal in the registry schema, and
+  its explorer in `src/links.ts`. The compiler holds these together: a chain in one and not the
+  others does not build;
+- its default vault in `src/config/earn.ts` (`defaultVaultByChain`). Each chain has exactly one vault
+  marked `isDefault`;
+- its RPC variables in the plugin's `.mcp.json`, in [`docs/configuration.md`](docs/configuration.md),
+  and in the allowlist and the exact-set assertion of `tests/boundary.unit.test.ts`. That is the one
+  edit to the boundary test a new chain needs; the rule that it is not weakened to pass still holds;
+- the tests that pin the supported chains (`tests/registry.test.ts`, `tests/client.unit.test.ts`),
+  restated for the new set;
+- the places that name the chains in prose: the `earn` skill, [`docs/tools.md`](docs/tools.md) and the
+  README. CI checks the skill's tool table, not its prose.
 
 ## Development
 
