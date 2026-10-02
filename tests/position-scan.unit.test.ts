@@ -7,7 +7,7 @@
  * Every error string below is one a real provider returned on 2026-09-14.
  */
 import { describe, it, expect } from "vitest";
-import { getPosition, MAX_SCAN_TXS, UNKNOWN_AFTER_SCAN_FAILURE, UNKNOWN_INCOMPLETE_SCAN } from "../src/position.js";
+import { getPosition, MAX_SCAN_TXS, rangeLimitFromError, UNKNOWN_AFTER_SCAN_FAILURE, UNKNOWN_INCOMPLETE_SCAN } from "../src/position.js";
 import { getVault, listVaults } from "../src/registry.js";
 import { EARN } from "../src/config/earn.js";
 
@@ -23,6 +23,8 @@ const HEAD = DEPLOYED + 3_384n;
 const PUBLICNODE_ARCHIVE = "Archive requests require a personal token. Get one at: https://example.invalid";
 const ALCHEMY_FREE = "Under the Free tier plan, you can make eth_getLogs requests with up to a 10 block range.";
 const BASE_PUBLIC = "eth_getLogs is limited to a 2,000 range";
+/** Infura on Arbitrum One, returned on 2026-10-02 for an 798,952-block eth_getLogs range. */
+const INFURA_ARBITRUM = "range 798952 exceeds limit of 10000";
 
 type GetLogsArgs = { fromBlock: bigint; toBlock: bigint; event: { name: string } };
 
@@ -332,5 +334,76 @@ describe("getPosition — the transactions behind the scan (#9)", () => {
     expect(pos.entryBasisUsdc).toBe(UNKNOWN_AFTER_SCAN_FAILURE);
     expect(pos.scan.depositTxs).toEqual([]);
     expect(pos.scan.withdrawTxs).toEqual([]);
+  });
+});
+
+/**
+ * A second chain brings a second provider vocabulary and a second set of variable names. Both are
+ * things an operator ACTS on, so both are pinned: a window refusal this client cannot read becomes
+ * "event scan FAILED" on a provider that could have served the range in chunks, and a note naming
+ * Base's variable for an Arbitrum vault sends the operator to set the wrong one.
+ */
+describe("getPosition on a vault that is not on Base", () => {
+  const arb = getVault("tlCashPlusUSDC2C");
+  const ARB_DEPLOYED = BigInt(arb.deployedAtBlock!);
+  const ARB_HEAD = ARB_DEPLOYED + 45_000n;
+  /** 1 share (18 decimals) from one Deposit; the provider refuses any range wider than 10,000 blocks, in Infura's words. */
+  const infura = (depositBlock: bigint) => {
+    const calls: GetLogsArgs[] = [];
+    const client = {
+      getBlockNumber: async () => ARB_HEAD,
+      readContract: async ({ functionName }: { functionName: string }) => (functionName === "balanceOf" ? 10n ** 18n : functionName === "convertToAssets" ? 1_000_000n : 0n),
+      getLogs: async (a: GetLogsArgs) => {
+        calls.push(a);
+        const span = a.toBlock - a.fromBlock + 1n;
+        if (span > 10_000n) throw new Error(INFURA_ARBITRUM.replace("798952", String(span)));
+        if (a.event.name === "Deposit" && a.fromBlock <= depositBlock && depositBlock <= a.toBlock) return [{ ...log(depositBlock), args: { assets: 1_000_000n, shares: 10n ** 18n } }];
+        return [];
+      },
+    };
+    return { client: client as never, calls };
+  };
+
+  it("reads Infura's range refusal as a WINDOW: 'range N exceeds limit of 10000' → 10000", () => {
+    expect(rangeLimitFromError(new Error(INFURA_ARBITRUM))).toBe(10_000n);
+    // the wordings it already knew still parse, and an unrelated error is still not a window
+    expect(rangeLimitFromError(new Error(BASE_PUBLIC))).toBe(2_000n);
+    expect(rangeLimitFromError(new Error(ALCHEMY_FREE))).toBe(10n);
+    expect(rangeLimitFromError(new Error(PUBLICNODE_ARCHIVE))).toBeUndefined();
+    expect(rangeLimitFromError(new Error("execution reverted: exceeds limit of 10000"))).toBeUndefined(); // "limit of N" alone is not a range refusal
+  });
+
+  it("walks the vault's whole history in 10,000-block windows on that provider, with no fallback needed", async () => {
+    const p = infura(ARB_DEPLOYED + 7n);
+    const pos = await getPosition({ vault: arb, principal: ACCOUNT, client: p.client });
+    expect(pos.scan.providerWindow).toBe("10000");
+    expect(pos.scan.source).toBe("logs rpc");
+    expect(pos.scan.fromBlock).toBe(String(ARB_DEPLOYED));
+    expect(pos.scan.wholeHistory).toBe(true);
+    expect(pos.entryBasisUsdc).toBe("1 USDC");
+    // one sizing call that was refused, then five 10,000-block windows per event over 45,001 blocks
+    expect(p.calls.filter((c) => c.event.name === "Deposit")).toHaveLength(6);
+  });
+
+  it("a scan that cannot be read names ARBITRUM's logs variable — never Base's", async () => {
+    const dead = { ...infura(ARB_DEPLOYED + 7n).client as object, getLogs: async () => { throw new Error("some refusal no window can be sized from"); } } as never;
+    const pos = await getPosition({ vault: arb, principal: ACCOUNT, client: dead });
+    expect(pos.entryBasisUsdc).toBe(UNKNOWN_AFTER_SCAN_FAILURE);
+    expect(pos.scan.note).toContain("TREASURY_LOGS_RPC_ARBITRUM");
+    expect(pos.scan.note).not.toContain("TREASURY_LOGS_RPC_BASE");
+    // and the same failure on a Base vault still names Base's
+    const baseDead = { ...provider({ fail: "some refusal no window can be sized from" }).client as object } as never;
+    const basePos = await getPosition({ vault: VAULT, principal: ACCOUNT, client: baseDead });
+    expect(basePos.scan.note).toContain("TREASURY_LOGS_RPC_BASE");
+    expect(basePos.scan.note).not.toContain("ARBITRUM");
+  });
+
+  it("a handover to the fallback names the chain whose public endpoint served it", async () => {
+    const primary = { ...infura(ARB_DEPLOYED + 7n).client as object, getLogs: async () => { throw new Error(PUBLICNODE_ARCHIVE); } } as never;
+    const fallback = infura(ARB_DEPLOYED + 7n);
+    const pos = await getPosition({ vault: arb, principal: ACCOUNT, client: primary, fallbackClient: fallback.client });
+    expect(pos.scan.source).toBe("fallback");
+    expect(pos.scan.note).toContain("Arbitrum One's public endpoint by default");
+    expect(pos.scan.note).not.toMatch(/Base's public endpoint/);
   });
 });

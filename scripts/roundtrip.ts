@@ -5,6 +5,9 @@
  *   TREASURY_RPC_BASE=… npx tsx scripts/roundtrip.ts --account 0x… --receiver 0x… \
  *     [--vault <ticker>] [--amount 0.05] [--out ./roundtrip-out] [--server dist|src]
  *
+ * `--vault` decides the chain: a vault is on one chain, and the run uses that chain's RPC variable
+ * (`TREASURY_RPC_ARBITRUM` for a vault on Arbitrum One).
+ *
  * The round-trip harness. Vault and amount default from src/config/earn.ts (`roundTripVault`,
  * `roundTripAmountUsdc`) — the default vault; change `EARN.roundTripVault`, not this script. The
  * account has no default: no depositor address is configured anywhere in this package, by rule
@@ -112,19 +115,19 @@ child.stdin.write(JSON.stringify({ jsonrpc: "2.0", method: "notifications/initia
 console.log(`server: ${useDist ? "dist/mcp-server.mjs" : "src/mcp/server.ts (tsx)"}  vault: ${vault}  account: ${account}  amount: ${amount} USDC`);
 
 console.log("\n1. earn_vaults");
-const vaults = await tool<{ vaults: { symbol: string; address: string; chassis: string; isDefault: boolean; asset: { address: string } }[] }>("earn_vaults");
+const vaults = await tool<{ vaults: { symbol: string; address: string; chassis: string; isDefault: boolean; chain: string; chainId: number; asset: { address: string } }[] }>("earn_vaults");
 const row = vaults.vaults.find((v) => v.symbol === vault);
 check(Boolean(row), `registry lists ${vault}`, vaults.vaults.map((v) => v.symbol));
 if (!row) process.exit(1);
-console.log(`       ${row.address}  chassis=${row.chassis}  default=${row.isDefault}`);
+console.log(`       ${row.address}  chain=${row.chain} (${row.chainId})  chassis=${row.chassis}  default=${row.isDefault}`);
 
 console.log("\n2. earn_terms");
 const terms = await tool("earn_terms");
 check(Object.keys(terms).length > 0, "disclosures returned (an operator must acknowledge these before the first deposit)");
 
 console.log("\n3. earn_status — health, then preflight");
-const health = await tool<{ mode: string; rpcSource?: string; rpcConfigured?: boolean; chainId?: number }>("earn_status");
-check(health.mode === "health" && health.chainId === 8453, "server up on chain 8453", health);
+const health = await tool<{ mode: string; rpc?: string; rpcSource?: string; rpcConfigured?: boolean; chainId?: number }>("earn_status", { chain: row.chain });
+check(health.mode === "health" && health.chainId === row.chainId && health.rpc === "ok", `server up, and the ${row.chain} RPC answers for chain ${row.chainId}`, health);
 check(health.rpcConfigured === true, `RPC configured (source: ${health.rpcSource ?? "none"}) — on the public endpoint the steps below rate-limit`, health);
 const pre = await tool<{ mode: string; status: string; canDeposit: boolean; findings: string[]; balances?: { asset: string; shares: string } }>("earn_status", { vault, account, amount_usdc: amount });
 check(pre.mode === "preflight", "preflight mode", pre);

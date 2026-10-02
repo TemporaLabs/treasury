@@ -16,27 +16,31 @@ import type { VaultEntry } from "./registry-schema.js";
 /**
  * Block explorers, by chain.
  *
- * 🔴 THIS MAP MAY NOT BE MISSED A CHAIN. An unknown `chainId` interpolates `undefined` into the
- * URL — `undefined0x040f…` — which is a well-formed string, so nothing throws and the caller
- * receives a link that goes nowhere. Today that is unreachable, but only because the registry
- * schema pins `chainId: z.literal(8453)`: a wrong value is a compile-time error wherever a
- * `VaultEntry` is built, and `loadRegistry()` rejects the whole file on any parse failure.
- *
- * So the safety here is the LITERAL, not this map. **Widening the schema to a second chain
- * without adding its row below reintroduces the broken link**, silently. Add the row in the same
- * change, or make the lookup fail loudly instead.
+ * 🔴 THIS MAP MAY NOT MISS A CHAIN, and the lookup below throws if it does. An unknown `chainId`
+ * used to interpolate `undefined` into the URL — `undefined0x040f…` — which is a well-formed string,
+ * so nothing threw and the caller received a link that goes nowhere. That was unreachable only
+ * while the registry schema pinned one chain. It now accepts several, so the safety is the throw:
+ * a chain added to the schema without a row here fails the first `earn_vaults` call, and
+ * `registry.test.ts` builds a link for every chain the schema accepts.
  */
 const EXPLORER: Record<number, string> = {
   8453: "https://basescan.org/address/",
+  42161: "https://arbiscan.io/address/",
 };
 
 /**
- * The protocol's own front end, where one exists and the URL shape is known. A chassis with no
- * entry gets no link rather than a guessed one — a wrong app URL sends an operator to someone
- * else's vault, which is worse than sending them nowhere.
+ * The protocol's own front end, where one exists, the URL shape is known, AND the page resolves. A
+ * chassis or chain with no entry gets no link rather than a guessed one — a wrong app URL sends an
+ * operator to someone else's vault, which is worse than sending them nowhere, and a dead one teaches
+ * them the links are not worth opening.
+ *
+ * Morpho's app: Base only. Measured 2026-10-02: `app.morpho.org/arbitrum/vault/<address>` answers
+ * 404 for the Arbitrum vault in the registry, and Morpho's API does not know that address on chain
+ * 42161, while the Base page and API both resolve. Add Arbitrum's slug here once that page exists.
  */
+const MORPHO_APP_CHAIN: Record<number, string> = { 8453: "base" };
 const APP: Record<string, (chainId: number, address: string) => string | undefined> = {
-  "morpho-v2": (chainId, address) => (chainId === 8453 ? `https://app.morpho.org/base/vault/${address}` : undefined),
+  "morpho-v2": (chainId, address) => (MORPHO_APP_CHAIN[chainId] ? `https://app.morpho.org/${MORPHO_APP_CHAIN[chainId]}/vault/${address}` : undefined),
 };
 
 export interface VaultLinks {
@@ -47,7 +51,9 @@ export interface VaultLinks {
 }
 
 export function linksFor(vault: Pick<VaultEntry, "chainId" | "address" | "chassis">): VaultLinks {
-  const links: VaultLinks = { explorer: `${EXPLORER[vault.chainId]}${vault.address}` };
+  const explorer = EXPLORER[vault.chainId];
+  if (explorer === undefined) throw new Error(`no block explorer is recorded for chain ${vault.chainId}; add it to EXPLORER in src/links.ts`);
+  const links: VaultLinks = { explorer: `${explorer}${vault.address}` };
   const app = APP[vault.chassis]?.(vault.chainId, vault.address);
   if (app) links.app = app;
   return links;

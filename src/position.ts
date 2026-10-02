@@ -3,7 +3,7 @@ import { erc4626Abi } from "./abi/erc4626.js";
 import { type VaultEntry } from "./registry-schema.js";
 import { describeError } from "./redact.js";
 import { formatAmount } from "./units.js";
-import type { ReadClient } from "./client.js";
+import { CHAIN_INFO, type ReadClient } from "./client.js";
 
 /** ERC-4626's own events — the only durable record of what an account put in and took out. */
 const depositEvent = parseAbiItem("event Deposit(address indexed sender, address indexed owner, uint256 assets, uint256 shares)");
@@ -57,7 +57,7 @@ export interface Position {
   sharePriceInAssets: string;
   /**
    * `source` names which RPC served the event scan, never its URL: `"logs rpc"` (the configured one)
-   * or `"fallback"` (the endpoint `TREASURY_LOGS_FALLBACK` names, Base's public one by default, used
+   * or `"fallback"` (the endpoint `TREASURY_LOGS_FALLBACK` names, the chain's public one by default, used
    * when the configured one could not cover the range). 🔴 `complete` is only a RECONCILIATION and is
    * vacuously true for an empty window — `wholeHistory` is the coverage claim, and the note is written
    * from it.
@@ -113,7 +113,8 @@ export interface PositionArgs {
    * eth_getLogs error is one no window can be sized from (measured 2026-09-14: publicnode refuses any
    * range older than ~2,000 blocks with "Archive requests require a personal token"), or its window
    * would need more than `maxLogRequests` requests (Alchemy free tier: 10 blocks). The server passes
-   * Base's public endpoint, whose 2,000-block window serves history. Omitted ⇒ no fallback.
+   * the chain's public endpoint: Base's, whose 2,000-block window serves history, or Arbitrum One's,
+   * which served an 800,000-block range in one request (measured 2026-10-02). Omitted ⇒ no fallback.
    */
   fallbackClient?: ReadClient;
   /**
@@ -133,13 +134,15 @@ type LogEvent = typeof depositEvent | typeof withdrawEvent;
 
 /**
  * Parses the provider's stated maximum range out of its error, e.g. "limited to a 2,000 range" /
- * "up to a 10 block range". `undefined` means the failure is NOT a window refusal — a caller must
+ * "up to a 10 block range" / "range 798952 exceeds limit of 10000" (Infura on Arbitrum One, measured
+ * 2026-10-02). `undefined` means the failure is NOT a window refusal — a caller must
  * rethrow rather than narrow, or a dead provider and an empty result become the same answer.
  * Exported for `tests/access.ts`, which walks a different contract's logs and needs the same
  * distinction; NOT re-exported from index.ts.
  */
 export function rangeLimitFromError(e: unknown): bigint | undefined {
-  const m = String(e).replace(/,/g, "").match(/(?:limited to a|up to a)\s+(\d+)\s*(?:block)?\s*range/i);
+  const text = String(e).replace(/,/g, "");
+  const m = text.match(/(?:limited to a|up to a)\s+(\d+)\s*(?:block)?\s*range/i) ?? text.match(/range\s+\d+\s+exceeds limit of\s+(\d+)/i);
   return m ? BigInt(m[1]!) : undefined;
 }
 
@@ -480,6 +483,9 @@ export async function getPosition(args: PositionArgs): Promise<Position> {
   const basisUnknown = !wholeHistory;
 
   const fmtA = (x: bigint) => `${formatAmount(x, vault.asset.decimals)} ${vault.asset.symbol}`;
+  // The notes name the variable an operator would set, and that differs by chain.
+  const chain = CHAIN_INFO[vault.chainId];
+  const logsEnv = chain.logsRpcEnv;
   return {
     vault: vault.symbol,
     principal,
@@ -504,12 +510,12 @@ export async function getPosition(args: PositionArgs): Promise<Position> {
       ...(providerWindow !== undefined ? { providerWindow: providerWindow.toString() } : {}),
       source,
       wholeHistory,
-      note: (handover && !scanFailure ? `the configured logs RPC could not cover this range (${handover}), so the fallback endpoint (TREASURY_LOGS_FALLBACK, Base's public endpoint by default) served the scan. ` : "") + (scanFailure
-        ? `event scan FAILED (${scanFailure}): the provider's eth_getLogs error was not one this client can size a window from, so no history was read — basis and yield are unknown, not zero. Set TREASURY_LOGS_RPC_BASE to a provider with a known window (Alchemy, Base public), or use the agent's own deposit receipts.`
+      note: (handover && !scanFailure ? `the configured logs RPC could not cover this range (${handover}), so the fallback endpoint (TREASURY_LOGS_FALLBACK, ${chain.name}'s public endpoint by default) served the scan. ` : "") + (scanFailure
+        ? `event scan FAILED (${scanFailure}): the provider's eth_getLogs error was not one this client can size a window from, so no history was read — basis and yield are unknown, not zero. Set ${logsEnv} to a provider with a known window (Alchemy, Infura, ${chain.name} public), or use the agent's own deposit receipts.`
         : wholeHistory
           ? "the scan covered every block from the vault's deployment, and shares in − shares out reconciles to the balance: the basis covers this position's whole history"
           : capped
-            ? `the scan was CUT SHORT — ${block - fromBlock + 1n} of the ${block - (deployed ?? 0n) + 1n} blocks since deployment, at the provider's ${providerWindow ?? "?"}-block eth_getLogs window and ${timedOut ? `a ${Math.round((args.budgetMs ?? 30_000) / 1000)}s time budget` : `${maxReq} requests`}; covering the rest needs about ${providerWindow ? (block - (deployed ?? 0n) + providerWindow) / providerWindow : BigInt(maxReq)} requests per event. ${complete ? "Shares in − shares out happens to reconcile over that window, which an empty window does vacuously — it is NOT evidence the history was covered." : "Basis and yield are unknown, not bounds."} Set TREASURY_LOGS_RPC_BASE to a provider with a wide eth_getLogs range${timedOut ? "" : ", raise max_log_requests"}, or use the agent's own deposit receipts.`
+            ? `the scan was CUT SHORT — ${block - fromBlock + 1n} of the ${block - (deployed ?? 0n) + 1n} blocks since deployment, at the provider's ${providerWindow ?? "?"}-block eth_getLogs window and ${timedOut ? `a ${Math.round((args.budgetMs ?? 30_000) / 1000)}s time budget` : `${maxReq} requests`}; covering the rest needs about ${providerWindow ? (block - (deployed ?? 0n) + providerWindow) / providerWindow : BigInt(maxReq)} requests per event. ${complete ? "Shares in − shares out happens to reconcile over that window, which an empty window does vacuously — it is NOT evidence the history was covered." : "Basis and yield are unknown, not bounds."} Set ${logsEnv} to a provider with a wide eth_getLogs range${timedOut ? "" : ", raise max_log_requests"}, or use the agent's own deposit receipts.`
             : complete
               ? `shares in − shares out reconciles over the ${block - fromBlock + 1n} blocks scanned, but the scan started at block ${fromBlock}${deployed === undefined ? " and the registry does not record when this vault was deployed" : `, after the vault's deployment block ${deployed}`} — deposits and withdrawals before it cancel out unseen, so this is a WINDOW, NOT the whole history. Omit lookback_blocks to scan from deployment.`
               : "shares in − shares out ≠ balance: history predates the window or shares moved by transfer — basis and yield are unknown, not totals"),

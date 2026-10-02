@@ -1,5 +1,6 @@
 /**
- * Read-only against real Base. Skipped unless an RPC is configured. No transactions.
+ * Read-only against real Base, and against real Arbitrum One. Each chain's block is skipped unless
+ * THAT chain's RPC is configured. No transactions.
  *
  * These are the instrument-fires-on-a-known-positive checks: a Fusion vault must classify as
  * WHITELIST_GATED, a Morpho V2 vault as NEEDS_APPROVAL, and a public MetaMorpho vault that is
@@ -10,7 +11,7 @@ import { describe, it, expect } from "vitest";
 import { erc4626Abi } from "../src/abi/erc4626.js";
 import { type VaultEntry } from "../src/registry-schema.js";
 import { parseAbi } from "viem";
-import { makePublicClient, rpcUrlFromEnv, PUBLIC_RPC } from "../src/client.js";
+import { makePublicClient, rpcChainMismatch, rpcUrlFromEnv, PUBLIC_RPC } from "../src/client.js";
 import { preflightDeposit } from "../src/preflight.js";
 import { quoteDeposit, quoteWithdraw } from "../src/quote.js";
 import { getPosition } from "../src/position.js";
@@ -156,4 +157,79 @@ live("preflight against live Base (read-only)", () => {
     // Reconciliation is the property: shares in − shares out equals the balance, whatever it is now.
     if (!p.scan.capped) expect(p.scan.complete).toBe(true);
   });
+});
+
+const hasArbitrumRpc = Boolean(process.env["TREASURY_RPC_ARBITRUM"] || process.env["ARBITRUM_RPC_URL"]);
+const liveArbitrum = hasArbitrumRpc ? describe : describe.skip;
+
+/**
+ * The same instrument on the second chain. What these establish that the unit tier cannot: the
+ * classifier's revert selectors, measured on Base, are the ones Arbitrum's contracts actually
+ * return — the vault is the same Morpho Vault V2 code and the asset is Circle's native USDC, but
+ * "the same code" is a claim about a deployment, and only a call against it settles that.
+ */
+liveArbitrum("preflight, quotes and position against live Arbitrum One (read-only)", () => {
+  const client = makePublicClient(42161, rpcUrlFromEnv(42161));
+  const vault = () => defaultVault(42161);
+
+  it("the configured endpoint IS Arbitrum One — and the check that says so can say otherwise", async () => {
+    expect(await rpcChainMismatch(client, 42161)).toBeUndefined();
+    // The control: the SAME endpoint, asked whether it is Base, must report the mismatch. Without
+    // this arm, a check that always returned undefined would pass the line above.
+    expect(await rpcChainMismatch(makePublicClient(8453, rpcUrlFromEnv(42161)), 8453)).toBe(42161);
+  });
+
+  it("the Arbitrum default (Morpho V2, open) classifies NEEDS_APPROVAL from a stranger while maxDeposit() reads 0", async () => {
+    const r = await preflightDeposit({ vault: vault(), depositor: STRANGER, client });
+    expect(r.status, JSON.stringify(r, null, 2)).toBe("NEEDS_APPROVAL");
+    expect(r.canDeposit).toBe(true);
+    expect(r.findings[0]).toMatch(/identity OK/); // asset() and decimals() agree with the registry row, on this chain
+    expect(r.findings.at(-1)).toMatch(/TransferFromReverted \(0xe65b7a77\)/);
+    expect(r.advisory!.maxDepositRaw).toBe("0"); // why the pre-flight simulates instead of reading it
+    expect(r.measuredAtBlock).toBeGreaterThan(vault().deployedAtBlock!);
+  });
+
+  it("🔴 the Arbitrum vault read through a BASE endpoint is not a verdict — the identity reads fail, and nothing is classified", async () => {
+    // What a misconfigured variable produces, and why `earn_status` names it: on Base there is no
+    // contract at this address, so the reads return no data. It must come back UNRESOLVED — never
+    // as a gated or closed vault, which would be a verdict about a vault that was never asked.
+    const r = await preflightDeposit({ vault: vault(), depositor: STRANGER, client: makePublicClient(8453, PUBLIC_RPC[8453]) as never });
+    expect(r.status, JSON.stringify(r, null, 2)).toBe("UNRESOLVED");
+    expect(r.canDeposit).toBe(false);
+  });
+
+  it("quote_deposit on the Arbitrum default: expected shares in ITS ticker, and no rate quoted", async () => {
+    const q = await quoteDeposit({ vault: vault(), depositor: STRANGER, assetsHuman: "100", client });
+    expect(q.preflight.status).toBe("NEEDS_APPROVAL");
+    expect(q.canProceed).toBe(true);
+    expect(q.expectedShares).toMatch(/tlCashPlusUSDC2C$/);
+    expect(Number(q.expectedShares.split(" ")[0])).toBeGreaterThan(50); // ~1 USDC/share
+    expect(q).not.toHaveProperty("currentApy");
+  });
+
+  it("quote_withdraw for an address with no shares REVERTS in simulation", async () => {
+    const EMPTY = "0x1111111111111111111111111111111111111111" as const;
+    const bal = await client.readContract({ address: vault().address, abi: erc4626Abi, functionName: "balanceOf", args: [EMPTY] });
+    expect(bal, "precondition: the test address must hold no shares").toBe(0n);
+    const q = await quoteWithdraw({ vault: vault(), owner: EMPTY, assetsHuman: "1", client });
+    expect(q.simulated).toBe("REVERTED");
+    expect(q.canProceed).toBe(false);
+  });
+
+  it("a real position's whole history reconciles from the vault's deployment block, and the whole position is exitable", async () => {
+    // As on Base: the account with history is whoever the chain says OWNS the vault — read from the
+    // contract, never written here. The fallback is Arbitrum's own public endpoint.
+    const owner = await client.readContract({ address: vault().address, abi: parseAbi(["function owner() view returns (address)"]), functionName: "owner" });
+    const fallbackClient = makePublicClient(42161, PUBLIC_RPC[42161]);
+    const p = await getPosition({ vault: vault(), principal: owner, client, fallbackClient });
+    expect(p.scan.fromBlock).toBe(String(vault().deployedAtBlock));
+    expect(p.scan.deposits).toBeGreaterThanOrEqual(1);
+    if (!p.scan.capped) {
+      expect(p.scan.complete).toBe(true);
+      expect(p.scan.wholeHistory).toBe(true);
+      expect(p.entryBasisUsdc).toMatch(/^\d+(\.\d+)? USDC$/); // a number, because the whole history was read
+    }
+    expect(p.usdcValue).toMatch(/^\d+(\.\d+)? USDC$/);
+    expect(p.measuredAtBlock).toBeGreaterThan(510_270_114);
+  }, 120_000);
 });

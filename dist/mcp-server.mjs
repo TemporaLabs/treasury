@@ -54955,6 +54955,32 @@ var chainConfig = {
   serializers
 };
 
+// node_modules/viem/_esm/chains/definitions/arbitrum.js
+var arbitrum = /* @__PURE__ */ defineChain({
+  id: 42161,
+  name: "Arbitrum One",
+  nativeCurrency: { name: "Ether", symbol: "ETH", decimals: 18 },
+  blockTime: 250,
+  rpcUrls: {
+    default: {
+      http: ["https://arb1.arbitrum.io/rpc"]
+    }
+  },
+  blockExplorers: {
+    default: {
+      name: "Arbiscan",
+      url: "https://arbiscan.io",
+      apiUrl: "https://api.arbiscan.io/api"
+    }
+  },
+  contracts: {
+    multicall3: {
+      address: "0xca11bde05977b3631167028862be2a173976ca11",
+      blockCreated: 7654707
+    }
+  }
+});
+
 // node_modules/viem/_esm/chains/definitions/base.js
 var sourceId = 1;
 var base = /* @__PURE__ */ defineChain({
@@ -55016,11 +55042,25 @@ var basePreconf = /* @__PURE__ */ defineChain({
 });
 
 // src/client.ts
-var chains = { 8453: base };
+var chains = { 8453: base, 42161: arbitrum };
 function isSupportedChainId(id) {
   return id in chains;
 }
-var PUBLIC_RPC = { 8453: "https://mainnet.base.org" };
+var CHAIN_INFO = {
+  8453: { key: "base", name: "Base", rpcEnv: ["TREASURY_RPC_BASE", "BASE_RPC_URL"], logsRpcEnv: "TREASURY_LOGS_RPC_BASE", publicRpc: "https://mainnet.base.org" },
+  42161: {
+    key: "arbitrum",
+    name: "Arbitrum One",
+    rpcEnv: ["TREASURY_RPC_ARBITRUM", "ARBITRUM_RPC_URL"],
+    logsRpcEnv: "TREASURY_LOGS_RPC_ARBITRUM",
+    publicRpc: "https://arb1.arbitrum.io/rpc"
+  }
+};
+var supportedChainIds = Object.keys(chains).map(Number);
+function chainIdForKey(key) {
+  return supportedChainIds.find((id) => CHAIN_INFO[id].key === key);
+}
+var PUBLIC_RPC = { 8453: CHAIN_INFO[8453].publicRpc, 42161: CHAIN_INFO[42161].publicRpc };
 var RATE_LIMIT_WAIT_MS = 15500;
 var RPC_TIMEOUT_MS = 1e4;
 var QUOTA_EXHAUSTED = /\b(monthly|daily) capacity limit exceeded\b/i;
@@ -55061,8 +55101,7 @@ function rpcUrlFromEnvValue(v) {
   }
 }
 function rpcUrlFromEnv(chainId) {
-  const candidates = chainId === 8453 ? ["TREASURY_RPC_BASE", "BASE_RPC_URL"] : [];
-  for (const k of candidates) {
+  for (const k of CHAIN_INFO[chainId].rpcEnv) {
     const v = rpcUrlFromEnvValue(process.env[k]);
     if (v) return v;
   }
@@ -55071,6 +55110,7 @@ function rpcUrlFromEnv(chainId) {
 function logsFallbackUrlFromEnv(chainId, logsUrl) {
   const raw = (process.env["TREASURY_LOGS_FALLBACK"] ?? "").trim();
   if (raw.length === 0 || raw.includes("${")) return sameOrUndefined(PUBLIC_RPC[chainId], logsUrl);
+  if (chainId !== 8453) return void 0;
   const url2 = rpcUrlFromEnvValue(raw);
   return url2 === void 0 ? void 0 : sameOrUndefined(url2, logsUrl);
 }
@@ -55078,11 +55118,10 @@ function sameOrUndefined(url2, logsUrl) {
   return url2 === logsUrl ? void 0 : url2;
 }
 function logsRpcUrlFromEnv(chainId) {
-  return rpcUrlFromEnvValue(process.env["TREASURY_LOGS_RPC_BASE"]) ?? rpcUrlFromEnv(chainId);
+  return rpcUrlFromEnvValue(process.env[CHAIN_INFO[chainId].logsRpcEnv]) ?? rpcUrlFromEnv(chainId);
 }
 function rpcSourceForEnv(chainId) {
-  const candidates = chainId === 8453 ? ["TREASURY_RPC_BASE", "BASE_RPC_URL"] : [];
-  for (const k of candidates) {
+  for (const k of CHAIN_INFO[chainId].rpcEnv) {
     if (rpcUrlFromEnvValue(process.env[k])) return { source: k, configured: true };
   }
   return { source: "public default", configured: false };
@@ -55099,7 +55138,8 @@ function resolvedRpcSecrets() {
     }
   };
   const urls = /* @__PURE__ */ new Set();
-  for (const k of ["TREASURY_RPC_BASE", "TREASURY_LOGS_RPC_BASE", "BASE_RPC_URL", "TREASURY_LOGS_FALLBACK"]) {
+  const names = [...supportedChainIds.flatMap((id) => [...CHAIN_INFO[id].rpcEnv, CHAIN_INFO[id].logsRpcEnv]), "TREASURY_LOGS_FALLBACK"];
+  for (const k of names) {
     const v = rpcUrlFromEnvValue(process.env[k]);
     if (v) urls.add(v);
   }
@@ -55121,7 +55161,16 @@ function resolvedRpcSecrets() {
 }
 function publicRpcHint(chainId) {
   if (rpcSourceForEnv(chainId).configured) return void 0;
-  return "No RPC was configured, so this used the public endpoint (mainnet.base.org), which rate-limits after a handful of calls \u2014 that is the most likely cause of the failure above, not the vault. Set TREASURY_RPC_BASE to a keyed Base RPC URL (Alchemy, Infura, QuickNode or your own node) and retry. Reads like the vault list and the disclosures work without one; quotes, pre-flight and position history generally do not.";
+  const info = CHAIN_INFO[chainId];
+  return `No RPC was configured for ${info.name}, so this used the public endpoint (${new URL(info.publicRpc).hostname}), which rate-limits after a handful of calls \u2014 that is the most likely cause of the failure above, not the vault. Set ${info.rpcEnv[0]} to a keyed ${info.name} RPC URL (Alchemy, Infura, QuickNode or your own node) and retry. Reads like the vault list and the disclosures work without one; quotes, pre-flight and position history generally do not.`;
+}
+async function rpcChainMismatch(client, chainId) {
+  try {
+    const got = await client.getChainId();
+    return got === chainId ? void 0 : got;
+  } catch {
+    return void 0;
+  }
 }
 
 // src/registry.ts
@@ -55159,11 +55208,20 @@ var vaultEntrySchema = external_exports.object({
    * than summarising it.
    */
   warning: external_exports.string().min(1),
-  chainId: external_exports.literal(8453),
+  /**
+   * The chain the vault is on. One literal per chain in `chains` (`src/client.ts`), spelled out so
+   * `VaultEntry["chainId"]` stays a union of literals — `registry.test.ts` holds the two lists equal.
+   * 🔴 Adding a chain here also needs its row in `CHAIN_INFO` (a compile error until it has one) and
+   * in `links.ts`'s explorer map (which throws on a chain it does not know).
+   */
+  chainId: external_exports.union([external_exports.literal(8453), external_exports.literal(42161)]),
   address,
   chassis: chassisSchema,
   backend: backendSchema,
-  /** Exactly one vault in the registry carries this; it is what the tools use when no `vault` is given. */
+  /**
+   * Exactly one vault PER CHAIN carries this: the vault the tools use when a caller names a chain
+   * and no vault. Which chain is used when the caller names neither is `EARN.defaultChain`.
+   */
   isDefault: external_exports.boolean().default(false),
   asset: external_exports.object({ address, symbol: external_exports.string().min(1), decimals: external_exports.number().int().min(0).max(36) }),
   /** Measured on-chain via `decimals()`. 18 on Morpho V2 and Enzyme, 8 on Fusion — never assume. */
@@ -55202,13 +55260,16 @@ var registrySchema = external_exports.object({
 }).strict().superRefine((r, ctx) => {
   const symbols = /* @__PURE__ */ new Set();
   const addrs = /* @__PURE__ */ new Set();
-  const defaults = r.vaults.filter((v) => v.isDefault);
-  if (defaults.length !== 1) {
-    ctx.addIssue({ code: "custom", path: ["vaults"], message: `exactly one vault must be isDefault; found ${defaults.length}` });
-  }
-  const d = defaults[0];
-  if (d && !(erc4626Chassis.has(d.chassis) && (d.depositOpen.open || d.depositOpen.reason === "WHITELIST_GATED"))) {
-    ctx.addIssue({ code: "custom", path: ["vaults"], message: `the default vault (${d.symbol}) must be ERC-4626 and either measured open or WHITELIST_GATED` });
+  for (const chainId of [...new Set(r.vaults.map((v) => v.chainId))]) {
+    const defaults = r.vaults.filter((v) => v.chainId === chainId && v.isDefault);
+    if (defaults.length !== 1) {
+      ctx.addIssue({ code: "custom", path: ["vaults"], message: `exactly one vault per chain must be isDefault; chain ${chainId} has ${defaults.length}` });
+    }
+    for (const d of defaults) {
+      if (!(erc4626Chassis.has(d.chassis) && (d.depositOpen.open || d.depositOpen.reason === "WHITELIST_GATED"))) {
+        ctx.addIssue({ code: "custom", path: ["vaults"], message: `the default vault (${d.symbol}) must be ERC-4626 and either measured open or WHITELIST_GATED` });
+      }
+    }
   }
   r.vaults.forEach((v, i) => {
     if (symbols.has(v.symbol)) ctx.addIssue({ code: "custom", path: ["vaults", i, "symbol"], message: `duplicate symbol ${v.symbol}` });
@@ -55220,13 +55281,23 @@ var registrySchema = external_exports.object({
 
 // src/config/earn.ts
 var EARN = {
+  /** The chain used when a caller names neither a chain nor a vault. A `ChainKey` (`src/client.ts`). */
+  defaultChain: "base",
   /**
-   * Tempora Labs Cash Plus USDC (Test 2), Base — a Morpho Vault V2, the Tempora vault this client
-   * offers by default. Deposits are OPEN to any account (measured by a simulated stranger deposit;
-   * `earn_vaults` reports `defaultAccess: "open"`). The whitelist-gated sibling, Cash Plus USDC
-   * (Test 2A), stays listed as `tlCashPlusUSDC2A` and is refused per account by the pre-flight.
+   * The default vault on each chain, by chain key.
+   *
+   * `base`: Tempora Labs Cash Plus USDC (Test 2) — a Morpho Vault V2, the Tempora vault this client
+   * offers when nothing is named. Deposits are OPEN to any account (measured by a simulated stranger
+   * deposit; `earn_vaults` reports `defaultAccess: "open"`). The whitelist-gated sibling, Cash Plus
+   * USDC (Test 2A), stays listed as `tlCashPlusUSDC2A` and is refused per account by the pre-flight.
+   *
+   * `arbitrum`: Tempora Labs Cash Plus USDC (Test 2C) — a Morpho Vault V2 on Arbitrum One, open to
+   * any account by the same measurement.
    */
-  defaultVault: "tlCashPlusUSDC2",
+  defaultVaultByChain: {
+    base: "tlCashPlusUSDC2",
+    arbitrum: "tlCashPlusUSDC2C"
+  },
   /** The round-trip target. The same vault as the default; open, so the fork tier deposits from the whale directly. */
   roundTripVault: "tlCashPlusUSDC2",
   /** USDC, as a decimal string — the amount `scripts/roundtrip.ts` prepares by default. Never a float. */
@@ -55237,6 +55308,8 @@ var EARN = {
     stranger: "0x000000000000000000000000000000000000dEaD",
     /** Morpho Blue on Base — held ~2.1e14 USDC base units when probed 2026-09-11. Impersonated on the fork, never keyed. */
     usdcWhale: "0xBBBBBbbBBb9cC5e90e3b3Af64bdAF62C37EEFFCb",
+    /** Aave V3's aArbUSDCn token on Arbitrum One — held ~1.7e13 native-USDC base units when probed 2026-10-02. Impersonated on the fork, never keyed. */
+    usdcWhaleArbitrum: "0x724dc807b04555b71ed48a6896b6F41593b8C637",
     /** USDC the fork round trip deposits, and what it seeds a discovered depositor with beforehand. */
     forkDepositUsdc: "100",
     forkSeedUsdc: "1000"
@@ -55263,16 +55336,46 @@ function getVault(symbol2) {
   }
   return v;
 }
-function defaultVault() {
-  const v = getVault(EARN.defaultVault);
-  if (!v.isDefault) {
-    const marked = loadRegistry().vaults.find((x) => x.isDefault)?.symbol ?? "(none)";
-    throw new Error(`config/earn.ts names "${EARN.defaultVault}" as the default but the registry marks "${marked}"; change both or neither`);
+function defaultChainId() {
+  const id = chainIdForKey(EARN.defaultChain);
+  if (id === void 0) throw new Error(`config/earn.ts names "${EARN.defaultChain}" as the default chain, which this client does not support`);
+  return id;
+}
+function offeredChains() {
+  const present = new Set(loadRegistry().vaults.map((v) => v.chainId));
+  const first = defaultChainId();
+  return supportedChainIds.filter((id) => present.has(id)).sort((a, b) => a === first ? -1 : b === first ? 1 : a - b).map((id) => ({ key: CHAIN_INFO[id].key, chainId: id, name: CHAIN_INFO[id].name }));
+}
+function defaultVault(chainId = defaultChainId()) {
+  const key = CHAIN_INFO[chainId].key;
+  const named = EARN.defaultVaultByChain[key];
+  const marked = loadRegistry().vaults.find((x) => x.chainId === chainId && x.isDefault);
+  if (named === void 0 || marked === void 0) {
+    throw new Error(`no vault is offered on ${CHAIN_INFO[chainId].name}; chains with a vault: ${offeredChains().map((c) => c.key).join(", ")}`);
+  }
+  if (marked.symbol !== named) {
+    throw new Error(`config/earn.ts names "${named}" as the default on ${key} but the registry marks "${marked.symbol}"; change both or neither`);
+  }
+  return marked;
+}
+function resolveVault(symbol2, chain) {
+  let chainId;
+  if (chain !== void 0) {
+    chainId = chainIdForKey(chain);
+    const offered = offeredChains();
+    if (chainId === void 0 || !offered.some((c) => c.chainId === chainId)) {
+      throw new Error(`unknown chain "${chain}"; chains with a vault: ${offered.map((c) => c.key).join(", ")}`);
+    }
+  }
+  if (!symbol2) return defaultVault(chainId);
+  const v = getVault(symbol2);
+  if (chainId !== void 0 && v.chainId !== chainId) {
+    const on = loadRegistry().vaults.filter((x) => x.chainId === chainId).map((x) => x.symbol).join(", ");
+    throw new Error(
+      `vault "${symbol2}" is on ${CHAIN_INFO[v.chainId].key}, not ${chain}. Name one or the other: drop \`chain\` to use ${symbol2} on ${CHAIN_INFO[v.chainId].key}, or pick a vault on ${chain} (${on}).`
+    );
   }
   return v;
-}
-function resolveVault(symbol2) {
-  return symbol2 ? getVault(symbol2) : defaultVault();
 }
 function depositableVaults() {
   return loadRegistry().vaults.filter(
@@ -55282,13 +55385,17 @@ function depositableVaults() {
 
 // src/links.ts
 var EXPLORER = {
-  8453: "https://basescan.org/address/"
+  8453: "https://basescan.org/address/",
+  42161: "https://arbiscan.io/address/"
 };
+var MORPHO_APP_CHAIN = { 8453: "base" };
 var APP = {
-  "morpho-v2": (chainId, address2) => chainId === 8453 ? `https://app.morpho.org/base/vault/${address2}` : void 0
+  "morpho-v2": (chainId, address2) => MORPHO_APP_CHAIN[chainId] ? `https://app.morpho.org/${MORPHO_APP_CHAIN[chainId]}/vault/${address2}` : void 0
 };
 function linksFor(vault) {
-  const links = { explorer: `${EXPLORER[vault.chainId]}${vault.address}` };
+  const explorer = EXPLORER[vault.chainId];
+  if (explorer === void 0) throw new Error(`no block explorer is recorded for chain ${vault.chainId}; add it to EXPLORER in src/links.ts`);
+  const links = { explorer: `${explorer}${vault.address}` };
   const app = APP[vault.chassis]?.(vault.chainId, vault.address);
   if (app) links.app = app;
   return links;
@@ -55602,7 +55709,8 @@ var withdrawEvent = parseAbiItem(
 var UNKNOWN_AFTER_SCAN_FAILURE = "unknown \u2014 event scan failed; see scan.note";
 var UNKNOWN_INCOMPLETE_SCAN = "unknown \u2014 the scan did not cover this position's history; see scan.note";
 function rangeLimitFromError(e) {
-  const m = String(e).replace(/,/g, "").match(/(?:limited to a|up to a)\s+(\d+)\s*(?:block)?\s*range/i);
+  const text2 = String(e).replace(/,/g, "");
+  const m = text2.match(/(?:limited to a|up to a)\s+(\d+)\s*(?:block)?\s*range/i) ?? text2.match(/range\s+\d+\s+exceeds limit of\s+(\d+)/i);
   return m ? BigInt(m[1]) : void 0;
 }
 async function scanLogs(client, address2, event, owner, from16, to, maxRequests, refuseIfCapped, deadline, now) {
@@ -55796,6 +55904,8 @@ async function getPosition(args) {
   const wholeHistory = deployed !== void 0 && fromBlock <= deployed && !capped && complete;
   const basisUnknown = !wholeHistory;
   const fmtA = (x) => `${formatAmount(x, vault.asset.decimals)} ${vault.asset.symbol}`;
+  const chain = CHAIN_INFO[vault.chainId];
+  const logsEnv = chain.logsRpcEnv;
   return {
     vault: vault.symbol,
     principal,
@@ -55820,7 +55930,7 @@ async function getPosition(args) {
       ...providerWindow !== void 0 ? { providerWindow: providerWindow.toString() } : {},
       source,
       wholeHistory,
-      note: (handover && !scanFailure ? `the configured logs RPC could not cover this range (${handover}), so the fallback endpoint (TREASURY_LOGS_FALLBACK, Base's public endpoint by default) served the scan. ` : "") + (scanFailure ? `event scan FAILED (${scanFailure}): the provider's eth_getLogs error was not one this client can size a window from, so no history was read \u2014 basis and yield are unknown, not zero. Set TREASURY_LOGS_RPC_BASE to a provider with a known window (Alchemy, Base public), or use the agent's own deposit receipts.` : wholeHistory ? "the scan covered every block from the vault's deployment, and shares in \u2212 shares out reconciles to the balance: the basis covers this position's whole history" : capped ? `the scan was CUT SHORT \u2014 ${block - fromBlock + 1n} of the ${block - (deployed ?? 0n) + 1n} blocks since deployment, at the provider's ${providerWindow ?? "?"}-block eth_getLogs window and ${timedOut ? `a ${Math.round((args.budgetMs ?? 3e4) / 1e3)}s time budget` : `${maxReq} requests`}; covering the rest needs about ${providerWindow ? (block - (deployed ?? 0n) + providerWindow) / providerWindow : BigInt(maxReq)} requests per event. ${complete ? "Shares in \u2212 shares out happens to reconcile over that window, which an empty window does vacuously \u2014 it is NOT evidence the history was covered." : "Basis and yield are unknown, not bounds."} Set TREASURY_LOGS_RPC_BASE to a provider with a wide eth_getLogs range${timedOut ? "" : ", raise max_log_requests"}, or use the agent's own deposit receipts.` : complete ? `shares in \u2212 shares out reconciles over the ${block - fromBlock + 1n} blocks scanned, but the scan started at block ${fromBlock}${deployed === void 0 ? " and the registry does not record when this vault was deployed" : `, after the vault's deployment block ${deployed}`} \u2014 deposits and withdrawals before it cancel out unseen, so this is a WINDOW, NOT the whole history. Omit lookback_blocks to scan from deployment.` : "shares in \u2212 shares out \u2260 balance: history predates the window or shares moved by transfer \u2014 basis and yield are unknown, not totals")
+      note: (handover && !scanFailure ? `the configured logs RPC could not cover this range (${handover}), so the fallback endpoint (TREASURY_LOGS_FALLBACK, ${chain.name}'s public endpoint by default) served the scan. ` : "") + (scanFailure ? `event scan FAILED (${scanFailure}): the provider's eth_getLogs error was not one this client can size a window from, so no history was read \u2014 basis and yield are unknown, not zero. Set ${logsEnv} to a provider with a known window (Alchemy, Infura, ${chain.name} public), or use the agent's own deposit receipts.` : wholeHistory ? "the scan covered every block from the vault's deployment, and shares in \u2212 shares out reconciles to the balance: the basis covers this position's whole history" : capped ? `the scan was CUT SHORT \u2014 ${block - fromBlock + 1n} of the ${block - (deployed ?? 0n) + 1n} blocks since deployment, at the provider's ${providerWindow ?? "?"}-block eth_getLogs window and ${timedOut ? `a ${Math.round((args.budgetMs ?? 3e4) / 1e3)}s time budget` : `${maxReq} requests`}; covering the rest needs about ${providerWindow ? (block - (deployed ?? 0n) + providerWindow) / providerWindow : BigInt(maxReq)} requests per event. ${complete ? "Shares in \u2212 shares out happens to reconcile over that window, which an empty window does vacuously \u2014 it is NOT evidence the history was covered." : "Basis and yield are unknown, not bounds."} Set ${logsEnv} to a provider with a wide eth_getLogs range${timedOut ? "" : ", raise max_log_requests"}, or use the agent's own deposit receipts.` : complete ? `shares in \u2212 shares out reconciles over the ${block - fromBlock + 1n} blocks scanned, but the scan started at block ${fromBlock}${deployed === void 0 ? " and the registry does not record when this vault was deployed" : `, after the vault's deployment block ${deployed}`} \u2014 deposits and withdrawals before it cancel out unseen, so this is a WINDOW, NOT the whole history. Omit lookback_blocks to scan from deployment.` : "shares in \u2212 shares out \u2260 balance: history predates the window or shares moved by transfer \u2014 basis and yield are unknown, not totals")
     },
     measuredAtBlock: Number(block)
   };
@@ -56012,22 +56122,34 @@ var DISCLOSURES = {
 // src/mcp/server.ts
 var addressArg = external_exports.string().refine((s) => isAddress(s), "must be an EVM address").transform((s) => getAddress(s));
 var amountArg = external_exports.string().regex(/^\d+(\.\d+)?$/, 'plain decimal USDC amount, e.g. "25" or "12.5"');
-var vaultArg = external_exports.string().optional().describe("the vault's ERC-20 ticker, e.g. tlCashPlusUSDC2 (earn_vaults lists them); omit for the default vault");
+var vaultArg = external_exports.string().optional().describe("the vault's ERC-20 ticker, e.g. tlCashPlusUSDC2 (earn_vaults lists them); omit for the default vault of `chain`, or of the default chain when `chain` is omitted too");
 var accountArg = addressArg.describe("the account whose shares these are \u2014 the depositor, the owner, the holder");
-function supportedVault(symbol2) {
-  const vault = resolveVault(symbol2);
+var chainArg = () => external_exports.string().optional().describe(
+  `which chain: ${offeredChains().map((c) => `"${c.key}"`).join(" or ")}. Omit for ${CHAIN_INFO[defaultChainId()].key} (the default), or when \`vault\` already names a vault. If the operator has not said which chain to deposit on, ASK them before preparing a deposit. A \`vault\` that is on a different chain than \`chain\` is refused.`
+);
+function supportedVault(symbol2, chain) {
+  const vault = resolveVault(symbol2, chain);
   if (!isSupportedChainId(vault.chainId)) throw new Error(`chain ${vault.chainId} unsupported`);
   return vault;
 }
-function clientFor(symbol2) {
-  const vault = supportedVault(symbol2);
+function clientFor(symbol2, chain) {
+  const vault = supportedVault(symbol2, chain);
   return { vault, client: makePublicClient(vault.chainId, rpcUrlFromEnv(vault.chainId)) };
 }
+var onChain = (vault) => ({ chain: CHAIN_INFO[vault.chainId].key, chainId: vault.chainId });
+function hintChain(args) {
+  try {
+    const a = args ?? {};
+    return resolveVault(typeof a.vault === "string" ? a.vault : void 0, typeof a.chain === "string" ? a.chain : void 0).chainId;
+  } catch {
+    return defaultChainId();
+  }
+}
 var RPC_FAILURE = /RPC Request failed|HTTP request failed|reads failed|over rate limit|rate.?limit|"unreachable"|fetch failed|ETIMEDOUT|ECONNREFUSED/i;
-var text = (v) => {
+var text = (v, chainId = defaultChainId()) => {
   let body = typeof v === "string" ? v : JSON.stringify(v, null, 2);
   if (RPC_FAILURE.test(body)) {
-    const hint = publicRpcHint(8453);
+    const hint = publicRpcHint(chainId);
     if (hint) {
       body = typeof v === "string" ? `${body}
 
@@ -56037,16 +56159,22 @@ ${hint}` : JSON.stringify({ ...v, setup_required: hint }, null, 2);
   return { content: [{ type: "text", text: body }] };
 };
 var commitsMoney = (vault) => ({ warning: vault.warning });
-var unsigned = (calls, vault) => text({
-  requires_signature: true,
-  status: "unsigned",
-  // before `next_step`, so it is not past the field a reader stops at
-  ...vault === void 0 ? {} : commitsMoney(vault),
-  next_step: "Hand these calls to a signer IN ORDER, following `signer_rules`. A call carrying `precondition` must not be estimated or sent until that read holds on the RPC the signer sends through. Nothing has been submitted; no funds have moved.",
-  signer_rules: SIGNER_RULES,
-  calls
-});
+var unsigned = (calls, vault, kind) => text(
+  {
+    requires_signature: true,
+    status: "unsigned",
+    // The chain FIRST: these calls are correct on this chain and on no other.
+    ...onChain(vault),
+    // before `next_step`, so it is not past the field a reader stops at
+    ...kind === "deposit" ? commitsMoney(vault) : {},
+    next_step: `These calls are for ${CHAIN_INFO[vault.chainId].name} (chainId ${vault.chainId}): tell the operator which chain, and send them on that chain only. Hand these calls to a signer IN ORDER, following \`signer_rules\`. A call carrying \`precondition\` must not be estimated or sent until that read holds on the RPC the signer sends through. Nothing has been submitted; no funds have moved.`,
+    signer_rules: SIGNER_RULES,
+    calls
+  },
+  vault.chainId
+);
 var SIGNER_RULES = [
+  "Send each call on the chain its `chainId` names, and on no other: check the signer's network before signing. Sent on a different chain, a call can be mined there without doing anything \u2014 the approve or the deposit never happened, and gas was still spent.",
   "Before signing, check every call's destination against the addresses the operator gave: `to`, and the receiver/owner named in `description`. Do not sign a call whose destination you did not confirm.",
   'Set the nonce explicitly from eth_getTransactionCount(account, "pending") immediately before each send. A load-balanced RPC can hand a signing library a stale nonce, and the send is then rejected as "nonce too low" (measured 2026-09-14, mainnet.base.org).',
   "Set the gas limit to the call's gasAdvice (estimate \xD7 1.5).",
@@ -56059,7 +56187,7 @@ var guarded = (fn) => async (...a) => {
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e);
     const redacted = redactEndpoints(msg);
-    const hint = RPC_FAILURE.test(redacted) ? publicRpcHint(8453) : void 0;
+    const hint = RPC_FAILURE.test(redacted) ? publicRpcHint(hintChain(a[0])) : void 0;
     throw new Error(hint ? `${redacted}
 
 ${hint}` : redacted);
@@ -56068,20 +56196,33 @@ ${hint}` : redacted);
 function buildServer() {
   registerSecretSource(resolvedRpcSecrets);
   const server = new McpServer({ name: "treasury", version: PACKAGE_VERSION });
+  const chain = chainArg();
   server.registerTool(
     "earn_vaults",
     {
       title: "List vaults",
-      description: "Every vault in the registry. `symbol` is the vault's own on-chain ERC-20 ticker \u2014 the value every other tool takes as `vault` \u2014 and `name` its `name()`; `links` are openable without any RPC endpoint, so an operator can verify the contract independently. SHOW `warning` TO THE DEPOSITOR \u2014 every vault offered today is a test vault. Each row also carries its backend, chassis, decimals and MEASURED deposit-open status. `default` is used when a tool is called without `vault`; `depositable` is the subset any account can put money into today: ERC-4626 chassis + measured open. `defaultAccess` says whether the default takes deposits from any account (`open`) or only whitelisted ones (`whitelist`); for `whitelist`, run earn_status for the account before preparing a deposit.",
+      description: "Every vault in the registry, on every chain. `symbol` is the vault's own on-chain ERC-20 ticker \u2014 the value every other tool takes as `vault` \u2014 and `name` its `name()`; `chain` is the chain it is on, the value every other tool takes as `chain`; `links` are openable without any RPC endpoint, so an operator can verify the contract independently. SHOW `warning` TO THE DEPOSITOR \u2014 every vault offered today is a test vault. Each row also carries its backend, chassis, decimals and MEASURED deposit-open status. `chains` lists the chains a deposit can go to, the default chain first, each with its own default vault: if the operator has not said which chain, show them these and ASK before preparing a deposit. `default` is used when a tool is called with neither `vault` nor `chain`, and is on `defaultChain`; `depositable` is the subset any account can put money into today, across all chains: ERC-4626 chassis + measured open. `defaultAccess` says whether a default takes deposits from any account (`open`) or only whitelisted ones (`whitelist`); for `whitelist`, run earn_status for the account before preparing a deposit.",
       inputSchema: {}
     },
     guarded(async () => {
       const reg = loadRegistry();
       return text({
         reconciledAtIso: reg.reconciledAtIso,
+        defaultChain: CHAIN_INFO[defaultChainId()].key,
         default: defaultVault().symbol,
         defaultAccess: defaultVault().depositOpen.open ? "open" : "whitelist",
         depositable: depositableVaults().map((v) => v.symbol),
+        chains: offeredChains().map((c) => {
+          const d = defaultVault(c.chainId);
+          return {
+            chain: c.key,
+            chainId: c.chainId,
+            name: c.name,
+            default: d.symbol,
+            defaultAccess: d.depositOpen.open ? "open" : "whitelist",
+            depositable: depositableVaults().filter((v) => v.chainId === c.chainId).map((v) => v.symbol)
+          };
+        }),
         vaults: listVaults().map((v) => ({
           symbol: v.symbol,
           name: v.name,
@@ -56089,6 +56230,7 @@ function buildServer() {
           links: linksFor(v),
           backend: v.backend,
           isDefault: v.isDefault,
+          chain: CHAIN_INFO[v.chainId].key,
           chainId: v.chainId,
           address: v.address,
           chassis: v.chassis,
@@ -56113,18 +56255,18 @@ function buildServer() {
     "earn_status",
     {
       title: "Server health, or a deposit pre-flight verdict",
-      description: "With NO arguments: is the server up and the RPC reachable \u2014 chain id, latest block, registry version, and which env var supplied the RPC (never the URL). With `account`: simulates deposit() from that address and reports OPEN_READY, NEEDS_APPROVAL, WHITELIST_GATED, REVERTED_OTHER, REFUSED_BY_CLIENT or UNRESOLVED, never trusting maxDeposit(). The `mode` field says which answer you got.",
-      inputSchema: { vault: vaultArg, account: accountArg.optional(), amount_usdc: amountArg.optional() }
+      description: "With NO `account`: is the server up and the chain's RPC reachable \u2014 chain, chain id, latest block, registry version, and which env var supplied the RPC (never the URL). Each chain has its own RPC, so pass `chain` to check the one you are about to use; `rpc` is `ok`, `unreachable`, or `wrong_chain` when the configured endpoint answers for a different chain. With `account`: simulates deposit() from that address and reports OPEN_READY, NEEDS_APPROVAL, WHITELIST_GATED, REVERTED_OTHER, REFUSED_BY_CLIENT or UNRESOLVED, never trusting maxDeposit(). The `mode` field says which answer you got.",
+      inputSchema: { vault: vaultArg, chain, account: accountArg.optional(), amount_usdc: amountArg.optional() }
     },
-    guarded(async ({ vault: symbol2, account, amount_usdc }) => {
+    guarded(async ({ vault: symbol2, chain: chain2, account, amount_usdc }) => {
       if (account !== void 0) {
-        const { vault: vault2, client } = clientFor(symbol2);
+        const { vault: vault2, client } = clientFor(symbol2, chain2);
         const args = amount_usdc === void 0 ? { vault: vault2, depositor: account, client } : { vault: vault2, depositor: account, client, assetsHuman: amount_usdc };
         const verdict = await preflightDeposit(args);
-        return text({ ...verdict, mode: "preflight", account, ...commitsMoney(vault2) });
+        return text({ ...verdict, mode: "preflight", account, ...onChain(vault2), ...commitsMoney(vault2) }, vault2.chainId);
       }
       const partial2 = symbol2 !== void 0 ? { requested: "preflight", missing: ["account"] } : {};
-      const vault = supportedVault(symbol2);
+      const vault = supportedVault(symbol2, chain2);
       const src = rpcSourceForEnv(vault.chainId);
       const base2 = {
         mode: "health",
@@ -56132,16 +56274,30 @@ function buildServer() {
         server: "treasury",
         version: PACKAGE_VERSION,
         registry: { schemaVersion: loadRegistry().schemaVersion, vaults: loadRegistry().vaults.length, reconciledAtIso: loadRegistry().reconciledAtIso },
-        chainId: vault.chainId,
+        ...onChain(vault),
         rpcSource: src.source,
         rpcConfigured: src.configured
       };
       try {
         const client = makePublicClient(vault.chainId, rpcUrlFromEnv(vault.chainId));
-        return text({ ...base2, rpc: "ok", latestBlock: (await client.getBlockNumber()).toString() });
+        const [mismatch, latest] = await Promise.all([src.configured ? rpcChainMismatch(client, vault.chainId) : Promise.resolve(void 0), client.getBlockNumber()]);
+        if (mismatch !== void 0) {
+          const info = CHAIN_INFO[vault.chainId];
+          return text(
+            {
+              ...base2,
+              rpc: "wrong_chain",
+              rpcChainId: mismatch,
+              latestBlock: null,
+              reason: `the endpoint in ${src.source} answers for chain ${mismatch}, not ${info.name} (${vault.chainId}). Point ${info.rpcEnv[0]} at a ${info.name} endpoint; until then every read for this chain is wrong.`
+            },
+            vault.chainId
+          );
+        }
+        return text({ ...base2, rpc: "ok", latestBlock: latest.toString() }, vault.chainId);
       } catch (e) {
         const reason = redactEndpoints(e instanceof Error ? e.message : String(e));
-        return text({ ...base2, rpc: "unreachable", latestBlock: null, reason });
+        return text({ ...base2, rpc: "unreachable", latestBlock: null, reason }, vault.chainId);
       }
     })
   );
@@ -56152,47 +56308,54 @@ function buildServer() {
       description: "Pre-trade quote, in USDC. direction=deposit: expected shares (previewDeposit), share price, and the access verdict from a simulated deposit(). This client quotes no rate: an ERC-4626 vault exposes none, and it calls no yield API. direction=withdraw: shares burned (previewWithdraw), shares held, a simulated withdraw() verdict, `instantLiquidity` \u2014 the vault's own liquid balance of the asset, which is chassis-specific in BOTH directions: a Fusion vault without instant-withdrawal fuses pays only from it, so there it is the ceiling maxWithdraw() does not know; a Morpho V2 vault holds almost none and still pays out of its markets, so there it is near zero and NOT a ceiling \u2014 the simulated verdict is what decides \u2014 maxWithdraw advisory only (Morpho V2 returns 0 by design), and queue depth. Run before the matching earn_prepare_* tool.",
       inputSchema: {
         vault: vaultArg,
+        chain,
         account: accountArg,
         amount_usdc: amountArg,
         direction: external_exports.enum(["deposit", "withdraw"]).describe("which side to quote \u2014 required, there is no default")
       }
     },
-    guarded(async ({ vault: symbol2, account, amount_usdc, direction }) => {
-      const { vault, client } = clientFor(symbol2);
+    guarded(async ({ vault: symbol2, chain: chain2, account, amount_usdc, direction }) => {
+      const { vault, client } = clientFor(symbol2, chain2);
       if (direction === "deposit") {
-        return text({
-          direction: "deposit",
-          ...commitsMoney(vault),
-          ...await quoteDeposit({ vault, depositor: account, assetsHuman: amount_usdc, client })
-        });
+        return text(
+          {
+            direction: "deposit",
+            ...onChain(vault),
+            ...commitsMoney(vault),
+            ...await quoteDeposit({ vault, depositor: account, assetsHuman: amount_usdc, client })
+          },
+          vault.chainId
+        );
       }
-      return text({ direction: "withdraw", ...await quoteWithdraw({ vault, owner: account, assetsHuman: amount_usdc, client }) });
+      return text({ direction: "withdraw", ...onChain(vault), ...await quoteWithdraw({ vault, owner: account, assetsHuman: amount_usdc, client }) }, vault.chainId);
     })
   );
   server.registerTool(
     "earn_prepare_deposit",
     {
       title: "Prepare an unsigned deposit",
-      description: "Returns the UNSIGNED calls for a deposit \u2014 [approve(asset \u2192 vault), deposit(assets, receiver)] \u2014 inside an envelope with requires_signature: true. Amount is USDC. NOTHING IS SUBMITTED: hand the calls to a signer in order. This tool cannot sign or send, and the deposit has not happened until the signer's transactions confirm. Each call also carries `function` and `args` \u2014 the same call `data` encodes, decoded, e.g. `approve(address spender, uint256 value)` with `{ spender, value }` \u2014 so an operator without a CLI signer can fill a block explorer's Write Contract form directly. `args` values are RAW contract units, which is what the form takes; `description` is the human sentence.",
+      description: "Returns the UNSIGNED calls for a deposit \u2014 [approve(asset \u2192 vault), deposit(assets, receiver)] \u2014 inside an envelope with requires_signature: true. Amount is USDC. The envelope names the `chain` and `chainId` the calls are for: say which chain to the operator, and if they have not chosen one, ask before calling this. NOTHING IS SUBMITTED: hand the calls to a signer in order. This tool cannot sign or send, and the deposit has not happened until the signer's transactions confirm. Each call also carries `function` and `args` \u2014 the same call `data` encodes, decoded, e.g. `approve(address spender, uint256 value)` with `{ spender, value }` \u2014 so an operator without a CLI signer can fill a block explorer's Write Contract form directly. `args` values are RAW contract units, which is what the form takes; `description` is the human sentence.",
       inputSchema: {
         vault: vaultArg,
+        chain,
         account: accountArg.describe("the depositing account \u2014 the one that signs both calls; step 2's allowance precondition is read for it"),
         amount_usdc: amountArg,
         receiver: addressArg.describe("where the SHARES land \u2014 usually the account, not necessarily")
       }
     },
-    guarded(async ({ vault: symbol2, account, amount_usdc, receiver }) => {
-      const vault = supportedVault(symbol2);
-      return unsigned(buildDeposit(vault, { assetsHuman: amount_usdc, receiver, account }), vault);
+    guarded(async ({ vault: symbol2, chain: chain2, account, amount_usdc, receiver }) => {
+      const vault = supportedVault(symbol2, chain2);
+      return unsigned(buildDeposit(vault, { assetsHuman: amount_usdc, receiver, account }), vault, "deposit");
     })
   );
   server.registerTool(
     "earn_prepare_withdraw",
     {
       title: "Prepare an unsigned withdrawal",
-      description: "Returns the UNSIGNED call for a withdrawal in USDC terms \u2014 withdraw(assets, receiver, owner) \u2014 inside an envelope with requires_signature: true. To empty the account pass all=true with shares_exact copied verbatim from earn_balance.sharesExact (redeem of the exact balance; never a rounded number). NOTHING IS SUBMITTED and no funds have moved until a signer confirms. Each call also carries `function` and `args` \u2014 the same call `data` encodes, decoded, e.g. `approve(address spender, uint256 value)` with `{ spender, value }` \u2014 so an operator without a CLI signer can fill a block explorer's Write Contract form directly. `args` values are RAW contract units, which is what the form takes; `description` is the human sentence.",
+      description: "Returns the UNSIGNED call for a withdrawal in USDC terms \u2014 withdraw(assets, receiver, owner) \u2014 inside an envelope with requires_signature: true, which names the `chain` the call is for: a position is withdrawn on the chain it is on, so name the vault (or its chain) and never ask the operator to choose one. To empty the account pass all=true with shares_exact copied verbatim from earn_balance.sharesExact (redeem of the exact balance; never a rounded number). NOTHING IS SUBMITTED and no funds have moved until a signer confirms. Each call also carries `function` and `args` \u2014 the same call `data` encodes, decoded, e.g. `approve(address spender, uint256 value)` with `{ spender, value }` \u2014 so an operator without a CLI signer can fill a block explorer's Write Contract form directly. `args` values are RAW contract units, which is what the form takes; `description` is the human sentence.",
       inputSchema: {
         vault: vaultArg,
+        chain,
         receiver: addressArg.describe("where the USDC lands \u2014 NOT necessarily the account"),
         account: accountArg.describe("whose shares are burnt"),
         amount_usdc: amountArg.optional(),
@@ -56200,44 +56363,44 @@ function buildServer() {
         shares_exact: external_exports.string().regex(/^\d+(\.\d+)?$/).optional()
       }
     },
-    guarded(async ({ vault: symbol2, receiver, account, amount_usdc, all, shares_exact }) => {
-      const vault = supportedVault(symbol2);
+    guarded(async ({ vault: symbol2, chain: chain2, receiver, account, amount_usdc, all, shares_exact }) => {
+      const vault = supportedVault(symbol2, chain2);
       if (all) {
         if (!shares_exact) throw new Error("all=true requires shares_exact (copy earn_balance.sharesExact verbatim)");
-        return unsigned(buildWithdraw(vault, { receiver, owner: account, all: true, sharesExact: shares_exact }));
+        return unsigned(buildWithdraw(vault, { receiver, owner: account, all: true, sharesExact: shares_exact }), vault, "withdraw");
       }
       if (!amount_usdc) throw new Error("provide amount_usdc, or all=true with shares_exact");
-      return unsigned(buildWithdraw(vault, { receiver, owner: account, assetsHuman: amount_usdc }));
+      return unsigned(buildWithdraw(vault, { receiver, owner: account, assetsHuman: amount_usdc }), vault, "withdraw");
     })
   );
   server.registerTool(
     "earn_balance",
     {
       title: "Earn position",
-      description: "Shares held (exact string + display), current USDC value, WHAT CAN ACTUALLY BE WITHDRAWN NOW (`exit`, measured by simulating the withdrawal \u2014 `usdcValue` is what the position is worth, `exit.exitableNow` is what the vault can pay, `exit.instantLiquidity` is the vault's own liquid balance of the asset, chassis-specific in both directions \u2014 a Fusion vault without instant-withdrawal fuses pays only from it, so there it is the ceiling and `usdcValue` can exceed `exitableNow` by 10x while `maxWithdraw()` \u2014 `exit.maxWithdrawSays` \u2014 reports the larger one; a Morpho V2 vault holds almost none and still pays out of its markets, so there a near-zero `instantLiquidity` is not a ceiling and `exitableNow` is the verdict), entry basis and accrued yield derived from the vault's own Deposit/Withdraw events for this account, and share price. `scan.complete` says whether the event window covered the whole position; `sharesExact` is what earn_prepare_withdraw({ all }) needs. `scan.depositTxs` and `scan.withdrawTxs` carry the transactions behind those events \u2014 `{ txHash, blockNumber, amountUsdc }`, oldest first \u2014 so an operator can be shown an explorer link without anyone rebuilding the log query; each list holds at most the 100 most recent, while `scan.deposits`/`scan.withdrawals` stay the totals.",
+      description: "A position in ONE vault, on that vault's chain (`chain` in the result) \u2014 an account's positions on different chains are separate calls. Shares held (exact string + display), current USDC value, WHAT CAN ACTUALLY BE WITHDRAWN NOW (`exit`, measured by simulating the withdrawal \u2014 `usdcValue` is what the position is worth, `exit.exitableNow` is what the vault can pay, `exit.instantLiquidity` is the vault's own liquid balance of the asset, chassis-specific in both directions \u2014 a Fusion vault without instant-withdrawal fuses pays only from it, so there it is the ceiling and `usdcValue` can exceed `exitableNow` by 10x while `maxWithdraw()` \u2014 `exit.maxWithdrawSays` \u2014 reports the larger one; a Morpho V2 vault holds almost none and still pays out of its markets, so there a near-zero `instantLiquidity` is not a ceiling and `exitableNow` is the verdict), entry basis and accrued yield derived from the vault's own Deposit/Withdraw events for this account, and share price. `scan.complete` says whether the event window covered the whole position; `sharesExact` is what earn_prepare_withdraw({ all }) needs. `scan.depositTxs` and `scan.withdrawTxs` carry the transactions behind those events \u2014 `{ txHash, blockNumber, amountUsdc }`, oldest first \u2014 so an operator can be shown an explorer link without anyone rebuilding the log query; each list holds at most the 100 most recent, while `scan.deposits`/`scan.withdrawals` stay the totals.",
       inputSchema: {
         vault: vaultArg,
+        chain,
         account: accountArg,
-        lookback_blocks: external_exports.number().int().positive().optional().describe("how far back to scan for Deposit/Withdraw events; default: from the vault's deployment block, i.e. the whole history. The EFFECTIVE window is max_log_requests \xD7 the provider's eth_getLogs cap (Alchemy free 10 blocks, Base public 2,000); if the configured RPC cannot cover it, Base's public endpoint serves the scan and scan.source says so"),
-        max_log_requests: external_exports.number().int().positive().max(400).optional().describe("cap on eth_getLogs calls per event per scan; default 100 (= 1,000 blocks on Alchemy free, 200,000 on Base public). scan.wholeHistory says whether the scan actually covered every block since the vault was deployed \u2014 scan.complete alone is only a reconciliation and can be vacuously true. For an older vault, a provider with a wide eth_getLogs range (TREASURY_LOGS_RPC_BASE) is what makes it whole")
+        lookback_blocks: external_exports.number().int().positive().optional().describe("how far back to scan for Deposit/Withdraw events; default: from the vault's deployment block, i.e. the whole history. The EFFECTIVE window is max_log_requests \xD7 the provider's eth_getLogs cap (Alchemy free 10 blocks, Base public 2,000, Infura on Arbitrum 10,000); if the configured RPC cannot cover it, the chain's public endpoint serves the scan and scan.source says so"),
+        max_log_requests: external_exports.number().int().positive().max(400).optional().describe("cap on eth_getLogs calls per event per scan; default 100 (= 1,000 blocks on Alchemy free, 200,000 on Base public). scan.wholeHistory says whether the scan actually covered every block since the vault was deployed \u2014 scan.complete alone is only a reconciliation and can be vacuously true. For an older vault, a provider with a wide eth_getLogs range (TREASURY_LOGS_RPC_BASE, or TREASURY_LOGS_RPC_ARBITRUM on Arbitrum) is what makes it whole")
       }
     },
-    guarded(async ({ vault: symbol2, account, lookback_blocks, max_log_requests }) => {
-      const vault = supportedVault(symbol2);
+    guarded(async ({ vault: symbol2, chain: chain2, account, lookback_blocks, max_log_requests }) => {
+      const vault = supportedVault(symbol2, chain2);
       const logsUrl = logsRpcUrlFromEnv(vault.chainId);
       const client = makePublicClient(vault.chainId, logsUrl);
       const fallbackUrl = logsFallbackUrlFromEnv(vault.chainId, logsUrl);
       const fallbackClient = fallbackUrl === void 0 ? void 0 : makePublicClient(vault.chainId, fallbackUrl);
-      return text(
-        await getPosition({
-          vault,
-          principal: account,
-          client,
-          ...fallbackClient ? { fallbackClient } : {},
-          ...lookback_blocks === void 0 ? {} : { lookbackBlocks: BigInt(lookback_blocks) },
-          ...max_log_requests === void 0 ? {} : { maxLogRequests: max_log_requests }
-        })
-      );
+      const position = await getPosition({
+        vault,
+        principal: account,
+        client,
+        ...fallbackClient ? { fallbackClient } : {},
+        ...lookback_blocks === void 0 ? {} : { lookbackBlocks: BigInt(lookback_blocks) },
+        ...max_log_requests === void 0 ? {} : { maxLogRequests: max_log_requests }
+      });
+      return text({ ...onChain(vault), ...position }, vault.chainId);
     })
   );
   server.registerTool(
