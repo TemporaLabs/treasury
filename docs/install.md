@@ -55,11 +55,14 @@ Set an RPC before you rely on it:
 ```bash
 export TREASURY_RPC_BASE=https://...          # a keyed Base RPC (Alchemy, Infura, QuickNode, your own node)
 export TREASURY_LOGS_RPC_BASE=https://...     # optional: a wide-window provider for earn_balance's event scans
+export TREASURY_RPC_ARBITRUM=https://...      # a keyed Arbitrum One RPC, if you will use a vault on Arbitrum
+export TREASURY_LOGS_RPC_ARBITRUM=https://... # optional, the same for Arbitrum
 ```
 
-Unset, the server falls back to Base's public RPC, which rate-limits after a handful of calls. A
-`… over rate limit` error from any tool means "set a keyed RPC", not "the vault is down". The plugin
-is expected to pass only these two variables through to the server. See [`configuration.md`](configuration.md).
+Each chain reads only its own variable. Unset, a chain falls back to its public RPC, which rate-limits
+after a handful of calls. A `… over rate limit` error from any tool means "set a keyed RPC for that
+chain", not "the vault is down". The plugin is expected to pass only these four variables through to
+the server. See [`configuration.md`](configuration.md).
 
 Claude Code asks once whether the plugin may start a Node process for the MCP server. Allow it for
 the project; it is the same command every time (`node …/dist/mcp-server.mjs`).

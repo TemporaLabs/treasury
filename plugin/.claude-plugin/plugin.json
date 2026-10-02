@@ -1,6 +1,6 @@
 {
   "name": "treasury",
-  "description": "Agent Treasury by Tempora Labs \u2014 treasury management plugin for AI agents; the agent's own wallet is the account. The earn skill puts idle USDC to work in measured ERC-4626 vaults on Base: lists vaults with measured deposit status, pre-flights a deposit by simulation, and builds UNSIGNED approve/deposit/withdraw calls for your own signer. Holds no keys; cannot sign or send.",
+  "description": "Agent Treasury by Tempora Labs \u2014 treasury management plugin for AI agents; the agent's own wallet is the account. The earn skill puts idle USDC to work in measured ERC-4626 vaults on Base and Arbitrum One: lists vaults with measured deposit status, pre-flights a deposit by simulation, and builds UNSIGNED approve/deposit/withdraw calls for your own signer. Holds no keys; cannot sign or send.",
   "version": "0.1.2",
   "author": {
     "name": "Tempora Labs"
@@ -15,6 +15,7 @@
     "usdc",
     "erc-4626",
     "base",
+    "arbitrum",
     "agent-treasury",
     "mcp",
     "tempora"

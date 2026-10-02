@@ -8,7 +8,11 @@ the row is wrong, never the chain.
 
 ## Offered today
 
-### Tempora Labs Cash Plus USDC (Test 2) — the default
+Two chains: Base, which is the default, and Arbitrum One. Each chain has its own default vault; a
+tool called with no vault and no chain uses Base's. A vault's ticker names exactly one vault on
+exactly one chain.
+
+### Tempora Labs Cash Plus USDC (Test 2) — the default, and the default on Base
 
 | | |
 |---|---|
@@ -41,7 +45,24 @@ the row is wrong, never the chain.
 | fees | a management fee and a performance fee, both readable on-chain from the vault (`getManagementFeeData`, `getPerformanceFeeData`) |
 | positions | ERC-4626 leaf vaults on Base — readable on-chain; Treasury does not model the fund's allocation |
 
-**"Test" is in both names on purpose.** These are test-series vaults: real contracts, real USDC, real
+### Tempora Labs Cash Plus USDC (Test 2C) — the default on Arbitrum One
+
+| | |
+|---|---|
+| ticker | `tlCashPlusUSDC2C` |
+| chain | Arbitrum One (42161) |
+| vault | [`0x4057a63953142Ac2b3E5dB1954Fc14d578662587`](https://arbiscan.io/address/0x4057a63953142Ac2b3E5dB1954Fc14d578662587) |
+| asset | native USDC [`0xaf88d065e77c8cC2239327C5EDb3A432268e5831`](https://arbiscan.io/address/0xaf88d065e77c8cC2239327C5EDb3A432268e5831), 6 decimals — not bridged USDC.e, which is a different token this vault does not take |
+| shares | `tlCashPlusUSDC2C`, **18 decimals** — a share amount is never an asset amount |
+| chassis | Morpho Vault V2 (ERC-4626) |
+| deployed | block 510,270,114 (first block with code) |
+| deposits | **open to any account**. A stranger's simulated `deposit()` reaches the USDC pull and reverts `TransferFromReverted` only for lack of an allowance (measured at block 511,070,816). `maxDeposit()` reads `0` to every caller on this chassis by design and is not consulted |
+| withdrawals | **public**. Served from idle USDC, then through the vault's liquidity adapter; a withdrawal larger than that reverts until positions are unwound — `earn_balance` reports `exit.exitableNow` by simulating it. `maxWithdraw()` also reads `0` by design |
+| fees | none set: `performanceFee()` and `managementFee()` read `0` at block 511,070,816. The curator can introduce one, and the vault's fee timelocks are **0** (`timelock(setPerformanceFee)` and `timelock(setManagementFee)` both read `0` at that block), so a change needs no notice; Morpho Vault V2's protocol constants cap them at 50% performance and 5%/yr management. Read both fees on-chain before depositing |
+| positions | through the vault's three adapters on Arbitrum One — readable on-chain; Treasury does not model the fund's allocation. Read the vault's positions on-chain before a first deposit |
+| links | Arbiscan only. Morpho's app has no page for this vault yet (`app.morpho.org/arbitrum/vault/…` answered 404 on 2026-10-02), so `earn_vaults` offers no `app` link for it |
+
+**"Test" is in every name on purpose.** These are test-series vaults: real contracts, real USDC, real
 positions, operated by Tempora while the product is proven. Read [`risks.md`](risks.md).
 
 ## Getting access to a whitelist-gated vault
@@ -56,7 +77,7 @@ anywhere in this repository; its own test tiers discover one from the chain when
 
 ## Why the default is what it is
 
-**The default is a Tempora-curated destination, and Tempora can set fees on it as curator.** Treasury offers it
+**Each chain's default is a Tempora-curated destination, and Tempora can set fees on it as curator.** Treasury offers it
 because it is Tempora's — not because it is the best-yielding vault available, and Treasury makes no
 such claim. A fork of this client may point its default anywhere; the official distribution points
 here, and says so.

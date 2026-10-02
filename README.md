@@ -11,7 +11,7 @@
 
 
 Open Agent Treasury (OAT) helps agents manage on-chain capital. Its first skill, **Earn**, lets
-agents inspect Tempora-curated vaults on Base, track USDC positions, and prepare deposits and
+agents inspect Tempora-curated vaults on Base and Arbitrum One, track USDC positions, and prepare deposits and
 withdrawals. It ships as an agent plugin, an MCP server, and a TypeScript/JavaScript library.
 
 **OAT prepares transactions. Your signer executes them.** It never holds private keys or signs.
@@ -28,17 +28,20 @@ A transaction goes out only from your own wallet, after you approve it there. Yo
 - **Track a position:** see its value, deposits, and earnings from on-chain records.
 - **Prepare a withdrawal:** check how much is withdrawable now and build unsigned calls.
 
-Earn currently supports **USDC in, USDC out** through Tempora's ERC-4626 vaults on Base.
+Earn currently supports **USDC in, USDC out** through Tempora's ERC-4626 vaults on Base and
+Arbitrum One. Base is the default; the agent asks which chain when you have not said, and the USDC
+has to be on that chain already.
 See the [eight `earn_*` tools](docs/tools.md) for inputs, outputs, and limits.
 
 ## Quick start
 
-**Requires Node.js 22+ on your `PATH`.** Use a keyed Base RPC; the public fallback rate-limits quickly.
+**Requires Node.js 22+ on your `PATH`.** Use a keyed RPC for each chain you use; the public fallbacks rate-limit quickly.
 
 ### Claude Code
 
 ```bash
-export TREASURY_RPC_BASE=https://...  # replace with your Base RPC URL
+export TREASURY_RPC_BASE=https://...      # replace with your Base RPC URL
+export TREASURY_RPC_ARBITRUM=https://...  # only if you will use a vault on Arbitrum One
 claude plugin marketplace add TemporaLabs/treasury@v0.1.1
 claude plugin install treasury@treasury
 ```
@@ -85,13 +88,17 @@ Later, ask: **“What is my position worth, and how much can I withdraw now?”*
 
 ## Vaults
 
-The default, **Cash Plus USDC (Test 2)**, uses Morpho Vault V2 and is open to any account.
+The default, **Cash Plus USDC (Test 2)**, is on Base, uses Morpho Vault V2 and is open to any account.
 
 Explore the default vault in the [Morpho dashboard](https://app.morpho.org/base/vault/0x040fCA12673778FEED5DA7b2ccFbbAb0cc0134Cf/tempora-labs-cash-plus-usdc-test-2#overview) for a visual overview.
 
-**Cash Plus USDC (Test 2A)** uses IPOR Fusion and requires whitelist access. Both are experimental
-vaults using real USDC, not bank savings accounts. Neither currently has a lock-up, but liquidity
-can limit withdrawals.
+**Cash Plus USDC (Test 2A)**, also on Base, uses IPOR Fusion and requires whitelist access.
+
+**Cash Plus USDC (Test 2C)** is the default on Arbitrum One: Morpho Vault V2 over native USDC, open to
+any account. Ask for it by chain ("deposit on Arbitrum") or by name.
+
+All three are experimental vaults using real USDC, not bank savings accounts. None currently has a
+lock-up, but liquidity can limit withdrawals.
 
 Tempora Labs curates these vaults and can set fees. OAT offers Tempora's vaults; it does not compare
 them against the market or promise the best yield. It reports your position's value and earnings,

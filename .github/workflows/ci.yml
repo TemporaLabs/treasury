@@ -213,11 +213,11 @@ jobs:
           expected = {
               "earn_vaults": set(),
               "earn_terms": set(),
-              "earn_status": {"vault", "account", "amount_usdc"},
-              "earn_quote": {"vault", "account", "amount_usdc", "direction"},
-              "earn_prepare_deposit": {"vault", "account", "amount_usdc", "receiver"},
-              "earn_prepare_withdraw": {"vault", "receiver", "account", "amount_usdc", "all", "shares_exact"},
-              "earn_balance": {"vault", "account", "lookback_blocks", "max_log_requests"},
+              "earn_status": {"vault", "chain", "account", "amount_usdc"},
+              "earn_quote": {"vault", "chain", "account", "amount_usdc", "direction"},
+              "earn_prepare_deposit": {"vault", "chain", "account", "amount_usdc", "receiver"},
+              "earn_prepare_withdraw": {"vault", "chain", "receiver", "account", "amount_usdc", "all", "shares_exact"},
+              "earn_balance": {"vault", "chain", "account", "lookback_blocks", "max_log_requests"},
               "earn_claim": {"receipt_id"},
           }
           assert props == expected, {k: (sorted(props.get(k, [])), sorted(v)) for k, v in expected.items() if props.get(k) != v}

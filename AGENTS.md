@@ -4,7 +4,7 @@ Instructions for coding agents working in this repository. People should start w
 [`CONTRIBUTING.md`](CONTRIBUTING.md); it is the fuller guide for people, and wins if the two ever
 disagree.
 
-Treasury is a depositor client for ERC-4626 vaults on Base: a vault registry, pre-flight checks, and
+Treasury is a depositor client for ERC-4626 vaults on Base and Arbitrum One: a vault registry, pre-flight checks, and
 builders for **unsigned** deposit and withdraw calls, served as a library and as an MCP server.
 
 ## Two rules that decide every review
@@ -36,6 +36,10 @@ TREASURY_RPC_BASE=https://... npm test           # adds live read-only checks ag
 TREASURY_RPC_BASE=https://... npm run test:fork  # anvil fork round trips, impersonated accounts
 npm run registry:check     # reconcile registry/vaults.json against the chain
 ```
+
+Each chain's live and fork tiers run when that chain's RPC variable is set: add
+`TREASURY_RPC_ARBITRUM=https://...` to the same commands for Arbitrum One. `registry:check` reads
+each row on its own chain and reports a chain it could not reach as not checked.
 
 ## Things that fail CI if forgotten
 

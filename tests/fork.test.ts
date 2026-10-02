@@ -1,6 +1,8 @@
 /**
- * Acceptance: a full deposit → redeem round trip on a fork of Base against the default vault,
- * using ONLY the calls this package builds. Gated behind TREASURY_FORK=1 because it spawns anvil.
+ * Acceptance: a full deposit → redeem round trip on a fork of each chain against that chain's
+ * default vault, using ONLY the calls this package builds. Gated behind TREASURY_FORK=1 because it
+ * spawns anvil, and per chain behind that chain's RPC variable: a chain with no upstream configured
+ * skips, and says so in the runner's summary. The forks run one after another, never together.
  *
  * The signer here is anvil impersonating a USDC-rich account. That is the point: the skill emits
  * unsigned calls, and something else — here the fork node — signs them. No key is read anywhere.
@@ -11,7 +13,7 @@
 import { describe, it, expect, beforeAll, afterAll } from "vitest";
 import { spawn, type ChildProcess } from "node:child_process";
 import { createPublicClient, createTestClient, createWalletClient, erc20Abi, formatUnits, http, parseUnits, type Address } from "viem";
-import { base } from "viem/chains";
+import { arbitrum, base } from "viem/chains";
 import { erc4626Abi } from "../src/abi/erc4626.js";
 import { buildDeposit, buildWithdraw } from "../src/build.js";
 import { getPosition, UNKNOWN_INCOMPLETE_SCAN } from "../src/position.js";
@@ -22,29 +24,58 @@ import { EARN } from "../src/config/earn.js";
 import { findRoleHolder } from "./access.js";
 
 const enabled = process.env["TREASURY_FORK"] === "1";
-const upstream = process.env["TREASURY_RPC_BASE"] || process.env["BASE_RPC_URL"];
-const fork = enabled && upstream ? describe : describe.skip;
-
-// Every address and amount below comes from config/earn.ts — nothing is named here.
-const WHALE: Address = EARN.fixtures.usdcWhale;
 const STRANGER: Address = EARN.fixtures.stranger;
-const ROUND_TRIP = EARN.roundTripVault;
-/** The whitelist-gated sibling, for the access-discrimination pair. Its member is DISCOVERED from the chain. */
-const GATED = "tlCashPlusUSDC2A";
+
+/**
+ * One fork per chain. Every address and amount comes from config/earn.ts — nothing is named here.
+ * `gated` is the whitelist-gated sibling for the access-discrimination pair, on the chain that has
+ * one; its member is DISCOVERED from the chain. A distinct port per chain as well as per run.
+ */
+const NETS = [
+  {
+    key: "base",
+    chain: base,
+    upstream: process.env["TREASURY_RPC_BASE"] || process.env["BASE_RPC_URL"],
+    port: 18545 + (process.pid % 1000),
+    whale: EARN.fixtures.usdcWhale as Address,
+    roundTrip: EARN.roundTripVault as string,
+    gated: "tlCashPlusUSDC2A" as string | undefined,
+    /** ~16 s behind head at Base's 2 s blocks. */
+    pinBehind: 8n,
+  },
+  {
+    key: "arbitrum",
+    chain: arbitrum,
+    upstream: process.env["TREASURY_RPC_ARBITRUM"] || process.env["ARBITRUM_RPC_URL"],
+    port: 19545 + (process.pid % 1000),
+    whale: EARN.fixtures.usdcWhaleArbitrum as Address,
+    roundTrip: EARN.defaultVaultByChain.arbitrum as string,
+    gated: undefined as string | undefined,
+    /** The same ~16 s at Arbitrum One's ~0.25 s blocks: 8 blocks there is two seconds, inside replica lag. */
+    pinBehind: 64n,
+  },
+] as const;
+
+for (const net of NETS) {
+const upstream = net.upstream;
+const fork = enabled && upstream ? describe : describe.skip;
+const WHALE: Address = net.whale;
+const ROUND_TRIP = net.roundTrip;
+const GATED = net.gated;
 /**
  * The account holding the gated vault's deposit role, DISCOVERED FROM THE CHAIN in `beforeAll` and
  * impersonated — an address, never a key, and never written down here (`tests/access.ts` says why).
  * `undefined` if the chain names nobody; the pair test then fails with that reason, not the arm.
  */
 let gatedMember: Address | undefined;
-const PORT = 18545 + (process.pid % 1000);
+const PORT = net.port;
 const RPC = `http://127.0.0.1:${PORT}`;
 
 let anvil: ChildProcess | undefined;
 
 async function waitForRpc(ms: number): Promise<void> {
   const deadline = Date.now() + ms;
-  const c = createPublicClient({ chain: base, transport: http(RPC) });
+  const c = createPublicClient({ chain: net.chain, transport: http(RPC) });
   while (Date.now() < deadline) {
     try {
       await c.getBlockNumber();
@@ -56,11 +87,11 @@ async function waitForRpc(ms: number): Promise<void> {
   throw new Error(`anvil on ${RPC} did not come up in ${ms}ms`);
 }
 
-fork("fork round trip: deposit → redeem through the package's unsigned calls", () => {
+fork(`fork round trip on ${net.key}: deposit → redeem through the package's unsigned calls`, () => {
   // 60s: a fork's first touch of a contract's storage is an upstream round-trip per slot, and can stall past viem's 10s default.
-  const pub = createPublicClient({ chain: base, transport: http(RPC, { timeout: 60_000 }) });
-  const test = createTestClient({ chain: base, mode: "anvil", transport: http(RPC, { timeout: 60_000 }) });
-  const wallet = createWalletClient({ chain: base, transport: http(RPC, { timeout: 60_000 }) });
+  const pub = createPublicClient({ chain: net.chain, transport: http(RPC, { timeout: 60_000 }) });
+  const test = createTestClient({ chain: net.chain, mode: "anvil", transport: http(RPC, { timeout: 60_000 }) });
+  const wallet = createWalletClient({ chain: net.chain, transport: http(RPC, { timeout: 60_000 }) });
 
 
 /**
@@ -77,8 +108,8 @@ async function sendBuffered(to: Address, data: `0x${string}`, from: Address = WH
     // Pin the fork a few blocks behind head: a load-balanced upstream can serve lazy state fetches
     // from replicas that have not yet seen the very latest block, which surfaces as a spurious
     // revert mid-test. Blocks a little behind head exist everywhere.
-    const head = await createPublicClient({ chain: base, transport: http(upstream!) }).getBlockNumber();
-    const pinned = head - 8n;
+    const head = await createPublicClient({ chain: net.chain, transport: http(upstream!) }).getBlockNumber();
+    const pinned = head - net.pinBehind;
     anvil = spawn(
       "anvil",
       ["--fork-url", upstream!, "--fork-block-number", pinned.toString(), "--port", String(PORT), "--silent", "--no-rate-limit"],
@@ -92,7 +123,11 @@ async function sendBuffered(to: Address, data: `0x${string}`, from: Address = WH
     // the gated sibling is read from its AccessManager, not from this repository; a stale address
     // would produce an AccessManagedUnauthorized that reads like a broken test.
     expect(getVault(ROUND_TRIP).depositOpen.open, `${ROUND_TRIP} is the round-trip target and must be measured open`).toBe(true);
-    gatedMember = await findRoleHolder(pub as never, getVault(GATED));
+    // The fork must be OF the chain the target vault is on — a round trip through a vault's address
+    // on another chain's fork deposits into nothing.
+    expect(getVault(ROUND_TRIP).chainId, `${ROUND_TRIP} is not on ${net.key}`).toBe(net.chain.id);
+    expect(await pub.getChainId(), `the upstream for ${net.key} answers for a different chain`).toBe(net.chain.id);
+    gatedMember = GATED === undefined ? undefined : await findRoleHolder(pub as never, getVault(GATED));
     if (gatedMember && gatedMember !== WHALE) {
       await test.impersonateAccount({ address: gatedMember });
       await test.setBalance({ address: gatedMember, value: parseUnits("1", 18) });
@@ -116,11 +151,12 @@ async function sendBuffered(to: Address, data: `0x${string}`, from: Address = WH
     }
   });
 
-  it(`${GATED} (gated Fusion sibling): the SAME fork classifies a stranger WHITELIST_GATED and the discovered member NEEDS_APPROVAL`, async () => {
+  // Only on a chain that HAS a gated sibling. Skipped (visibly) elsewhere rather than passed.
+  (GATED === undefined ? it.skip : it)(`${GATED ?? "(no gated vault on this chain)"} (gated Fusion sibling): the SAME fork classifies a stranger WHITELIST_GATED and the discovered member NEEDS_APPROVAL`, async () => {
     // The discriminating pair on one vault at one block: if both read the same, the classifier is
     // not seeing the AccessManager. Kept on the gated sibling now that the default is open.
     expect(gatedMember, `${GATED}: no account holds the deposit role on its AccessManager — the whitelist is empty, or the vault is not gated the way the registry says`).toBeDefined();
-    const vault = getVault(GATED);
+    const vault = getVault(GATED!);
     const gated = await preflightDeposit({ vault, depositor: STRANGER, assetsHuman: EARN.fixtures.forkDepositUsdc, client: pub as never });
     expect(gated.status, JSON.stringify(gated, null, 2)).toBe("WHITELIST_GATED");
     expect(gated.canDeposit).toBe(false);
@@ -267,3 +303,4 @@ async function sendBuffered(to: Address, data: `0x${string}`, from: Address = WH
   );
 
 });
+} // one fork per chain

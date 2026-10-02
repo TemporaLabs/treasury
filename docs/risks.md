@@ -21,7 +21,7 @@ third party. Review every transaction your signer is asked to sign.
   guaranteed. Yield figures are measurements of the past, labelled by their source, never a promise.
 - **Third-party protocol risk.** The vault holds positions in other protocols' contracts, each with
   its own smart-contract, custody and mechanism risk that Tempora does not control. One of the
-  default's positions lends against a stablecoin whose Morpho oracle is fixed at par; a depeg is not
+  Base default's positions lends against a stablecoin whose Morpho oracle is fixed at par; a depeg is not
   priced by the fund's loss model. Read the vault's positions on-chain before a first deposit.
 - **Liquidity.** A withdrawal is served from the vault's liquid balance and then by unwinding its
   positions. Under stress, part of a position may not be withdrawable immediately. `earn_balance`
@@ -29,10 +29,10 @@ third party. Review every transaction your signer is asked to sign.
 - **Access.** A whitelist-gated vault admits deposits only from accounts the fund has admitted.
   Withdrawals are public. Admission can be granted and, in principle, revoked, by the fund.
 - **Fees.** A vault's curator can set a management fee and a performance fee; both are readable
-  on-chain. The default sets none today (measured at block 51,372,415). Its fee timelocks are 0
+  on-chain. The Base default sets none today (measured at block 51,372,415). Its fee timelocks are 0
   (measured at block 51,404,161), so the curator can introduce a fee without notice; read both fees
-  before depositing.
-- **The default is Tempora's.** It is offered because Tempora curates it, and can set fees on it, not
+  before depositing. The same holds for the Arbitrum One default (both measured at block 511,070,816).
+- **Each chain's default is Tempora's.** It is offered because Tempora curates it, and can set fees on it, not
   because it is the best-yielding vault available.
 
 ## The client
@@ -42,6 +42,10 @@ third party. Review every transaction your signer is asked to sign.
 - **A quote is a simulation at one block.** State can change between the quote and the signed
   transaction. The builders carry a gas buffer for exactly this; the `precondition` on a call says what
   must still be true when it is sent.
+- **A call is for one chain.** Every prepared call carries a `chainId`, and the envelope names the
+  chain. Send it on that chain only, with USDC that is already there: Treasury does not bridge. A
+  transaction sent on a different chain, to an address with no contract there, is mined and does
+  nothing — the deposit did not happen and the gas is spent. Check your signer's network first.
 - **Two addresses, two meanings.** `account` is whose shares; `receiver` is where the money lands.
   They are usually the same. The tool will not assume it, and neither should you — a transposed
   receiver sends USDC to the wrong place, irreversibly.

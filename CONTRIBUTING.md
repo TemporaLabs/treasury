@@ -77,8 +77,23 @@ Every row in `registry/vaults.json` is a vault the client will list and build ca
 for, so a new row is a product decision, not only a passing build. Treasury's official registry lists
 Tempora vaults. Proposing a new destination needs Tempora Labs' agreement; say so in the pull request.
 
-A row is a set of measurements. `scripts/registry-check.ts` reconciles each one against the chain, and
-the pull request should say which block it was measured at.
+A row is a set of measurements. `scripts/registry-check.ts` reconciles each one against the chain it
+is on, and the pull request should say which block it was measured at.
+
+A vault on a chain Treasury does not support yet needs that chain added first:
+
+- its entry in `chains` and `CHAIN_INFO` (`src/client.ts`), its literal in the registry schema, and
+  its explorer in `src/links.ts`. The compiler holds these together: a chain in one and not the
+  others does not build;
+- its default vault in `src/config/earn.ts` (`defaultVaultByChain`). Each chain has exactly one vault
+  marked `isDefault`;
+- its RPC variables in the plugin's `.mcp.json`, in [`docs/configuration.md`](docs/configuration.md),
+  and in the allowlist and the exact-set assertion of `tests/boundary.unit.test.ts`. That is the one
+  edit to the boundary test a new chain needs; the rule that it is not weakened to pass still holds;
+- the tests that pin the supported chains (`tests/registry.test.ts`, `tests/client.unit.test.ts`),
+  restated for the new set;
+- the places that name the chains in prose: the `earn` skill, [`docs/tools.md`](docs/tools.md) and the
+  README. CI checks the skill's tool table, not its prose.
 
 ## Development
 
@@ -92,6 +107,10 @@ npm test                          # unit tests
 TREASURY_RPC_BASE=https://... npm test          # adds live read-only checks against Base
 TREASURY_RPC_BASE=https://... npm run test:fork # anvil fork round trips with impersonated accounts
 ```
+
+Each chain's live and fork tiers run when that chain's RPC variable is set. For Arbitrum One, add
+`TREASURY_RPC_ARBITRUM=https://...` to the same commands; a chain with no variable set is skipped
+and shown as skipped.
 
 - **Use `npm ci`, not `npm install`.** It fails on a stale lockfile, which is what CI does.
 - **Rebuild the bundle when source changes.** `dist/mcp-server.mjs` is committed,
