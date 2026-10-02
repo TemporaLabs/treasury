@@ -17,6 +17,7 @@ subject per file, facts stated with the block or date they were measured at.
 | [`vaults.md`](vaults.md) | the vaults offered, their addresses, access rules, fees and how access is granted |
 | [`risks.md`](risks.md) | what can go wrong with your money, stated before you deposit |
 | [`configuration.md`](configuration.md) | environment variables, RPC choice, `eth_getLogs` windows and the fallback |
+| [`blurb.md`](blurb.md) | a one-page introduction to OAT and the Earn skill, written for publication and for agents that read it |
 
 ## How it works
 
