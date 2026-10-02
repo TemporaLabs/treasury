@@ -16,11 +16,15 @@ import { EARN } from "../src/config/earn.js";
 import { readFileSync } from "node:fs";
 import { FIXTURE, useFixtureRegistry, useShippedRegistry } from "./fixtures/registry.js";
 import { defaultVault } from "../src/registry.js";
+import { __forgetEndpointChainsForTests } from "../src/client.js";
 
 // The unit tiers exercise code paths (18-decimal shares, an open vault) that the shipped
 // registry does not offer; `fixtures/registry.ts` explains why they are synthetic.
 beforeAll(() => useFixtureRegistry());
 afterAll(() => useShippedRegistry());
+// An endpoint's chain is remembered per URL for the life of a process. Every mock here is a fresh
+// local port, and the OS reuses ports: forget between tests so one mock never answers for the next.
+afterEach(() => __forgetEndpointChainsForTests());
 
 type Handler = (a: unknown, extra: unknown) => Promise<{ content: { type: string; text: string }[] }>;
 type Registered = Record<string, { handler: Handler; inputSchema?: { shape?: Record<string, unknown> } }>;
@@ -56,12 +60,14 @@ describe("tool surface", () => {
     const t = tools();
     const props = (n: string) => Object.keys(t[n]!.inputSchema?.shape ?? {}).sort();
     // exact property sets, so a leftover old name fails instead of passing as an extra key
-    expect(props("earn_quote")).toEqual(["account", "amount_usdc", "direction", "vault"]);
-    expect(props("earn_status")).toEqual(["account", "amount_usdc", "vault"]);
-    expect(props("earn_balance")).toEqual(["account", "lookback_blocks", "max_log_requests", "vault"]);
-    expect(props("earn_prepare_deposit")).toEqual(["account", "amount_usdc", "receiver", "vault"]);
+    // every tool that takes `vault` takes `chain` beside it — and the three that take no vault do not
+    expect(props("earn_quote")).toEqual(["account", "amount_usdc", "chain", "direction", "vault"]);
+    expect(props("earn_status")).toEqual(["account", "amount_usdc", "chain", "vault"]);
+    expect(props("earn_balance")).toEqual(["account", "chain", "lookback_blocks", "max_log_requests", "vault"]);
+    expect(props("earn_prepare_deposit")).toEqual(["account", "amount_usdc", "chain", "receiver", "vault"]);
     // `receiver` stays distinct from `account`: different slots, both addresses
-    expect(props("earn_prepare_withdraw")).toEqual(["account", "all", "amount_usdc", "receiver", "shares_exact", "vault"]);
+    expect(props("earn_prepare_withdraw")).toEqual(["account", "all", "amount_usdc", "chain", "receiver", "shares_exact", "vault"]);
+    for (const n of Object.keys(t)) expect(props(n).includes("chain"), `${n}: chain and vault travel together`).toBe(props(n).includes("vault"));
     expect(props("earn_vaults")).toEqual([]);
     expect(props("earn_terms")).toEqual([]);
     expect(props("earn_claim")).toEqual(["receipt_id"]);
@@ -73,7 +79,7 @@ describe("tool surface", () => {
 });
 
 describe("earn_vaults — Tempora vaults only, and the access of each is reported", () => {
-  it("default is Cash Plus USDC 2B with defaultAccess open; it IS depositable; the gated sibling is listed but not depositable", async () => {
+  it("default is Cash Plus USDC 2 with defaultAccess open; it IS depositable; the gated sibling is listed but not depositable", async () => {
     const out = payload(await tools()["earn_vaults"]!.handler({}, {})) as {
       default: string;
       defaultAccess: string;
@@ -106,8 +112,125 @@ describe("earn_vaults — Tempora vaults only, and the access of each is reporte
       // the link must name THIS vault — a constant that merely looks like a URL would pass a
       // truthiness check and send an operator to the wrong contract
       expect(v.links.explorer, `${v.symbol} explorer link`).toContain(v.address);
-      if (v.chassis === "morpho-v2") expect(v.links.app, `${v.symbol} app link`).toContain(v.address);
+      // an app link is offered only where the protocol's page exists (registry.test.ts pins which);
+      // where one is offered it must name THIS vault, for the same reason as the explorer link
+      if (v.links.app !== undefined) expect(v.links.app, `${v.symbol} app link`).toContain(v.address);
     }
+    // not vacuous: at least one row carries an app link, so the branch above ran
+    expect(out.vaults.some((v) => v.links.app !== undefined)).toBe(true);
+  });
+
+  it("lists the chains a deposit can go to — the default chain first, each with its own default vault — and every row says which chain it is on", async () => {
+    const out = payload(await tools()["earn_vaults"]!.handler({}, {})) as {
+      defaultChain: string;
+      default: string;
+      chains: { chain: string; chainId: number; name: string; default: string; defaultAccess: string; depositable: string[] }[];
+      vaults: { symbol: string; chain: string; chainId: number }[];
+    };
+    expect(out.defaultChain).toBe("base");
+    expect(out.chains.map((c) => [c.chain, c.chainId, c.name, c.default, c.defaultAccess])).toEqual([
+      ["base", 8453, "Base", "tlCashPlusUSDC2B", "open"],
+      ["arbitrum", 42161, "Arbitrum One", "tlCashPlusUSDC2C", "open"],
+    ]);
+    // the global default is the default CHAIN's default — the two fields cannot disagree
+    expect(out.default).toBe(out.chains[0]!.default);
+    // a chain's depositable set holds only vaults on that chain, and its default is in it
+    for (const c of out.chains) {
+      expect(c.depositable).toContain(c.default);
+      for (const s of c.depositable) expect(out.vaults.find((v) => v.symbol === s)!.chain).toBe(c.chain);
+    }
+    const chainOf = Object.fromEntries(out.vaults.map((v) => [v.symbol, `${v.chain}/${v.chainId}`]));
+    expect(chainOf["tlCashPlusUSDC2"]).toBe("base/8453");
+    expect(chainOf["tlCashPlusUSDC2A"]).toBe("base/8453");
+    expect(chainOf["tlCashPlusUSDC2C"]).toBe("arbitrum/42161");
+  });
+});
+
+/**
+ * `chain` decides which CONTRACTS a prepared call names. These decode the calldata's destinations
+ * rather than read a label: a response that said "arbitrum" above calls built for Base would pass
+ * any assertion on the label and send an operator's signer to the wrong chain's addresses.
+ */
+describe("`chain` selects the vault, and the calls are built for that chain's contracts", () => {
+  const BASE_VAULT = "0x91BcEbA5feCB9E92d80F1845B55cC56621E9352F"; // Test 2B, the Base default
+  const BASE_USDC = "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913";
+  const ARB_VAULT = "0x4057a63953142Ac2b3E5dB1954Fc14d578662587";
+  const ARB_USDC = "0xaf88d065e77c8cC2239327C5EDb3A432268e5831";
+  type Envelope = { chain: string; chainId: number; warning?: string; next_step: string; signer_rules: string[]; calls: { chainId: number; to: string; data: `0x${string}` }[] };
+  const deposit = async (extra: Record<string, unknown>) =>
+    payload(await tools()["earn_prepare_deposit"]!.handler({ amount_usdc: "25", receiver: RECEIVER, account: RECEIVER, ...extra }, {})) as Envelope;
+
+  it("neither chain nor vault → Base's default (Test 2B), and the demo vault only when named", async () => {
+    const out = await deposit({});
+    expect([out.chain, out.chainId]).toEqual(["base", 8453]);
+    expect(out.calls.map((c) => [c.chainId, c.to])).toEqual([
+      [8453, BASE_USDC], // approve, on the asset
+      [8453, BASE_VAULT], // deposit, on the vault
+    ]);
+    // the demo vault, by name: the same chain and asset, a different vault
+    const demo = await deposit({ vault: "tlCashPlusUSDC2" });
+    expect([demo.chain, demo.calls.map((c) => c.to)]).toEqual(["base", [BASE_USDC, "0x040fCA12673778FEED5DA7b2ccFbbAb0cc0134Cf"]]);
+  });
+
+  it("chain: arbitrum → the Arbitrum default, its own USDC, chainId 42161 on every call", async () => {
+    const out = await deposit({ chain: "arbitrum" });
+    expect([out.chain, out.chainId]).toEqual(["arbitrum", 42161]);
+    expect(out.calls.map((c) => [c.chainId, c.to])).toEqual([
+      [42161, ARB_USDC],
+      [42161, ARB_VAULT],
+    ]);
+    // the approve's spender is the Arbitrum vault — not Base's vault approved on Arbitrum's token
+    const approve = decodeFunctionData({ abi: erc4626Abi, data: out.calls[0]!.data });
+    expect(approve.functionName).toBe("approve");
+    expect(approve.args![0]).toBe(ARB_VAULT);
+    expect(out.next_step).toMatch(/Arbitrum One \(chainId 42161\)/);
+  });
+
+  it("vault alone names the chain; chain: base is the same as omitting it", async () => {
+    expect((await deposit({ vault: "tlCashPlusUSDC2C" })).calls.map((c) => c.to)).toEqual([ARB_USDC, ARB_VAULT]);
+    expect((await deposit({ chain: "base" })).calls.map((c) => c.to)).toEqual([BASE_USDC, BASE_VAULT]);
+  });
+
+  it("a vault on one chain and a `chain` naming another is REFUSED — in both directions, on every vault-taking tool", async () => {
+    const t = tools();
+    const args = { amount_usdc: "1", receiver: RECEIVER, account: RECEIVER, direction: "deposit" };
+    for (const name of ["earn_prepare_deposit", "earn_prepare_withdraw", "earn_quote", "earn_status", "earn_balance"]) {
+      await expect(t[name]!.handler({ ...args, vault: "tlCashPlusUSDC2", chain: "arbitrum" }, {}), name).rejects.toThrow(/is on base, not arbitrum/);
+      await expect(t[name]!.handler({ ...args, vault: "tlCashPlusUSDC2C", chain: "base" }, {}), name).rejects.toThrow(/is on arbitrum, not base/);
+      await expect(t[name]!.handler({ ...args, chain: "solana" }, {}), name).rejects.toThrow(/unknown chain "solana"; chains with a vault: base, arbitrum/);
+    }
+  });
+
+  it("a withdrawal is built on the chain the vault is on, and still carries no deposit warning", async () => {
+    const out = payload(
+      await tools()["earn_prepare_withdraw"]!.handler({ vault: "tlCashPlusUSDC2C", amount_usdc: "1", receiver: RECEIVER, account: OWNER }, {}),
+    ) as Envelope;
+    expect([out.chain, out.chainId]).toEqual(["arbitrum", 42161]);
+    expect(out.calls.map((c) => [c.chainId, c.to])).toEqual([[42161, ARB_VAULT]]);
+    expect(out.warning).toBeUndefined();
+  });
+
+  it("the signer is told to send on the call's chain, first, on both envelopes", async () => {
+    const dep = await deposit({ chain: "arbitrum" });
+    const wd = payload(await tools()["earn_prepare_withdraw"]!.handler({ amount_usdc: "1", receiver: RECEIVER, account: OWNER }, {})) as Envelope;
+    for (const out of [dep, wd]) {
+      expect(out.signer_rules[0]).toMatch(/on the chain its `chainId` names, and on no other/);
+      // the envelope's chain is stated BEFORE the calls and before next_step, where a reader stops
+      const keys = Object.keys(out);
+      expect(keys.indexOf("chain")).toBeLessThan(keys.indexOf("next_step"));
+      expect(keys.indexOf("chainId")).toBeLessThan(keys.indexOf("calls"));
+      // and it agrees with every call it wraps
+      for (const c of out.calls) expect(c.chainId).toBe(out.chainId);
+    }
+  });
+
+  it("the tool descriptions tell the agent to ask which chain, where it decides to prepare a deposit", () => {
+    const d = (n: string) => (tools()[n] as unknown as { description: string }).description;
+    expect(d("earn_vaults")).toMatch(/`chains`.*ASK before preparing a deposit/s);
+    expect(d("earn_prepare_deposit")).toMatch(/if they have not chosen one, ask before calling this/);
+    const chainProp = (tools()["earn_prepare_deposit"]!.inputSchema!.shape!["chain"] as { description?: string }).description ?? "";
+    expect(chainProp).toMatch(/"base" or "arbitrum"/);
+    expect(chainProp).toMatch(/ASK them before preparing a deposit/);
   });
 });
 
@@ -306,6 +429,239 @@ describe("earn_status", () => {
     expect(s).not.toContain("127.0.0.1");
     expect(s).not.toMatch(/https?:\/\//);
     expect(out.rpcSource).toBe("TREASURY_RPC_BASE"); // the NAME is reported, the value never is
+  });
+});
+
+/**
+ * Each chain has its own RPC variable, so health is asked PER CHAIN — and the likeliest mistake with
+ * two variables is one pointed at the other chain. Nothing then fails usefully by itself: a vault's
+ * address has no code there, so reads come back empty. Health names it instead.
+ */
+describe("earn_status health is per chain, and names an endpoint that answers for the wrong one", () => {
+  /** A mock endpoint that answers for whatever chain it is told to be. */
+  const startChain = async (chainIdHex: string) => {
+    const srv = createServer((req, res) => {
+      let b = "";
+      req.on("data", (c) => (b += c));
+      req.on("end", () => {
+        const r = JSON.parse(b) as { id: number; method: string };
+        if (r.method === "eth_chainId" && chainIdHex === "hang") return; // never answers this one method
+        const result = r.method === "eth_blockNumber" ? "0x1e7a1f00" : r.method === "eth_chainId" ? chainIdHex : "0x" + "0".repeat(64);
+        res.writeHead(200, { "content-type": "application/json" });
+        res.end(JSON.stringify({ jsonrpc: "2.0", id: r.id, result }));
+      });
+    });
+    await new Promise<void>((r) => srv.listen(0, "127.0.0.1", r));
+    const { port } = srv.address() as { port: number };
+    return {
+      url: `http://127.0.0.1:${port}/v2/ARBKEY${port}`,
+      close: () =>
+        new Promise<void>((r) => {
+          srv.closeAllConnections(); // a hung request must not keep the server (and the test) open
+          srv.close(() => r());
+        }),
+    };
+  };
+  afterEach(() => {
+    delete process.env["TREASURY_RPC_ARBITRUM"];
+    delete process.env["TREASURY_RPC_BASE"];
+  });
+  const health = async (args: Record<string, unknown>) => payload(await tools()["earn_status"]!.handler(args, {}));
+
+  it("chain: arbitrum reports Arbitrum's chain id and ITS variable — never Base's, even when only Base's is set", async () => {
+    process.env["TREASURY_RPC_BASE"] = "http://127.0.0.1:9/v2/BASEKEY_abc12345";
+    process.env["TREASURY_RPC_ARBITRUM"] = "http://127.0.0.1:9/v2/ARBKEY_abc12345"; // refused: no network
+    const arb = await health({ chain: "arbitrum" });
+    expect([arb.mode, arb.chain, arb.chainId, arb.rpcSource, arb.rpc]).toEqual(["health", "arbitrum", 42161, "TREASURY_RPC_ARBITRUM", "unreachable"]);
+    const base = await health({});
+    expect([base.chain, base.chainId, base.rpcSource]).toEqual(["base", 8453, "TREASURY_RPC_BASE"]);
+    // naming an Arbitrum vault selects the same chain as naming the chain
+    expect((await health({ vault: "tlCashPlusUSDC2C" })).rpcSource).toBe("TREASURY_RPC_ARBITRUM");
+    expect(JSON.stringify(arb)).not.toMatch(/ARBKEY|127\.0\.0\.1/);
+  });
+
+  it("an Arbitrum variable pointed at a BASE endpoint → rpc: wrong_chain, naming the variable and both chains", async () => {
+    const baseEndpoint = await startChain("0x2105"); // answers for 8453
+    try {
+      process.env["TREASURY_RPC_ARBITRUM"] = baseEndpoint.url;
+      const out = await health({ chain: "arbitrum" });
+      expect(out.rpc).toBe("wrong_chain");
+      expect(out.rpcChainId).toBe(8453);
+      expect(out.latestBlock).toBeNull(); // a block number from the wrong chain is not this chain's head
+      expect(out.reason).toMatch(/TREASURY_RPC_ARBITRUM answers for chain 8453, not Arbitrum One \(42161\)/);
+      expect(JSON.stringify(out)).not.toMatch(/ARBKEY|127\.0\.0\.1/);
+    } finally {
+      await baseEndpoint.close();
+    }
+  });
+
+  it("the same variable pointed at an endpoint that IS Arbitrum → rpc: ok, chainVerified: true (the control for the test above)", async () => {
+    const arbEndpoint = await startChain("0xa4b1"); // answers for 42161
+    try {
+      process.env["TREASURY_RPC_ARBITRUM"] = arbEndpoint.url;
+      const out = await health({ chain: "arbitrum" });
+      expect(out.rpc).toBe("ok");
+      expect(out.chainVerified).toBe(true);
+      expect(out.rpcChainId).toBeUndefined();
+      expect(out.latestBlock).toBe(String(0x1e7a1f00));
+      expect(out.logsRpc, "no separate logs endpoint is configured, so none is reported").toBeUndefined();
+    } finally {
+      await arbEndpoint.close();
+    }
+  });
+
+  it("🔴 an endpoint that answers a block but will not say its chain is `ok` with chainVerified: FALSE — and does not hold the answer up", async () => {
+    // "ok" used to mean "the chain check passed". When eth_chainId errors, is rate-limited or hangs
+    // while the block read answers, it means only "it answered" — and says so. The probe is bounded:
+    // an endpoint that never answers eth_chainId must not make health wait out the transport's 10 s.
+    const mute = await startChain("hang");
+    try {
+      process.env["TREASURY_RPC_ARBITRUM"] = mute.url;
+      const t0 = Date.now();
+      const out = await health({ chain: "arbitrum" });
+      expect(out.rpc).toBe("ok");
+      expect(out.chainVerified).toBe(false);
+      expect(out.latestBlock).toBe(String(0x1e7a1f00));
+      expect(Date.now() - t0).toBeLessThan(7_000);
+    } finally {
+      await mute.close();
+    }
+  }, 15_000);
+
+  it("an unconfigured chain is not asked, and claims nothing about verification", async () => {
+    // Unconfigured means the chain's public endpoint, which is this client's own constant. Asserted
+    // on the refused-port path of the OTHER variable so the unit tier never reaches the network:
+    // the property is that `chainVerified` appears only for a configured endpoint.
+    process.env["TREASURY_RPC_ARBITRUM"] = "http://127.0.0.1:9/v2/ARBKEY_abc12345";
+    const out = await health({ chain: "arbitrum" });
+    expect(out.rpc).toBe("unreachable");
+    expect(out).not.toHaveProperty("chainVerified"); // nothing answered, so nothing is claimed either way
+  });
+
+  it("a SEPARATE logs endpoint is checked too, and reported beside the main verdict", async () => {
+    // `earn_balance` reads through the logs variable. Health used to check only the general RPC, so
+    // the tool documented as the misconfiguration check passed while every balance read failed.
+    const arbEndpoint = await startChain("0xa4b1");
+    const baseEndpoint = await startChain("0x2105");
+    try {
+      process.env["TREASURY_RPC_ARBITRUM"] = arbEndpoint.url;
+      process.env["TREASURY_LOGS_RPC_ARBITRUM"] = baseEndpoint.url; // the logs variable, on the wrong chain
+      const bad = await health({ chain: "arbitrum" });
+      expect([bad.rpc, bad.logsRpc, bad.logsRpcSource, bad.logsRpcChainId]).toEqual(["ok", "wrong_chain", "TREASURY_LOGS_RPC_ARBITRUM", 8453]);
+      process.env["TREASURY_LOGS_RPC_ARBITRUM"] = arbEndpoint.url + "/logs"; // a second endpoint on the right chain
+      const good = await health({ chain: "arbitrum" });
+      expect([good.rpc, good.logsRpc, good.logsRpcSource]).toEqual(["ok", "ok", "TREASURY_LOGS_RPC_ARBITRUM"]);
+      expect(good.logsRpcChainId).toBeUndefined();
+      expect(JSON.stringify([bad, good])).not.toMatch(/ARBKEY|127\.0\.0\.1/);
+    } finally {
+      delete process.env["TREASURY_LOGS_RPC_ARBITRUM"];
+      await arbEndpoint.close();
+      await baseEndpoint.close();
+    }
+  });
+});
+
+/**
+ * Through an endpoint for another chain, a vault's address has no contract, so every read fails
+ * with "returned no data … the address is not a contract" — loud, and naming the wrong thing. Each
+ * RPC-touching tool reports the endpoint instead, by the name of the variable that holds it.
+ */
+describe("every tool that reads the chain names an endpoint that answers for the wrong one", () => {
+  const startChain = async (chainIdHex: string) => {
+    const srv = createServer((req, res) => {
+      let b = "";
+      req.on("data", (c) => (b += c));
+      req.on("end", () => {
+        const r = JSON.parse(b) as { id: number; method: string };
+        // eth_call answers "0x": what a chain says about an address with no contract on it
+        const result = r.method === "eth_blockNumber" ? "0x1e7a1f00" : r.method === "eth_chainId" ? chainIdHex : r.method === "eth_getLogs" ? [] : "0x";
+        res.writeHead(200, { "content-type": "application/json" });
+        res.end(JSON.stringify({ jsonrpc: "2.0", id: r.id, result }));
+      });
+    });
+    await new Promise<void>((r) => srv.listen(0, "127.0.0.1", r));
+    const { port } = srv.address() as { port: number };
+    return { url: `http://127.0.0.1:${port}/v2/ARBKEY${port}`, close: () => new Promise<void>((r) => srv.close(() => r())) };
+  };
+  const VARS = ["TREASURY_RPC_ARBITRUM", "TREASURY_LOGS_RPC_ARBITRUM", "TREASURY_RPC_BASE", "TREASURY_LOGS_RPC_BASE", "TREASURY_LOGS_FALLBACK"];
+  afterEach(() => {
+    for (const k of VARS) delete process.env[k];
+  });
+  const WRONG = /the endpoint in TREASURY_RPC_ARBITRUM answers for chain 8453, not Arbitrum One \(42161\)/;
+
+  it("pre-flight, quote (both directions) and balance on Arbitrum, through a Base endpoint → the variable is named, not the vault", async () => {
+    const baseEndpoint = await startChain("0x2105");
+    try {
+      process.env["TREASURY_RPC_ARBITRUM"] = baseEndpoint.url;
+      const t = tools();
+      const a = { chain: "arbitrum", account: RECEIVER, amount_usdc: "1" };
+      await expect(t["earn_status"]!.handler(a, {})).rejects.toThrow(WRONG);
+      await expect(t["earn_quote"]!.handler({ ...a, direction: "deposit" }, {})).rejects.toThrow(WRONG);
+      await expect(t["earn_quote"]!.handler({ ...a, direction: "withdraw" }, {})).rejects.toThrow(WRONG);
+      await expect(t["earn_balance"]!.handler(a, {})).rejects.toThrow(WRONG);
+      // and the refusal carries neither the key nor the host
+      const err = await t["earn_balance"]!.handler(a, {}).then(() => "", (e: Error) => e.message);
+      expect(err).not.toMatch(/ARBKEY|127\.0\.0\.1/);
+    } finally {
+      await baseEndpoint.close();
+    }
+  });
+
+  it("the control: the same calls through an endpoint that IS Arbitrum are NOT reported as a wrong chain", async () => {
+    const arbEndpoint = await startChain("0xa4b1");
+    try {
+      process.env["TREASURY_RPC_ARBITRUM"] = arbEndpoint.url;
+      // The mock answers "0x" to every read, so these still fail — as themselves. What must not
+      // happen is the wrong-chain sentence, which would be a false accusation of the endpoint.
+      const out = payload(await tools()["earn_status"]!.handler({ chain: "arbitrum", account: RECEIVER }, {})) as { status: string };
+      expect(out.status).toBe("UNRESOLVED");
+      const err = await tools()["earn_balance"]!.handler({ chain: "arbitrum", account: RECEIVER }, {}).then(() => "no error", (e: Error) => e.message);
+      expect(err).not.toMatch(/answers for chain/);
+      expect(err).toMatch(/returned no data/);
+    } finally {
+      await arbEndpoint.close();
+    }
+  });
+
+  it("earn_balance checks the LOGS endpoint it actually reads through, and a fallback the operator named", async () => {
+    const arbEndpoint = await startChain("0xa4b1");
+    const baseEndpoint = await startChain("0x2105");
+    try {
+      // the general RPC is right; the logs variable is on the wrong chain
+      process.env["TREASURY_RPC_ARBITRUM"] = arbEndpoint.url;
+      process.env["TREASURY_LOGS_RPC_ARBITRUM"] = baseEndpoint.url;
+      await expect(tools()["earn_balance"]!.handler({ chain: "arbitrum", account: RECEIVER }, {})).rejects.toThrow(
+        /the endpoint in TREASURY_LOGS_RPC_ARBITRUM answers for chain 8453, not Arbitrum One/,
+      );
+      // On Base, a fallback URL that is an ARBITRUM endpoint: it would answer an event scan with an
+      // empty list, and an empty scan reads as a history that was covered in full.
+      for (const k of VARS) delete process.env[k];
+      process.env["TREASURY_RPC_BASE"] = baseEndpoint.url;
+      process.env["TREASURY_LOGS_FALLBACK"] = arbEndpoint.url;
+      await expect(tools()["earn_balance"]!.handler({ vault: FIXTURE.morphoOpen, account: RECEIVER }, {})).rejects.toThrow(
+        /the endpoint in TREASURY_LOGS_FALLBACK answers for chain 42161, not Base \(8453\)/,
+      );
+    } finally {
+      await arbEndpoint.close();
+      await baseEndpoint.close();
+    }
+  });
+
+  it("a chain's own name in the RPC URL is not masked out of a refusal that names the chain", async () => {
+    // Providers put the chain in the path or the host. The redactor registers long URL segments as
+    // secrets; "arbitrum" is 8 characters, and the refusal read `is on base, not <redacted>`.
+    process.env["TREASURY_RPC_ARBITRUM"] = "http://127.0.0.1:9/arbitrum/KEYabcdef123456";
+    const t = tools(); // buildServer registers the secrets
+    const err = await t["earn_prepare_deposit"]!
+      .handler({ vault: "tlCashPlusUSDC2", chain: "arbitrum", account: RECEIVER, receiver: RECEIVER, amount_usdc: "1" }, {})
+      .then(() => "no error", (e: Error) => e.message);
+    expect(err).toMatch(/is on base, not arbitrum/);
+    expect(err).toMatch(/pick a vault on arbitrum \(tlCashPlusUSDC2C\)/);
+    expect(err).not.toMatch(/<redacted>/);
+    const unknown = await t["earn_prepare_deposit"]!
+      .handler({ chain: "solana", account: RECEIVER, receiver: RECEIVER, amount_usdc: "1" }, {})
+      .then(() => "no error", (e: Error) => e.message);
+    expect(unknown).toMatch(/chains with a vault: base, arbitrum/);
   });
 });
 

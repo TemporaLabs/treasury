@@ -39,20 +39,25 @@ const SEL = { decimals: "0x313ce567", symbol: "0x95d89b41", name: "0x06fdde03", 
  * `rateLimit` makes the TRANSPORT fail for one selector — HTTP 429, the way a public endpoint
  * refuses under load — which must read as "not checked" and never as a disagreement.
  */
-function startMock(corrupt?: { address: string; symbol: string }, corruptDeployment?: { address: string }, rateLimit?: { selector: string }): Promise<{ url: string; methods: Set<string>; perAddress: Map<string, Set<string>>; close: () => Promise<void>; server: Server }> {
+function startMock(corrupt?: { address: string; symbol: string }, corruptDeployment?: { address: string }, rateLimit?: { selector: string }): Promise<{ url: string; methods: Set<string>; perAddress: Map<string, Set<string>>; askedOn: Map<string, Set<number>>; close: () => Promise<void>; server: Server }> {
   const methods = new Set<string>();
+  /** address → the chain endpoints it was asked through. A row must be read on its own chain only. */
+  const askedOn = new Map<string, Set<number>>();
   /** address → the selectors it was actually asked about. A reconciler that checks only the first
    *  row passes a verdict assertion and fails this one. */
   const perAddress = new Map<string, Set<string>>();
   const rows = new Map(reg.vaults.map((v) => [v.address.toLowerCase(), v]));
-  const handle = (req: { method: string; params?: unknown[]; id: unknown }) => {
+  // ONE host plays every chain: the path says which (`/chain/42161`), so "it reached one host" stays
+  // a checkable property while each row is still served by an endpoint that answers for its chain.
+  const handle = (req: { method: string; params?: unknown[]; id: unknown }, servedChain: number) => {
     methods.add(req.method);
     const id = req.id;
-    if (req.method === "eth_blockNumber") return { jsonrpc: "2.0", id, result: encUint(51_000_000) };
-    if (req.method === "eth_chainId") return { jsonrpc: "2.0", id, result: encUint(8453) };
+    if (req.method === "eth_blockNumber") return { jsonrpc: "2.0", id, result: encUint(600_000_000) };
+    if (req.method === "eth_chainId") return { jsonrpc: "2.0", id, result: encUint(servedChain) };
     if (req.method === "eth_getCode") {
       const who = String((req.params?.[0] as string) ?? "").toLowerCase();
       perAddress.set(who, (perAddress.get(who) ?? new Set()).add("getCode"));
+      askedOn.set(who, (askedOn.get(who) ?? new Set()).add(servedChain));
       // A chain that agrees about deployment: code exists at the row's deployedAtBlock and at every
       // later block, and does NOT exist before it. `latest` (no block, or the string) is "later".
       const at = req.params?.[1];
@@ -71,6 +76,7 @@ function startMock(corrupt?: { address: string; symbol: string }, corruptDeploym
       const sel = String(call.data).slice(0, 10);
       const who = String(call.to).toLowerCase();
       perAddress.set(who, (perAddress.get(who) ?? new Set()).add(sel));
+      askedOn.set(who, (askedOn.get(who) ?? new Set()).add(servedChain));
       if (sel === SEL.decimals) return { jsonrpc: "2.0", id, result: encUint(row.shareDecimals) };
       if (sel === SEL.symbol) {
         const sym = corrupt && corrupt.address.toLowerCase() === row.address.toLowerCase() ? corrupt.symbol : row.symbol;
@@ -97,7 +103,8 @@ function startMock(corrupt?: { address: string; symbol: string }, corruptDeploym
         res.end("Too Many Requests");
         return;
       }
-      const out = Array.isArray(parsed) ? parsed.map(handle) : handle(parsed);
+      const servedChain = Number(/\/chain\/(\d+)/.exec(req.url ?? "")?.[1] ?? 8453);
+      const out = Array.isArray(parsed) ? parsed.map((p) => handle(p, servedChain)) : handle(parsed, servedChain);
       res.writeHead(200, { "content-type": "application/json" });
       res.end(JSON.stringify(out));
     });
@@ -109,6 +116,7 @@ function startMock(corrupt?: { address: string; symbol: string }, corruptDeploym
         url: `http://127.0.0.1:${port}`,
         methods,
         perAddress,
+        askedOn,
         server,
         close: () => new Promise<void>((done) => server.close(() => done())),
       });
@@ -122,14 +130,24 @@ const exec = promisify(execFile);
  * ⚠️ ASYNC on purpose. `spawnSync` blocks this process's event loop, so the in-process mock server
  * can never answer and every call "reverts" — a green-looking harness measuring nothing.
  */
-const run = async (rpc: string): Promise<{ status: number; out: string }> => {
+const run = async (rpc: string, arbitrumServes = 42161): Promise<{ status: number; out: string }> => {
   try {
     const { stdout, stderr } = await exec("npx", ["tsx", "scripts/registry-check.ts"], {
       cwd: pkgRoot,
       timeout: 120_000,
-      // Only the RPC is supplied. No fund variables exist in this environment, and the ones that used
-      // to matter are set to values that would break the script if it still read them.
-      env: { ...process.env, TREASURY_RPC_BASE: rpc, BASE_RPC_URL: rpc, FUND_REPO: "/nonexistent", FUND_RPC_BASE: "not-a-url" },
+      // Only the RPCs are supplied — one per chain, each a path on the one mock host. No fund
+      // variables exist in this environment, and the ones that used to matter are set to values that
+      // would break the script if it still read them. `arbitrumServes` lets one test hand the
+      // Arbitrum variable an endpoint that answers for a different chain.
+      env: {
+        ...process.env,
+        TREASURY_RPC_BASE: `${rpc}/chain/8453`,
+        BASE_RPC_URL: `${rpc}/chain/8453`,
+        TREASURY_RPC_ARBITRUM: `${rpc}/chain/${arbitrumServes}`,
+        ARBITRUM_RPC_URL: `${rpc}/chain/${arbitrumServes}`,
+        FUND_REPO: "/nonexistent",
+        FUND_RPC_BASE: "not-a-url",
+      },
     });
     return { status: 0, out: stdout + stderr };
   } catch (e) {
@@ -150,7 +168,13 @@ describe("registry-check reconciles against the CHAIN and nothing else", () => {
     expect(r.status).toBe(0);
     // The method set is the instrument: an extra reach (a registry service, an operator endpoint)
     // would show up here even if the verdict were unchanged.
-    expect([...mock.methods].sort()).toEqual(["eth_blockNumber", "eth_call", "eth_getCode"]);
+    // `eth_chainId` is in the set because the script proves each endpoint is on its chain before
+    // reading any row through it.
+    expect([...mock.methods].sort()).toEqual(["eth_blockNumber", "eth_call", "eth_chainId", "eth_getCode"]);
+    // Each row was read on ITS chain and on no other: a reconciler that read an Arbitrum row
+    // through the Base endpoint would report "no contract" about a vault that exists.
+    expect(new Set(reg.vaults.map((v) => v.chainId)).size, "premise: the registry spans more than one chain").toBeGreaterThan(1);
+    for (const v of reg.vaults) expect([...(mock.askedOn.get(v.address.toLowerCase()) ?? [])], `${v.symbol} must be read on chain ${v.chainId} only`).toEqual([v.chainId]);
     // and it ASKED THE CHAIN about every row. Printing an identifier is not interrogating an address:
     // a reconciler that read row one and trusted the rest would pass a verdict assertion and fail
     // this one. Enzyme is asked decimals()/symbol() but not asset() — that is the row's own rule.
@@ -193,6 +217,41 @@ describe("registry-check reconciles against the CHAIN and nothing else", () => {
     expect(r.out, "no row disagreed, because none of them did").not.toMatch(/^✗/m);
     // The endpoint is a secret when it carries a key. viem puts the request URL in its message.
     expect(r.out, "the endpoint must never be echoed on an error path").not.toContain(mock.url);
+  }, 180_000);
+
+  it("an endpoint that answers for the WRONG chain → that chain's rows are 'not checked', never 'no contract'", async () => {
+    // The Arbitrum variable holds an endpoint that says it is Base. Read through it, every Arbitrum
+    // row's address has no code — which would print "no contract at …" and "the chain is right; fix
+    // the row" about rows that are correct. The script must refuse to read them there at all.
+    const mock = await startMock();
+    mocks.push(mock.close);
+    const r = await run(mock.url, 8453);
+    expect(r.status, "unchecked rows are not a pass").toBe(1);
+    const arbRows = reg.vaults.filter((v) => v.chainId === 42161);
+    expect(arbRows.length).toBeGreaterThan(0);
+    for (const v of arbRows) {
+      expect(r.out).toMatch(new RegExp(`\\? ${v.symbol}: every check — NOT CHECKED: the endpoint in TREASURY_RPC_ARBITRUM answers for chain 8453, not Arbitrum One \\(42161\\)`));
+      expect(mock.askedOn.get(v.address.toLowerCase()), `${v.symbol} must not be read through a Base endpoint`).toBeUndefined();
+    }
+    expect(r.out, "a misconfigured endpoint is not bad data").not.toContain("the chain is right; fix the row");
+    expect(r.out).not.toMatch(/^✗/m);
+    // the Base rows were still checked, on Base
+    for (const v of reg.vaults.filter((x) => x.chainId === 8453)) expect(r.out).toContain(`✓ ${v.symbol}: symbol() = ${v.symbol}`);
+    expect(r.out).not.toContain(mock.url);
+  }, 180_000);
+
+  it("eth_getCode refused by the ENDPOINT → 'not checked', and the URL is not echoed", async () => {
+    // getCode is the first read of every row and was the one read with no handler: a transport
+    // failure there escaped as an uncaught error that printed the endpoint's full URL.
+    const mock = await startMock(undefined, undefined, { selector: "eth_getCode" });
+    mocks.push(mock.close);
+    const r = await run(mock.url);
+    expect(r.status).toBe(1);
+    expect(r.out).toContain("NOT CHECKED");
+    expect(r.out).not.toContain("the chain is right; fix the row");
+    expect(r.out).not.toMatch(/^✗/m);
+    expect(r.out, "the endpoint must never be echoed on an error path").not.toContain(mock.url);
+    expect(r.out).not.toMatch(/HttpRequestError|at async|node:internal/); // a handled failure, not a crash
   }, 180_000);
 
   it("a deployedAtBlock that is one block LATE → exit 1, naming that row", async () => {

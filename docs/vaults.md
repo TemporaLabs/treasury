@@ -8,24 +8,11 @@ the row is wrong, never the chain.
 
 ## Offered today
 
-### Tempora Labs Cash Plus USDC (Test 2B) — the default
+Two chains: Base, which is the default, and Arbitrum One. Each chain has its own default vault (Test 2B on Base, Test 2C on Arbitrum One); a
+tool called with no vault and no chain uses Base's. Test 2, the demo vault, is also on Base and is chosen by naming it. A vault's ticker names exactly one vault on
+exactly one chain.
 
-| | |
-|---|---|
-| ticker | `tlCashPlusUSDC2B` |
-| chain | Base (8453) |
-| vault | [`0x91BcEbA5feCB9E92d80F1845B55cC56621E9352F`](https://basescan.org/address/0x91BcEbA5feCB9E92d80F1845B55cC56621E9352F) |
-| asset | USDC [`0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913`](https://basescan.org/address/0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913), 6 decimals |
-| shares | `tlCashPlusUSDC2B`, **18 decimals** — a share amount is never an asset amount |
-| chassis | Morpho Vault V2 (ERC-4626) |
-| deployed | block 51,436,870 (first block with code) |
-| deposits | **open to any account**. A stranger's simulated `deposit()` reaches the USDC pull and reverts `TransferFromReverted` only for lack of funds (measured at block 51,690,071). `maxDeposit()` reads `0` to every caller on this chassis by design and is not consulted |
-| withdrawals | **public**. Served from idle USDC, then through the vault's liquidity adapter; a withdrawal larger than that reverts until positions are unwound — `earn_balance` reports `exit.exitableNow` by simulating it. `maxWithdraw()` also reads `0` by design |
-| fees | none set: `performanceFee()` and `managementFee()` read `0` at block 51,690,071. The curator can introduce one, and the vault's fee timelocks are **0**, so a change needs no notice; Morpho Vault V2's protocol constants cap them at 50% performance and 5%/yr management. Read both fees on-chain before depositing |
-| positions | three configured adapters on Base (measured at block 51,690,071) — readable on-chain; Treasury does not model the fund's allocation. Read the vault's positions on-chain before a first deposit |
-| visibility | this vault does not currently render on [Morpho's own app](https://app.morpho.org/base/vault/0x91BcEbA5feCB9E92d80F1845B55cC56621E9352F) — the page returns "Not Found"/"Unavailable" rather than the vault's data (checked 2026-09-23). Verify positions on BaseScan or on-chain instead of Morpho's dashboard for this vault |
-
-### Tempora Labs Cash Plus USDC (Test 2)
+### Tempora Labs Cash Plus USDC (Test 2) — the demo vault
 
 | | |
 |---|---|
@@ -40,7 +27,8 @@ the row is wrong, never the chain.
 | withdrawals | **public**. Served from idle USDC, then through the vault's liquidity adapter; a withdrawal larger than that reverts until positions are unwound — `earn_balance` reports `exit.exitableNow` by simulating it. `maxWithdraw()` also reads `0` by design |
 | fees | none set: `performanceFee()` and `managementFee()` read `0` at block 51,372,415. The curator can introduce one, and the vault's fee timelocks are **0** (`timelock(setPerformanceFee)` and `timelock(setManagementFee)` both read `0` at block 51,404,161), so a change needs no notice; Morpho Vault V2's protocol constants cap them at 50% performance and 5%/yr management. Read both fees on-chain before depositing |
 | positions | Morpho vaults on Base through the vault's adapters — readable on-chain; Treasury does not model the fund's allocation. One of the fund's positions lends against a stablecoin whose Morpho oracle is fixed at par; a depeg is not priced by the fund's loss model. Read the vault's positions on-chain before a first deposit |
-| visibility | renders fully on [Morpho's own app](https://app.morpho.org/base/vault/0x040fCA12673778FEED5DA7b2ccFbbAb0cc0134Cf/tempora-labs-cash-plus-usdc-test-2#overview), unlike Test 2B above |
+
+The demo vault: open and depositable, listed so the product can be exercised end to end, but it is not what a call with no vault uses. Name it with `vault: "tlCashPlusUSDC2"`.
 
 ### Tempora Labs Cash Plus USDC (Test 2A)
 
@@ -59,7 +47,41 @@ the row is wrong, never the chain.
 | fees | a management fee and a performance fee, both readable on-chain from the vault (`getManagementFeeData`, `getPerformanceFeeData`) |
 | positions | ERC-4626 leaf vaults on Base — readable on-chain; Treasury does not model the fund's allocation |
 
-**"Test" is in both names on purpose.** These are test-series vaults: real contracts, real USDC, real
+### Tempora Labs Cash Plus USDC (Test 2B) — the default on Base
+
+| | |
+|---|---|
+| ticker | `tlCashPlusUSDC2B` |
+| chain | Base (8453) |
+| vault | [`0x91BcEbA5feCB9E92d80F1845B55cC56621E9352F`](https://basescan.org/address/0x91BcEbA5feCB9E92d80F1845B55cC56621E9352F) |
+| asset | USDC [`0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913`](https://basescan.org/address/0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913), 6 decimals |
+| shares | `tlCashPlusUSDC2B`, **18 decimals** — a share amount is never an asset amount |
+| chassis | Morpho Vault V2 (ERC-4626) |
+| deployed | block 51,436,870 (first block with code) |
+| deposits | **open to any account**. A stranger's simulated `deposit()` reaches the USDC pull and reverts `TransferFromReverted` only for lack of funds (measured at block 52,097,648). `maxDeposit()` reads `0` to every caller on this chassis by design and is not consulted |
+| withdrawals | **public**. Served from idle USDC, then through the vault's liquidity adapter; a withdrawal larger than that reverts until positions are unwound — `earn_balance` reports `exit.exitableNow` by simulating it. `maxWithdraw()` also reads `0` by design |
+| fees | none set: `performanceFee()` and `managementFee()` read `0` at block 51,372,415. The curator can introduce one, and the vault's fee timelocks are **0** (`timelock(setPerformanceFee)` and `timelock(setManagementFee)` both read `0` at block 52,097,648), so a change needs no notice; Morpho Vault V2's protocol constants cap them at 50% performance and 5%/yr management. Read both fees on-chain before depositing |
+| positions | three adapters on Base — readable on-chain; Treasury does not model the fund's allocation. Read the vault's positions on-chain before a first deposit |
+| links | BaseScan only. Morpho's app has no page for this vault (`app.morpho.org/base/vault/…` answered 404 on 2026-10-02, and Morpho's API does not list it), so `earn_vaults` offers no `app` link for it |
+
+### Tempora Labs Cash Plus USDC (Test 2C) — the default on Arbitrum One
+
+| | |
+|---|---|
+| ticker | `tlCashPlusUSDC2C` |
+| chain | Arbitrum One (42161) |
+| vault | [`0x4057a63953142Ac2b3E5dB1954Fc14d578662587`](https://arbiscan.io/address/0x4057a63953142Ac2b3E5dB1954Fc14d578662587) |
+| asset | native USDC [`0xaf88d065e77c8cC2239327C5EDb3A432268e5831`](https://arbiscan.io/address/0xaf88d065e77c8cC2239327C5EDb3A432268e5831), 6 decimals — not bridged USDC.e, which is a different token this vault does not take |
+| shares | `tlCashPlusUSDC2C`, **18 decimals** — a share amount is never an asset amount |
+| chassis | Morpho Vault V2 (ERC-4626) |
+| deployed | block 510,270,114 (first block with code) |
+| deposits | **open to any account**. A stranger's simulated `deposit()` reaches the USDC pull and reverts `TransferFromReverted` only for lack of an allowance (measured at block 511,070,816). `maxDeposit()` reads `0` to every caller on this chassis by design and is not consulted |
+| withdrawals | **public**. Served from idle USDC, then through the vault's liquidity adapter; a withdrawal larger than that reverts until positions are unwound — `earn_balance` reports `exit.exitableNow` by simulating it. `maxWithdraw()` also reads `0` by design |
+| fees | none set: `performanceFee()` and `managementFee()` read `0` at block 511,070,816. The curator can introduce one, and the vault's fee timelocks are **0** (`timelock(setPerformanceFee)` and `timelock(setManagementFee)` both read `0` at that block), so a change needs no notice; Morpho Vault V2's protocol constants cap them at 50% performance and 5%/yr management. Read both fees on-chain before depositing |
+| positions | through the vault's three adapters on Arbitrum One — readable on-chain; Treasury does not model the fund's allocation. Read the vault's positions on-chain before a first deposit |
+| links | Arbiscan only. Morpho's app has no page for this vault yet (`app.morpho.org/arbitrum/vault/…` answered 404 on 2026-10-02), so `earn_vaults` offers no `app` link for it |
+
+**"Test" is in every name on purpose.** These are test-series vaults: real contracts, real USDC, real
 positions, operated by Tempora while the product is proven. Read [`risks.md`](risks.md).
 
 ## Getting access to a whitelist-gated vault
@@ -74,23 +96,10 @@ anywhere in this repository; its own test tiers discover one from the chain when
 
 ## Why the default is what it is
 
-**The default is a Tempora-curated destination, and Tempora can set fees on it as curator.** Treasury offers it
+**Each chain's default is a Tempora-curated destination, and Tempora can set fees on it as curator.** Treasury offers it
 because it is Tempora's — not because it is the best-yielding vault available, and Treasury makes no
 such claim. A fork of this client may point its default anywhere; the official distribution points
 here, and says so.
-
-**Test 2 and Test 2B run the same three-position structure with a different asset standing in for the
-cash-like leg.** Test 2's cash-like position is a lending vault: it earns by lending against crypto
-collateral and carries that collateral's credit risk, even though the product's own framing treats it
-as the "safe" side of the book. Test 2B's cash-like position is a savings-rate instrument rather than
-a lending position, which is a closer match to what "cash, plus a spread" is meant to mean — the two
-higher-yield legs still carry the credit risk, and the cash leg does not.
-
-**What that costs: Test 2B does not currently render on Morpho's own app**, while Test 2 does. A
-depositor evaluating Test 2 can see its positions on `app.morpho.org`; a depositor evaluating Test 2B
-cannot, and has to verify on BaseScan or on-chain instead. Neither vault's registry row depends on
-Morpho's app — `depositOpen`, fees and positions are all read directly from the chain — but the
-Morpho dashboard is a real, lost convenience for anyone used to it.
 
 ## What a registry row is not
 

@@ -29,7 +29,7 @@ compiler and fails the build if any file:
 
 - imports, requires or dynamically loads anything outside the package and its three declared
   dependencies (`@modelcontextprotocol/sdk`, `viem`, `zod`);
-- reads an environment variable that is not on the allowlist of four
+- reads an environment variable that is not on the allowlist of seven
   ([`configuration.md`](configuration.md)), or reads one with a computed key;
 - starts a process, except three named files — two test tiers that spawn the reconciliation script and
   a fork node against a mock or a local fork, and the round-trip harness under `scripts/`;

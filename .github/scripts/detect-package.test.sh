@@ -1,10 +1,11 @@
 #!/usr/bin/env bash
-# Offline proof that detect-package.sh answers correctly, and can go RED (10 cases).
+# Offline proof that detect-package.sh answers correctly, and can go RED (13 cases).
 # Run: bash .github/scripts/detect-package.test.sh
 #
-# Case 4 is the one this file exists for: it passed under the previous repair, silently, and a green
-# run meant nothing. Case 6 is its false-positive twin — a stray package.json under node_modules is
-# not a moved package, and a fix that fires on it would break every documents-only branch.
+# The `moved` case is the one this file exists for: it passed under the previous repair, silently, and
+# a green run meant nothing. The `nodemods` case is its false-positive twin — a stray package.json
+# under node_modules is not a moved package, and a fix that fires on it would break every
+# documents-only branch. (Cases are named, not numbered: inserting one renumbers the rest.)
 set -u
 S="$(cd "$(dirname "$0")" && pwd)/detect-package.sh"; pass=0; fail=0
 tmp="$(mktemp -d)"; trap 'rm -rf "$tmp"' EXIT
@@ -21,15 +22,20 @@ t() { # name want_exit want_stdout build...
 }
 
 full()      { mkdir -p src dist registry; touch package.json dist/mcp-server.mjs registry/vaults.json; }
-# The skill ships from the PLUGIN repository, so a product tree without it is complete. This case is
-# the published product exactly, and under the previous PARTS it errored as a half-moved package.
+# The plugin is not a part of the package, so a package tree without it is still a package. Under an
+# earlier PARTS that included the skill, this case errored as a half-moved package.
 withskill() { full; mkdir -p skills/earn; touch skills/earn/SKILL.md; }
-# ...and a tree that still carries the skill (the drafting repository) is a package too: the skill
-# is not required, and it is not forbidden either.
+# ...and a skill at the root beside the package is a package too: not required, not forbidden.
 skillonly() { mkdir -p skills/earn; touch skills/earn/SKILL.md; }
 # A lone skill and nothing else is NOT this package moved elsewhere — it is the consumer's file.
 straySkill(){ mkdir -p docs elsewhere/skills/earn; touch docs/README.md elsewhere/skills/earn/SKILL.md; }
 docsonly()  { mkdir -p docs; touch docs/README.md; }
+# The shipped layout: the package at the root and the plugin's copies of the bundle and registry in
+# plugin/. The root answers first, so the copies are never mistaken for a moved package...
+withplugin(){ full; mkdir -p plugin/dist plugin/registry plugin/skills/earn
+              touch plugin/dist/mcp-server.mjs plugin/registry/vaults.json plugin/skills/earn/SKILL.md; }
+# ...but plugin/ copies with NO package at the root are a broken tree, and must not read as "no package".
+pluginonly(){ mkdir -p docs plugin/dist plugin/registry; touch docs/README.md plugin/dist/mcp-server.mjs plugin/registry/vaults.json; }
 partial()   { mkdir -p src; }
 moved()     { mkdir -p packages/treasury/src packages/treasury/skills/earn packages/treasury/dist packages/treasury/registry
               touch packages/treasury/package.json packages/treasury/skills/earn/SKILL.md \
@@ -44,8 +50,10 @@ nodemods()  { mkdir -p docs node_modules/leftover; touch docs/README.md node_mod
 ghaction()  { mkdir -p docs .github/actions/notify; touch docs/README.md .github/actions/notify/package.json; }
 docssite()  { mkdir -p docs/site; touch docs/README.md docs/site/package.json; }
 
-t "the package is at the root (no skill — the product ships none)" 0 yes full
-t "the drafting tree, which still carries the skill"            0 yes withskill
+t "the package is at the root, no plugin folder"                0 yes full
+t "a skill at the root beside the package"                      0 yes withskill
+t "the shipped layout: package at the root, plugin/ copies"     0 yes withplugin
+t "plugin/ copies without the package at the root"              1 ""  pluginonly
 t "a lone skill at the root is not this package"                0 no  skillonly
 t "a skill elsewhere is the consumer's file, not a move"        0 no  straySkill
 t "a documents-only version branch genuinely has none"          0 no  docsonly

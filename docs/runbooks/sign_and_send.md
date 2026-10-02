@@ -1,6 +1,7 @@
 # Signing and sending Treasury's unsigned calls — a runbook
 
-Treasury never signs, never sends, never holds a key. Something else has to.
+Treasury never signs and never holds a key. Something else has to: your own wallet, or, as in this
+runbook, a process that holds a key.
 This is that something else, written up from the first time it was actually done: a real 0.05 USDC
 deposit → withdraw round trip against a Tempora Morpho V2 vault on Base mainnet, 2026-09-11, using a
 key the operator already held on their own host — not a fork, not a testnet,
@@ -9,6 +10,11 @@ real signed transactions (`0xd34111…`, `0x3bad94…`, `0x7a64b7…`, all `stat
 This is the shape a real consumer of Treasury takes: **call the MCP tools to get intent and unsigned
 calls, then hand those calls to something that holds a key and never let the key touch the same
 process the calls came from.** The two are deliberately different trust domains.
+
+**The chain comes from the calls.** This run was on Base, and the script below hard-codes
+`chain: base`. Every call Treasury prepares carries its `chainId`, and the envelope names the chain:
+a signer for a vault on Arbitrum One uses `arbitrum` from `viem/chains` and an Arbitrum RPC, and
+should refuse a call whose `chainId` is not the chain it is connected to.
 
 ## The three-step shape
 

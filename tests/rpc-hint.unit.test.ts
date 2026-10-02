@@ -29,6 +29,7 @@ afterEach(async () => {
   await new Promise<void>((r) => (srv ? srv.close(() => r()) : r()));
   srv = undefined;
   delete process.env["TREASURY_RPC_BASE"];
+  delete process.env["TREASURY_RPC_ARBITRUM"];
 });
 
 describe("the public-endpoint hint", () => {
@@ -53,6 +54,19 @@ describe("the public-endpoint hint", () => {
     expect(d.rpc).toBe("unreachable"); // it still failed
     expect(d.setup_required).toBeUndefined(); // but it is not a setup problem
     expect(d.rpcSource).toBe("TREASURY_RPC_BASE");
+  });
+
+  it("a failure on ARBITRUM with Arbitrum's RPC configured is not a setup problem either, whatever Base has", async () => {
+    // Base unconfigured, Arbitrum configured and failing: the hint is about the chain that was
+    // CALLED. A hint keyed on Base would tell this operator to set a variable for the wrong chain.
+    delete process.env["TREASURY_RPC_BASE"];
+    process.env["TREASURY_RPC_ARBITRUM"] = `http://127.0.0.1:${PORT}/v2/configuredkey123`;
+    const out = (await tools()["earn_status"]!.handler({ chain: "arbitrum" }, {})).content[0]!.text;
+    const d = JSON.parse(out);
+    expect(d.rpc).toBe("unreachable");
+    expect(d.setup_required).toBeUndefined();
+    expect(d.rpcSource).toBe("TREASURY_RPC_ARBITRUM");
+    expect(out).not.toMatch(/TREASURY_RPC_BASE/);
   });
 
   it("does not fire on a SUCCESSFUL result that merely mentions nothing about RPC", async () => {

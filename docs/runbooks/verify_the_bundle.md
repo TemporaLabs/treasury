@@ -1,9 +1,9 @@
 # Verifying the bundle you installed is the one CI built — a runbook
 
-Treasury ships as a Claude Code plugin installed **from git**: the marketplace copies the plugin
-repository, [TemporaLabs/treasury-plugin](https://github.com/TemporaLabs/treasury-plugin), and the
-MCP server that runs is its committed `dist/mcp-server.mjs` — a byte copy of this repository's
-`dist/mcp-server.mjs` (2 MB, dependencies inlined, no `npm install` on your side).
+Treasury ships as a Claude Code plugin installed **from git**: the marketplace copies this
+repository's `plugin/` folder, and the MCP server that runs is its `dist/mcp-server.mjs` — a byte
+copy of this repository's `dist/mcp-server.mjs`, made in the same commit and checked by CI (2 MB,
+dependencies inlined, no `npm install` on your side).
 Nothing about "it came from GitHub" tells you that file was built by this repository's CI from the
 commit it claims. This runbook is how a stranger checks that, with no membership in the org and no
 trust in anyone's word. It is the last mile of "the code is open": open source you cannot tie to the
@@ -50,8 +50,9 @@ for `dist/mcp-server.mjs` and verifies it against the signer workflow before the
 On a private mirror of this tree the same steps are gated to skip, and the assertion accepts the
 skip only because the repository is private — a skip can never pass as a success on the public
 repository. Whatever repository you are reading this in, the weaker chain is always checkable: the
-commit's `dist/` equals a rebuild of the commit's source (CI's stale-dist step, which you can
-reproduce with `npm ci && npm run build && git diff --exit-code -- dist`).
+commit's `dist/`, and the plugin's copy in `plugin/dist/`, equal a rebuild of the commit's source
+(CI's stale-dist step, which you can reproduce with `npm ci && npm run build` followed by
+`git status --porcelain -- dist plugin/dist`, which must print nothing).
 
 ## Verifying, as a stranger (public repository)
 
@@ -62,21 +63,21 @@ command reads the attestation from GitHub's API; it does not need read access to
    cache; the path ends in `dist/mcp-server.mjs`. Record its digest:
 
    ```bash
-   f=~/.claude/plugins/cache/treasury/treasury/*/dist/mcp-server.mjs
-   sha256sum $f
+   # <version> as `claude plugin list` shows it; an upgrade can leave older version folders beside it
+   f=~/.claude/plugins/cache/treasury/treasury/<version>/dist/mcp-server.mjs
+   sha256sum "$f"
    ```
 
 2. Verify it against the public repository and its workflow:
 
    ```bash
-   gh attestation verify $f --repo TemporaLabs/treasury \
+   gh attestation verify "$f" --repo TemporaLabs/treasury \
      --signer-workflow TemporaLabs/treasury/.github/workflows/ci.yml
    ```
 
    Success prints the attestation's subject digest and the commit (`sourceRepositoryRef`,
-   `sourceRepositoryDigest`) that produced it. That commit is in this repository, not the plugin
-   repository: the plugin's release notes name the release of this repository its bundle was copied
-   from, and `claude plugin list` shows which plugin version you have. The verification is by
+   `sourceRepositoryDigest`) that produced it. That commit is in this repository, and
+   `claude plugin list` shows which plugin version you have. The verification is by
    digest, so a byte-identical copy in the plugin cache verifies against this repository's attestation;
    a copy that differs by one byte does not.
 
@@ -85,7 +86,7 @@ command reads the attestation from GitHub's API; it does not need read access to
    attested, but not by this workflow in this repository. Either way: do not run it; reinstall from
    the marketplace and verify again.
 
-Offline: `gh attestation download $f --repo TemporaLabs/treasury` writes a `sha256:….jsonl` bundle you can
+Offline: `gh attestation download "$f" --repo TemporaLabs/treasury` writes a `sha256:….jsonl` bundle you can
 keep and later pass to `gh attestation verify --bundle <file>`; the signature and transparency-log
 inclusion are checked locally, but the trust roots are still fetched from Sigstore/GitHub on first
 use, so "offline" means "without this repository", not "air-gapped".
@@ -97,8 +98,8 @@ with npm provenance: each version is published from `publish.yml` running on Git
 with `id-token: write`, from the release tag, and npm records that fact against the tarball.
 `package.json` is what makes that hold — `repository` names the public repository,
 `TemporaLabs/treasury` (CI fails if it names anything else, because that is the only repository
-provenance can be issued from), `files` limits the tarball to `dist/` and `registry/` (the skill is
-not in it — it ships from the plugin repository), `publishConfig.provenance` is on, and `prepack`
+provenance can be issued from), `files` limits the tarball to `dist/`, `registry/` and the licence files (the skill is
+not in it — it ships in `plugin/`, by git tag), `publishConfig.provenance` is on, and `prepack`
 builds so `main`/`types` exist in the tarball — only `dist/*.mjs` is committed, so without that build
 the tarball would carry the bundle and nothing the manifest's own `main`/`types` point at.
 
@@ -119,9 +120,11 @@ so a version published without provenance passes it silently.
 whatever the publishing machine built rather than the attested committed file — agreeing only while
 the build is byte-deterministic, and disagreeing silently, because both artifacts are "the bundle".
 
-It now cannot. `prepack` is `npm run build && git diff --exit-code -- dist/mcp-server.mjs`: it still
+It now cannot. `prepack` is
+`npm run build && git diff --exit-code -- dist/mcp-server.mjs THIRD_PARTY_NOTICES.md`: it still
 produces the `main`/`types` outputs the tarball needs, and then **refuses** if the rebuild differs by
-a byte from what is committed and attested. Verified by changing a disclosure string in `src/` and
+a byte from what is committed and attested, or if the regenerated third-party notices differ from the
+committed ones. Verified by changing a disclosure string in `src/` and
 running it: exit 1, naming the file; restored, exit 0.
 
 So a publish from any machine ships the attested bytes or does not happen. `publish.yml` runs on the

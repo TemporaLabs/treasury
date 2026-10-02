@@ -54,10 +54,11 @@ commercially chosen default is never presented as a neutral best-vault ranking.
    line lives in `NOTICE`.
 3. **`NOTICE` carries attribution.** Section 4(d) requires a redistribution to carry its attribution
    notices.
-4. **Both travel with what ships.** The package is the repository root, so `LICENSE` and `NOTICE`
-   are carried by the `files` list rather than duplicated into a subdirectory; CI checks the packed
-   artifact carries them, and the plugin repository gates its own copies against these.
-5. **Every manifest declares `Apache-2.0`**, so no file names a different licence from `LICENSE`.
+4. **Both travel with what ships.** The npm package carries them through its `files` list, and CI
+   checks the packed artifact does. A plugin install carries only `plugin/`, so that folder holds
+   copies, which CI checks against these byte for byte.
+5. **No manifest names a licence other than `Apache-2.0`.** Every manifest that has a licence field
+   declares it, so no file contradicts `LICENSE`.
 
 ## Contributions
 

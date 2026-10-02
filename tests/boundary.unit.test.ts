@@ -97,7 +97,18 @@ const ENTRY_POINTS = ["src/index.ts", "src/mcp/server.ts"];
 /** Variable names any audited file may READ. A write (the poisoning runs below) is not a read. */
 // TREASURY_LOGS_FALLBACK: the event scan's fallback endpoint, or `off` to forbid the fallback
 // entirely — an operator who may not reach a third party they did not name.
-const ENV_READS_ALLOWED = ["BASE_RPC_URL", "TREASURY_FORK", "TREASURY_LOGS_FALLBACK", "TREASURY_LOGS_RPC_BASE", "TREASURY_RPC_BASE"];
+// One RPC pair and one logs variable PER CHAIN (`CHAIN_INFO` in src/client.ts). A chain reads only its
+// own names — an Arbitrum call never falls back to a Base endpoint.
+const ENV_READS_ALLOWED = [
+  "ARBITRUM_RPC_URL",
+  "BASE_RPC_URL",
+  "TREASURY_FORK",
+  "TREASURY_LOGS_FALLBACK",
+  "TREASURY_LOGS_RPC_ARBITRUM",
+  "TREASURY_LOGS_RPC_BASE",
+  "TREASURY_RPC_ARBITRUM",
+  "TREASURY_RPC_BASE",
+];
 
 /**
  * Files that may compute an env key instead of writing it literally, and every uppercase string
@@ -309,13 +320,21 @@ describe("B. the environment surface, statically and at runtime", () => {
       // This is why moving a name out of the `candidates` array does not move it out of this set.
       if (MAY_COMPUTE_ENV_KEY.includes(rel(f))) for (const lit of envLikeLiterals(f)) names.add(lit);
     }
-    expect([...names].sort()).toEqual(["BASE_RPC_URL", "TREASURY_LOGS_FALLBACK", "TREASURY_LOGS_RPC_BASE", "TREASURY_RPC_BASE"]);
+    expect([...names].sort()).toEqual([
+      "ARBITRUM_RPC_URL",
+      "BASE_RPC_URL",
+      "TREASURY_LOGS_FALLBACK",
+      "TREASURY_LOGS_RPC_ARBITRUM",
+      "TREASURY_LOGS_RPC_BASE",
+      "TREASURY_RPC_ARBITRUM",
+      "TREASURY_RPC_BASE",
+    ]);
   });
 
   it("a fund variable in the environment is not used, WHATEVER it is called — the property, not the prefix", () => {
     const saved = { ...process.env };
     try {
-      for (const k of ["TREASURY_RPC_BASE", "TREASURY_LOGS_RPC_BASE", "TREASURY_LOGS_FALLBACK", "BASE_RPC_URL"]) delete process.env[k];
+      for (const k of ["TREASURY_RPC_BASE", "TREASURY_LOGS_RPC_BASE", "TREASURY_LOGS_FALLBACK", "BASE_RPC_URL", "TREASURY_RPC_ARBITRUM", "TREASURY_LOGS_RPC_ARBITRUM", "ARBITRUM_RPC_URL"]) delete process.env[k];
       // Three DISTINCT naming conventions, because the title's claim is "whatever it is called". A
       // mechanical rename once collapsed two of these into one line — the test still passed, and
       // proved one convention fewer than it said (caught in review of the public release).
@@ -325,8 +344,14 @@ describe("B. the environment surface, statically and at runtime", () => {
       const url = rpcUrlFromEnv(8453); // a throw here fails the test, it does not pass it
       expect(url).toBe("https://mainnet.base.org");
       expect(url).not.toMatch(/sibling|fund|generic/i);
+      // The same property on the second chain, with that chain's own look-alike names.
+      process.env["SIBLING_RPC_ARBITRUM"] = "https://sibling.example/KEY";
+      process.env["FUND_RPC_ARBITRUM"] = "https://fund.example/KEY";
+      const arb = rpcUrlFromEnv(42161);
+      expect(arb).toBe("https://arb1.arbitrum.io/rpc");
+      expect(arb).not.toMatch(/sibling|fund|generic/i);
     } finally {
-      for (const k of ["SIBLING_RPC_BASE", "FUND_RPC_BASE", "RPC_URL"]) delete process.env[k];
+      for (const k of ["SIBLING_RPC_BASE", "FUND_RPC_BASE", "RPC_URL", "SIBLING_RPC_ARBITRUM", "FUND_RPC_ARBITRUM"]) delete process.env[k];
       Object.assign(process.env, saved);
     }
   });
@@ -524,5 +549,12 @@ describe("D. what gets published is what was attested", () => {
 
   it("prepack cannot ship a bundle that differs from the attested committed one", () => {
     expect(scripts["prepack"]).toContain("git diff --exit-code -- dist/mcp-server.mjs");
+  });
+
+  it("nor third-party notices that differ from the committed ones", () => {
+    // The build also rewrites THIRD_PARTY_NOTICES.md, which is in `files`: a rebuild on the publishing
+    // machine against different dependencies would otherwise ship notices nobody committed.
+    const guarded = (scripts["prepack"] ?? "").split("git diff --exit-code --")[1]?.trim().split(/\s+/) ?? [];
+    expect(guarded).toEqual(expect.arrayContaining(["dist/mcp-server.mjs", "THIRD_PARTY_NOTICES.md"]));
   });
 });

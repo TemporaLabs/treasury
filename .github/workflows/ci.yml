@@ -67,47 +67,62 @@ jobs:
           sys.exit(1 if bad else 0)
           PY
       # The install instructions pin a version on purpose (an immutable publish cannot drift); the
-      # cost is eight prose pins nothing tied to a release. Script + proof in .github/scripts.
-      # On main the pins must name the newest RELEASE tag (pre-release tags are never chosen) — a
-      # tag pushed without its follow-up documentation change (docs/release-process.md step 6) goes
-      # red on the next push here; and on main, zero visible release tags is a failed fetch, not a
-      # state, so the script refuses rather than dropping to the weaker check.
-      # On a release branch the docs legitimately lag package.json until the publish has happened,
-      # so only their agreement with each other is checked there. That couples this gate to the
-      # written order: the release pull request itself passes ONLY because step 6 follows the tag.
-      - name: documentation pins ONE version — and on main, the newest release tag
+      # cost is prose pins nothing tied to a release. Script + proof in .github/scripts.
+      # On main (a push, or a pull request into it) the pins must name package.json's version: the
+      # release pull request moves them, because the plugin installs from the release tag and a
+      # tagged tree whose docs named the previous version would send every reader to a tree without
+      # this release in it. Between the merge and the tag the docs name a version not yet tagged or
+      # published; that window is the maintainer's to close (docs/release-process.md), so here it
+      # is a warning, not a failure.
+      # On a release branch the docs legitimately lag package.json until the release pull request
+      # moves them, so only their agreement with each other is checked there.
+      - name: documentation pins ONE version — and on main, package.json's
         env:
           TARGET: ${{ github.base_ref || github.ref_name }}
         run: |
           if [ "$TARGET" = "main" ]; then
+            bash .github/scripts/version-pins.sh --package-version
             git fetch -q --depth=1 origin '+refs/tags/*:refs/tags/*' || echo "::warning::tag fetch failed"
-            bash .github/scripts/version-pins.sh --newest-release-tag
+            v=$(node -p 'require("./package.json").version')
+            if ! git rev-parse -q --verify "refs/tags/v${v}" >/dev/null; then
+              echo "::warning::the documentation names ${v}, which has no v${v} tag yet — tag and publish it (docs/release-process.md)"
+            fi
           else
             echo "${TARGET}: pins must agree with each other"
             bash .github/scripts/version-pins.sh
           fi
-      - name: the version-pin gate can still go red (10 offline cases)
+      - name: the version-pin gate can still go red (24 offline cases)
         run: bash .github/scripts/version-pins.test.sh
       # The decision lives in .github/scripts/detect-package.sh, with a case-driven proof beside
-      # it — it gates ten steps plus the whole `attest` job, and it has been wrong twice.
+      # it — it gates most of this job's steps plus the whole `attest` job, and it has been wrong twice.
       - name: detect packages (a documents-only version branch has none — a MOVED one is an error)
         id: pk
         run: |
           present="$(bash .github/scripts/detect-package.sh)"
           echo "packages present: $present" >> "$GITHUB_STEP_SUMMARY"
           echo "present=$present" >> "$GITHUB_OUTPUT"
-      - name: the package detector can still go red (10 offline cases)
+      - name: the package detector can still go red (13 offline cases)
         run: bash .github/scripts/detect-package.test.sh
-        # The skill ships from the PLUGIN repository; this package does not distribute it. Where it
-        # IS present — the drafting tree — it is checked in full. Where it is absent, there is
-        # nothing to check, and that is a complete product tree rather than a broken one.
-        # ⚠️ This is a presence test, never a skip switch: the three steps below are gated on it so
-        # that a tree WITH a skill can never quietly stop validating it.
+        # The Claude Code plugin ships from plugin/ in this repository; its skill is
+        # plugin/skills/earn/SKILL.md. A tree that declares the plugin must carry the skill, so its
+        # absence there is a failure, never a skip. A documents-only version branch declares
+        # neither, and has nothing to check.
       - name: does this tree carry the skill?
         id: sk
         run: |
-          if [ -f skills/earn/SKILL.md ]; then echo "present=yes" >> "$GITHUB_OUTPUT"; else echo "present=no" >> "$GITHUB_OUTPUT"; fi
-          echo "skill present: $([ -f skills/earn/SKILL.md ] && echo yes || echo no)" >> "$GITHUB_STEP_SUMMARY"
+          if [ -f plugin/skills/earn/SKILL.md ]; then echo "present=yes" >> "$GITHUB_OUTPUT"
+          elif [ -f plugin/.claude-plugin/plugin.json ]; then echo "::error file=plugin/.claude-plugin/plugin.json::the plugin is declared but plugin/skills/earn/SKILL.md is missing"; exit 1
+          else echo "present=no" >> "$GITHUB_OUTPUT"; fi
+          echo "skill present: $([ -f plugin/skills/earn/SKILL.md ] && echo yes || echo no)" >> "$GITHUB_STEP_SUMMARY"
+      # plugin/ is what a Claude Code install copies. Every file in it that also exists at the root is
+      # a copy made by `npm run build` in the same commit, so the check is byte identity against this
+      # tree: no release pin, nothing fetched. 🔴 It runs BEFORE `npm ci` and the build ON PURPOSE: the
+      # build rewrites these copies, so a check after it reads the build's output, not the commit, and
+      # a commit that deleted a copy would pass. It also pins the plugin's layout (marketplace source,
+      # launch target) and refuses a lockfile or a symlink in plugin/.
+      - name: the plugin folder carries exactly this commit's files
+        if: steps.pk.outputs.present == 'yes'
+        run: bash scripts/sync-plugin.sh --check
       - name: the declared version follows the version branch (release/v0.1.0 ⇒ 0.1.0)
         # The convention was set by hand; this holds it. A PR into vX.Y.Z, or a push to it,
         # fails if package.json declares anything else.
@@ -134,8 +149,8 @@ jobs:
         if: steps.pk.outputs.present == 'yes' && steps.sk.outputs.present == 'yes'
         run: |
           git clone --depth 1 https://github.com/anthropics/claude-plugins-official /tmp/cpo
-          python3 /tmp/cpo/plugins/skill-creator/skills/skill-creator/scripts/quick_validate.py skills/earn
-      - name: bundled MCP server is current (the plugin runs the committed dist/)
+          python3 /tmp/cpo/plugins/skill-creator/skills/skill-creator/scripts/quick_validate.py plugin/skills/earn
+      - name: bundled MCP server is current, and so are the plugin's copies of it
         if: steps.pk.outputs.present == 'yes'
         run: |
           npm run build
@@ -143,9 +158,13 @@ jobs:
             || { echo "::error::dist/mcp-server.mjs is stale — run npm run build and commit it"; exit 1; }
           git diff --exit-code --stat -- THIRD_PARTY_NOTICES.md \
             || { echo "::error::THIRD_PARTY_NOTICES.md is stale — run npm run build and commit it"; exit 1; }
-      # ── Licensing (Apache-2.0). An npm tarball, and the plugin repository that
-      # copies the bundle, take what `files` publishes, so the licence, its NOTICE and the dependency
-      # notices must travel INSIDE that set. ───────────────────────────────────────
+          # Only the files the build WRITES into plugin/; the manifests and the skill there are edited by hand.
+          # `git status`, not `git diff`: a copy the commit deleted comes back UNTRACKED, which diff ignores.
+          stale=$(git status --porcelain -- plugin/dist plugin/registry plugin/LICENSE plugin/NOTICE plugin/THIRD_PARTY_NOTICES.md plugin/package.json)
+          [ -z "$stale" ] || { echo "$stale"; echo "::error::plugin/ copies are stale or missing — run npm run build and commit them"; exit 1; }
+      # ── Licensing (Apache-2.0). An npm tarball takes what `files` publishes, and a plugin install
+      # takes plugin/, so the licence, its NOTICE and the dependency notices must travel INSIDE both.
+      # ───────────────────────────────────────────────────────────────────────────────────────────
       - name: the packed artifact ships LICENSE, NOTICE and the third-party notices
         if: steps.pk.outputs.present == 'yes'
         run: |
@@ -194,11 +213,11 @@ jobs:
           expected = {
               "earn_vaults": set(),
               "earn_terms": set(),
-              "earn_status": {"vault", "account", "amount_usdc"},
-              "earn_quote": {"vault", "account", "amount_usdc", "direction"},
-              "earn_prepare_deposit": {"vault", "account", "amount_usdc", "receiver"},
-              "earn_prepare_withdraw": {"vault", "receiver", "account", "amount_usdc", "all", "shares_exact"},
-              "earn_balance": {"vault", "account", "lookback_blocks", "max_log_requests"},
+              "earn_status": {"vault", "chain", "account", "amount_usdc"},
+              "earn_quote": {"vault", "chain", "account", "amount_usdc", "direction"},
+              "earn_prepare_deposit": {"vault", "chain", "account", "amount_usdc", "receiver"},
+              "earn_prepare_withdraw": {"vault", "chain", "receiver", "account", "amount_usdc", "all", "shares_exact"},
+              "earn_balance": {"vault", "chain", "account", "lookback_blocks", "max_log_requests"},
               "earn_claim": {"receipt_id"},
           }
           assert props == expected, {k: (sorted(props.get(k, [])), sorted(v)) for k, v in expected.items() if props.get(k) != v}
@@ -212,14 +231,16 @@ jobs:
         run: |
           python3 - <<'PY'
           import json, re, subprocess, pathlib, sys
-          p = subprocess.Popen(["node","dist/mcp-server.mjs"], stdin=subprocess.PIPE, stdout=subprocess.PIPE, text=True)
+          # The copy the plugin actually runs, not the root bundle: a later step holds the two
+          # identical, and this one checks the skill against what an install executes.
+          p = subprocess.Popen(["node","plugin/dist/mcp-server.mjs"], stdin=subprocess.PIPE, stdout=subprocess.PIPE, text=True)
           def send(o): p.stdin.write(json.dumps(o)+"\n"); p.stdin.flush()
           send({"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-06-18","capabilities":{},"clientInfo":{"name":"ci","version":"0"}}}); p.stdout.readline()
           send({"jsonrpc":"2.0","method":"notifications/initialized"})
           send({"jsonrpc":"2.0","id":2,"method":"tools/list","params":{}})
           live = {t["name"] for t in json.loads(p.stdout.readline())["result"]["tools"]}
           p.stdin.close(); p.wait(5)
-          md = pathlib.Path("skills/earn/SKILL.md").read_text()
+          md = pathlib.Path("plugin/skills/earn/SKILL.md").read_text()
           # ANCHORED ON THE TOOL TABLE'S FIRST COLUMN ONLY. A free prose scan had
           # both failure modes: a forward-looking sentence ("future work may add `earn_transfer`")
           # read as a phantom tool, and an unbackticked or call-style mention
@@ -238,10 +259,58 @@ jobs:
           if phantom: print("::error::SKILL.md names tools the server does not have:", sorted(phantom))
           sys.exit(1 if (missing or phantom) else 0)
           PY
+      # A package.json version is a RUNTIME value: the bundle reports the one beside it as
+      # serverInfo.version, and the manifests are what the marketplaces advertise.
+      - name: every declaration of this repository's own version agrees
+        if: steps.pk.outputs.present == 'yes'
+        run: bash scripts/check-versions.sh
+      - name: the licence and NOTICE say what they must
+        if: steps.pk.outputs.present == 'yes'
+        run: |
+          node - <<'JS'
+          const { createHash } = require("node:crypto");
+          const { readFileSync, statSync } = require("node:fs");
+          const sha = (b) => createHash("sha256").update(b).digest("hex");
+          const norm = (t) => t.replace(/\s+/g, " ").trim();
+          // The licence is pinned by its TEXT, not its bytes. The repository's LICENSE is
+          // GitHub's licence-picker template: 11,357 bytes, sha256 c71d239d…, which differs
+          // from the canonical file at apache.org (11,358 bytes, sha256 cfc7749b…) by a single
+          // leading newline. Same licence, laid out differently — measured against apache.org
+          // directly rather than against our own comment about it.
+          //
+          // A byte pin would buy one property: a stranger verifies with `diff` and no normaliser.
+          // It would also mean this gate rejecting the file the repository's owner put there, so
+          // the pin is the thing that gives way. CANONICAL below still proves it is Apache-2.0
+          // word for word, which is the property that actually matters for a licence.
+          const CANONICAL = "0ffddef9e48f8a09aed5caf2d44f7ba1c1be2d9b8e0a6f693b1635b2d5566645";
+          const fail = [];
+          const licence = readFileSync("LICENSE", "utf8");
+          // ⚠️ THIS IS A DIAGNOSTIC, NOT A GUARD, AND IT CANNOT FIRE WHILE CANONICAL IS BELOW IT.
+          // CANONICAL pins one exact normalised string, and that string contains "Apache License",
+          // so anything passing CANONICAL contains it too. Its only job is a readable error: an MIT
+          // file fails here with "does not name the Apache License" rather than with the less
+          // obvious "not the canonical text". If CANONICAL is ever dropped or weakened, THIS LINE
+          // WILL LOOK LIKE A SURVIVING GUARD AND WILL NOT BE ONE — a substring check passes on any
+          // document that merely quotes the licence's name.
+          if (!licence.includes("Apache License")) fail.push("LICENSE does not name the Apache License");
+          if (sha(norm(licence)) !== CANONICAL) fail.push("LICENSE is not the canonical Apache-2.0 text");
+          if (/TRADEMARKS\.md/.test(licence)) fail.push("LICENSE references TRADEMARKS.md, which no longer ships");
+          const notice = readFileSync("NOTICE", "utf8");
+          if (!norm(notice).includes("section 6")) fail.push("NOTICE does not withhold the names by citing section 6");
+          if (!/^Copyright 2026 Tempora Labs/m.test(notice)) fail.push("NOTICE carries no copyright line");
+          // Not vacuous: the notices file must actually carry the bundled dependencies' licences, so an
+          // emptied or placeholder file fails instead of passing.
+          const notices = readFileSync("THIRD_PARTY_NOTICES.md", "utf8");
+          if (statSync("THIRD_PARTY_NOTICES.md").size < 5000) fail.push("THIRD_PARTY_NOTICES.md is too small to be the real notices");
+          if (!/MIT|Apache/.test(notices)) fail.push("THIRD_PARTY_NOTICES.md names no dependency licence");
+          if (fail.length) { for (const f of fail) console.log("::error::" + f); process.exit(1); }
+          console.log("LICENSE is the canonical Apache-2.0 text; NOTICE and the third-party notices say what they must");
+          JS
 
   # ── Bundle provenance ──────────────────────────────────────────────────────────────────────────
-  # What a marketplace install actually runs is the COMMITTED dist/mcp-server.mjs
-  # (git install, no npm). `check` proved, on this same commit, that the committed bundle equals a
+  # This job attests the COMMITTED root dist/mcp-server.mjs. A marketplace install runs
+  # plugin/dist/mcp-server.mjs, which the plugin-folder step holds byte-identical to it in the
+  # committed tree, so the same attestation verifies the installed copy by digest (git install, no npm). `check` proved, on this same commit, that the committed bundle equals a
   # rebuild of the committed source (its stale-dist step) — `needs: check` is what carries that
   # across. This job attests THAT file with GitHub's OIDC identity and verifies it back, so a
   # stranger can later run `gh attestation verify` on the file in their plugin cache and get the

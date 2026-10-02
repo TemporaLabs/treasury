@@ -57,10 +57,13 @@ change fits before you spend time on it.
 
 Two rules decide most reviews. A change that breaks either is a design change, not a pull request.
 
-1. **Nothing in this repository holds, reads, derives or is handed a private key. Nothing signs.
-   Nothing sends.** Treasury prepares unsigned calls. The person or agent running it supplies the
-   signer and the verification. A `sign`, `send` or `transfer` tool, a wallet client, or a private-key
-   variable will not merge.
+1. **Nothing in this repository holds, reads, derives or is handed a private key. Nothing signs. A
+   call reaches the chain only from the operator's own wallet, after the operator approves it
+   there.** Treasury prepares unsigned calls. A wallet connection may hand a prepared call to the
+   operator's connected wallet for approval; it never builds or alters a call, and it refuses any
+   destination outside `registry/vaults.json` (a listed vault, or its asset for the approval). A
+   private-key variable, a local signer, a tool that signs, or a relay that accepts an arbitrary
+   destination will not merge.
 2. **The client knows only the chain.** It has a vault address and an RPC endpoint. Code may not
    depend on any fund's internal source, deploy records, operators or private services. A vault's row
    in `registry/vaults.json` is a set of measurements that
@@ -74,8 +77,23 @@ Every row in `registry/vaults.json` is a vault the client will list and build ca
 for, so a new row is a product decision, not only a passing build. Treasury's official registry lists
 Tempora vaults. Proposing a new destination needs Tempora Labs' agreement; say so in the pull request.
 
-A row is a set of measurements. `scripts/registry-check.ts` reconciles each one against the chain, and
-the pull request should say which block it was measured at.
+A row is a set of measurements. `scripts/registry-check.ts` reconciles each one against the chain it
+is on, and the pull request should say which block it was measured at.
+
+A vault on a chain Treasury does not support yet needs that chain added first:
+
+- its entry in `chains` and `CHAIN_INFO` (`src/client.ts`), its literal in the registry schema, and
+  its explorer in `src/links.ts`. The compiler holds these together: a chain in one and not the
+  others does not build;
+- its default vault in `src/config/earn.ts` (`defaultVaultByChain`). Each chain has exactly one vault
+  marked `isDefault`;
+- its RPC variables in the plugin's `.mcp.json`, in [`docs/configuration.md`](docs/configuration.md),
+  and in the allowlist and the exact-set assertion of `tests/boundary.unit.test.ts`. That is the one
+  edit to the boundary test a new chain needs; the rule that it is not weakened to pass still holds;
+- the tests that pin the supported chains (`tests/registry.test.ts`, `tests/client.unit.test.ts`),
+  restated for the new set;
+- the places that name the chains in prose: the `earn` skill, [`docs/tools.md`](docs/tools.md) and the
+  README. CI checks the skill's tool table, not its prose.
 
 ## Development
 
@@ -83,17 +101,23 @@ Requires Node.js 22 or later. Fork tests also need [Foundry](https://getfoundry.
 
 ```bash
 npm ci
-npm run build                     # compiles, bundles dist/mcp-server.mjs, regenerates the notices
+npm run build                     # compiles, bundles dist/mcp-server.mjs, regenerates the notices and plugin/
 npm run typecheck
 npm test                          # unit tests
 TREASURY_RPC_BASE=https://... npm test          # adds live read-only checks against Base
 TREASURY_RPC_BASE=https://... npm run test:fork # anvil fork round trips with impersonated accounts
 ```
 
+Each chain's live and fork tiers run when that chain's RPC variable is set. For Arbitrum One, add
+`TREASURY_RPC_ARBITRUM=https://...` to the same commands; a chain with no variable set is skipped
+and shown as skipped.
+
 - **Use `npm ci`, not `npm install`.** It fails on a stale lockfile, which is what CI does.
 - **Rebuild the bundle when source changes.** `dist/mcp-server.mjs` is committed,
-  because a plugin install runs no build. After any change under `src/`, run `npm run build` and commit the result.
-  CI fails on a stale bundle.
+  because a plugin install runs no build. After any change under `src/`, or to `registry/vaults.json`,
+  `LICENSE` or `NOTICE`, run `npm run build` and commit the result; the same build refreshes the
+  plugin's copies in `plugin/`, and `npm run plugin:check` confirms them. CI fails on a stale bundle
+  or copy. The build uses `bash` for that last step, so on Windows run it from Git Bash or WSL.
 - **Say which test tier ran.** Unit tests say nothing about the chain. State in the pull request
   whether you ran unit, live read-only or fork tests.
 - **Tests never need a real key.** A test that moves funds runs on a fork and impersonates the
@@ -114,17 +138,18 @@ TREASURY_RPC_BASE=https://... npm run test:fork # anvil fork round trips with im
   request, so it can merge without waiting on the feature's review.
 - **Show that a new test can fail.** Break the behaviour it guards, confirm the test goes red, then
   restore it. A test that passes both ways proves nothing.
-- **The skill lives in the plugin repository.** `SKILL.md`, its trigger queries and its validation
-  ship from [TemporaLabs/treasury-plugin](https://github.com/TemporaLabs/treasury-plugin), which
-  carries the skill and the bundled server together and checks the skill's tool table against the
-  server's real `tools/list`. A change here that adds, removes or renames a tool needs the matching
-  change there; this repository cannot catch that drift, and that repository can.
+- **The skill lives in `plugin/`, beside the server it describes.** The Claude Code plugin is the
+  [`plugin/`](plugin/) folder: its manifests, the `earn` skill
+  ([`plugin/skills/earn/SKILL.md`](plugin/skills/earn/SKILL.md)) and its trigger cases. A change that
+  adds, removes or renames a tool updates the skill in the same pull request; CI checks the skill's
+  tool table against the server's real `tools/list`. The server bundle, registry and licence files
+  in `plugin/` are copies that `npm run build` writes; never edit them by hand. A change to the
+  skill's `description:` decides whether the skill is reached at all, so treat it as a behavioural
+  change and measure it by running the plugin, not by reading it.
 
 - **Expect questions.** Reviewers run the change rather than only reading it, and a review usually
   takes more than one round. Approval does not mean merge; a Tempora Labs maintainer merges.
-- **Do not bump versions.** Releases are cut by maintainers, each as a single commit of the release
-  tree; the public repository carries no drafting history, so nothing you see in a release commit's
-  parent is missing — there is none.
+- **Do not bump versions.** Maintainers cut releases ([`docs/release-process.md`](docs/release-process.md)).
 
 ## Security
 

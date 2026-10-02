@@ -3,13 +3,15 @@
  * as a literal; `scripts/roundtrip.ts` and the tiers read the default and the round-trip target
  * from here (the fork and live tiers also name the gated sibling directly, for the access pair).
  *
- * Two knobs, deliberately separate, because they can legitimately differ:
+ * Three knobs, deliberately separate, because they can legitimately differ:
  *
- *   `defaultVault`   what the tools use when the caller names none. The registry row must also be
- *                    `isDefault` — `defaultVault()` refuses a config/registry disagreement — and the
- *                    schema allows a WHITELIST_GATED default, because the pre-flight re-measures
- *                    access live on every call and refuses a non-member before anything is built.
- *   `roundTripVault` what the deposit → redeem tiers exercise. The same vault today.
+ *   `defaultChain`        the chain the tools use when the caller names neither a chain nor a vault.
+ *   `defaultVaultByChain` what the tools use on each chain when the caller names no vault. Each
+ *                         registry row must also be `isDefault` — `defaultVault()` refuses a
+ *                         config/registry disagreement — and the schema allows a WHITELIST_GATED
+ *                         default, because the pre-flight re-measures access live on every call and
+ *                         refuses a non-member before anything is built.
+ *   `roundTripVault`      what the deposit → redeem tiers exercise. The Base default today.
  *
  * Addresses live in the registry (`registry/vaults.json`, schema-validated, block-stamped) — a
  * ticker here resolves through it.
@@ -21,19 +23,33 @@
  * stale the moment the whitelist changes. An address is never a key either way (CONTRIBUTING.md, the first rule).
  */
 
+import type { ChainKey } from "../client.js";
+
 /** A vault's ERC-20 ticker — resolved via `getVault`, so a typo fails at load, not at a call site. */
 export type VaultSymbol = string;
 
 export const EARN = {
+  /** The chain used when a caller names neither a chain nor a vault. */
+  defaultChain: "base" satisfies ChainKey,
+
   /**
-   * Tempora Labs Cash Plus USDC (Test 2B), Base — a Morpho Vault V2, the Tempora vault this client
-   * offers by default. Deposits are OPEN to any account (measured by a simulated stranger deposit;
-   * `earn_vaults` reports `defaultAccess: "open"`). Its cash-like leg is a savings-rate instrument
-   * rather than a lending position (`docs/vaults.md`), unlike the prior default, Test 2. The
-   * whitelist-gated sibling, Cash Plus USDC (Test 2A), stays listed as `tlCashPlusUSDC2A` and is
-   * refused per account by the pre-flight.
+   * The default vault on each chain, by chain key.
+   *
+   * `base`: Tempora Labs Cash Plus USDC (Test 2B) — a Morpho Vault V2, the Tempora vault this client
+   * offers when nothing is named. Tempora Labs Cash Plus USDC (Test 2), also on Base, is the DEMO
+   * vault: listed and open, selected by naming it. Deposits are OPEN to any account (measured by a simulated stranger
+   * deposit; `earn_vaults` reports `defaultAccess: "open"`). The whitelist-gated sibling, Cash Plus
+   * USDC (Test 2A), stays listed as `tlCashPlusUSDC2A` and is refused per account by the pre-flight.
+   *
+   * `arbitrum`: Tempora Labs Cash Plus USDC (Test 2C) — a Morpho Vault V2 on Arbitrum One, open to
+   * any account by the same measurement.
+   *
+   * `Record<ChainKey, …>`: a chain added to `CHAIN_INFO` without a default here does not compile.
    */
-  defaultVault: "tlCashPlusUSDC2B" satisfies VaultSymbol,
+  defaultVaultByChain: {
+    base: "tlCashPlusUSDC2B",
+    arbitrum: "tlCashPlusUSDC2C",
+  } satisfies Record<ChainKey, VaultSymbol>,
 
   /** The round-trip target. The same vault as the default; open, so the fork tier deposits from the whale directly. */
   roundTripVault: "tlCashPlusUSDC2B" satisfies VaultSymbol,
@@ -47,6 +63,8 @@ export const EARN = {
     stranger: "0x000000000000000000000000000000000000dEaD" as const,
     /** Morpho Blue on Base — held ~2.1e14 USDC base units when probed 2026-09-11. Impersonated on the fork, never keyed. */
     usdcWhale: "0xBBBBBbbBBb9cC5e90e3b3Af64bdAF62C37EEFFCb" as const,
+    /** Aave V3's aArbUSDCn token on Arbitrum One — held ~1.7e13 native-USDC base units when probed 2026-10-02. Impersonated on the fork, never keyed. */
+    usdcWhaleArbitrum: "0x724dc807b04555b71ed48a6896b6F41593b8C637" as const,
     /** USDC the fork round trip deposits, and what it seeds a discovered depositor with beforehand. */
     forkDepositUsdc: "100",
     forkSeedUsdc: "1000",

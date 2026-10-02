@@ -4,6 +4,107 @@ All notable changes to Agent Treasury are recorded here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versions follow [SemVer](https://semver.org/).
 Pre-1.0, minor versions may change tool names, schemas and behaviour.
 
+## [v0.1.2] - Unreleased
+
+### Added
+- **Earn on more than one chain: Arbitrum One joins Base** (#62). Every tool that takes `vault` also
+  takes `chain` (`"base"` or `"arbitrum"`). Base stays the default: a call that names neither a chain
+  nor a vault behaves as before. Naming a chain alone uses that chain's default vault; a `vault` and
+  a `chain` that disagree are refused. Results name the chain, and a prepared envelope carries
+  `chain` and `chainId` ahead of its calls.
+- **Tempora Labs Cash Plus USDC (Test 2C)**, `tlCashPlusUSDC2C`, the default vault on Arbitrum One: a
+  Morpho Vault V2 over native USDC, measured open to any account at block 511,070,816.
+- `earn_vaults` returns `chains` — the chains a deposit can go to, the default first, each with its
+  default vault — and `defaultChain`. The `earn` skill has the agent ask the operator which chain
+  before preparing a deposit when they have not said, and never for a withdrawal or a balance.
+- `TREASURY_RPC_ARBITRUM` and `TREASURY_LOGS_RPC_ARBITRUM` (and the alias `ARBITRUM_RPC_URL`). A chain
+  reads only its own variables, and the plugin forwards the two `TREASURY_*` ones.
+- **An endpoint for the wrong chain is named, not guessed at.** `earn_status` takes `chain`, and
+  reports `rpc: "wrong_chain"` with `rpcChainId` when a configured endpoint answers for a different
+  chain, `chainVerified: false` when it would not say, and `logsRpc` for a separate logs endpoint.
+  A pre-flight, a quote or a balance through such an endpoint is refused, naming the variable.
+- A signer rule, first in `signer_rules`: send each call on the chain its `chainId` names. The
+  envelope's `next_step` opens by naming the chain.
+- The event scan reads Infura's range refusal (`range N exceeds limit of 10000`) as a window.
+
+### Changed
+- **Tempora Labs Cash Plus USDC (Test 2B) is the default on Base**, and Test 2 becomes the demo
+  vault: still listed, open and depositable, chosen by naming it. Test 2B's cash-like leg is a
+  savings-rate token, not a lending vault (#47). Morpho's app has no page for it, so it carries no
+  `app` link, and `src/links.ts` now offers one only for vaults Morpho is known to list.
+- The registry marks one default vault **per chain** (it was one in total), and
+  `src/config/earn.ts` names them in `defaultVaultByChain`, with `defaultChain` beside it.
+- `TREASURY_LOGS_FALLBACK` set to a URL names a Base endpoint: on Arbitrum One a set variable means
+  no fallback. Unset, each chain falls back to its own public endpoint.
+- `scripts/registry-check.ts` reads each row on its own chain, and reports a chain whose endpoint
+  did not answer, or answered for another chain, as not checked.
+- A vault's explorer link is its chain's (Arbiscan on Arbitrum One). A chain with no explorer on
+  record now fails loudly instead of producing a broken link.
+- A registry with no vault on the default chain is refused when it is loaded, with the cause named.
+
+### Fixed
+- A chain's own name in an RPC URL (`…/arbitrum/<key>`) is no longer treated as a secret, so an
+  error that names the chain is not masked.
+- `scripts/registry-check.ts` reports a failed `eth_getCode` as not checked, through the same
+  redaction as every other read; it used to escape as an uncaught error.
+
+## [v0.1.1] - 2026-09-29
+
+### Added
+- **The Claude Code plugin and the `earn` skill now ship from this repository**, in
+  [`plugin/`](plugin/) (#53). Up to v0.1.0 they shipped from a separate plugin repository, which
+  carried byte copies of this repository's bundle, refreshed by hand. The copies in `plugin/` are now
+  written by `npm run build` in the same commit and checked by CI, so a tool change and its skill text
+  land in one pull request. The install id is unchanged (`treasury@treasury`); the marketplace source
+  is now `TemporaLabs/treasury`. The move does not change the npm package's contents: `plugin/` is
+  outside its `files` list.
+- `AGENTS.md`, instructions for coding agents working in this repository (#49).
+
+### Fixed
+- The package's `treasury-mcp` command now starts the server: the entry check compares the file's
+  identity, not the name it was invoked by (#27, fixes #22). A script that imports or preloads the
+  bundle no longer starts it, whatever that script is named.
+- The MCP server reads its own `package.json` and vault registry when run through a symlink with
+  `--preserve-symlinks-main`; it failed at startup before (#57).
+- `earn_quote` and `earn_balance` name `instantLiquidity` in their descriptions, and the prepare-tool
+  population is derived rather than listed (#29, fixes #17).
+
+### Changed
+- The project is named Open Agent Treasury (OAT), the treasury management system for AI agents, with
+  a mascot and a simpler README (#33, #37, #39, #41, #43).
+- The install docs cover the published npm package, use an absolute MCP path, and compare a published
+  bundle to its tag (#23, #24).
+
+### CI
+- The documentation version pins must agree, and on `main` equal `package.json`'s version; a release
+  moves them in its own pull request (#30, #55).
+- The publish workflow checks the plugin's copies, every version declaration and the install pins at
+  the tag, and polls the registry for up to ten minutes, warning rather than failing on a timeout
+  (#28, #55, #57).
+- `prepack` also refuses rebuilt third-party notices that differ from the committed file (#57).
+- Dependabot no longer proposes TypeScript or `@types/node` majors (#25); GitHub Actions and
+  development dependencies bumped (#20, #55).
+
+### Not supported in this release
+- **Codex.** `plugin/` carries Codex manifests and Codex installs the plugin (#55 corrected a policy
+  value Codex refused), but the server does not start there: measured on Codex 0.155.1, Codex does
+  not expand `${CLAUDE_PLUGIN_ROOT}` in the launch path. With Codex, register the npm package's
+  bundle by its absolute path with `codex mcp add`
+  ([docs/install.md](docs/install.md#claude-code--the-plugin)).
+
+### Upgrading an earlier Claude Code install
+Remove the old marketplace first — adding the new one while it is still configured is refused,
+because both are named `treasury` — then add the new one and reinstall. Removing the marketplace also
+uninstalls the plugin, so the last step is needed:
+
+```bash
+claude plugin marketplace remove treasury
+claude plugin marketplace add TemporaLabs/treasury@v0.1.1
+claude plugin install treasury@treasury
+```
+
+Then restart your Claude Code session so the tools connect.
+
 ## [v0.1.0] - 2026-09-18
 
 The first public release. Everything below is what ships in it.
