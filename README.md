@@ -99,12 +99,14 @@ By default, Earn deposits into **Cash Plus USDC (Test 2B)** on Base. There are o
 | Option | **Cash Plus USDC (Test 2C)** | Arbitrum One | `chain: "arbitrum"` |
 | Option | **Cash Plus USDC (Test 2A)** | Base | `vault: "tlCashPlusUSDC2A"` (whitelist only) |
 
-- **Test 2B, the default.** A Morpho Vault V2 on Base, open to any account. Its cash-like leg is a
-  savings-rate token rather than a lending vault. [BaseScan](https://basescan.org/address/0x91BcEbA5feCB9E92d80F1845B55cC56621E9352F);
+- **Test 2B, the default.** A Morpho Vault V2 on Base, open to any account. Its first position is a
+  savings-rate token rather than a lending vault, and its other two positions differ from Test 2's too
+  ([how](docs/vaults.md#offered-today)). [BaseScan](https://basescan.org/address/0x91BcEbA5feCB9E92d80F1845B55cC56621E9352F);
   Morpho's own app has no page for it.
 - **Test 2, the demo.** The same kind of vault, and the one to show people: it has a page on Morpho's
   app, [here](https://app.morpho.org/base/vault/0x040fCA12673778FEED5DA7b2ccFbbAb0cc0134Cf/tempora-labs-cash-plus-usdc-test-2#overview).
-  Its cash-like leg is a lending vault. Open to any account, but an agent uses it only when it is named.
+  Its three positions are different vaults from Test 2B's, and the first is a lending vault. Open to any
+  account, but an agent uses it only when it is named.
 - **Test 2C, Arbitrum One.** A Morpho Vault V2 over native USDC, open to any account.
   [Arbiscan](https://arbiscan.io/address/0x4057a63953142Ac2b3E5dB1954Fc14d578662587). The USDC has to
   be on Arbitrum already; OAT does not bridge.

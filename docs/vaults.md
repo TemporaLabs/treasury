@@ -19,10 +19,20 @@ names exactly one vault on exactly one chain.
 | Cash Plus USDC (Test 2C) | `tlCashPlusUSDC2C` | Arbitrum One | the default on Arbitrum One | `chain: "arbitrum"` | [Arbiscan](https://arbiscan.io/address/0x4057a63953142Ac2b3E5dB1954Fc14d578662587). Morpho's app has no page for it |
 | Cash Plus USDC (Test 2A) | `tlCashPlusUSDC2A` | Base | whitelist-gated; listed so an admitted account can read and exit its position | `vault: "tlCashPlusUSDC2A"` | [BaseScan](https://basescan.org/address/0x1516D2c082b9cc9af852B1Ebc828f168F27299ef) |
 
-**How the three open vaults differ.** Test 2B and Test 2 share a three-position structure on Base and
-differ in the cash-like leg: Test 2B's is a savings-rate token (sUSDC), Test 2's is a lending vault
-(Spark USDC Vault), which carries that book's credit risk. Test 2C is Test 2B's rule on Arbitrum One. The
-two anchors have identical names on-chain and are different contracts, so Treasury names them by address.
+**How the three open vaults differ.** Each holds three positions, in three other Morpho vaults, and the
+three differ in **all three positions**, not in one. Read from each vault's adapters on 2026-10-02 (the
+underlying vaults, by address):
+
+| vault | position 1 | position 2 | position 3 |
+|---|---|---|---|
+| Test 2B (Base) | Spark USDC Vault `0x3128a0F7f0ea68E7B7c9B00AFa7E41045828e858` (sUSDC, the savings-rate token) | Steakhouse Prime USDC `0xbeef0e0834849aCC03f0089F01f4F1Eeb06873C9` | Gauntlet USDC Frontier `0x1deEfABEe758AAbdC29a542B24ca3b75aFD56765` |
+| Test 2 (Base) | Spark USDC Vault `0x7BfA7C4f149E7415b73bdeDfe609237e29CBF34A` (a lending vault) | Gauntlet USDC Prime `0xeE8F4eC5672F09119b96Ab6fB59C27E1b7e44b61` | Steakhouse High Yield USDC `0xBEEFA7B88064FeEF0cEe02AAeBBd95D30df3878F` |
+| Test 2C (Arbitrum One) | Spark USDC Vault `0x940098b108fB7D0a7E374f6eDED7760787464609` (sUSDC) | Gauntlet USDC Prime `0x610D151aE40662AE148cdBaaE1Ea5904b6AFAE78` | Fluid USD Coin `0x1A996cb54bb95462040408C06122D45D6Cdb6096` |
+
+The same rule allocates all three; Test 2C is that rule over Arbitrum One's vaults. The most visible
+difference between Test 2B and Test 2 is the first position: Test 2B's is a savings-rate token and
+Test 2's is a lending vault, which carries that book's credit risk. The two Base anchors have the same
+name on-chain (`Spark USDC Vault`) and are different contracts, so Treasury names them by address.
 
 **Why Test 2 is the demo.** It is the vault that Morpho's own app lists, so it can be shown there; it is
 open to any account and exercises every path. It is not what an agent uses unless asked.
