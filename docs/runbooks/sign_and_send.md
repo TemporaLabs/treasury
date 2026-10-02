@@ -11,6 +11,11 @@ This is the shape a real consumer of Treasury takes: **call the MCP tools to get
 calls, then hand those calls to something that holds a key and never let the key touch the same
 process the calls came from.** The two are deliberately different trust domains.
 
+**The chain comes from the calls.** This run was on Base, and the script below hard-codes
+`chain: base`. Every call Treasury prepares carries its `chainId`, and the envelope names the chain:
+a signer for a vault on Arbitrum One uses `arbitrum` from `viem/chains` and an Arbitrum RPC, and
+should refuse a call whose `chainId` is not the chain it is connected to.
+
 ## The three-step shape
 
 1. **Quote and status** (`earn_quote` with `direction` / `earn_status`) — read-only, no key involved.

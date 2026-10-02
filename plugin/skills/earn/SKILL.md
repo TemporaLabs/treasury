@@ -1,11 +1,11 @@
 ---
 name: earn
-description: Put approved idle USDC to work in supported Tempora-curated vaults on Base. Inspect vault terms, quote deposits and withdrawals, check position value and currently withdrawable amounts, and prepare unsigned transactions for the operator's own signer. Use for earning yield on idle USDC or managing these vault positions, including withdrawal requests. Not for generating business revenue, paid tasks, swaps, trading, or operating a vault allocator.
+description: Put approved idle USDC to work in supported Tempora-curated vaults on Base or Arbitrum. Inspect vault terms, quote deposits and withdrawals, check position value and currently withdrawable amounts, and prepare unsigned transactions for the operator's own signer. Use for earning yield on idle USDC or managing these vault positions, including withdrawal requests. Not for generating business revenue, paid tasks, swaps, trading, or operating a vault allocator.
 ---
 
 # Earn — put idle USDC to work in a Tempora vault
 
-You are the depositor. A Tempora fund is an ERC-4626 vault on Base: you put USDC in, you hold
+You are the depositor. A Tempora fund is an ERC-4626 vault on Base or on Arbitrum One: you put USDC in, you hold
 shares, the shares' USDC value moves with what the vault earns or loses, you redeem when you need
 cash. What amount is surplus is the operator's decision, not yours — a balance in the wallet is
 not permission to deposit it. The
@@ -17,14 +17,21 @@ whole design: a skill that supplies judgement must never hold the gate that supp
 
 ## Setup
 
-The server reads Base through `TREASURY_RPC_BASE` (and `TREASURY_LOGS_RPC_BASE` for the event scans
-`earn_balance` does), passed through from the host environment. Unset, it falls back to the
-public `mainnet.base.org`, which rate-limits after a handful of calls — an `RPC Request failed …
-over rate limit` error from any tool means set a keyed RPC URL, not that the vault is down.
-Run standalone (outside the plugin), the server also accepts `BASE_RPC_URL` as a fallback. The
-plugin forwards only the two `TREASURY_*` RPC variables, but the server it spawns inherits its
-parent's environment, so `TREASURY_LOGS_FALLBACK` (below) reaches it on the plugin path too. A keyed URL is a secret: tool output never repeats it —
-errors are reported without the endpoint.
+**Each chain has its own RPC.** The server reads Base through `TREASURY_RPC_BASE` and Arbitrum One
+through `TREASURY_RPC_ARBITRUM` (and `TREASURY_LOGS_RPC_BASE` / `TREASURY_LOGS_RPC_ARBITRUM` for the
+event scans `earn_balance` does), passed through from the host environment. A chain never reads
+another chain's variable. Unset, a chain falls back to its public endpoint (`mainnet.base.org`,
+`arb1.arbitrum.io`), which rate-limits after a handful of calls — an `RPC Request failed …
+over rate limit` error from any tool means set a keyed RPC URL for that chain, not that the vault
+is down. Run standalone (outside the plugin), the server also accepts `BASE_RPC_URL` and
+`ARBITRUM_RPC_URL` as fallbacks. The plugin forwards only the `TREASURY_*` RPC variables, but the
+server it spawns inherits its parent's environment, so `TREASURY_LOGS_FALLBACK` (below) reaches it
+on the plugin path too. A keyed URL is a secret: tool output never repeats it — errors are reported
+without the endpoint.
+
+`earn_status` with `chain` checks that chain's RPC. 🔴 **`rpc: "wrong_chain"` means the variable for
+that chain holds an endpoint for a different one** — say so and stop; every read through it would
+come back empty and look like an empty position or a broken vault.
 
 `earn_balance` reads history through `eth_getLogs`, starting at the vault's deployment block.
 🔴 **Read `scan.wholeHistory`, not `scan.complete`.** `complete` only says shares in − shares out
@@ -32,23 +39,25 @@ reconciles, which an empty window does vacuously; `wholeHistory` says the scan a
 deployment block and was not cut short. Only then are `entryBasisUsdc` and `accruedYieldUsdc` numbers —
 otherwise they read `unknown`, never a partial sum that renders a missed deposit as yield.
 
-Providers cap the block range per request (Alchemy free tier 10 blocks, Base public RPC 2,000), and
+Providers cap the block range per request (Alchemy free tier 10 blocks, Base public RPC 2,000, Infura on Arbitrum 10,000), and
 some public endpoints refuse old ranges outright. When the configured RPC cannot cover the range, the
 scan moves to the fallback endpoint and `scan.source` says `"fallback"`; you do not need to
 retry anything. Set `TREASURY_LOGS_FALLBACK` to another endpoint to choose it, or to `off` — or any value that is not
 a URL — to forbid it, for an operator who may not query a third party they did not name. It fails
-closed: an unrecognised value turns the fallback off rather than quietly keeping the default. The fallback reaches
+closed: an unrecognised value turns the fallback off rather than quietly keeping the default. A URL
+there names a Base endpoint, so on Arbitrum a set variable means no fallback at all. On Base the fallback reaches
 `max_log_requests` (default 100) × 2,000 blocks, about 4.6 days; each scan also stops at a 30-second
-budget. For an older vault, a whole-history basis needs `TREASURY_LOGS_RPC_BASE` set to a provider
-with a wide `eth_getLogs` range; until then `scan` says exactly how much was covered.
+budget. For an older vault, a whole-history basis needs that chain's logs variable
+(`TREASURY_LOGS_RPC_BASE`, `TREASURY_LOGS_RPC_ARBITRUM`) set to a provider with a wide `eth_getLogs`
+range; until then `scan` says exactly how much was covered.
 
 ## The tools
 
 | tool | use it to |
 |---|---|
-| `earn_vaults` | see every vault, the `default`, and `depositable` — the ones you can put money into today |
+| `earn_vaults` | see every vault and the chain it is on, `chains` — where a deposit can go, each with its own default vault — the `default`, and `depositable` — the ones you can put money into today |
 | `earn_terms` | show the operator the required disclosures before a first deposit |
-| `earn_status` | **with no arguments**: is the server up and the RPC reachable (chain, latest block, which RPC variable resolved). **With `account`**: the access verdict alone. `mode` tells you which you got |
+| `earn_status` | **with no `account`**: is the server up and the chain's RPC reachable (chain, latest block, which RPC variable resolved); pass `chain` to check the chain you are about to use. **With `account`**: the access verdict alone. `mode` tells you which you got |
 | `earn_quote` | with `direction: "deposit"` — expected shares, share price, and the verdict from a **simulated** deposit. No rate is quoted — the vault exposes none and this client calls no yield API. With `direction: "withdraw"` — shares that would burn, a simulated `withdraw` verdict, the vault's `instantLiquidity`, queue depth. `direction` is required and is echoed back on the result |
 | `earn_prepare_deposit` | get the unsigned `approve` + `deposit` calls, enveloped |
 | `earn_prepare_withdraw` | get the unsigned `withdraw` call in USDC terms — or `all=true` with `shares_exact` to empty the account |
@@ -58,15 +67,40 @@ with a wide `eth_getLogs` range; until then `scan` says exactly how much was cov
 Everything is USDC in, USDC out. Vault shares exist only inside `earn_balance` (as an exact
 string you hand back to `earn_prepare_withdraw` unchanged) — you never compute with them.
 
+Every tool that takes `vault` also takes **`chain`** (`"base"` or `"arbitrum"`). A vault is on one
+chain, so naming the vault is enough; naming only the chain selects that chain's default vault; naming
+both when they disagree is refused, and the error says which chain the vault is on. Every result that
+names a vault carries `chain` and `chainId`.
+
 The address argument is **`account`** on every tool that takes one — whose shares these are.
 `earn_prepare_withdraw` also takes **`receiver`**, and it is a different thing: `account` owns
 the shares that burn, `receiver` is where the USDC lands. They are usually the same address and
 the tool will not assume it. Confirm the payee with the operator before you build.
 
+## Choosing the chain
+
+A deposit goes to ONE chain, and the USDC has to be on that chain already — this skill does not
+bridge. **Which chain is the operator's decision. Ask; do not pick.**
+
+- **Before preparing a deposit, if the operator has not said which chain, show them `earn_vaults` →
+  `chains` and ask.** Each entry is a chain with its default vault; the first is the default chain.
+  Put it as a choice they can answer in a word: "Base (default) or Arbitrum?"
+- **Do not ask again once it is settled.** If they named a chain, named a vault, or said where
+  their USDC is, that is the answer for the rest of the task.
+- **Never ask for a withdrawal, a balance or a quote on an existing position.** A position is on
+  the chain its vault is on. Name the vault and the tools use the right chain.
+- **"The default" with no chain named means the default chain's default vault** — only when the
+  operator says to use the default, not as a way to skip the question.
+- **An account's positions on different chains are separate.** To report everything an account
+  holds, call `earn_balance` once per vault; a zero on one chain says nothing about the other.
+- **Say the chain out loud at every money step**: in the quote, when you hand over the calls, and
+  when you report the result. The operator's signer must be on that network (below).
+
 ## Opening an account and depositing
 
-1. **If the operator names no vault, use the default** (`earn_vaults` → `default`; today Tempora
-   Labs Cash Plus USDC (Test 2) on Base, open to any account). Every listed vault is a Tempora vault.
+1. **Settle the chain first (above), then the vault.** If the operator names no vault, use that
+   chain's default (`earn_vaults` → `chains[].default`; today Tempora Labs Cash Plus USDC (Test 2) on
+   Base and Tempora Labs Cash Plus USDC (Test 2C) on Arbitrum One, both open to any account). Every listed vault is a Tempora vault.
    Read `defaultAccess`: when it is `"whitelist"`, run `earn_status` for the account first, and if
    it returns `WHITELIST_GATED`, **tell the operator the account is not admitted to that vault and that
    admission is a fund-side action — do not offer a substitute and do not retry.** A listed vault that
@@ -95,6 +129,8 @@ the tool will not assume it. Confirm the payee with the operator before you buil
    - `REFUSED_BY_CLIENT` / `UNRESOLVED` → stop; the first is a registry/chain mismatch, the
      second a transport failure. Neither is a verdict about the vault.
 5. **`earn_prepare_deposit`, then hand BOTH calls in `calls` to the signer in order, and ask before each.** The
+   envelope names `chain` and `chainId`: tell the operator which chain these calls are for before
+   anything else, because a call sent on the wrong chain can be mined there and do nothing. The
    amount is in USDC (6 decimals); the tool refuses more precision than that. Show the operator
    each call's `description` — that sentence exists to be read by a human before a signature —
    **and its `gasAdvice`**: Morpho V2 calls can run out of gas on an unbuffered estimate even
@@ -105,7 +141,7 @@ the tool will not assume it. Confirm the payee with the operator before you buil
    node ahead of the one simulating the `deposit` — measured on both real round trips — so a
    signer that reads the precondition until it holds is deterministic and one that retries on
    an error string is not. **Then follow the envelope's `signer_rules`**, which every prepared
-   build carries: confirm each destination against the operator's own addresses, set the nonce
+   build carries: send on the chain the call's `chainId` names and no other, confirm each destination against the operator's own addresses, set the nonce
    from the `pending` count before each send, wait for each receipt, and after any failure that
    is not an on-chain revert, read the nonce on a different provider before re-sending, so
    nothing is sent twice. The hand-off itself — the destination check and the operator's own
@@ -127,7 +163,7 @@ right on both chassis; `exit.maxWithdrawSays` is reported only because other int
 2026-09-15 on a live Tempora vault: with a key, both the exit and a whole-history scan complete in
 about 15-22 s; with no key, one of them usually degrades — the exit reports `not measured`, or the
 scan reports CUT SHORT. Each says so in its own result, so the answer is smaller, never wrong. A
-keyed `TREASURY_RPC_BASE` is what makes both available in one call.
+keyed RPC for the vault's chain (`TREASURY_RPC_BASE`, `TREASURY_RPC_ARBITRUM`) is what makes both available in one call.
 
 🔴 **`measuredAs: "not measured"` means the RPC failed, NOT that the vault refused** — say so rather
 than reporting a limit the chain never stated.
@@ -203,7 +239,9 @@ calls themselves, raw — no re-encoding by you, no key near you. Give them, for
 the `to` and `data` exactly as the envelope carries them:
 
 ```bash
-export RPC=https://mainnet.base.org     # or their keyed Base RPC
+# The RPC of the chain the envelope names. chainId 8453 is Base, 42161 is Arbitrum One.
+export RPC=https://mainnet.base.org     # Base; for Arbitrum One: https://arb1.arbitrum.io/rpc — or their keyed RPC for that chain
+cast chain-id --rpc-url $RPC            # must print the envelope's chainId before anything is sent
 cast send <to> <data> --account <keystore-name> --rpc-url $RPC \
   --gas-limit $(( $(cast estimate <to> <data> --from <account> --rpc-url $RPC) * 3 / 2 )) \
   --nonce $(cast nonce <account> --block pending --rpc-url $RPC)
@@ -247,7 +285,10 @@ names `receiver` and `owner` separately, and they are both addresses — a trans
 invisible in hex is legible here. Have them read `receiver` back before signing; that is the
 destination check, done on something they can actually read.
 
-One gotcha specific to the approve call: **USDC on Base is deployed as a proxy** (`FiatTokenProxy`),
+**Use the explorer of the call's chain** — BaseScan for chainId 8453, Arbiscan for 42161. The same
+address on the other chain's explorer is a different contract, or nothing.
+
+One gotcha specific to the approve call: **USDC is deployed as a proxy on both chains** (`FiatTokenProxy`),
 so `approve` does not appear under the plain "Write Contract" tab — it only appears under **"Write
 as Proxy"**, which resolves against the implementation contract. The vault contract itself has no
 such wrinkle; `deposit`/`redeem` show up on its plain "Write Contract" tab as expected.
@@ -279,19 +320,23 @@ you do it, and here is why the key stays with you."
   calling one-shot `earn_prepare_withdraw`; nothing here runs unattended.
 - **Deposit into a vault outside `depositable`**, override a `WHITELIST_GATED` or
   `REVERTED_OTHER` verdict, or build for an Enzyme vault. Refusing is the correct output.
-- Swap, trade, bridge, or touch the allocator side of a vault. Those are other tools' jobs.
+- Swap, trade, bridge, or touch the allocator side of a vault. Those are other tools' jobs. USDC on
+  one chain cannot be deposited into a vault on another: the operator moves it first, by their own means.
+- **Pick the chain for the operator**, or deposit on a chain other than the one they chose because
+  its vault looks better. Asking is the correct output.
 
 ## Reporting
 
-State what was measured and when: the vault's `symbol`, the pre-flight `status`, `measuredAtBlock`,
+State what was measured and when: the vault's `symbol` and its `chain`, the pre-flight `status`, `measuredAtBlock`,
 and — after a transaction — the resulting shares and value. Quote `findings` verbatim when
 something stopped you. An operator who can see the block and the exact revert can act; one
 who is told "it didn't work" cannot.
 
 **Show the transactions, not just the totals.** `earn_balance`'s `scan.depositTxs` and
 `scan.withdrawTxs` carry `{ txHash, blockNumber, amountUsdc }` for the events behind the basis, and
-a transaction link is `https://basescan.org/tx/<txHash>`. ⚠️ That is a DIFFERENT path from the
-vault's `links.explorer`, which is `https://basescan.org/address/<vault>` — swap the `/address/…`
+a transaction link is `https://basescan.org/tx/<txHash>` on Base and `https://arbiscan.io/tx/<txHash>`
+on Arbitrum One. ⚠️ That is a DIFFERENT path from the
+vault's `links.explorer`, which is `https://basescan.org/address/<vault>` (or `https://arbiscan.io/address/<vault>`) — swap the `/address/…`
 segment for `/tx/<txHash>`, never append to it, or the result is a URL that resolves to nothing.
 With the link the operator can open what actually landed instead of taking your word for it. ⚠️ **Each list holds at most the
 100 most recent, while `scan.deposits`/`scan.withdrawals` stay the TOTALS** — when the two disagree

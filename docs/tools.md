@@ -8,6 +8,30 @@ Every tool that takes a vault takes it as `vault`, the vault's ERC-20 ticker (e.
 omitted. Every tool that takes an address takes it as `account` — whose shares these are.
 `earn_prepare_withdraw` also takes `receiver`, which is a different thing (where the USDC lands).
 
+## `chain` — which chain a call is for
+
+A vault is on one chain. Every tool that takes `vault` also takes `chain`: `"base"` or `"arbitrum"`
+— the chains with a vault in the registry, as `earn_vaults` lists them under `chains`.
+
+| `vault` | `chain` | resolves to |
+|---|---|---|
+| omitted | omitted | the default chain's default vault (Base) |
+| omitted | given | that chain's default vault |
+| given | omitted | that vault, on the chain it is on |
+| given | given | that vault — **refused** if it is on a different chain; the error names the chain the vault is on and the vaults on the chain that was asked for |
+
+An unknown chain name is refused, with the list of chains that have a vault. Nothing is resolved by
+guessing: the two readings of a mismatch are different contracts on different chains.
+
+Every result that names a vault carries `chain` and `chainId`. On a prepared envelope they come
+before the calls, and every call inside carries the same `chainId`: a call is correct on that chain
+only. Sent on another chain, a transaction to an address with no contract there is mined and does
+nothing.
+
+**The agent asks, the tool does not choose.** When the operator has not said which chain to deposit
+on, the skill has the agent show `earn_vaults` → `chains` and ask. Withdrawals, quotes and balances
+on an existing position need no question: the vault names the chain.
+
 Amounts are decimal strings in USDC (`"25"`, `"0.05"`). More fractional digits than USDC has (6) are
 refused, never truncated. Shares never cross the boundary as numbers — only as an exact string.
 
@@ -15,13 +39,14 @@ refused, never truncated. Shares never cross the boundary as numbers — only as
 
 ## `earn_vaults` — READ
 
-No inputs. Every vault in the registry with its chassis, decimals and **measured** deposit-open
+No inputs. Every vault in the registry, on every chain, with its chassis, decimals and **measured** deposit-open
 status (the block and method it was measured at). Each row carries the vault's public identity:
 
 - `symbol` — the vault's own ERC-20 ticker, e.g. `tlCashPlusUSDC2`, as `symbol()` reports it;
 - `name` — the vault's `name()`;
-- `address` — the contract itself;
-- `links` — `explorer` always, and `app` where the chassis has a known front end. **These need no
+- `chain` and `chainId` — the chain the vault is on, e.g. `"arbitrum"` and `42161`;
+- `address` — the contract itself, on that chain;
+- `links` — `explorer` always (the chain's own: BaseScan, Arbiscan), and `app` where the chassis has a front end whose page for this vault exists. **These need no
   RPC endpoint.** They are how an operator verifies, without this client's help, that the address
   about to be used is the vault it claims to be;
 - `warning` — what to show before preparing a deposit into this vault. Show it; do not summarise it.
@@ -30,10 +55,15 @@ status (the block and method it was measured at). Each row carries the vault's p
 
 And, once per response:
 
-- `default` — the vault used when a tool is called without `vault`;
+- `chains` — the chains a deposit can go to, the default chain first. Each entry is
+  `{ chain, chainId, name, default, defaultAccess, depositable }`: that chain's default vault, its
+  access, and the vaults on that chain any account can deposit into. This is what an agent shows an
+  operator who has not chosen a chain;
+- `defaultChain` — the chain used when a tool is called with neither `vault` nor `chain`;
+- `default` — the vault used in that case: the default chain's default;
 - `defaultAccess` — `"open"` if the default takes deposits from any account, `"whitelist"` if only
   admitted ones;
-- `depositable` — those any account can put money into today: ERC-4626 chassis and measured open.
+- `depositable` — those any account can put money into today, across all chains: ERC-4626 chassis and measured open.
   **May be empty.** An empty set is a state of the offering, not a fault.
 
 ## `earn_terms` — READ
@@ -46,12 +76,20 @@ an acknowledgement before building a first deposit.
 | input | |
 |---|---|
 | `vault` | optional ticker |
+| `chain` | optional; see [`chain`](#chain--which-chain-a-call-is-for) |
 | `account` | optional address |
 | `amount_usdc` | optional; the amount the simulated deposit uses |
 
-With **no arguments**, a health check: chain id, latest block, registry version, and *which
+With **no `account`**, a health check: chain, chain id, latest block, registry version, and *which
 environment variable* supplied the RPC — never the URL. Returns a verdict when the RPC is
-unreachable; it does not throw.
+unreachable; it does not throw. Each chain has its own RPC, so pass `chain` to check the one you are
+about to use. `rpc` is one of:
+
+| `rpc` | meaning |
+|---|---|
+| `ok` | the endpoint answered, and for a configured endpoint, answered for this chain |
+| `unreachable` | the endpoint did not answer; `reason` says why, without the URL |
+| `wrong_chain` | the configured endpoint answers for a different chain (`rpcChainId`). Every read through it would return empty data. Point the variable `reason` names at an endpoint for this chain |
 
 With `account`, the access verdict for that account from a **simulated `deposit()`**:
 
@@ -73,6 +111,7 @@ vault on another.
 | input | |
 |---|---|
 | `vault` | optional ticker |
+| `chain` | optional; see [`chain`](#chain--which-chain-a-call-is-for) |
 | `account` | required |
 | `amount_usdc` | required |
 | `direction` | required, `"deposit"` or `"withdraw"`; echoed back on the result |
@@ -90,11 +129,15 @@ verdict (`OK` or `REVERTED` with the reason in liquidity terms), the vault's `in
 | input | |
 |---|---|
 | `vault` | optional ticker |
+| `chain` | optional; see [`chain`](#chain--which-chain-a-call-is-for) |
 | `account` | required |
 | `lookback_blocks` | optional; default is from the vault's deployment block, i.e. the whole history |
 | `max_log_requests` | optional; cap on `eth_getLogs` calls per event per scan, default 100 |
 
-Returns: `sharesExact` (the string to hand back for a full withdrawal), `shares` (display),
+A position is in one vault, on that vault's chain. An account's positions on different chains are
+separate calls, and an empty result on one chain says nothing about another.
+
+Returns: `chain` and `chainId`, `sharesExact` (the string to hand back for a full withdrawal), `shares` (display),
 `usdcValue`, `sharePriceInAssets`, `entryBasisUsdc`, `accruedYieldUsdc`, and two
 objects worth reading carefully:
 
@@ -120,14 +163,18 @@ objects worth reading carefully:
 | input | |
 |---|---|
 | `vault` | optional ticker |
+| `chain` | optional; see [`chain`](#chain--which-chain-a-call-is-for) |
 | `account` | required; the depositing account, which signs both calls |
 | `amount_usdc` | required |
 | `receiver` | required; where the **shares** land — usually the account, not necessarily |
 
-Returns `{ requires_signature: true, status: "unsigned", warning, calls: [approve, deposit] }`. Each call is
-`{ to, data, function, args, value, description, gasAdvice, precondition? }`. Hand them to your signer
-**in order**; the deposit's precondition names the allowance the approve must have set. Nothing has
+Returns `{ requires_signature: true, status: "unsigned", chain, chainId, warning, next_step, signer_rules, calls: [approve, deposit] }`. Each call is
+`{ chainId, to, data, function, args, value, description, gasAdvice, precondition? }`. Hand them to your signer
+**in order**, on the chain `chainId` names; the deposit's precondition names the allowance the approve must have set. Nothing has
 happened until the signer's transactions confirm.
+
+The approve is on that chain's USDC and names that chain's vault as the spender. USDC on one chain
+cannot be deposited into a vault on another; Treasury does not bridge.
 
 `function` and `args` are the same call `data` encodes, in the form a block explorer's **Write
 Contract** tab asks for — for an operator with no CLI signer, that is often the friendliest way to
@@ -160,12 +207,13 @@ disclosure repeated where it does not apply is what teaches a reader to skip it.
 | input | |
 |---|---|
 | `vault` | optional ticker |
+| `chain` | optional; see [`chain`](#chain--which-chain-a-call-is-for). A position is withdrawn on the chain it is on: name the vault |
 | `account` | required; whose shares are burnt |
 | `receiver` | required; where the **USDC** lands — not necessarily the account |
 | `amount_usdc` | the USDC to withdraw (`withdraw(assets, receiver, owner)`) |
 | `all` + `shares_exact` | instead of an amount: empty the account by `redeem` of the exact share string from `earn_balance.sharesExact`, verbatim |
 
-Same envelope. Quote first: the simulated verdict is what tells you whether the vault can pay this
+Same envelope, without `warning`. Quote first: the simulated verdict is what tells you whether the vault can pay this
 out now, and the agent must be told before signing.
 
 ## `earn_claim` — READ

@@ -4,7 +4,7 @@
     "name": "Tempora Labs"
   },
   "metadata": {
-    "description": "Agent Treasury by Tempora Labs — treasury management plugin for AI agents. Open source, starting with yield on idle USDC: measured vault registry on Base, simulation-based pre-flight, unsigned deposit and withdraw calls for your own signer. Never holds a key."
+    "description": "Agent Treasury by Tempora Labs — treasury management plugin for AI agents. Open source, starting with yield on idle USDC: measured vault registry on Base and Arbitrum One, simulation-based pre-flight, unsigned deposit and withdraw calls for your own signer. Never holds a key."
   },
   "plugins": [
     {

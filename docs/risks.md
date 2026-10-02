@@ -31,7 +31,7 @@ third party. Review every transaction your signer is asked to sign.
 - **Fees.** A vault's curator can set a management fee and a performance fee; both are readable
   on-chain. The default sets none today (measured at block 51,372,415). Its fee timelocks are 0
   (measured at block 51,404,161), so the curator can introduce a fee without notice; read both fees
-  before depositing.
+  before depositing. The same holds for the Arbitrum One default (both measured at block 511,070,816).
 - **The default is Tempora's.** It is offered because Tempora curates it, and can set fees on it, not
   because it is the best-yielding vault available.
 
@@ -42,6 +42,10 @@ third party. Review every transaction your signer is asked to sign.
 - **A quote is a simulation at one block.** State can change between the quote and the signed
   transaction. The builders carry a gas buffer for exactly this; the `precondition` on a call says what
   must still be true when it is sent.
+- **A call is for one chain.** Every prepared call carries a `chainId`, and the envelope names the
+  chain. Send it on that chain only, with USDC that is already there: Treasury does not bridge. A
+  transaction sent on a different chain, to an address with no contract there, is mined and does
+  nothing — the deposit did not happen and the gas is spent. Check your signer's network first.
 - **Two addresses, two meanings.** `account` is whose shares; `receiver` is where the money lands.
   They are usually the same. The tool will not assume it, and neither should you — a transposed
   receiver sends USDC to the wrong place, irreversibly.
