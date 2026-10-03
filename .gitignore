@@ -4,6 +4,7 @@ node_modules
 # Only the bundled CLI is committed; tsc output is not.
 dist/*
 !dist/*.mjs
+!dist/connect-page.js
 
 .env
 

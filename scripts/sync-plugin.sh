@@ -18,7 +18,7 @@ cd "$(dirname "$0")/.."
 
 # Hardcoded on purpose: a list read from data can be shortened, and a check that silently covers
 # fewer files is the failure this exists to prevent.
-FILES=(dist/treasury.mjs registry/vaults.json LICENSE NOTICE THIRD_PARTY_NOTICES.md)
+FILES=(dist/treasury.mjs dist/connect-page.js registry/vaults.json LICENSE NOTICE THIRD_PARTY_NOTICES.md THIRD_PARTY_NOTICES.connect-page.md)
 
 version=$(node -e 'process.stdout.write(require("./package.json").version)')
 manifest=$(printf '{\n  "name": "treasury-plugin",\n  "version": "%s",\n  "private": true\n}\n' "$version")

@@ -59,11 +59,12 @@ Two rules decide most reviews. A change that breaks either is a design change, n
 
 1. **Nothing in this repository holds, reads, derives or is handed a private key. Nothing signs. A
    call reaches the chain only from the operator's own wallet, after the operator approves it
-   there.** Treasury prepares unsigned calls. A wallet connection may hand a prepared call to the
-   operator's connected wallet for approval; it never builds or alters a call, and it refuses any
-   destination outside `registry/vaults.json` (a listed vault, or its asset for the approval). A
-   private-key variable, a local signer, a tool that signs, or a relay that accepts an arbitrary
-   destination will not merge.
+   there.** Treasury prepares unsigned calls. The wallet connection (`treasury connect`) may hand a
+   call to the operator's connected wallet for approval; it builds calls only through the same
+   builders, and it refuses any destination outside `registry/vaults.json` (a listed vault, or its
+   asset for the approval) and any receiver other than the connected account. A private-key
+   variable, a local signer, a tool that signs, or a relay that accepts an arbitrary destination
+   will not merge.
 2. **The client knows only the chain.** It has a vault address and an RPC endpoint. Code may not
    depend on any fund's internal source, deploy records, operators or private services. A vault's row
    in `registry/vaults.json` is a set of measurements that

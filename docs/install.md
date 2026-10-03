@@ -97,6 +97,19 @@ exactly (`npm install --save-exact @temporalabs/treasury@0.1.1`): a `^0.1.1` ran
 release, which has no `dist/mcp-server.mjs`. Upgrading the plugin likewise removes the eight `earn_*`
 MCP tools; the `earn` skill reaches the same operations through the CLI.
 
+## Connecting a wallet (`treasury connect`)
+
+`treasury connect wallet` opens `http://localhost:53682` in the browser on the same machine: one
+Connect button, then Privy's window with email, Google, Apple, X and any browser wallet installed
+there. Signing in costs nothing. After that, `treasury connect deposit` and `treasury connect withdraw`
+open a confirm page for each transaction. See [`tools.md`](tools.md#the-connect-commands--treasury-connect-command).
+
+- It needs a browser on the machine running the agent. Over SSH, or with `TREASURY_CONNECT_NO_OPEN`
+  set, the command prints the URL instead of opening it.
+- Port 53682 must be free while a page is open; one sign-in or confirmation runs at a time.
+- Phone wallets are not offered in this release: the page lists wallets installed in the browser, and
+  an email or social login gives a wallet with no extension at all.
+
 ## As a library
 
 `@temporalabs/treasury` — the same package, `npm install @temporalabs/treasury@0.1.1` — also exports

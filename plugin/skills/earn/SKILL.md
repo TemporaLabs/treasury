@@ -216,6 +216,20 @@ than reporting a limit the chain never stated.
 
 ## Handing calls to the signer
 
+**First choice: the operator's own wallet, through `connect`.** It needs a browser on this machine.
+1. `connect status`. If disconnected, `connect wallet` opens a page; the operator clicks Connect and uses
+   a browser wallet, or an email, Google, Apple or X login (a Privy wallet). Wait for it to return.
+2. Run the earn quote as usual, then `connect deposit --amount_usdc <n> --receiver <addr>` (or
+   `connect withdraw …`), with the same `--vault`/`--chain`. The page shows each call; the operator
+   confirms it there and in the wallet. The command returns when they finish (up to 9 minutes).
+3. Report every `hash` and its `verified`. `extra_transfer` means the wallet also moved money besides
+   the call (`alsoMoved`, often its own gas fee in USDC): say so. Anything else that is not `matched`:
+   stop, check `earn balance`, tell the operator.
+
+`--receiver` must be the connected account (`connect status`), and it still comes from the operator,
+not from you: the page pays only that account. For any other receiver, or no browser here, use the
+prepare commands below with the operator's own signer.
+
 Every prepared call names a destination: `to`, and the receiver or owner in its `description`. A
 wrong destination is the one mistake nothing downstream can undo — the transaction succeeds, the
 receipt says so, and the money is somewhere nobody holds a key for. Measured, once, for real: a

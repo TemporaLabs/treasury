@@ -160,8 +160,21 @@ jobs:
             || { echo "::error::THIRD_PARTY_NOTICES.md is stale — run npm run build and commit it"; exit 1; }
           # Only the files the build WRITES into plugin/; the manifests and the skill there are edited by hand.
           # `git status`, not `git diff`: a copy the commit deleted comes back UNTRACKED, which diff ignores.
-          stale=$(git status --porcelain -- plugin/dist plugin/registry plugin/LICENSE plugin/NOTICE plugin/THIRD_PARTY_NOTICES.md plugin/package.json)
+          stale=$(git status --porcelain -- plugin/dist plugin/registry plugin/LICENSE plugin/NOTICE plugin/THIRD_PARTY_NOTICES.md plugin/THIRD_PARTY_NOTICES.connect-page.md plugin/package.json)
           [ -z "$stale" ] || { echo "$stale"; echo "::error::plugin/ copies are stale or missing — run npm run build and commit them"; exit 1; }
+      - name: the connect page is current, typechecks, and carries no WalletConnect code
+        if: steps.pk.outputs.present == 'yes'
+        run: |
+          # The page has its own dependencies (Privy, React) so that none of them enters this package's
+          # dependency set. Its build refuses any @walletconnect / @reown module and writes the notices
+          # for exactly what it inlines; both outputs are committed and must match a fresh build.
+          cd connect-page
+          npm ci --no-audit --no-fund
+          npm run typecheck
+          npm run build
+          cd ..
+          git diff --exit-code --stat -- dist/connect-page.js THIRD_PARTY_NOTICES.connect-page.md \
+            || { echo "::error::dist/connect-page.js or THIRD_PARTY_NOTICES.connect-page.md is stale — run the page build (cd connect-page && npm ci && npm run build) and commit it"; exit 1; }
       # ── Licensing (Apache-2.0). An npm tarball takes what `files` publishes, and a plugin install
       # takes plugin/, so the licence, its NOTICE and the dependency notices must travel INSIDE both.
       # ───────────────────────────────────────────────────────────────────────────────────────────
@@ -171,7 +184,7 @@ jobs:
           npm pack --dry-run --json --ignore-scripts > /tmp/pack.json
           node -e '
             const files = new Set(require("/tmp/pack.json")[0].files.map((f) => f.path));
-            const need = ["LICENSE", "NOTICE", "THIRD_PARTY_NOTICES.md", "dist/treasury.mjs"];
+            const need = ["LICENSE", "NOTICE", "THIRD_PARTY_NOTICES.md", "THIRD_PARTY_NOTICES.connect-page.md", "dist/treasury.mjs", "dist/connect-page.js"];
             const missing = need.filter((f) => !files.has(f));
             if (missing.length) { console.log("::error file=package.json::the packed artifact is missing " + missing.join(", ")); process.exit(1); }
             console.log("packed artifact carries " + need.join(", "));
@@ -191,7 +204,7 @@ jobs:
           want="git+https://github.com/TemporaLabs/treasury.git"
           [ "$got" = "$want" ] || { echo "::error file=package.json::repository.url is '$got' but the public repository is TemporaLabs/treasury — an npm publish with provenance from anywhere else will be refused"; exit 1; }
           echo "repository.url names the public repository"
-      - name: bundled CLI opens one skill and exactly the eight earn commands, with no sign/send command
+      - name: bundled CLI opens exactly its two skills, the eight earn commands and the five connect commands, with no sign/send command
         if: steps.pk.outputs.present == 'yes'
         run: |
           python3 - <<'PY'
@@ -200,7 +213,20 @@ jobs:
           # do) must be a reviewed change here, so the skill list is pinned before the earn commands are.
           top = subprocess.run(["node","dist/treasury.mjs","--help"], capture_output=True, text=True, timeout=60)
           assert top.returncode == 0, top.stderr
-          assert json.loads(top.stdout)["skills"] == ["earn"], top.stdout
+          assert json.loads(top.stdout)["skills"] == ["earn", "connect"], top.stdout
+          # The connect commands hand calls to the operator's own wallet and nothing else: their names
+          # and flags are pinned exactly, like the earn set below, and none of them signs or sends here.
+          con = subprocess.run(["node","dist/treasury.mjs","connect","--help"], capture_output=True, text=True, timeout=60)
+          assert con.returncode == 0, con.stderr
+          cprops = {c["tool"]: {f["flag"].removeprefix("--") for f in c["flags"]} for c in json.loads(con.stdout)["commands"]}
+          assert cprops == {
+              "connect_status": set(),
+              "connect_wallet": set(),
+              "connect_disconnect": set(),
+              "connect_deposit": {"vault", "chain", "amount_usdc", "receiver"},
+              "connect_withdraw": {"vault", "chain", "receiver", "amount_usdc", "all", "shares_exact"},
+          }, cprops
+          assert not any(k in n for n in cprops for k in ("sign","send","transfer")), "a signing command leaked in"
           out = subprocess.run(["node","dist/treasury.mjs","earn","--help"], capture_output=True, text=True, timeout=60)
           assert out.returncode == 0, out.stderr
           commands = json.loads(out.stdout)["commands"]

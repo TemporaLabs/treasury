@@ -1,8 +1,10 @@
 # Configuration
 
-Treasury reads the seven environment variables below and nothing else that an operator can set. A
-test pins the exact set — the seven here plus `TREASURY_FORK`, a switch only the fork test tier reads,
-never the shipped code — so a variable read anywhere else in the package fails the build.
+Treasury reads the environment variables below and nothing else that an operator can set: seven for
+the chain, and four optional ones for `treasury connect`. A test pins the exact set — these, plus
+`TREASURY_FORK` (a switch only the fork test tier reads, never the shipped code) and the four a
+browser launcher checks to see whether there is a browser to open (`DISPLAY`, `WAYLAND_DISPLAY`,
+`SSH_CONNECTION`, `SSH_TTY`) — so a variable read anywhere else in the package fails the build.
 
 **Each chain has its own variables, and a chain reads only its own.** An Arbitrum call never falls
 back to a Base endpoint: a vault's address has no contract on the other chain, so reads there fail
@@ -17,6 +19,10 @@ with "returned no data", which looks like a broken vault, not like a misconfigur
 | `TREASURY_LOGS_RPC_ARBITRUM` | the RPC `earn_balance` scans events through on Arbitrum One | uses `TREASURY_RPC_ARBITRUM` |
 | `ARBITRUM_RPC_URL` | a conventional alias, used when `TREASURY_RPC_ARBITRUM` is unset — through the plugin too | — |
 | `TREASURY_LOGS_FALLBACK` | where a scan goes when the configured RPC cannot cover the range: an `http(s)` URL for a Base endpoint, or anything that is not a URL (`off`, `disabled`, …) to forbid a fallback on every chain | the chain's own public endpoint |
+| `PRIVY_APP_ID` | the Privy app the `treasury connect` sign-in page uses. A Privy app ID is public — it ships in the page — so a fork can point at its own app | Tempora's own app |
+| `TREASURY_CONNECT_PORT` | the local port the connect page is served on. Privy accepts sign-in only from origins its dashboard lists exactly, so change it only together with that list | `53682` |
+| `TREASURY_CONNECT_HOME` | the directory holding the connect session file (an address, how it signed in, when; no credential) | `~/.config/treasury` |
+| `TREASURY_CONNECT_NO_OPEN` | set to anything to stop `treasury connect` opening a browser itself; it prints the page's URL instead | the browser opens |
 
 **Check a chain's RPC with `earn_status` and `chain`.** It reports which variable supplied the
 endpoint, and `rpc: "wrong_chain"` when that endpoint answers for a different chain — the likeliest

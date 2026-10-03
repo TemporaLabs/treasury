@@ -1,0 +1,56 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1002.8 119.3" role="img" aria-label="Tempora Labs">
+  <title>Tempora Labs</title>
+  <g fill="#76a6d5">
+    <rect x="2.5" y="2.5" width="73.8" height="21.4" rx="4"/>
+    <rect x="90.6" y="2.5" width="73.8" height="21.4" rx="4"/>
+    <rect x="178.7" y="2.5" width="23.2" height="114.3" rx="4"/>
+    <rect x="229.3" y="2.5" width="23.2" height="114.3" rx="4"/>
+    <rect x="266.8" y="2.5" width="23.2" height="114.3" rx="4"/>
+    <rect x="292.1" y="2.5" width="48.5" height="21.4" rx="4"/>
+    <rect x="317.4" y="2.5" width="23.2" height="67.8" rx="4"/>
+    <rect x="354.9" y="2.5" width="23.2" height="114.3" rx="4"/>
+    <rect x="380.2" y="2.5" width="48.5" height="21.4" rx="4"/>
+    <rect x="405.5" y="2.5" width="23.2" height="114.3" rx="4"/>
+    <rect x="443" y="2.5" width="23.2" height="67.8" rx="4"/>
+    <rect x="468.3" y="2.5" width="48.5" height="21.4" rx="4"/>
+    <rect x="531.1" y="2.5" width="23.2" height="114.3" rx="4"/>
+    <rect x="531.1" y="2.5" width="48.5" height="21.4" rx="4"/>
+    <rect x="581.7" y="2.5" width="23.2" height="114.3" rx="4"/>
+    <rect x="493.6" y="2.5" width="23.2" height="44.6" rx="4"/>
+    <rect x="27.8" y="25.7" width="23.2" height="91.1" rx="4"/>
+    <rect x="90.6" y="25.7" width="23.2" height="67.9" rx="4"/>
+    <rect x="100" y="48.9" width="39.1" height="21.4" rx="4"/>
+    <rect x="292.1" y="48.9" width="48.5" height="21.4" rx="4"/>
+    <rect x="443" y="48.9" width="48.5" height="21.4" rx="4"/>
+    <rect x="556.4" y="48.9" width="33.6" height="21.4" rx="4"/>
+    <rect x="443" y="72.2" width="23.2" height="44.6" rx="4"/>
+    <rect x="90.6" y="95.4" width="73.8" height="21.4" rx="4"/>
+    <rect x="354.9" y="95.4" width="48.5" height="21.4" rx="4"/>
+  </g>
+  <g fill="#b9a7d6">
+    <rect x="662.2" y="2.5" width="23.2" height="91.1" rx="4"/>
+    <rect x="750.3" y="2.5" width="73.8" height="21.4" rx="4"/>
+    <rect x="838.4" y="2.5" width="23.2" height="114.3" rx="4"/>
+    <rect x="863.7" y="2.5" width="48.5" height="21.4" rx="4"/>
+    <rect x="926.5" y="2.5" width="23.2" height="67.8" rx="4"/>
+    <rect x="951.8" y="2.5" width="48.5" height="21.4" rx="4"/>
+    <rect x="750.3" y="2.5" width="23.2" height="44.6" rx="4"/>
+    <rect x="800.9" y="2.5" width="23.2" height="44.6" rx="4"/>
+    <rect x="889" y="2.5" width="23.2" height="44.6" rx="4"/>
+    <rect x="750.3" y="48.9" width="73.8" height="21.4" rx="4"/>
+    <rect x="951.8" y="48.9" width="48.5" height="21.4" rx="4"/>
+    <rect x="977.1" y="48.9" width="23.2" height="67.9" rx="4"/>
+    <rect x="750.3" y="48.9" width="23.2" height="67.9" rx="4"/>
+    <rect x="800.9" y="48.9" width="23.2" height="67.9" rx="4"/>
+    <rect x="889" y="72.2" width="23.2" height="44.6" rx="4"/>
+    <rect x="662.2" y="95.4" width="73.8" height="21.4" rx="4"/>
+    <rect x="863.7" y="95.4" width="48.5" height="21.4" rx="4"/>
+    <rect x="926.5" y="95.4" width="48.5" height="21.4" rx="4"/>
+  </g>
+  <g fill="#b2b2b2">
+    <rect x="204.1" y="2.5" width="22.9" height="67.6" rx="4"/>
+    <rect x="863.8" y="48.7" width="22.9" height="21.4" rx="4"/>
+    <rect x="493.7" y="72.1" width="23" height="44.7" rx="4"/>
+  </g>
+</svg>

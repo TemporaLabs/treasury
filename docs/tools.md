@@ -243,6 +243,41 @@ consumer can code against the full contract before an asynchronous chassis is ad
 
 ---
 
+## The connect commands — `treasury connect <command>`
+
+These hand calls to the operator's own wallet instead of returning them: a browser wallet (MetaMask,
+Rabby, Coinbase Wallet), or a Privy embedded wallet opened with an email, Google, Apple or X login.
+A page opens on the operator's machine (`http://localhost:53682`); they read each call there and
+confirm it in the wallet. Nothing here signs. See [`security-model.md`](security-model.md#the-wallet-connection-treasury-connect).
+
+| command | flags | does |
+|---|---|---|
+| `connect status` | — | the connected account and how it signed in (`external` / `embedded`), or `disconnected`; reads a local file only |
+| `connect wallet` | — | opens the sign-in page: one Connect button, then Privy's window. The wallet signs a free sign-in message; waits up to 9 minutes and returns the connected account |
+| `connect deposit` | `--amount_usdc`, `--receiver`, optional `--vault`, `--chain` | builds approve + deposit for the connected account, checks them against the registry, and hands each to the wallet in turn |
+| `connect withdraw` | `--receiver`, then `--amount_usdc` or `--all --shares_exact`, optional `--vault`, `--chain` | the same for a withdrawal |
+| `connect disconnect` | — | forgets the connected account; moves nothing |
+
+`--receiver` must be the connected account: this page pays no one else. It comes from the operator's
+own message, never from the agent. To pay a different address, use `earn prepare_deposit` /
+`earn prepare_withdraw` with the operator's own signer.
+
+`connect deposit` and `connect withdraw` return one entry per transaction, each with `hash` and
+`verified`, read from the receipt:
+
+| `verified` | meaning |
+|---|---|
+| `matched` | the vault's (or token's) own event for the connected account and the exact amount is there, and nothing else left the account |
+| `extra_transfer` | as `matched`, but the account ALSO sent the asset elsewhere in the same transaction (`alsoMoved`) — often a wallet's fee for paying gas in tokens. Tell the operator |
+| `mismatch` | the transaction succeeded without the expected event. Stop |
+| `reverted` | it failed on chain; nothing it was meant to do happened |
+| `unverified` | no receipt in time; look the hash up before retrying anything |
+
+The flow stops at the first transaction that is not `matched` or `extra_transfer`, and sends nothing
+after it.
+
+---
+
 ## Failure paths, in general
 
 - A keyed RPC URL never appears in any output, on any path, including thrown errors.

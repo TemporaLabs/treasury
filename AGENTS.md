@@ -12,13 +12,15 @@ builders for **unsigned** deposit and withdraw calls, served as a library and as
 
 1. **Nothing holds, reads, derives or is handed a private key. Nothing signs. A call reaches the
    chain only from the operator's own wallet, after the operator approves it there.** The earn
-   commands prepare unsigned calls and never send. A wallet connection (WalletConnect) may hand a
-   prepared call to the operator's connected wallet, which shows it and asks for approval every
-   time. That relay never builds or alters a call, and it refuses any call whose destination is
-   not a vault in `registry/vaults.json` or that vault's asset (the approval to it). Do not add a
-   private-key variable, a local signer, a tool that signs, or a relay that accepts an arbitrary
-   destination: that is a design change, not a pull request. CI runs the bundled CLI and fails if
-   `earn --help` lists any command beyond its eight.
+   commands prepare unsigned calls and never send. The wallet connection (`treasury connect`,
+   `src/connect/`) may hand a call to the operator's connected wallet — a browser wallet, or a
+   Privy embedded wallet with its own confirmation — which shows it and asks for approval every
+   time. That relay builds calls only through `src/build.ts`, and its gate (`src/connect/gate.ts`)
+   refuses any call whose destination is not a vault in `registry/vaults.json` or that vault's asset
+   (the approval to it, for exactly the deposit's amount), and any receiver or owner other than the
+   connected account. Do not add a private-key variable, a local signer, a tool that signs, or a
+   relay that accepts an arbitrary destination: that is a design change, not a pull request. CI runs
+   the bundled CLI and fails if `earn --help` or `connect --help` lists any command beyond its pinned set.
 2. **The client knows only the chain.** It has a vault address and an RPC endpoint, nothing else.
    `tests/boundary.unit.test.ts` parses every audited file and fails on any import, `require`, child
    process or path that reaches outside this repository's allowlist. Do not weaken that test to make
