@@ -129,15 +129,13 @@ test("connect: an embedded sign-in goes to the signing service and keeps its ses
   assert.deepEqual(await h.done, { ok: true, value: { account: ME, chainId: 8453, walletType: "embedded", signerSession: "sess" } });
 });
 
-test("connect page serves two separate paths: plain /connect without the Privy bundle, /privy with it", async () => {
+test("connect page is one page: the Privy bundle at /connect, no second path", async () => {
   const h = await startConnect({ ...noOpen, port: 0, readBundle: () => "// bundle" });
   const s = secretOf(h.url);
   const connect = await (await fetch(`${originOf(h.url)}/connect?s=${s}`)).text();
-  assert.match(connect, /Continue with Google or email/);
-  assert.match(connect, /Connect a wallet/);
-  assert.doesNotMatch(connect, /app\.js/);
-  const privy = await (await fetch(`${originOf(h.url)}/privy?s=${s}`)).text();
-  assert.match(privy, /app\.js/);
+  assert.match(connect, /app\.js/);
+  assert.doesNotMatch(connect, /Continue with Google or email/);
+  assert.equal((await fetch(`${originOf(h.url)}/privy?s=${s}`)).status, 404);
   assert.equal((await fetch(`${originOf(h.url)}/app.js?s=${s}`)).status, 200);
   h.close();
 });

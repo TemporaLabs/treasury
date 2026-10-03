@@ -40130,6 +40130,12 @@ var PRIVY_CSP = [
 var STYLE = `
   :root { --bg:#fbfaf7; --ink:#1c1b18; --mute:#6b675e; --line:#dedad0; --ok:#1d6b3a; --bad:#9b2c1f; --warn:#8a5a00; --accent:#2b4c7e; --card:#fff; }
   @media (prefers-color-scheme: dark) { :root { --bg:#141412; --ink:#ebe8e0; --mute:#a39e93; --line:#33312c; --ok:#5fbf7f; --bad:#e0705f; --warn:#e0b04f; --accent:#8fb0e0; --card:#1d1c19; } }
+  .tl-ground { background:
+    radial-gradient(ellipse 48% 60% at 72% 60%, rgba(255,255,255,.9), rgba(255,255,255,0) 72%),
+    radial-gradient(ellipse 60% 75% at 0% 0%, rgba(118,166,213,.16), rgba(118,166,213,0) 70%),
+    radial-gradient(ellipse 55% 65% at 100% 100%, rgba(185,167,214,.17), rgba(185,167,214,0) 70%),
+    linear-gradient(90deg, #e9f1f9 0%, #eff1f6 50%, #efecf6 100%); }
+  @media (prefers-color-scheme: dark) { .tl-ground { background:var(--bg); } }
   html,body { margin:0; background:var(--bg); color:var(--ink); font:15px/1.5 ui-sans-serif,system-ui,-apple-system,"Segoe UI",Roboto,sans-serif; }
   main { max-width:560px; margin:0 auto; padding:48px 16px; display:flex; flex-direction:column; gap:16px; }
   h1 { font-size:20px; margin:0; }
@@ -40188,7 +40194,7 @@ var shell = (title, body, script) => `<!doctype html>
 <title>${title}</title>
 <style>${STYLE}</style>
 </head>
-<body>
+<body class="tl-ground">
 ${body}
 <script>
 (function () {
@@ -40199,62 +40205,6 @@ ${script}
 </body>
 </html>
 `;
-var CONNECT_HTML = shell(
-  "Connect \u2014 Tempora Treasury",
-  `<main>
-  <h1 id="h">Connect to Tempora Treasury</h1>
-  <p class="muted" id="lead">Choose how you sign in. Every deposit and withdrawal is shown here for you to confirm before anything is signed.</p>
-  <div class="stack" id="choices">
-    <button id="privy">Continue with Google or email<br><span class="muted" style="color:inherit;opacity:.8">Privy creates or opens an embedded wallet.</span></button>
-    <button id="wallet">Connect a wallet<br><span class="muted" style="color:inherit;opacity:.8">MetaMask, Rabby, Coinbase Wallet or any browser wallet. Privy is not used.</span></button>
-  </div>
-  <div class="stack" id="wallets" hidden></div>
-  <p id="msg" role="status"></p>
-</main>`,
-  `
-  function done(title, text) { finished = true; $("h").textContent = title; $("lead").textContent = text; $("choices").hidden = true; $("wallets").replaceChildren(); $("wallets").hidden = true; say(""); }
-  function abort(reason) {
-    finished = true;
-    post("/result", { rejected: true, reason: reason }).catch(function () {});
-    $("choices").hidden = true; $("wallets").replaceChildren();
-    say(reason + " Nothing was connected. Go back to your terminal and run connect again.", "bad");
-  }
-  async function runConnect(p) {
-    var accts = await p.request({ method: "eth_requestAccounts" });
-    var addr = accts && accts[0];
-    if (!addr) throw new Error("The wallet returned no account.");
-    await ensureBase(p);
-    var ch = await post("/challenge", { address: addr });
-    var sig = await p.request({ method: "personal_sign", params: [ch.message, addr] });
-    await post("/result", { kind: "external", address: addr, signature: sig, chainId: BASE });
-    done("Wallet connected", addr + " is connected on Base. You can close this tab and go back to your terminal.");
-  }
-  async function pick(p) {
-    if (busy || finished) return;
-    busy = true; say("Check your wallet\\u2026");
-    try { await runConnect(p); } catch (e) { busy = false; abort(msgOf(e)); }
-  }
-  function renderWallets() {
-    var box = $("wallets"); box.replaceChildren();
-    providers.forEach(function (w) {
-      var b = document.createElement("button");
-      b.textContent = "Connect " + w.name;
-      b.onclick = function () { pick(w.provider); };
-      box.append(b);
-    });
-  }
-  $("privy").onclick = function () { location.href = "/privy?s=" + encodeURIComponent(s); };
-  $("wallet").onclick = function () {
-    $("wallet").disabled = true; say("Looking for wallets\\u2026");
-    discover(renderWallets).then(function () {
-      $("wallets").hidden = false;
-      if (providers.length) say("Pick your wallet, then sign one message. It costs no gas and cannot move funds.");
-      else say("No wallet extension was found in this browser. Open this link in a browser that has MetaMask, Rabby or Coinbase Wallet.", "bad");
-      $("wallet").disabled = false;
-    });
-  };
-  `
-);
 var CONFIRM_HTML = shell(
   "Confirm \u2014 Tempora Treasury",
   `<main>
@@ -40418,8 +40368,7 @@ async function startConnect(deps = {}) {
       mode: "connect",
       ttlMs: 10 * 6e4,
       pages: {
-        "/connect": { html: CONNECT_HTML, csp: PLAIN_CSP },
-        "/privy": { html: privyShell, csp: PRIVY_CSP }
+        "/connect": { html: privyShell, csp: PRIVY_CSP }
       },
       assets: { "/app.js": { type: "text/javascript; charset=utf-8", body: bundle } },
       info: () => ({ mode: "connect", appId: privyAppId(), signerId: signerId() ?? null, policyIds: signerPolicyIds() }),

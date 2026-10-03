@@ -9,7 +9,13 @@ Rebuilt from source in this repository. The server logic now lives in `src/` and
 with `npm run build`; previously this repository carried only a bundle built elsewhere.
 
 ### Changed
-- **Two separate sign-in paths on one page.** `connect_wallet` opens a page with "Continue with Google
+- **One Connect button, one Privy modal.** (Replaces the two-button page described next, which was
+  never released.) `/connect` serves the Privy bundle; the modal offers email, Google and detected
+  browser wallets, with no WalletConnect entry. An email/Google login goes through the signing
+  service as before; a browser wallet signs the server's challenge and the signature is checked
+  locally (`via: "wallet"`). A stored Privy session is cleared on load. The `/privy` route and the
+  plain wallet page are gone. Requires the `wallet` login method enabled in the Privy dashboard.
+- *Superseded:* **Two separate sign-in paths on one page.** `connect_wallet` opens a page with "Continue with Google
   or email" (a Privy embedded wallet) and "Connect a wallet" (MetaMask, Rabby, Coinbase Wallet or any
   browser wallet, connected directly with a locally verified signature). The Privy SDK is loaded only
   on the Google/email path; the direct-wallet path never loads or calls Privy and never resumes a

@@ -14,14 +14,15 @@ Confirm, fresh, every time.
 
 ## How it works
 
-`connect_wallet` opens one browser page with two separate choices:
+`connect_wallet` opens one browser page with a single **Connect** button. It opens one Privy modal
+with email, Google and the browser wallets Privy detects (no WalletConnect, no QR):
 
-- **Continue with Google or email** — [Privy](https://privy.io) signs you in and opens (or creates)
+- **Google or email** — [Privy](https://privy.io) signs you in and opens (or creates)
   an *embedded* wallet. After a one-time delegation, a separately hosted signing service can sign
   deposits and withdrawals for it within a fixed policy.
-- **Connect a wallet** — MetaMask, Rabby, Coinbase Wallet or any browser wallet, connected directly:
-  you sign a free sign-in message, which the plugin checks locally. **Privy is not loaded or called
-  on that path**, and a stored Privy session is never resumed.
+- **A browser wallet** — MetaMask, Rabby, Coinbase Wallet or any detected extension. Privy only shows
+  the picker: you sign a free sign-in message, which the plugin checks locally. A stored Privy session
+  is cleared on load and never resumed.
 
 Then, for every deposit or withdrawal, whichever wallet is connected, a **confirmation page** opens
 showing the decoded call: action, amount, vault, receiver and chain, with warnings if the receiver or
@@ -37,7 +38,7 @@ WalletConnect is not supported and is never offered.
   `connect_status`, `connect_wallet`, `disconnect_wallet`, `switch_wallet`,
   `connect_send_transaction`); `src/flows.ts` the connect and confirm flows; `src/http.ts` the
   one-shot loopback server; `src/pages.ts` the connect and confirmation pages; `src/decode.ts` the
-  call decoder; `src/privy-page/main.tsx` the Google/email page.
+  call decoder; `src/privy-page/main.tsx` the sign-in page.
 - `dist/connect-server.mjs`, `dist/privy-page.js` — the two built files the plugin runs and serves.
   Rebuild with `npm run build`; never edit by hand.
 - `test/` — `npm test` (decoder, confirmation and connect flows). `npm run typecheck` for types.
@@ -67,7 +68,7 @@ WalletConnect is not supported and is never offered.
 
 2. Restart Claude Code (or reload plugins) so the `connect` MCP server starts. Claude Code asks once
    whether the plugin may start a Node process for it; it is always `node …/dist/connect-server.mjs`.
-3. Ask the agent to **connect my wallet**. A browser tab opens with the two choices above.
+3. Ask the agent to **connect my wallet**. A browser tab opens with the Connect button.
 4. The agent reports your address. When it later needs a signature, a confirmation tab opens for
    that one call.
 

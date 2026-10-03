@@ -17,16 +17,18 @@ vault, receiver, chain — and nothing is signed until the operator clicks Confi
 operator asks this skill to decide an amount or a destination, say plainly that this skill only
 moves what Earn already built — Earn's `earn_prepare_*` tools are where that gets decided.
 
-## Two sign-in choices
+## One sign-in button, two kinds of wallet
 
-`connect_wallet` opens one browser page with two separate buttons. Both connect a wallet the
-operator **already has and controls**; you never ask which one up front, the operator picks on the page.
+`connect_wallet` opens one browser page with a single **Connect** button. It opens one Privy modal
+with email, Google and the browser wallets Privy detects. Both kinds connect a wallet the operator
+**already has and controls**; you never ask which one up front, the operator picks in the modal.
 
-- **Connect a wallet** — MetaMask, Rabby, Coinbase Wallet or any browser wallet. The operator picks
-  the wallet and signs a free sign-in message (no gas, cannot move funds), which the server checks
-  locally. **Privy is not involved at all**, now or later: `connect_status` reports `via: "wallet"`,
-  `walletType: "external"`. Needs a browser on the same machine as the agent with the wallet extension.
-- **Continue with Google or email** — Privy signs the operator in and opens (or creates) its
+- **A browser wallet** (MetaMask, Rabby, Coinbase Wallet or any detected extension). Privy only shows
+  the picker. The operator signs a free sign-in message (no gas, cannot move funds), which the server
+  checks locally; Privy's own login is not trusted for who controls the address. `connect_status`
+  reports `via: "wallet"`, `walletType: "external"`. Needs a browser on the same machine as the agent
+  with the wallet extension.
+- **Google or email** — Privy signs the operator in and opens (or creates) its
   *embedded* wallet. After one delegation the signing service can sign calls for it within its fixed
   policy. `connect_status` reports `via: "privy"`, `walletType: "embedded"`, `delegated: true`.
 
@@ -79,7 +81,7 @@ and offer **Connect a wallet** instead; do not retry the same sign-in in a loop.
 | tool | use it to |
 |---|---|
 | `connect_status` | check the current state and how it was made (`via`): `disconnected`, `awaiting_approval` (a sign-in is in flight), `connected`, or `rejected` (read once, then clears) |
-| `connect_wallet` | sign in. Opens the two-choice page and **waits up to `wait_seconds` (default 90)**, returning `connected` directly |
+| `connect_wallet` | sign in. Opens the one-button sign-in page and **waits up to `wait_seconds` (default 90)**, returning `connected` directly |
 | `disconnect_wallet` | end the current session and clear the local record; reports `disconnected: false` if nothing was connected |
 | `switch_wallet` | disconnect whatever is connected, then open a new sign-in page — also how to move between a directly connected wallet and a Google/email wallet |
 | `connect_send_transaction` | Hand ONE call (`to`, `data`, optional `value`) from Earn's prepared envelope to the confirmation page, then returns `{status: "submitted", hash, verified}` or `{status: "rejected", reason}` |
@@ -88,8 +90,8 @@ and offer **Connect a wallet** instead; do not retry the same sign-in in a loop.
 
 1. **Call `connect_status` first.** Never assume a wallet is or isn't connected from prior
    conversation — session state can change between turns, and this is the one source of truth.
-2. **If `disconnected`, call `connect_wallet`.** Tell the operator a tab is opening with two
-   choices and that they pick one there. The call waits and returns `connected` with the `account`
+2. **If `disconnected`, call `connect_wallet`.** Tell the operator a tab is opening with a Connect
+   button and that they pick email, Google or a wallet in the modal. The call waits and returns `connected` with the `account`
    — no polling. If it comes back `awaiting_approval` with `opened: true`, the wait ran out: tell
    them the tab is still open and call `connect_status` once they say they are done. If
    `opened: false`, no browser could be opened on this machine (SSH, no display): give them the

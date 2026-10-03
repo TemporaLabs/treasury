@@ -10,7 +10,7 @@ claim that the flows are production-ready.
 |---|---|
 | `connect-plugin/` | The `treasury-connect` MCP server (v0.7.0, unreleased). Source in `src/`, bundle in `dist/`, built with `npm run build`. Tools: `connect_status`, `connect_wallet`, `disconnect_wallet`, `switch_wallet`, `connect_send_transaction`. |
 | `connect-plugin/skills/connect/SKILL.md` | The skill that tells an agent how to use those tools. |
-| `connect-plugin/src/privy-page/` | The browser page (React, bundled to `dist/privy-page.js`) that holds both sign-in buttons. |
+| `connect-plugin/src/privy-page/` | The browser page (React, bundled to `dist/privy-page.js`) that holds the single Connect button and the Privy modal. |
 | `signer-page/` | A separate local page that hands prepared Earn calls to a browser wallet. Its own README explains it. The core package does not import it; `tests/no-signing.test.ts` enforces that. |
 
 Both directories were copied from working trees that were not committed anywhere. The previous
@@ -22,14 +22,15 @@ homes were `treasury-connect-plugin` (branch `connect/browser-signin`) and
 ## How sign-in works
 
 `connect_wallet` opens one local browser page (fixed port 53682, `TREASURY_CONNECT_PORT` to change)
-with two separate buttons. The operator picks one.
+with one **Connect** button that opens a single Privy modal (email, Google, detected browser
+wallets; no WalletConnect). The operator picks in the modal. Superseded the two-button page.
 
 ### Connect a wallet (direct)
 
 - MetaMask, Rabby, Coinbase Wallet or any browser wallet. The operator signs a free sign-in message;
   the server verifies the signature locally.
-- Privy is not loaded and not called on this path, now or later. `connect_status` reports
-  `via: "wallet"`, `walletType: "external"`.
+- Privy only shows the picker; the server checks the wallet's signature locally and does not trust
+  Privy's login for the address. `connect_status` reports `via: "wallet"`, `walletType: "external"`.
 - Needs a browser with the extension on the same machine as the agent.
 
 ### Continue with Google or email (Privy embedded wallet)

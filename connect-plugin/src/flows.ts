@@ -6,7 +6,7 @@ import { describeCall } from "./decode.ts";
 import type { Call } from "./decode.ts";
 import { serveOnce } from "./http.ts";
 import type { Handle, ServeDeps } from "./http.ts";
-import { CONFIRM_HTML, CONNECT_HTML, PLAIN_CSP, PRIVY_CSP, privyShell } from "./pages.ts";
+import { CONFIRM_HTML, PLAIN_CSP, PRIVY_CSP, privyShell } from "./pages.ts";
 import { createSignerSession, sendViaSigner } from "./signer-client.ts";
 import type { SendResult } from "./signer-client.ts";
 
@@ -69,9 +69,9 @@ export function signInMessage(a: { address: string; origin: string; nonce: strin
   ].join("\n");
 }
 
-// One connect page, two separate paths. The page at /connect offers "Google or email" (loads the
-// Privy bundle at /privy) and "Connect a wallet" (plain injected-wallet code with a local signature
-// check, no Privy SDK on that page at all).
+// One connect page. /connect serves the Privy bundle: one "Connect" button, one modal with email,
+// Google and browser wallets. An embedded wallet goes through the signing service; a browser wallet
+// signs the server's challenge and the signature is checked locally.
 export async function startConnect(deps: ConnectDeps = {}): Promise<Handle<Connected>> {
   const verify = deps.verifySignature ?? defaultVerifySignature;
   const createSession = deps.createSession ?? createSignerSession;
@@ -81,8 +81,7 @@ export async function startConnect(deps: ConnectDeps = {}): Promise<Handle<Conne
       mode: "connect",
       ttlMs: 10 * 60_000,
       pages: {
-        "/connect": { html: CONNECT_HTML, csp: PLAIN_CSP },
-        "/privy": { html: privyShell, csp: PRIVY_CSP },
+        "/connect": { html: privyShell, csp: PRIVY_CSP },
       },
       assets: { "/app.js": { type: "text/javascript; charset=utf-8", body: bundle } },
       info: () => ({ mode: "connect", appId: privyAppId(), signerId: signerId() ?? null, policyIds: signerPolicyIds() }),
