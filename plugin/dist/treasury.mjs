@@ -39358,7 +39358,7 @@ var DISCLOSURES = {
 // src/earn/commands.ts
 var addressArg = external_exports.string().refine((s) => isAddress(s), "must be an EVM address").transform((s) => getAddress(s));
 var amountArg = external_exports.string().regex(/^\d+(\.\d+)?$/, 'plain decimal USDC amount, e.g. "25" or "12.5"');
-var vaultArg = external_exports.string().optional().describe("the vault's ERC-20 ticker, e.g. tlCashPlusUSDC2 (earn_vaults lists them); omit for the default vault of `chain`, or of the default chain when `chain` is omitted too");
+var vaultArg = external_exports.string().optional().describe("the vault's ERC-20 ticker, e.g. tlCashPlusUSDC2 (`earn vaults` lists them); omit for the default vault of `chain`, or of the default chain when `chain` is omitted too");
 var accountArg = addressArg.describe("the account whose shares these are \u2014 the depositor, the owner, the holder");
 var chainArg = () => {
   let offered;
@@ -39468,7 +39468,7 @@ function buildCommands() {
     "earn_vaults",
     {
       title: "List vaults",
-      description: "Every vault in the registry, on every chain. `symbol` is the vault's own on-chain ERC-20 ticker \u2014 the value every other tool takes as `vault` \u2014 and `name` its `name()`; `chain` is the chain it is on, the value every other tool takes as `chain`; `links` are openable without any RPC endpoint, so an operator can verify the contract independently. SHOW `warning` TO THE DEPOSITOR \u2014 every vault offered today is a test vault. Each row also carries its backend, chassis, decimals and MEASURED deposit-open status. `chains` lists the chains a deposit can go to, the default chain first, each with its own default vault: if the operator has not said which chain, show them these and ASK before preparing a deposit. `default` is used when a tool is called with neither `vault` nor `chain`, and is on `defaultChain`; `depositable` is the subset any account can put money into today, across all chains: ERC-4626 chassis + measured open. `defaultAccess` says whether a default takes deposits from any account (`open`) or only whitelisted ones (`whitelist`); for `whitelist`, run earn_status for the account before preparing a deposit.",
+      description: "Every vault in the registry, on every chain. `symbol` is the vault's own on-chain ERC-20 ticker \u2014 the value every other tool takes as `vault` \u2014 and `name` its `name()`; `chain` is the chain it is on, the value every other tool takes as `chain`; `links` are openable without any RPC endpoint, so an operator can verify the contract independently. SHOW `warning` TO THE DEPOSITOR \u2014 every vault offered today is a test vault. Each row also carries its backend, chassis, decimals and MEASURED deposit-open status. `chains` lists the chains a deposit can go to, the default chain first, each with its own default vault: if the operator has not said which chain, show them these and ASK before preparing a deposit. `default` is used when a tool is called with neither `vault` nor `chain`, and is on `defaultChain`; `depositable` is the subset any account can put money into today, across all chains: ERC-4626 chassis + measured open. `defaultAccess` says whether a default takes deposits from any account (`open`) or only whitelisted ones (`whitelist`); for `whitelist`, run `earn status` for the account before preparing a deposit.",
       inputSchema: {}
     },
     guarded(async () => {
@@ -39587,7 +39587,7 @@ function buildCommands() {
     "earn_quote",
     {
       title: "Quote a deposit or a withdrawal",
-      description: "Pre-trade quote, in USDC. direction=deposit: expected shares (previewDeposit), share price, and the access verdict from a simulated deposit(). This client quotes no rate: an ERC-4626 vault exposes none, and it calls no yield API. direction=withdraw: shares burned (previewWithdraw), shares held, a simulated withdraw() verdict, `instantLiquidity` \u2014 the vault's own liquid balance of the asset, which is chassis-specific in BOTH directions: a Fusion vault without instant-withdrawal fuses pays only from it, so there it is the ceiling maxWithdraw() does not know; a Morpho V2 vault holds almost none and still pays out of its markets, so there it is near zero and NOT a ceiling \u2014 the simulated verdict is what decides \u2014 maxWithdraw advisory only (Morpho V2 returns 0 by design), and queue depth. Run before the matching earn_prepare_* tool.",
+      description: "Pre-trade quote, in USDC. direction=deposit: expected shares (previewDeposit), share price, and the access verdict from a simulated deposit(). This client quotes no rate: an ERC-4626 vault exposes none, and it calls no yield API. direction=withdraw: shares burned (previewWithdraw), shares held, a simulated withdraw() verdict, `instantLiquidity` \u2014 the vault's own liquid balance of the asset, which is chassis-specific in BOTH directions: a Fusion vault without instant-withdrawal fuses pays only from it, so there it is the ceiling maxWithdraw() does not know; a Morpho V2 vault holds almost none and still pays out of its markets, so there it is near zero and NOT a ceiling \u2014 the simulated verdict is what decides \u2014 maxWithdraw advisory only (Morpho V2 returns 0 by design), and queue depth. Run before the matching `earn prepare_*` command.",
       inputSchema: {
         vault: vaultArg,
         chain,
@@ -39634,7 +39634,7 @@ function buildCommands() {
     "earn_prepare_withdraw",
     {
       title: "Prepare an unsigned withdrawal",
-      description: "Returns the UNSIGNED call for a withdrawal in USDC terms \u2014 withdraw(assets, receiver, owner) \u2014 inside an envelope with requires_signature: true, which names the `chain` the call is for: a position is withdrawn on the chain it is on, so name the vault (or its chain) and never ask the operator to choose one. To empty the account pass --all (a switch: it takes no value) with shares_exact copied verbatim from earn_balance.sharesExact (redeem of the exact balance; never a rounded number). NOTHING IS SUBMITTED and no funds have moved until a signer confirms. Each call also carries `function` and `args` \u2014 the same call `data` encodes, decoded, e.g. `approve(address spender, uint256 value)` with `{ spender, value }` \u2014 so an operator without a CLI signer can fill a block explorer's Write Contract form directly. `args` values are RAW contract units, which is what the form takes; `description` is the human sentence.",
+      description: "Returns the UNSIGNED call for a withdrawal in USDC terms \u2014 withdraw(assets, receiver, owner) \u2014 inside an envelope with requires_signature: true, which names the `chain` the call is for: a position is withdrawn on the chain it is on, so name the vault (or its chain) and never ask the operator to choose one. To empty the account pass --all (a switch: it takes no value) with shares_exact copied verbatim from sharesExact from `earn balance` (redeem of the exact balance; never a rounded number). NOTHING IS SUBMITTED and no funds have moved until a signer confirms. Each call also carries `function` and `args` \u2014 the same call `data` encodes, decoded, e.g. `approve(address spender, uint256 value)` with `{ spender, value }` \u2014 so an operator without a CLI signer can fill a block explorer's Write Contract form directly. `args` values are RAW contract units, which is what the form takes; `description` is the human sentence.",
       inputSchema: {
         vault: vaultArg,
         chain,
@@ -39648,7 +39648,7 @@ function buildCommands() {
     guarded(async ({ vault: symbol2, chain: chain2, receiver, account, amount_usdc, all, shares_exact }) => {
       const vault = supportedVault(symbol2, chain2);
       if (all) {
-        if (!shares_exact) throw new Error("--all requires --shares_exact (copy earn_balance.sharesExact verbatim)");
+        if (!shares_exact) throw new Error("--all requires --shares_exact (copy sharesExact from `earn balance` verbatim)");
         return unsigned(buildWithdraw(vault, { receiver, owner: account, all: true, sharesExact: shares_exact }), vault, "withdraw");
       }
       if (!amount_usdc) throw new Error("provide --amount_usdc, or --all with --shares_exact");
@@ -39659,7 +39659,7 @@ function buildCommands() {
     "earn_balance",
     {
       title: "Earn position",
-      description: "A position in ONE vault, on that vault's chain (`chain` in the result) \u2014 an account's positions on different chains are separate calls. Shares held (exact string + display), current USDC value, WHAT CAN ACTUALLY BE WITHDRAWN NOW (`exit`, measured by simulating the withdrawal \u2014 `usdcValue` is what the position is worth, `exit.exitableNow` is what the vault can pay, `exit.instantLiquidity` is the vault's own liquid balance of the asset, chassis-specific in both directions \u2014 a Fusion vault without instant-withdrawal fuses pays only from it, so there it is the ceiling and `usdcValue` can exceed `exitableNow` by 10x while `maxWithdraw()` \u2014 `exit.maxWithdrawSays` \u2014 reports the larger one; a Morpho V2 vault holds almost none and still pays out of its markets, so there a near-zero `instantLiquidity` is not a ceiling and `exitableNow` is the verdict), entry basis and accrued yield derived from the vault's own Deposit/Withdraw events for this account, and share price. `scan.complete` says whether the event window covered the whole position; `sharesExact` is what earn_prepare_withdraw({ all }) needs. `scan.depositTxs` and `scan.withdrawTxs` carry the transactions behind those events \u2014 `{ txHash, blockNumber, amountUsdc }`, oldest first \u2014 so an operator can be shown an explorer link without anyone rebuilding the log query; each list holds at most the 100 most recent, while `scan.deposits`/`scan.withdrawals` stay the totals.",
+      description: "A position in ONE vault, on that vault's chain (`chain` in the result) \u2014 an account's positions on different chains are separate calls. Shares held (exact string + display), current USDC value, WHAT CAN ACTUALLY BE WITHDRAWN NOW (`exit`, measured by simulating the withdrawal \u2014 `usdcValue` is what the position is worth, `exit.exitableNow` is what the vault can pay, `exit.instantLiquidity` is the vault's own liquid balance of the asset, chassis-specific in both directions \u2014 a Fusion vault without instant-withdrawal fuses pays only from it, so there it is the ceiling and `usdcValue` can exceed `exitableNow` by 10x while `maxWithdraw()` \u2014 `exit.maxWithdrawSays` \u2014 reports the larger one; a Morpho V2 vault holds almost none and still pays out of its markets, so there a near-zero `instantLiquidity` is not a ceiling and `exitableNow` is the verdict), entry basis and accrued yield derived from the vault's own Deposit/Withdraw events for this account, and share price. `scan.complete` says whether the event window covered the whole position; `sharesExact` is what `earn prepare_withdraw --all` needs. `scan.depositTxs` and `scan.withdrawTxs` carry the transactions behind those events \u2014 `{ txHash, blockNumber, amountUsdc }`, oldest first \u2014 so an operator can be shown an explorer link without anyone rebuilding the log query; each list holds at most the 100 most recent, while `scan.deposits`/`scan.withdrawals` stay the totals.",
       inputSchema: {
         vault: vaultArg,
         chain,
@@ -39721,7 +39721,7 @@ function kindOf(schema) {
 var isOptional = (schema) => schema.safeParse(void 0).success;
 var SCHEMA_KEYS = ["description", "enum", "pattern", "minimum", "maximum", "exclusiveMinimum", "exclusiveMaximum"];
 function describe3(skill, name, c) {
-  const props = external_exports.toJSONSchema(c.inputSchema, { io: "input" }).properties ?? {};
+  const props = external_exports.toJSONSchema(c.inputSchema, { io: "input", unrepresentable: "any" }).properties ?? {};
   return {
     command: `${skill} ${name.slice(skill.length + 1)}`,
     tool: name,
@@ -39760,7 +39760,8 @@ function parseFlags(c, argv) {
   } catch (e) {
     const why = (e instanceof Error ? e.message : String(e)).replace(/\.+$/, "");
     const hint = switches.length ? ` ${switches.map((n) => `--${n}`).join(", ")} ${switches.length === 1 ? "is a switch" : "are switches"}: give it for true, leave it out for false.` : "";
-    throw new UsageError(`${why}. Flags for this command: ${Object.keys(shape).map((f) => `--${f}`).join(", ") || "none"}.${hint}`);
+    const help = argv.includes("--help") || argv.includes("-h") ? " For help, put --help right after the command." : "";
+    throw new UsageError(`${why}. Flags for this command: ${Object.keys(shape).map((f) => `--${f}`).join(", ") || "none"}.${hint}${help}`);
   }
   const seen = /* @__PURE__ */ new Set();
   for (const t of parsed.tokens ?? []) {
@@ -39809,7 +39810,7 @@ async function run(argv) {
     return { stdout: JSON.stringify({ usage: `treasury ${skill} <command> [--flag value \u2026]`, version: PACKAGE_VERSION, commands: mine.map(([n, c]) => describe3(skill, n, c)) }, null, 2), code: 0 };
   }
   const name = `${skill}_${second.replaceAll("-", "_")}`;
-  const command = Object.hasOwn(commands, name) && name.startsWith(`${skill}_`) ? commands[name] : void 0;
+  const command = Object.hasOwn(commands, name) ? commands[name] : void 0;
   if (!command) {
     return fail(`unknown command ${JSON.stringify(`${skill} ${second}`)}; commands: ${mine.map(([n]) => n.slice(skill.length + 1)).join(", ")}`);
   }

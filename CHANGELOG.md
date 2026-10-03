@@ -15,9 +15,13 @@ Pre-1.0, minor versions may change tool names, schemas and behaviour.
   commands.
 - The bundle is `dist/treasury.mjs` and the npm bin is `treasury`. The plugin declares no server: its
   skill runs `node "${CLAUDE_PLUGIN_ROOT}/dist/treasury.mjs" earn …` through the shell, so no server
-  has to connect at session start (`/reload-plugins` loads the skill), and the CLI reads the whole
-  environment it was started in — `BASE_RPC_URL` and `ARBITRUM_RPC_URL` now reach it through the
-  plugin too.
+  has to connect at session start (`/reload-plugins` loads the skill). The CLI reads every variable in
+  `docs/configuration.md` from the environment it was started in, on every path; nothing filters
+  them on the way in.
+- **Upgrading the plugin removes the eight `earn_*` MCP tools.** An agent reaches the same eight
+  operations through the `earn` skill, which runs the CLI; anything that called a tool by its MCP
+  name must move to the command line. The skill pre-approves its own command for the turn it is used
+  in, so a first run after upgrading may still show a one-time permission prompt for that command.
 - Every command that cannot run as asked exits 1 with `{ "error": … }` on stderr: an unknown flag, a
   flag given twice (either spelling), a switch given a value (`--all` takes none), a vault on another
   chain. A verdict such as `WHITELIST_GATED` is still a result and exits 0.

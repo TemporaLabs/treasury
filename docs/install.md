@@ -92,7 +92,10 @@ plain Markdown and can be given to any agent as instructions; it tells the agent
 commands and what to refuse.
 
 Releases up to 0.1.1 shipped an MCP server (`dist/mcp-server.mjs`, the `treasury-mcp` bin) instead of
-this CLI; see the [changelog](../CHANGELOG.md).
+this CLI; see the [changelog](../CHANGELOG.md). A host that still runs that server must pin 0.1.1
+exactly (`npm install --save-exact @temporalabs/treasury@0.1.1`): a `^0.1.1` range resolves to a later
+release, which has no `dist/mcp-server.mjs`. Upgrading the plugin likewise removes the eight `earn_*`
+MCP tools; the `earn` skill reaches the same operations through the CLI.
 
 ## As a library
 

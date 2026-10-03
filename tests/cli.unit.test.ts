@@ -128,6 +128,12 @@ describe("refusals are errors with exit 1, never results", () => {
     expect(error(r)).not.toMatch(/\.\./);
   });
 
+  it("`--help` after the flags is refused, and the error says where help goes", async () => {
+    const r = await run(["earn", "quote", "--direction", "deposit", "--help"]);
+    expect(r.code).toBe(1);
+    expect(error(r)).toMatch(/put --help right after the command/);
+  });
+
   it("`--help` in a flag's value position is a missing value, not a request for help", async () => {
     const r = await run(["earn", "prepare_deposit", "--account", ACCOUNT, "--amount_usdc", "1", "--receiver", "--help"]);
     expect(r.code).toBe(1);

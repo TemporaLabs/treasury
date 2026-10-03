@@ -17,12 +17,17 @@ calls**. Run each one with the shell, exactly like this (nothing stays running b
 node "${CLAUDE_PLUGIN_ROOT}/dist/treasury.mjs" earn <command> --flag value …
 ```
 
+Run exactly that, one plain command per shell call — no `cd`, no variables, no `&&` or `;` chains. That
+form is pre-approved; anything wrapped around it asks the operator for permission instead. When unsure of
+a command's flags, run `earn <command> --help` first: the CLI shows only what you ask it for.
+
 Below, each command is named by its tool name: `earn_quote` is `earn quote`, and its arguments are its
 flags (`--direction deposit --account 0x… --amount_usdc 25`). `earn --help` lists every command and
 flag; a switch such as `--all` takes no value. A command prints one JSON document on stdout. When it
-cannot run as asked (an unknown or repeated flag, a vault on another chain, an unreachable RPC) it exits
-non-zero with `{ "error": … }` on stderr — report it, never read it as a result. A verdict such as
-`WHITELIST_GATED` is a result: it exits 0, and its fields say what was found. Every prepared call comes back inside
+cannot run as asked (an unknown or repeated flag, a vault on another chain, a quote or balance whose
+RPC cannot be reached) it exits non-zero with `{ "error": … }` on stderr — report it, never read it as a
+result. A verdict is a result and exits 0, with its fields saying what was found: `WHITELIST_GATED`,
+or `earn_status` reporting `rpc: "unreachable"` or a pre-flight `UNRESOLVED`. Every prepared call comes back inside
 `{ requires_signature: true, status: "unsigned", calls }` — that envelope is the command telling you
 nothing has been submitted and no money has moved. It cannot sign or send, and neither can you through it — the operator's own signer
 (a wallet, a policy-engine signer, a token-bound account) does that. That boundary is the
@@ -70,7 +75,7 @@ range; until then `scan` says exactly how much was covered.
 | `earn_terms` | show the operator the required disclosures before a first deposit |
 | `earn_status` | **with no `account`**: is the CLI healthy and the chain's RPC reachable (chain, latest block, which RPC variable resolved); pass `chain` to check the chain you are about to use. **With `account`**: the access verdict alone. `mode` tells you which you got |
 | `earn_quote` | with `direction: "deposit"` — expected shares, share price, and the verdict from a **simulated** deposit. No rate is quoted — the vault exposes none and this client calls no yield API. With `direction: "withdraw"` — shares that would burn, a simulated `withdraw` verdict, the vault's `instantLiquidity`, queue depth. `direction` is required and is echoed back on the result |
-| `earn_prepare_deposit` | get the unsigned `approve` + `deposit` calls, enveloped |
+| `earn_prepare_deposit` | get the unsigned `approve` + `deposit` calls, enveloped; `--receiver` (required) is where the shares land |
 | `earn_prepare_withdraw` | get the unsigned `withdraw` call in USDC terms — or `--all` with `--shares_exact` to empty the account |
 | `earn_balance` | shares (exact), USDC value, entry basis and accrued yield from the vault's own events; `lookback_blocks` / `max_log_requests` set the scan window (see Setup) |
 | `earn_claim` | finalize a queued withdrawal; today no vault queues, and it says so |
@@ -84,9 +89,11 @@ both when they disagree is refused, and the error says which chain the vault is 
 names a vault carries `chain` and `chainId`.
 
 The address argument is **`account`** on every tool that takes one — whose shares these are.
-`earn_prepare_withdraw` also takes **`receiver`**, and it is a different thing: `account` owns
-the shares that burn, `receiver` is where the USDC lands. They are usually the same address and
-the tool will not assume it. Confirm the payee with the operator before you build.
+**Both prepare commands also require `--receiver`**, and it is a different thing: on
+`earn_prepare_deposit` it is where the new **shares** land, on `earn_prepare_withdraw` where the
+**USDC** lands. They are usually the same address as `account`, and the command will not assume it —
+**neither may you.** The receiver comes from the operator's own message, through the destination check
+below, before you build either call; never fill it in from `account` on your own.
 
 ## Choosing the chain
 

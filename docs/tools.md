@@ -9,7 +9,8 @@ transfers, and CI asserts the command list exactly — a ninth command, or a `si
 
 Every tool that takes a vault takes it as `vault`, the vault's ERC-20 ticker (e.g. `tlCashPlusUSDC2`), and uses the default when it is
 omitted. Every tool that takes an address takes it as `account` — whose shares these are.
-`earn_prepare_withdraw` also takes `receiver`, which is a different thing (where the USDC lands).
+Both prepare commands also take `receiver`, which is a different thing: where the shares land on a
+deposit, where the USDC lands on a withdrawal.
 
 ## `chain` — which chain a call is for
 
@@ -88,7 +89,8 @@ an acknowledgement before building a first deposit.
 With **no `account`**, a health check: chain, chain id, latest block, registry version, and *which
 environment variable* supplied the RPC — never the URL. Returns a verdict when the RPC is
 unreachable; it does not throw. Each chain has its own RPC, so pass `chain` to check the one you are
-about to use. `rpc` is one of:
+about to use. Its `server: "treasury"` field keeps the name it had when this ran as a server, so the
+result stays the same JSON; it names the program, not a running process. `rpc` is one of:
 
 | `rpc` | meaning |
 |---|---|

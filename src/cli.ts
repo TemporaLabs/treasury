@@ -56,7 +56,8 @@ const SCHEMA_KEYS = ["description", "enum", "pattern", "minimum", "maximum", "ex
 function describe(skill: string, name: string, c: Command) {
   // The JSON Schema carries what the zod objects hide behind wrappers: a description set before
   // `.optional()`, an enum, a pattern, a range. Read in INPUT mode, so a transform describes what it accepts.
-  const props = ((z.toJSONSchema(c.inputSchema, { io: "input" }) as { properties?: Record<string, Record<string, unknown>> }).properties ?? {});
+  // `unrepresentable: "any"`: a type JSON Schema cannot express must not take `--help` down with it.
+  const props = ((z.toJSONSchema(c.inputSchema, { io: "input", unrepresentable: "any" }) as { properties?: Record<string, Record<string, unknown>> }).properties ?? {});
   return {
     command: `${skill} ${name.slice(skill.length + 1)}`,
     tool: name,
@@ -97,7 +98,8 @@ function parseFlags(c: Command, argv: string[]): Record<string, unknown> {
   } catch (e) {
     const why = (e instanceof Error ? e.message : String(e)).replace(/\.+$/, "");
     const hint = switches.length ? ` ${switches.map((n) => `--${n}`).join(", ")} ${switches.length === 1 ? "is a switch" : "are switches"}: give it for true, leave it out for false.` : "";
-    throw new UsageError(`${why}. Flags for this command: ${Object.keys(shape).map((f) => `--${f}`).join(", ") || "none"}.${hint}`);
+    const help = argv.includes("--help") || argv.includes("-h") ? " For help, put --help right after the command." : "";
+    throw new UsageError(`${why}. Flags for this command: ${Object.keys(shape).map((f) => `--${f}`).join(", ") || "none"}.${hint}${help}`);
   }
   // 🔴 Repeats are read from the TOKENS, not from `values`. `parseArgs` keeps only the LAST value of a
   // repeated option and keys `values` by spelling, so `--receiver A --receiver B` would otherwise
@@ -155,7 +157,7 @@ export async function run(argv: string[]): Promise<{ stdout?: string; stderr?: s
   }
   const name = `${skill}_${second.replaceAll("-", "_")}`;
   // Own keys only: `commands` is a plain object, so `earn constructor` must not reach anything inherited.
-  const command = Object.hasOwn(commands, name) && name.startsWith(`${skill}_`) ? commands[name] : undefined;
+  const command = Object.hasOwn(commands, name) ? commands[name] : undefined;
   if (!command) {
     return fail(`unknown command ${JSON.stringify(`${skill} ${second}`)}; commands: ${mine.map(([n]) => n.slice(skill.length + 1)).join(", ")}`);
   }
