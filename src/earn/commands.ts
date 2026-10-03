@@ -1,12 +1,12 @@
 /**
- * Agent Treasury — MCP server (earn skill).
+ * Agent Treasury — the earn commands (earn skill), run headless by `src/cli.ts` as `treasury earn <command>`.
  *
- * Read tools, quotes, and UNSIGNED call builders only. There is no `sign` and no `send` tool, and
+ * Read commands, quotes, and UNSIGNED call builders only. There is no `sign` and no `send` command, and
  * there will not be one here: the skill supplies intent, the consumer supplies the signer. Anything
- * that holds a key lives outside this process and receives the calls this server emits.
+ * that holds a key lives outside this process and receives the calls these commands emit.
  *
- * Eight tools, all `earn_`-prefixed so later skills can sit beside them
- * in one namespace:
+ * Eight commands. Each is keyed by its tool name, `earn_`-prefixed so later skills can sit beside it
+ * in one namespace; on the command line `earn_quote` is `treasury earn quote`:
  *
  *   earn_vaults    earn_terms     earn_quote (direction)   earn_status (no args = health)
  *   earn_balance   earn_claim     earn_prepare_deposit     earn_prepare_withdraw
@@ -27,10 +27,6 @@
  *    refused (`resolveVault`), never settled by picking one. Every response that names a vault says
  *    which chain it is on, because a prepared call is only correct on that chain.
  */
-import { realpathSync } from "node:fs";
-import { fileURLToPath } from "node:url";
-import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
-import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { z } from "zod";
 import { redactEndpoints, registerSecretSource } from "../redact.js";
 import { isAddress, getAddress } from "viem";
@@ -50,23 +46,23 @@ const addressArg = z
   .refine((s) => isAddress(s), "must be an EVM address")
   .transform((s) => getAddress(s));
 const amountArg = z.string().regex(/^\d+(\.\d+)?$/, 'plain decimal USDC amount, e.g. "25" or "12.5"');
-const vaultArg = z.string().optional().describe("the vault's ERC-20 ticker, e.g. tlCashPlusUSDC2 (earn_vaults lists them); omit for the default vault of `chain`, or of the default chain when `chain` is omitted too");
+const vaultArg = z.string().optional().describe("the vault's ERC-20 ticker, e.g. tlCashPlusUSDC2 (`earn vaults` lists them); omit for the default vault of `chain`, or of the default chain when `chain` is omitted too");
 const accountArg = addressArg.describe("the account whose shares these are — the depositor, the owner, the holder");
 
 /**
  * `chain`, as every vault-taking tool accepts it: one of the chains that have a vault in the
- * registry, so a caller cannot name a chain there is nothing to do on. Built per server because the
- * list comes from the registry.
+ * registry, so a caller cannot name a chain there is nothing to do on. Built per `buildCommands()`
+ * call because the list comes from the registry.
  *
  * The schema is a plain string rather than an enum, for three reasons: the set of chains comes from
  * the registry, which can be swapped after this schema is built; `vault` and `chain` are settled
  * together in ONE place (`resolveVault`), so there is one refusal path to test; and that refusal
  * says what to do next — which chain the vault is on, and which vaults the named chain has.
  *
- * 🔴 It must not throw. This runs while the server is being BUILT, and it reads the registry: a
- * registry that does not parse would stop the server from starting at all, and a host shows that as
- * a closed connection with no reason. Falling back to every supported chain lets the server start,
- * and each tool then reports the registry's own violation by name, as it did before `chain` existed.
+ * 🔴 It must not throw. This runs while the commands are being BUILT, and it reads the registry: a
+ * registry that does not parse would stop every command from running at all, `--help` included.
+ * Falling back to every supported chain lets the CLI start, and each command then reports the
+ * registry's own violation by name, as it did before `chain` existed.
  */
 const chainArg = () => {
   let offered: string[];
@@ -163,10 +159,10 @@ const text = (v: unknown, chainId: SupportedChainId = defaultChainId()) => {
           : JSON.stringify({ ...(v as Record<string, unknown>), setup_required: hint }, null, 2);
     }
   }
-  return { content: [{ type: "text" as const, text: body }] };
+  return body;
 };
 
-/** An unsigned build never leaves this server as a bare array. See contract 1 in the file header. */
+/** An unsigned build never leaves these commands as a bare array. See contract 1 in the file header. */
 /**
  * 🔴 THE ONE PLACE THE VAULT'S WARNING IS ATTACHED TO A RESPONSE. Every response that can be the
  * last thing an agent reads before a signer sees calldata goes through here.
@@ -179,7 +175,7 @@ const text = (v: unknown, chainId: SupportedChainId = defaultChainId()) => {
  * left the whole suite green.
  *
  * A test per call site would only have guarded the sites someone remembered to write a test for,
- * which is the same defect one level up. So: attach it HERE, and `server.unit.test.ts` asserts this
+ * which is the same defect one level up. So: attach it HERE, and `commands.unit.test.ts` asserts this
  * is the only place in the file that writes a `warning` field. A fourth money-committing tool then
  * gets the disclosure by going through this helper, and a hand-rolled one is caught by that test
  * rather than by someone noticing.
@@ -211,7 +207,7 @@ const unsigned = (calls: UnsignedCall[], vault: VaultEntry, kind: "deposit" | "w
  * measured on a real Base round trip, not a precaution (2026-09-13, two runs through these tools).
  * The first exists because the registry spans chains: a call's `to` is an address, and an address
  * with no contract on the chain it is sent on accepts the transaction and does nothing.
- * The server cannot enforce any of them — it never signs — so it states them with every build.
+ * These commands cannot enforce any of them — they never sign — so they state them with every build.
  */
 export const SIGNER_RULES = [
   "Send each call on the chain its `chainId` names, and on no other: check the signer's network before signing. Sent on a different chain, a call can be mined there without doing anything — the approve or the deposit never happened, and gas was still spent.",
@@ -223,9 +219,9 @@ export const SIGNER_RULES = [
 ] as const;
 
 /**
- * Every handler runs inside this. The MCP SDK forwards a thrown error's `.message` to the caller
- * verbatim, and viem's messages carry the transport URL — a keyed provider URL is a secret.
- * Anything that escapes a handler is re-thrown with endpoints masked.
+ * Every handler runs inside this. The CLI prints a thrown error's `.message` to the caller verbatim,
+ * and viem's messages carry the transport URL — a keyed provider URL is a secret. Anything that
+ * escapes a handler is re-thrown with endpoints masked.
  */
 const guarded =
   <A extends unknown[], R>(fn: (...a: A) => Promise<R>) =>
@@ -241,21 +237,36 @@ const guarded =
     }
   };
 
-export function buildServer(): McpServer {
+/** One command: what `--help` prints, the arguments it takes, and the handler that answers with JSON text. */
+export interface Command {
+  title: string;
+  description: string;
+  inputSchema: z.ZodObject<z.ZodRawShape>;
+  handler: (args: never) => Promise<string>;
+}
+
+export function buildCommands(): Record<string, Command> {
   // 🔴 Value-based redaction, registered before any handler can run. `redactEndpoints` masks the
   // resolved RPC URL and its credential-bearing parts wherever they appear — including inside a
   // provider's own error body, which is prose in JSON and which no shape rule matches
   // (review, reproduced against a real viem client and a real 401).
   registerSecretSource(resolvedRpcSecrets);
-  const server = new McpServer({ name: "treasury", version: PACKAGE_VERSION });
+  const commands: Record<string, Command> = {};
+  const register = <S extends z.ZodRawShape>(
+    name: string,
+    meta: { title: string; description: string; inputSchema: S },
+    handler: (args: z.infer<z.ZodObject<S>>) => Promise<string>,
+  ): void => {
+    commands[name] = { ...meta, inputSchema: z.object(meta.inputSchema), handler: handler as Command["handler"] };
+  };
   const chain = chainArg();
 
-  server.registerTool(
+  register(
     "earn_vaults",
     {
       title: "List vaults",
       description:
-        "Every vault in the registry, on every chain. `symbol` is the vault's own on-chain ERC-20 ticker — the value every other tool takes as `vault` — and `name` its `name()`; `chain` is the chain it is on, the value every other tool takes as `chain`; `links` are openable without any RPC endpoint, so an operator can verify the contract independently. SHOW `warning` TO THE DEPOSITOR — every vault offered today is a test vault. Each row also carries its backend, chassis, decimals and MEASURED deposit-open status. `chains` lists the chains a deposit can go to, the default chain first, each with its own default vault: if the operator has not said which chain, show them these and ASK before preparing a deposit. `default` is used when a tool is called with neither `vault` nor `chain`, and is on `defaultChain`; `depositable` is the subset any account can put money into today, across all chains: ERC-4626 chassis + measured open. `defaultAccess` says whether a default takes deposits from any account (`open`) or only whitelisted ones (`whitelist`); for `whitelist`, run earn_status for the account before preparing a deposit.",
+        "Every vault in the registry, on every chain. `symbol` is the vault's own on-chain ERC-20 ticker — the value every other tool takes as `vault` — and `name` its `name()`; `chain` is the chain it is on, the value every other tool takes as `chain`; `links` are openable without any RPC endpoint, so an operator can verify the contract independently. SHOW `warning` TO THE DEPOSITOR — every vault offered today is a test vault. Each row also carries its backend, chassis, decimals and MEASURED deposit-open status. `chains` lists the chains a deposit can go to, the default chain first, each with its own default vault: if the operator has not said which chain, show them these and ASK before preparing a deposit. `default` is used when a tool is called with neither `vault` nor `chain`, and is on `defaultChain`; `depositable` is the subset any account can put money into today, across all chains: ERC-4626 chassis + measured open. `defaultAccess` says whether a default takes deposits from any account (`open`) or only whitelisted ones (`whitelist`); for `whitelist`, run `earn status` for the account before preparing a deposit.",
       inputSchema: {},
     },
     guarded(async () => {
@@ -297,7 +308,7 @@ export function buildServer(): McpServer {
     }),
   );
 
-  server.registerTool(
+  register(
     "earn_terms",
     {
       title: "Pre-deposit disclosures",
@@ -307,12 +318,12 @@ export function buildServer(): McpServer {
     guarded(async () => text(DISCLOSURES)),
   );
 
-  server.registerTool(
+  register(
     "earn_status",
     {
-      title: "Server health, or a deposit pre-flight verdict",
+      title: "Health check, or a deposit pre-flight verdict",
       description:
-        "With NO `account`: is the server up and the chain's RPC reachable — chain, chain id, latest block, registry version, and which env var supplied the RPC (never the URL). Each chain has its own RPC, so pass `chain` to check the one you are about to use; `rpc` is `ok`, `unreachable`, or `wrong_chain` when the configured endpoint answers for a different chain. `chainVerified: false` beside `ok` means the endpoint answered but did not say which chain it is. When a separate logs RPC is set, `logsRpc` reports it the same way. With `account`: simulates deposit() from that address and reports OPEN_READY, NEEDS_APPROVAL, WHITELIST_GATED, REVERTED_OTHER, REFUSED_BY_CLIENT or UNRESOLVED, never trusting maxDeposit(). The `mode` field says which answer you got.",
+        "With NO `account`: is the CLI working and the chain's RPC reachable — chain, chain id, latest block, registry version, and which env var supplied the RPC (never the URL). Each chain has its own RPC, so pass `chain` to check the one you are about to use; `rpc` is `ok`, `unreachable`, or `wrong_chain` when the configured endpoint answers for a different chain. `chainVerified: false` beside `ok` means the endpoint answered but did not say which chain it is. When a separate logs RPC is set, `logsRpc` reports it the same way. With `account`: simulates deposit() from that address and reports OPEN_READY, NEEDS_APPROVAL, WHITELIST_GATED, REVERTED_OTHER, REFUSED_BY_CLIENT or UNRESOLVED, never trusting maxDeposit(). The `mode` field says which answer you got.",
       inputSchema: { vault: vaultArg, chain, account: accountArg.optional(), amount_usdc: amountArg.optional() },
     },
     guarded(async ({ vault: symbol, chain, account, amount_usdc }) => {
@@ -331,7 +342,7 @@ export function buildServer(): McpServer {
       // forgiving to an exploring agent: `earn_status` stays answerable in every state, including
       // a malformed call. This is NOT rejected on the must-never-throw rule below — that rule governs
       // a RUNTIME failure on the health path (a dead RPC must yield a verdict, not an exception),
-      // whereas a partial-args call is an INPUT problem settled by MCP's own invalid-params layer
+      // whereas a partial-args call is an INPUT problem settled by the CLI's schema check (`src/cli.ts`)
       // before the handler body runs. The two are different layers, and conflating them would license
       // "never validate inputs on a path that must not throw", which is not the rule.
       //
@@ -401,12 +412,12 @@ export function buildServer(): McpServer {
     }),
   );
 
-  server.registerTool(
+  register(
     "earn_quote",
     {
       title: "Quote a deposit or a withdrawal",
       description:
-        "Pre-trade quote, in USDC. direction=deposit: expected shares (previewDeposit), share price, and the access verdict from a simulated deposit(). This client quotes no rate: an ERC-4626 vault exposes none, and it calls no yield API. direction=withdraw: shares burned (previewWithdraw), shares held, a simulated withdraw() verdict, `instantLiquidity` — the vault's own liquid balance of the asset, which is chassis-specific in BOTH directions: a Fusion vault without instant-withdrawal fuses pays only from it, so there it is the ceiling maxWithdraw() does not know; a Morpho V2 vault holds almost none and still pays out of its markets, so there it is near zero and NOT a ceiling — the simulated verdict is what decides — maxWithdraw advisory only (Morpho V2 returns 0 by design), and queue depth. Run before the matching earn_prepare_* tool.",
+        "Pre-trade quote, in USDC. direction=deposit: expected shares (previewDeposit), share price, and the access verdict from a simulated deposit(). This client quotes no rate: an ERC-4626 vault exposes none, and it calls no yield API. direction=withdraw: shares burned (previewWithdraw), shares held, a simulated withdraw() verdict, `instantLiquidity` — the vault's own liquid balance of the asset, which is chassis-specific in BOTH directions: a Fusion vault without instant-withdrawal fuses pays only from it, so there it is the ceiling maxWithdraw() does not know; a Morpho V2 vault holds almost none and still pays out of its markets, so there it is near zero and NOT a ceiling — the simulated verdict is what decides — maxWithdraw advisory only (Morpho V2 returns 0 by design), and queue depth. Run before the matching `earn prepare_*` command.",
       inputSchema: {
         vault: vaultArg,
         chain,
@@ -440,7 +451,7 @@ export function buildServer(): McpServer {
     }),
   );
 
-  server.registerTool(
+  register(
     "earn_prepare_deposit",
     {
       title: "Prepare an unsigned deposit",
@@ -460,12 +471,12 @@ export function buildServer(): McpServer {
     }),
   );
 
-  server.registerTool(
+  register(
     "earn_prepare_withdraw",
     {
       title: "Prepare an unsigned withdrawal",
       description:
-        "Returns the UNSIGNED call for a withdrawal in USDC terms — withdraw(assets, receiver, owner) — inside an envelope with requires_signature: true, which names the `chain` the call is for: a position is withdrawn on the chain it is on, so name the vault (or its chain) and never ask the operator to choose one. To empty the account pass all=true with shares_exact copied verbatim from earn_balance.sharesExact (redeem of the exact balance; never a rounded number). NOTHING IS SUBMITTED and no funds have moved until a signer confirms. Each call also carries `function` and `args` — the same call `data` encodes, decoded, e.g. `approve(address spender, uint256 value)` with `{ spender, value }` — so an operator without a CLI signer can fill a block explorer's Write Contract form directly. `args` values are RAW contract units, which is what the form takes; `description` is the human sentence.",
+        "Returns the UNSIGNED call for a withdrawal in USDC terms — withdraw(assets, receiver, owner) — inside an envelope with requires_signature: true, which names the `chain` the call is for: a position is withdrawn on the chain it is on, so name the vault (or its chain) and never ask the operator to choose one. To empty the account pass --all (a switch: it takes no value) with shares_exact copied verbatim from sharesExact from `earn balance` (redeem of the exact balance; never a rounded number). NOTHING IS SUBMITTED and no funds have moved until a signer confirms. Each call also carries `function` and `args` — the same call `data` encodes, decoded, e.g. `approve(address spender, uint256 value)` with `{ spender, value }` — so an operator without a CLI signer can fill a block explorer's Write Contract form directly. `args` values are RAW contract units, which is what the form takes; `description` is the human sentence.",
       inputSchema: {
         vault: vaultArg,
         chain,
@@ -481,20 +492,20 @@ export function buildServer(): McpServer {
       // ⚠️ `receiver` and `account` are DIFFERENT slots and both are addresses, so a transposition
       // here type-checks. `account` is the owner whose shares burn; `receiver` is the payee.
       if (all) {
-        if (!shares_exact) throw new Error("all=true requires shares_exact (copy earn_balance.sharesExact verbatim)");
+        if (!shares_exact) throw new Error("--all requires --shares_exact (copy sharesExact from `earn balance` verbatim)");
         return unsigned(buildWithdraw(vault, { receiver, owner: account, all: true, sharesExact: shares_exact }), vault, "withdraw");
       }
-      if (!amount_usdc) throw new Error("provide amount_usdc, or all=true with shares_exact");
+      if (!amount_usdc) throw new Error("provide --amount_usdc, or --all with --shares_exact");
       return unsigned(buildWithdraw(vault, { receiver, owner: account, assetsHuman: amount_usdc }), vault, "withdraw");
     }),
   );
 
-  server.registerTool(
+  register(
     "earn_balance",
     {
       title: "Earn position",
       description:
-        "A position in ONE vault, on that vault's chain (`chain` in the result) — an account's positions on different chains are separate calls. Shares held (exact string + display), current USDC value, WHAT CAN ACTUALLY BE WITHDRAWN NOW (`exit`, measured by simulating the withdrawal — `usdcValue` is what the position is worth, `exit.exitableNow` is what the vault can pay, `exit.instantLiquidity` is the vault's own liquid balance of the asset, chassis-specific in both directions — a Fusion vault without instant-withdrawal fuses pays only from it, so there it is the ceiling and `usdcValue` can exceed `exitableNow` by 10x while `maxWithdraw()` — `exit.maxWithdrawSays` — reports the larger one; a Morpho V2 vault holds almost none and still pays out of its markets, so there a near-zero `instantLiquidity` is not a ceiling and `exitableNow` is the verdict), entry basis and accrued yield derived from the vault's own Deposit/Withdraw events for this account, and share price. `scan.complete` says whether the event window covered the whole position; `sharesExact` is what earn_prepare_withdraw({ all }) needs. `scan.depositTxs` and `scan.withdrawTxs` carry the transactions behind those events — `{ txHash, blockNumber, amountUsdc }`, oldest first — so an operator can be shown an explorer link without anyone rebuilding the log query; each list holds at most the 100 most recent, while `scan.deposits`/`scan.withdrawals` stay the totals.",
+        "A position in ONE vault, on that vault's chain (`chain` in the result) — an account's positions on different chains are separate calls. Shares held (exact string + display), current USDC value, WHAT CAN ACTUALLY BE WITHDRAWN NOW (`exit`, measured by simulating the withdrawal — `usdcValue` is what the position is worth, `exit.exitableNow` is what the vault can pay, `exit.instantLiquidity` is the vault's own liquid balance of the asset, chassis-specific in both directions — a Fusion vault without instant-withdrawal fuses pays only from it, so there it is the ceiling and `usdcValue` can exceed `exitableNow` by 10x while `maxWithdraw()` — `exit.maxWithdrawSays` — reports the larger one; a Morpho V2 vault holds almost none and still pays out of its markets, so there a near-zero `instantLiquidity` is not a ceiling and `exitableNow` is the verdict), entry basis and accrued yield derived from the vault's own Deposit/Withdraw events for this account, and share price. `scan.complete` says whether the event window covered the whole position; `sharesExact` is what `earn prepare_withdraw --all` needs. `scan.depositTxs` and `scan.withdrawTxs` carry the transactions behind those events — `{ txHash, blockNumber, amountUsdc }`, oldest first — so an operator can be shown an explorer link without anyone rebuilding the log query; each list holds at most the 100 most recent, while `scan.deposits`/`scan.withdrawals` stay the totals.",
       inputSchema: {
         vault: vaultArg,
         chain,
@@ -510,7 +521,7 @@ export function buildServer(): McpServer {
       // `logsFallbackUrlFromEnv` returns undefined when the operator opted out or when the fallback
       // would be the primary itself — the wiring is a one-liner precisely so it can be unit-tested
       // (measured in review: mutating this line to `undefined` left every position-layer test green;
-      // `server.unit.test.ts` is what fails now).
+      // `commands.unit.test.ts` is what fails now).
       const fallbackUrl = logsFallbackUrlFromEnv(vault.chainId, logsUrl);
       const fallbackClient = fallbackUrl === undefined ? undefined : makePublicClient(vault.chainId, fallbackUrl);
       // Every endpoint this read can go through: the logs RPC, and the fallback when the operator
@@ -532,7 +543,7 @@ export function buildServer(): McpServer {
     }),
   );
 
-  server.registerTool(
+  register(
     "earn_claim",
     {
       title: "Claim a queued withdrawal",
@@ -548,39 +559,5 @@ export function buildServer(): McpServer {
       })),
   );
 
-  return server;
-}
-
-async function main(): Promise<void> {
-  const server = buildServer();
-  await server.connect(new StdioServerTransport());
-}
-
-/**
- * True only when THIS module is the file Node was asked to run. The comparison is by resolved path,
- * not by name: an earlier guard tested `process.argv[1]` against `/server\.(ts|mjs|js)$/`, which is
- * the basename of whatever was invoked — so the published bin (`treasury-mcp`, a symlink npm makes)
- * never matched and exited silently (#22), while any unrelated script named `*server.mjs` that merely
- * imported this module matched and seized stdio. Node resolves the main module's symlink before
- * evaluating it, so `import.meta.url` is already the real path and the two sides agree for a bin.
- * Anything unresolvable is treated as "not the entry point": the module loads and does nothing.
- */
-function isEntryPoint(): boolean {
-  const invoked = process.argv[1];
-  if (!invoked) return false;
-  try {
-    return realpathSync(invoked) === realpathSync(fileURLToPath(import.meta.url));
-  } catch {
-    return false;
-  }
-}
-
-if (isEntryPoint()) {
-  main().catch((e) => {
-    // Defence-in-depth: HARDENED, NOT TESTED. main() only builds the server and connects a stdio
-    // transport — every RPC URL is resolved inside a handler body, so nothing reachable here can
-    // carry one. This guard exists so that stays true if main() ever grows.
-    process.stderr.write(`treasury mcp: ${redactEndpoints(String(e))}\n`);
-    process.exit(1);
-  });
+  return commands;
 }

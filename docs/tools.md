@@ -1,12 +1,16 @@
-# The tools
+# The commands
 
-Eight tools, all prefixed `earn_`. Two kinds: **READ** tools query the chain and return facts;
-**PREPARE** tools return unsigned calls for your signer. Nothing signs, sends or transfers, and CI
-asserts the tool list exactly — a ninth tool, or a `sign`, fails the build.
+Eight commands, each named here by its tool name, `earn_`-prefixed: `earn_quote` runs as
+`treasury earn quote`, and its arguments are its flags (`--direction deposit --account 0x…
+--amount_usdc 25`). Each prints one JSON document; a refusal exits 1 with `{ "error": … }` on stderr.
+`treasury earn --help` lists every command and flag. Two kinds: **READ** commands query the chain and
+return facts; **PREPARE** commands return unsigned calls for your signer. Nothing signs, sends or
+transfers, and CI asserts the command list exactly — a ninth command, or a `sign`, fails the build.
 
 Every tool that takes a vault takes it as `vault`, the vault's ERC-20 ticker (e.g. `tlCashPlusUSDC2`), and uses the default when it is
 omitted. Every tool that takes an address takes it as `account` — whose shares these are.
-`earn_prepare_withdraw` also takes `receiver`, which is a different thing (where the USDC lands).
+Both prepare commands also take `receiver`, which is a different thing: where the shares land on a
+deposit, where the USDC lands on a withdrawal.
 
 ## `chain` — which chain a call is for
 
@@ -85,7 +89,8 @@ an acknowledgement before building a first deposit.
 With **no `account`**, a health check: chain, chain id, latest block, registry version, and *which
 environment variable* supplied the RPC — never the URL. Returns a verdict when the RPC is
 unreachable; it does not throw. Each chain has its own RPC, so pass `chain` to check the one you are
-about to use. `rpc` is one of:
+about to use. Its `server: "treasury"` field keeps the name it had when this ran as a server, so the
+result stays the same JSON; it names the program, not a running process. `rpc` is one of:
 
 | `rpc` | meaning |
 |---|---|

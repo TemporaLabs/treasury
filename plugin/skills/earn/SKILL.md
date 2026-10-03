@@ -1,6 +1,7 @@
 ---
 name: earn
 description: Put approved idle USDC to work in supported Tempora-curated vaults on Base or Arbitrum. Inspect vault terms, quote deposits and withdrawals, check position value and currently withdrawable amounts, and prepare unsigned transactions for the operator's own signer. Use for earning yield on idle USDC or managing these vault positions, including withdrawal requests. Not for generating business revenue, paid tasks, swaps, trading, or operating a vault allocator.
+allowed-tools: Bash(node "${CLAUDE_PLUGIN_ROOT}/dist/treasury.mjs" *)
 ---
 
 # Earn — put idle USDC to work in a Tempora vault
@@ -9,25 +10,39 @@ You are the depositor. A Tempora fund is an ERC-4626 vault on Base or on Arbitru
 shares, the shares' USDC value moves with what the vault earns or loses, you redeem when you need
 cash. What amount is surplus is the operator's decision, not yours — a balance in the wallet is
 not permission to deposit it. The
-`treasury` MCP server gives you eight `earn_*` tools that read the vault and **prepare unsigned
-calls**. Every prepared call comes back inside `{ requires_signature: true, status: "unsigned", calls }`
-— that envelope is the tool telling you nothing has been submitted and no money has moved. It cannot sign or send, and neither can you through it — the operator's own signer
+bundled `treasury` CLI gives you eight `earn` commands that read the vault and **prepare unsigned
+calls**. Run each one with the shell, exactly like this (nothing stays running between commands):
+
+```bash
+node "${CLAUDE_PLUGIN_ROOT}/dist/treasury.mjs" earn <command> --flag value …
+```
+
+Run exactly that, one plain command per shell call — no `cd`, no variables, no `&&` or `;` chains. That
+form is pre-approved; anything wrapped around it asks the operator for permission instead. When unsure of
+a command's flags, run `earn <command> --help` first: the CLI shows only what you ask it for.
+
+Below, each command is named by its tool name: `earn_quote` is `earn quote`, and its arguments are its
+flags (`--direction deposit --account 0x… --amount_usdc 25`). `earn --help` lists every command and
+flag; a switch such as `--all` takes no value. A command prints one JSON document on stdout. When it
+cannot run as asked (an unknown or repeated flag, a vault on another chain, a quote or balance whose
+RPC cannot be reached) it exits non-zero with `{ "error": … }` on stderr — report it, never read it as a
+result. A verdict is a result and exits 0, with its fields saying what was found: `WHITELIST_GATED`,
+or `earn_status` reporting `rpc: "unreachable"` or a pre-flight `UNRESOLVED`. Every prepared call comes back inside
+`{ requires_signature: true, status: "unsigned", calls }` — that envelope is the command telling you
+nothing has been submitted and no money has moved. It cannot sign or send, and neither can you through it — the operator's own signer
 (a wallet, a policy-engine signer, a token-bound account) does that. That boundary is the
 whole design: a skill that supplies judgement must never hold the gate that supplies money.
 
 ## Setup
 
-**Each chain has its own RPC.** The server reads Base through `TREASURY_RPC_BASE` and Arbitrum One
+**Each chain has its own RPC.** The CLI reads Base through `TREASURY_RPC_BASE` and Arbitrum One
 through `TREASURY_RPC_ARBITRUM` (and `TREASURY_LOGS_RPC_BASE` / `TREASURY_LOGS_RPC_ARBITRUM` for the
-event scans `earn_balance` does), passed through from the host environment. A chain never reads
+event scans `earn_balance` does), from the shell's environment. A chain never reads
 another chain's variable. Unset, a chain falls back to its public endpoint (`mainnet.base.org`,
 `arb1.arbitrum.io`), which rate-limits after a handful of calls — an `RPC Request failed …
 over rate limit` error from any tool means set a keyed RPC URL for that chain, not that the vault
-is down. Run standalone (outside the plugin), the server also accepts `BASE_RPC_URL` and
-`ARBITRUM_RPC_URL` as fallbacks. The plugin forwards only the `TREASURY_*` RPC variables, but the
-server it spawns inherits its parent's environment, so `TREASURY_LOGS_FALLBACK` (below) reaches it
-on the plugin path too. A keyed URL is a secret: tool output never repeats it — errors are reported
-without the endpoint.
+is down. The CLI also accepts `BASE_RPC_URL` and `ARBITRUM_RPC_URL` as fallbacks. A keyed URL is a
+secret: command output never repeats it — errors are reported without the endpoint.
 
 `earn_status` with `chain` checks that chain's RPC. 🔴 **`rpc: "wrong_chain"` means the variable for
 that chain holds an endpoint for a different one** — say so and stop. The same refusal comes back
@@ -58,10 +73,10 @@ range; until then `scan` says exactly how much was covered.
 |---|---|
 | `earn_vaults` | see every vault and the chain it is on, `chains` — where a deposit can go, each with its own default vault — the `default`, and `depositable` — the ones you can put money into today |
 | `earn_terms` | show the operator the required disclosures before a first deposit |
-| `earn_status` | **with no `account`**: is the server up and the chain's RPC reachable (chain, latest block, which RPC variable resolved); pass `chain` to check the chain you are about to use. **With `account`**: the access verdict alone. `mode` tells you which you got |
+| `earn_status` | **with no `account`**: is the CLI healthy and the chain's RPC reachable (chain, latest block, which RPC variable resolved); pass `chain` to check the chain you are about to use. **With `account`**: the access verdict alone. `mode` tells you which you got |
 | `earn_quote` | with `direction: "deposit"` — expected shares, share price, and the verdict from a **simulated** deposit. No rate is quoted — the vault exposes none and this client calls no yield API. With `direction: "withdraw"` — shares that would burn, a simulated `withdraw` verdict, the vault's `instantLiquidity`, queue depth. `direction` is required and is echoed back on the result |
-| `earn_prepare_deposit` | get the unsigned `approve` + `deposit` calls, enveloped |
-| `earn_prepare_withdraw` | get the unsigned `withdraw` call in USDC terms — or `all=true` with `shares_exact` to empty the account |
+| `earn_prepare_deposit` | get the unsigned `approve` + `deposit` calls, enveloped; `--receiver` (required) is where the shares land |
+| `earn_prepare_withdraw` | get the unsigned `withdraw` call in USDC terms — or `--all` with `--shares_exact` to empty the account |
 | `earn_balance` | shares (exact), USDC value, entry basis and accrued yield from the vault's own events; `lookback_blocks` / `max_log_requests` set the scan window (see Setup) |
 | `earn_claim` | finalize a queued withdrawal; today no vault queues, and it says so |
 
@@ -74,9 +89,11 @@ both when they disagree is refused, and the error says which chain the vault is 
 names a vault carries `chain` and `chainId`.
 
 The address argument is **`account`** on every tool that takes one — whose shares these are.
-`earn_prepare_withdraw` also takes **`receiver`**, and it is a different thing: `account` owns
-the shares that burn, `receiver` is where the USDC lands. They are usually the same address and
-the tool will not assume it. Confirm the payee with the operator before you build.
+**Both prepare commands also require `--receiver`**, and it is a different thing: on
+`earn_prepare_deposit` it is where the new **shares** land, on `earn_prepare_withdraw` where the
+**USDC** lands. They are usually the same address as `account`, and the command will not assume it —
+**neither may you.** The receiver comes from the operator's own message, through the destination check
+below, before you build either call; never fill it in from `account` on your own.
 
 ## Choosing the chain
 
@@ -184,8 +201,8 @@ than reporting a limit the chain never stated.
   so quote value as a value, not a promise.
 - **Withdraw in USDC.** `earn_quote` with `direction: "withdraw"`, then `earn_prepare_withdraw` with
   `amount_usdc` and the `account` whose shares burn; the vault burns
-  whatever shares that costs at inclusion. To empty the account, pass `all=true` and
-  `shares_exact` copied **verbatim** from `earn_balance.sharesExact` — never a number you rounded
+  whatever shares that costs at inclusion. To empty the account, pass `--all` and
+  `--shares_exact` copied **verbatim** from `earn_balance.sharesExact` — never a number you rounded
   or computed: an 18-decimal balance exceeds 2⁵³, floats round it (sometimes up), and redeeming
   more than is owned reverts.
 - **A withdrawal can be refused for liquidity, not balance.** Some vaults (Fusion) pay a withdrawal
@@ -299,7 +316,7 @@ so `approve` does not appear under the plain "Write Contract" tab — it only ap
 as Proxy"**, which resolves against the implementation contract. The vault contract itself has no
 such wrinkle; `deposit`/`redeem` show up on its plain "Write Contract" tab as expected.
 
-**You never run these commands, and holding a shell is not a reason to.** A key reachable from
+**You never run these `cast send` commands, and holding a shell is not a reason to.** A key reachable from
 your shell is a key in this conversation. The operator runs the send in a shell of theirs; you get
 back the transaction hash.
 

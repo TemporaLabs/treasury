@@ -1,7 +1,7 @@
 node_modules
 *.tsbuildinfo
 
-# Only the bundled MCP server is committed; tsc output is not.
+# Only the bundled CLI is committed; tsc output is not.
 dist/*
 !dist/*.mjs
 

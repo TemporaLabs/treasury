@@ -77,7 +77,7 @@ signing beyond the commit itself. Details are in
 
 ## Third-party notices
 
-The MCP server bundle inlines its dependencies, so it must carry their licence notices.
+The CLI bundle inlines its dependencies, so it must carry their licence notices.
 `THIRD_PARTY_NOTICES.md` reproduces the full licence of every package the bundle
 actually inlines, at the exact version inlined. It is generated from the bundle by
 `scripts/third-party-notices.ts` during `npm run build`, and both a unit test and CI fail if it is

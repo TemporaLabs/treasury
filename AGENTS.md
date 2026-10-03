@@ -5,19 +5,20 @@ Instructions for coding agents working in this repository. People should start w
 disagree.
 
 Treasury is a depositor client for ERC-4626 vaults on Base and Arbitrum One: a vault registry, pre-flight checks, and
-builders for **unsigned** deposit and withdraw calls, served as a library and as an MCP server.
+builders for **unsigned** deposit and withdraw calls, served as a library and as a command-line program
+(`treasury earn <command>`, one JSON document per run).
 
 ## Two rules that decide every review
 
 1. **Nothing holds, reads, derives or is handed a private key. Nothing signs. A call reaches the
    chain only from the operator's own wallet, after the operator approves it there.** The earn
-   server prepares unsigned calls and never sends. A wallet connection (WalletConnect) may hand a
+   commands prepare unsigned calls and never send. A wallet connection (WalletConnect) may hand a
    prepared call to the operator's connected wallet, which shows it and asks for approval every
    time. That relay never builds or alters a call, and it refuses any call whose destination is
    not a vault in `registry/vaults.json` or that vault's asset (the approval to it). Do not add a
    private-key variable, a local signer, a tool that signs, or a relay that accepts an arbitrary
-   destination: that is a design change, not a pull request. CI starts the bundled earn server and
-   fails if `tools/list` offers any tool beyond its eight.
+   destination: that is a design change, not a pull request. CI runs the bundled CLI and fails if
+   `earn --help` lists any command beyond its eight.
 2. **The client knows only the chain.** It has a vault address and an RPC endpoint, nothing else.
    `tests/boundary.unit.test.ts` parses every audited file and fails on any import, `require`, child
    process or path that reaches outside this repository's allowlist. Do not weaken that test to make
@@ -29,7 +30,7 @@ Node.js 22 or later. The fork tier also needs [Foundry](https://getfoundry.sh) f
 
 ```bash
 npm ci                     # never `npm install` — CI fails on a stale lockfile
-npm run build              # tsc, the dist/mcp-server.mjs bundle, THIRD_PARTY_NOTICES.md, and the plugin/ copies
+npm run build              # tsc, the dist/treasury.mjs bundle, THIRD_PARTY_NOTICES.md, and the plugin/ copies
 npm run typecheck
 npm test                   # unit tier; live and fork tiers skip themselves without an RPC
 TREASURY_RPC_BASE=https://... npm test           # adds live read-only checks against Base
@@ -43,7 +44,7 @@ each row on its own chain and reports a chain it could not reach as not checked.
 
 ## Things that fail CI if forgotten
 
-- **`dist/mcp-server.mjs` and the `plugin/` copies are committed.** After any change under `src/`, or
+- **`dist/treasury.mjs` and the `plugin/` copies are committed.** After any change under `src/`, or
   to `registry/vaults.json`, `LICENSE` or `NOTICE`, run `npm run build` and commit the result; CI
   rebuilds and fails on a difference.
 - **Every commit carries a `Signed-off-by` trailer** matching its author (`git commit -s`). See
@@ -67,7 +68,7 @@ each row on its own chain and reports a chain it could not reach as not checked.
 
 ## The Claude Code plugin (`plugin/`)
 
-- **Never edit the copies in `plugin/` by hand.** `plugin/dist/mcp-server.mjs`,
+- **Never edit the copies in `plugin/` by hand.** `plugin/dist/treasury.mjs`,
   `plugin/registry/vaults.json`, `plugin/LICENSE`, `plugin/NOTICE`, `plugin/THIRD_PARTY_NOTICES.md` and
   `plugin/package.json` are written by `npm run build`; `npm run plugin:check` fails on a stale one.
 - **`plugin/` must never hold a lockfile.** A plugin install runs a dependency install when it finds
@@ -75,7 +76,7 @@ each row on its own chain and reports a chain it could not reach as not checked.
 - **A change to the skill's `description:` is a behavioural change**: it decides whether the skill is
   reached at all. Measure it by running the plugin (`claude -p --plugin-dir <absolute path to this
   repository>/plugin`, from a working directory that is not this repository and with no `treasury`
-  plugin installed) and checking which tools the run invoked.
+  plugin installed) and checking whether the run invoked the `treasury:earn` skill and ran its CLI.
 - `npm run lint:skill` validates the skill against the official skill spec.
 
 ## Pull requests
@@ -83,8 +84,8 @@ each row on its own chain and reports a chain it could not reach as not checked.
 - Target the current `release/vX.Y.Z` branch, not `main`.
 - One change per pull request; a documentation fix found along the way gets its own.
 - Say which test tier ran: unit, live read-only, or fork.
-- Adding, removing or renaming a tool needs the matching change to
+- Adding, removing or renaming a command needs the matching change to
   [`plugin/skills/earn/SKILL.md`](plugin/skills/earn/SKILL.md) in the same pull request; CI checks the
-  skill's tool table against the server's real `tools/list`.
+  skill's command table against the CLI's real `earn --help`.
 - Security issues go through private vulnerability reporting ([`SECURITY.md`](SECURITY.md)), never a
   public issue.

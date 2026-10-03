@@ -12,8 +12,8 @@ subject per file, facts stated with the block or date they were measured at.
 
 | document | what it answers |
 |---|---|
-| [`install.md`](install.md) | how to install the plugin in Claude Code, or run the MCP server under any agent runtime |
-| [`tools.md`](tools.md) | the eight `earn_*` tools: inputs, outputs, and what each one refuses |
+| [`install.md`](install.md) | how to install the plugin in Claude Code, or run the CLI under any agent runtime |
+| [`tools.md`](tools.md) | the eight `earn` commands: inputs, outputs, and what each one refuses |
 | [`vaults.md`](vaults.md) | the vaults offered, their addresses, access rules, fees and how access is granted |
 | [`risks.md`](risks.md) | what can go wrong with your money, stated before you deposit |
 | [`configuration.md`](configuration.md) | environment variables, RPC choice, `eth_getLogs` windows and the fallback |

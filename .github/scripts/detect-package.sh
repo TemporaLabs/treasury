@@ -22,7 +22,7 @@
 # declared without its skill. This file decides only whether the PACKAGE is here.
 set -uo pipefail
 
-PARTS=(package.json src dist/mcp-server.mjs registry/vaults.json)
+PARTS=(package.json src dist/treasury.mjs registry/vaults.json)
 found=(); missing=()
 for p in "${PARTS[@]}"; do
   if [ -e "$p" ]; then found+=("$p"); else missing+=("$p"); fi
@@ -49,7 +49,7 @@ fi
 # vendored directory would not be covered either. A moved package brings its own distinctive files
 # with it; an unrelated manifest does not.
 stray=""
-for probe in dist/mcp-server.mjs registry/vaults.json; do
+for probe in dist/treasury.mjs registry/vaults.json; do
   hit="$(find . -path "*/$probe" -not -path './node_modules/*' -not -path '*/node_modules/*' -not -path './.git/*' -print -quit 2>/dev/null)"
   if [ -n "$hit" ]; then stray="${hit#./}"; break; fi
 done

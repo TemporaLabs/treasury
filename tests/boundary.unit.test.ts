@@ -67,7 +67,7 @@
  *   B. the ENVIRONMENT surface — the exact names any audited file READS, plus a live poisoning run
  *      so a RENAMED fund variable fails on the property rather than the prefix;
  *   C. the REGISTRY source — the shipped JSON, parsed with fund-shaped variables poisoned;
- *   D. ENZYME refused at build and at the MCP boundary;
+ *   D. ENZYME refused at build and at the command boundary;
  *   E. the AUDITED surface — every `.ts` under `src/`, `scripts/` and `tests/` (the rule's wording is
  *      "no code path, test, script, env var or doc"), including who may start a process and what.
  */
@@ -79,7 +79,7 @@ import ts from "typescript";
 import { rpcUrlFromEnv } from "../src/client.js";
 import { loadRegistry, getVault, depositableVaults } from "../src/registry.js";
 import { buildDeposit, buildWithdraw } from "../src/build.js";
-import { buildServer } from "../src/mcp/server.js";
+import { buildCommands } from "../src/earn/commands.js";
 import { FIXTURE, fixtureVault, useFixtureRegistry, useShippedRegistry } from "./fixtures/registry.js";
 
 const here = dirname(fileURLToPath(import.meta.url));
@@ -91,8 +91,8 @@ const pkg = JSON.parse(readFileSync(resolve(pkgRoot, "package.json"), "utf8")) a
 // dependencies below and the devDependencies the tooling graph is checked against.
 const rootPkg = pkg as { devDependencies?: Record<string, string> };
 
-/** The two ways this package is entered: the library root, and the MCP server the plugin runs. */
-const ENTRY_POINTS = ["src/index.ts", "src/mcp/server.ts"];
+/** The two ways this package is entered: the library root, and the CLI the plugin runs. */
+const ENTRY_POINTS = ["src/index.ts", "src/cli.ts"];
 
 /** Variable names any audited file may READ. A write (the poisoning runs below) is not a read. */
 // TREASURY_LOGS_FALLBACK: the event scan's fallback endpoint, or `off` to forbid the fallback
@@ -119,7 +119,7 @@ const MAY_COMPUTE_ENV_KEY = ["src/client.ts", "tests/client.unit.test.ts"];
 /**
  * The only files that may reach `node:child_process`, and the only programs they may start.
  * Exact membership, like the dependency assertion. A flat ban would be wrong — `roundtrip.ts`
- * legitimately spawns the MCP server over stdio — and a flat allow is the hole.
+ * legitimately spawns the CLI, once per step — and a flat allow is the hole.
  */
 /**
  * 🔴 BUILTINS ARE ALLOWLISTED, NOT DENIED. Normalised, so `x` and `node:x` are one entry. Anything
@@ -127,9 +127,9 @@ const MAY_COMPUTE_ENV_KEY = ["src/client.ts", "tests/client.unit.test.ts"];
  * the same exact-membership shape as the dependency assertion, which is the one rule in this file
  * no reviewer has evaded in nine attempts.
  */
-const BUILTINS_ALLOWED = ["fs", "path", "url", "http", "util", "readline"];
+const BUILTINS_ALLOWED = ["fs", "path", "url", "http", "util"];
 const BUILTINS_ALLOWED_PER_FILE: Record<string, string[]> = {
-  "scripts/roundtrip.ts": ["child_process"], //            spawns the MCP server under test, over stdio
+  "scripts/roundtrip.ts": ["child_process"], //            spawns the CLI under test, once per step
   "tests/fork.test.ts": ["child_process"], //              spawns anvil; anvil holds the keys, this repo never does
   "tests/registry-check.chain.test.ts": ["child_process"], // runs scripts/registry-check.ts against a mock chain
   "tests/entrypoint.unit.test.ts": ["child_process", "os"], // runs the committed bundle by symlink and by import; tmpdir for the symlink
@@ -301,9 +301,8 @@ describe("A. the runtime module graph cannot leave this package", () => {
     expect(undeclared).toEqual([]);
   });
 
-  it("the dependency set is EXACTLY these three — membership, so a swap holding the count fails too", () => {
+  it("the dependency set is EXACTLY these two — membership, so a swap holding the count fails too", () => {
     expect(Object.keys(pkg.dependencies ?? {}).sort()).toEqual([
-      "@modelcontextprotocol/sdk",
       "viem",
       "zod",
     ]);
@@ -420,8 +419,8 @@ describe("D. Enzyme stays refused at BUILD — the boundary, not a note in a doc
     expect(() => buildWithdraw(enzyme(), { assetsHuman: "1", receiver: ADDR, owner: ADDR })).toThrow(/no ERC-4626 deposit\/redeem path/);
   });
 
-  it("the refusal survives the MCP boundary — no calls array reaches a caller", async () => {
-    const tools = (buildServer() as unknown as { _registeredTools: Record<string, { handler: (a: unknown, b: unknown) => Promise<unknown> }> })._registeredTools;
+  it("the refusal survives the command boundary — no calls array reaches a caller", async () => {
+    const tools = buildCommands() as unknown as Record<string, { handler: (a: unknown, b: unknown) => Promise<unknown> }>;
     await expect(
       tools["earn_prepare_deposit"]!.handler({ vault: FIXTURE.enzyme, account: ADDR, receiver: ADDR, amount_usdc: "1" }, {}),
     ).rejects.toThrow(/no ERC-4626 deposit\/redeem path/);
@@ -525,7 +524,7 @@ describe("E. the AUDITED surface is every .ts under src/, scripts/ and tests/", 
 /**
  * D. What gets published is what was attested.
  *
- * CI attests the COMMITTED `dist/mcp-server.mjs` — that path is the SLSA provenance subject, and
+ * CI attests the COMMITTED `dist/treasury.mjs` — that path is the SLSA provenance subject, and
  * `verify_the_bundle.md` tells a stranger to check their download against it. But `prepack` fires on
  * `npm pack` AND `npm publish`, so a publish REBUILDS the bundle and ships whatever the publishing
  * machine produced, not the attested file. They agree only while the build is byte-deterministic,
@@ -548,13 +547,13 @@ describe("D. what gets published is what was attested", () => {
   });
 
   it("prepack cannot ship a bundle that differs from the attested committed one", () => {
-    expect(scripts["prepack"]).toContain("git diff --exit-code -- dist/mcp-server.mjs");
+    expect(scripts["prepack"]).toContain("git diff --exit-code -- dist/treasury.mjs");
   });
 
   it("nor third-party notices that differ from the committed ones", () => {
     // The build also rewrites THIRD_PARTY_NOTICES.md, which is in `files`: a rebuild on the publishing
     // machine against different dependencies would otherwise ship notices nobody committed.
     const guarded = (scripts["prepack"] ?? "").split("git diff --exit-code --")[1]?.trim().split(/\s+/) ?? [];
-    expect(guarded).toEqual(expect.arrayContaining(["dist/mcp-server.mjs", "THIRD_PARTY_NOTICES.md"]));
+    expect(guarded).toEqual(expect.arrayContaining(["dist/treasury.mjs", "THIRD_PARTY_NOTICES.md"]));
   });
 });

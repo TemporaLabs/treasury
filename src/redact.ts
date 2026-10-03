@@ -33,7 +33,7 @@ export function describeError(e: unknown, max = 200): string {
  */
 let secretSource: () => readonly string[] = () => [];
 
-/** Register the source of known-secret values. Called by the MCP server at build time. */
+/** Register the source of known-secret values. Called by `buildCommands()` before any command runs. */
 export function registerSecretSource(f: () => readonly string[]): void {
   secretSource = f;
 }
@@ -57,8 +57,8 @@ export function registerSecretSource(f: () => readonly string[]): void {
  * split across whitespace. No implementation can, and attempting it would over-redact wildly; those
  * are the residual the shape rules below exist for (review).
  *
- * ⚠️ VALUE MASKING IS A PROPERTY OF THE SERVER, NOT OF THIS LIBRARY. `registerSecretSource` is
- * called by the MCP server in `buildServer()`. A consumer importing `describeError`/`redactEndpoints`
+ * ⚠️ VALUE MASKING IS A PROPERTY OF THE COMMANDS, NOT OF THIS LIBRARY. `registerSecretSource` is
+ * called in `buildCommands()`. A consumer importing `describeError`/`redactEndpoints`
  * directly gets `secretSource = () => []` and therefore the shape rules only — which degrades safely
  * and is the documented backstop, but is not inherited.
  */

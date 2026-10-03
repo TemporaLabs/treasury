@@ -1,9 +1,9 @@
 import { defineConfig } from "tsup";
 
 // One self-contained file so the Claude Code plugin cache — which copies source and runs no
-// install — can start the MCP server with a bare `node`. Dependencies are inlined on purpose.
+// install — can run the CLI with a bare `node`. Dependencies are inlined on purpose.
 export default defineConfig({
-  entry: { "mcp-server": "src/mcp/server.ts" },
+  entry: { treasury: "src/cli.ts" },
   format: ["esm"],
   outExtension: () => ({ js: ".mjs" }),
   platform: "node",

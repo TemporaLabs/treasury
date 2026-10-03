@@ -45,18 +45,18 @@ vi.mock("../src/client.js", async (importOriginal) => {
   return { ...actual, makePublicClient: () => stub };
 });
 
-type Handler = (a: unknown, extra: unknown) => Promise<{ content: { text: string }[] }>;
+type Handler = (a: unknown, extra: unknown) => Promise<string>;
 
-describe("the sentinel survives the MCP handler, not just the library function", () => {
+describe("the sentinel survives the command handler, not just the library function", () => {
   it("earn_balance reports basis and yield as UNKNOWN when the event scan fails", async () => {
-    const { buildServer } = await import("../src/mcp/server.js");
-    const tools = (buildServer() as unknown as { _registeredTools: Record<string, { handler: Handler }> })._registeredTools;
+    const { buildCommands } = await import("../src/earn/commands.js");
+    const tools = (buildCommands() as unknown as Record<string, { handler: Handler }>);
 
     const res = await tools["earn_balance"]!.handler(
       { account: STRANGER, vault: FIXTURE.morphoOpen, max_log_requests: 3 },
       {},
     );
-    const p = JSON.parse(res.content[0]!.text);
+    const p = JSON.parse(res);
 
     // the account reached the library through the renamed parameter
     expect(p.sharesExact).toBe("5");

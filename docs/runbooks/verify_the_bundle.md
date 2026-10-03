@@ -1,8 +1,8 @@
 # Verifying the bundle you installed is the one CI built — a runbook
 
 Treasury ships as a Claude Code plugin installed **from git**: the marketplace copies this
-repository's `plugin/` folder, and the MCP server that runs is its `dist/mcp-server.mjs` — a byte
-copy of this repository's `dist/mcp-server.mjs`, made in the same commit and checked by CI (2 MB,
+repository's `plugin/` folder, and the CLI that runs is its `dist/treasury.mjs` — a byte
+copy of this repository's `dist/treasury.mjs`, made in the same commit and checked by CI (1.5 MB,
 dependencies inlined, no `npm install` on your side).
 Nothing about "it came from GitHub" tells you that file was built by this repository's CI from the
 commit it claims. This runbook is how a stranger checks that, with no membership in the org and no
@@ -20,7 +20,7 @@ same commit:
 2. **`attest`** (`needs: check`, so it only runs once `check` passed on this commit) checks the
    repository out without persisting credentials, runs nothing but the gate script, the attest
    action and `gh`, and signs a **SLSA build-provenance attestation** for
-   `dist/mcp-server.mjs` with the workflow run's own GitHub OIDC identity
+   `dist/treasury.mjs` with the workflow run's own GitHub OIDC identity
    (`actions/attest-build-provenance`). No key is stored anywhere — the signing identity *is*
    the run, granted to this job alone, and the signature lands in this repository's attestation
    store and in a Sigstore transparency log. It then verifies the attestation back with
@@ -46,7 +46,7 @@ bytes you are running.
 
 GitHub issues artifact attestations for **public** repositories. On the public `TemporaLabs/treasury`
 repository the attest and verify steps are **required**: every CI run on `main` mints an attestation
-for `dist/mcp-server.mjs` and verifies it against the signer workflow before the run can go green.
+for `dist/treasury.mjs` and verifies it against the signer workflow before the run can go green.
 On a private mirror of this tree the same steps are gated to skip, and the assertion accepts the
 skip only because the repository is private — a skip can never pass as a success on the public
 repository. Whatever repository you are reading this in, the weaker chain is always checkable: the
@@ -60,11 +60,11 @@ You need `gh` ≥ 2.49 (`gh attestation` was added in 2.49) and a GitHub login o
 command reads the attestation from GitHub's API; it does not need read access to anything private.
 
 1. Find the file you are actually running. For a Claude Code plugin install it is under the plugin
-   cache; the path ends in `dist/mcp-server.mjs`. Record its digest:
+   cache; the path ends in `dist/treasury.mjs`. Record its digest:
 
    ```bash
    # <version> as `claude plugin list` shows it; an upgrade can leave older version folders beside it
-   f=~/.claude/plugins/cache/treasury/treasury/<version>/dist/mcp-server.mjs
+   f=~/.claude/plugins/cache/treasury/treasury/<version>/dist/treasury.mjs
    sha256sum "$f"
    ```
 
@@ -104,8 +104,8 @@ builds so `main`/`types` exist in the tarball — only `dist/*.mjs` is committed
 the tarball would carry the bundle and nothing the manifest's own `main`/`types` point at.
 
 To check a published version against the bundle it should carry: `npm pack @temporalabs/treasury@<version>`
-downloads the exact tarball, and the `dist/mcp-server.mjs` inside it must have the same sha256 as the
-file committed at that version's tag — `git show refs/tags/v<version>:dist/mcp-server.mjs | sha256sum`.
+downloads the exact tarball, and the `dist/treasury.mjs` inside it must have the same sha256 as the
+file committed at that version's tag — `git show refs/tags/v<version>:dist/treasury.mjs | sha256sum`.
 Compare against the tag, not against "an attestation": CI attests the bundle on every push to `main`
 and to release branches, so one digest accumulates many attestations and a tarball carrying a later
 `main` bundle would still verify. The tag is the only ref that names one release.
@@ -116,12 +116,12 @@ Whether npm holds a provenance record for a version at all is a separate questio
 package, checks the signatures on what is installed — but it reports counts and invalid entries only,
 so a version published without provenance passes it silently.
 
-`prepack` **rebuilds** `dist/mcp-server.mjs`, so an `npm pack` or `npm publish` would otherwise ship
+`prepack` **rebuilds** `dist/treasury.mjs`, so an `npm pack` or `npm publish` would otherwise ship
 whatever the publishing machine built rather than the attested committed file — agreeing only while
 the build is byte-deterministic, and disagreeing silently, because both artifacts are "the bundle".
 
 It now cannot. `prepack` is
-`npm run build && git diff --exit-code -- dist/mcp-server.mjs THIRD_PARTY_NOTICES.md`: it still
+`npm run build && git diff --exit-code -- dist/treasury.mjs THIRD_PARTY_NOTICES.md`: it still
 produces the `main`/`types` outputs the tarball needs, and then **refuses** if the rebuild differs by
 a byte from what is committed and attested, or if the regenerated third-party notices differ from the
 committed ones. Verified by changing a disclosure string in `src/` and
