@@ -157,8 +157,15 @@ function App() {
       appId={info.appId}
       config={{
         loginMethods: ["email", "google", "wallet"],
-        // Detected extensions (Rabby and others) plus the two named ones; no wallet_connect entry.
-        appearance: { theme: "light", accentColor: "#111827", walletChainType: "ethereum-only", walletList: ["detected_wallets", "metamask", "coinbase_wallet"] as never },
+        // Layout of the reference modal: email box and Continue on top, Google, then a wallet list.
+        // Named wallets first, then any other detected extension (Rabby and others). No wallet_connect.
+        appearance: {
+          theme: "light",
+          accentColor: "#4f6ef7",
+          landingHeader: "Log in or sign up",
+          walletChainType: "ethereum-only",
+          walletList: ["metamask", "phantom", "okx_wallet", "coinbase_wallet", "detected_wallets"] as never,
+        },
         embeddedWallets: { ethereum: { createOnLogin: "users-without-wallets" } },
         // The plugin never uses or offers WalletConnect; stop the SDK from initializing it.
         externalWallets: { walletConnect: { enabled: false } },
@@ -176,6 +183,7 @@ style.textContent = `
   :root{color-scheme:light dark;--fg:#111827;--bg:#fff;--mut:#6b7280;--ok:#047857;--err:#b91c1c}
   @media (prefers-color-scheme:dark){:root{--fg:#f3f4f6;--bg:#0b0f14;--mut:#9ca3af;--ok:#34d399;--err:#f87171}}
   body{margin:0;background:var(--bg);color:var(--fg);font:16px/1.5 system-ui,sans-serif}
+  :root{--privy-border-radius-sm:12px;--privy-border-radius-md:16px;--privy-border-radius-lg:24px;--privy-border-radius-full:999px}
   .tl-ground{background:
     radial-gradient(ellipse 48% 60% at 72% 60%,rgba(255,255,255,.9),rgba(255,255,255,0) 72%),
     radial-gradient(ellipse 60% 75% at 0% 0%,rgba(118,166,213,.16),rgba(118,166,213,0) 70%),
