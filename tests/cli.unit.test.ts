@@ -1,4 +1,5 @@
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, afterEach, vi } from "vitest";
+import { getAddress } from "viem";
 import { run } from "../src/cli.js";
 import { buildCommands } from "../src/earn/commands.js";
 
@@ -10,6 +11,7 @@ import { buildCommands } from "../src/earn/commands.js";
  */
 
 const ACCOUNT = "0x1111111111111111111111111111111111111111";
+const OTHER = "0x2222222222222222222222222222222222222222";
 const error = (r: { stderr?: string }) => (JSON.parse(r.stderr ?? "{}") as { error?: string }).error ?? "";
 
 describe("help and version", () => {
@@ -33,6 +35,24 @@ describe("help and version", () => {
     expect(balance.flags.find((f) => f.flag === "--lookback_blocks")).toMatchObject({ type: "number" });
     const withdraw = help.commands.find((c) => c.tool === "earn_prepare_withdraw")!;
     expect(withdraw.flags.find((f) => f.flag === "--all")).toMatchObject({ type: "boolean" });
+  });
+});
+
+describe("the surface: one skill, eight commands, nothing that signs", () => {
+  it("`treasury --help` lists exactly one skill — a second skill is a reviewed change, not a quiet addition", async () => {
+    const r = await run(["--help"]);
+    expect(r.code).toBe(0);
+    expect((JSON.parse(r.stdout!) as { skills: string[] }).skills).toEqual(["earn"]);
+  });
+
+  it("help repeats what each flag's schema will refuse: descriptions behind `.optional()`, enums, patterns, ranges, switches", async () => {
+    const help = JSON.parse((await run(["earn", "--help"])).stdout!) as { commands: { tool: string; flags: Record<string, unknown>[] }[] };
+    const flag = (tool: string, f: string) => help.commands.find((c) => c.tool === tool)!.flags.find((x) => x["flag"] === f)!;
+    expect(flag("earn_status", "--account")["description"]).toMatch(/whose shares these are/);
+    expect(flag("earn_quote", "--direction")["enum"]).toEqual(["deposit", "withdraw"]);
+    expect(flag("earn_quote", "--amount_usdc")["pattern"]).toBeDefined();
+    expect(flag("earn_balance", "--max_log_requests")["maximum"]).toBe(400);
+    expect(flag("earn_prepare_withdraw", "--all")).toMatchObject({ type: "boolean", takesValue: false });
   });
 });
 
@@ -62,10 +82,19 @@ describe("refusals are errors with exit 1, never results", () => {
     expect(error(r)).toMatch(/--receiver/);
   });
 
-  it("a flag given twice (in either spelling) is refused rather than silently taking one", async () => {
-    const r = await run(["earn", "prepare_deposit", "--account", ACCOUNT, "--receiver", ACCOUNT, "--amount_usdc", "1", "--amount-usdc", "2"]);
-    expect(r.code).toBe(1);
-    expect(error(r)).toMatch(/--amount_usdc was given twice/);
+  it("a flag given twice is refused rather than silently taking one — in the SAME spelling and across spellings", async () => {
+    // The same spelling is the dangerous case: `--receiver A --receiver B` would otherwise build a call
+    // that pays B while the operator read A first.
+    const same = await run(["earn", "prepare_deposit", "--account", ACCOUNT, "--receiver", ACCOUNT, "--receiver", OTHER, "--amount_usdc", "1"]);
+    expect(same.code).toBe(1);
+    expect(same.stdout).toBeUndefined();
+    expect(error(same)).toMatch(/--receiver was given twice/);
+    const mixed = await run(["earn", "prepare_deposit", "--account", ACCOUNT, "--receiver", ACCOUNT, "--amount_usdc", "1", "--amount-usdc", "2"]);
+    expect(mixed.code).toBe(1);
+    expect(error(mixed)).toMatch(/--amount_usdc was given twice/);
+    const flag = await run(["earn", "prepare_withdraw", "--account", ACCOUNT, "--receiver", ACCOUNT, "--all", "--all", "--shares_exact", "5"]);
+    expect(flag.code).toBe(1);
+    expect(error(flag)).toMatch(/--all was given twice/);
   });
 
   it("the command's own schema still decides: a malformed address and an off-list direction", async () => {
@@ -92,6 +121,19 @@ describe("refusals are errors with exit 1, never results", () => {
     expect(error(r)).not.toMatch(/received string/);
   });
 
+  it("a switch given a value says it is a switch", async () => {
+    const r = await run(["earn", "prepare_withdraw", "--account", ACCOUNT, "--receiver", ACCOUNT, "--all", "true", "--shares_exact", "5"]);
+    expect(r.code).toBe(1);
+    expect(error(r)).toMatch(/--all is a switch: give it for true, leave it out for false/);
+    expect(error(r)).not.toMatch(/\.\./);
+  });
+
+  it("`--help` in a flag's value position is a missing value, not a request for help", async () => {
+    const r = await run(["earn", "prepare_deposit", "--account", ACCOUNT, "--amount_usdc", "1", "--receiver", "--help"]);
+    expect(r.code).toBe(1);
+    expect(r.stdout).toBeUndefined();
+  });
+
   it("a handler's refusal (a vault on another chain) reaches stderr with exit 1", async () => {
     const r = await run(["earn", "prepare_deposit", "--vault", "tlCashPlusUSDC2", "--chain", "arbitrum", "--account", ACCOUNT, "--receiver", ACCOUNT, "--amount_usdc", "1"]);
     expect(r.code).toBe(1);
@@ -102,7 +144,10 @@ describe("refusals are errors with exit 1, never results", () => {
 
 describe("a valid call reaches the handler as the same call", () => {
   it("both spellings of a command and a flag build the same envelope, with the address checksummed", async () => {
-    const lower = ACCOUNT.toLowerCase();
+    // An address with letters, so the lowercase and checksummed forms differ: the schema's transform
+    // (`getAddress`) must reach the handler, as it did when a host validated the call before it.
+    const lower = "0xabcdefabcdefabcdefabcdefabcdefabcdefabcd";
+    expect(getAddress(lower)).not.toBe(lower);
     const a = await run(["earn", "prepare_deposit", "--account", lower, "--receiver", lower, "--amount_usdc", "1"]);
     const b = await run(["earn", "prepare-deposit", "--account", lower, "--receiver", lower, "--amount-usdc", "1"]);
     expect(a.code).toBe(0);
@@ -111,6 +156,8 @@ describe("a valid call reaches the handler as the same call", () => {
     expect(env.requires_signature).toBe(true);
     expect(env.status).toBe("unsigned");
     expect(env.calls).toHaveLength(2);
+    expect(env.calls[1]!.description).toContain(getAddress(lower));
+    expect(a.stdout).not.toContain(lower);
   });
 
   it("a boolean flag takes no value: `--all` with `--shares_exact` empties the account", async () => {
@@ -124,5 +171,36 @@ describe("a valid call reaches the handler as the same call", () => {
     const viaCli = await run(["earn", "terms"]);
     const direct = await (buildCommands()["earn_terms"]!.handler as (a: object) => Promise<string>)({});
     expect(viaCli.stdout).toBe(direct);
+  });
+});
+
+describe("nothing this file prints carries a keyed RPC URL — usage errors included", () => {
+  const KEY = "SECRETKEYabc123def456";
+  const URL_WITH_KEY = `https://base-mainnet.example-provider.io/v2/${KEY}`;
+  afterEach(() => {
+    delete process.env["TREASURY_RPC_BASE"];
+  });
+
+  it("the key is masked wherever the typed text is echoed back", async () => {
+    process.env["TREASURY_RPC_BASE"] = URL_WITH_KEY;
+    const cases = [
+      [URL_WITH_KEY], // as the skill
+      ["earn", URL_WITH_KEY], // as the command
+      ["earn", "balance", "--account", ACCOUNT, `--${URL_WITH_KEY}`], // as an unknown flag
+      ["earn", "balance", "--account", ACCOUNT, "--lookback_blocks", URL_WITH_KEY], // as a number flag's value
+      // The bare key, with no URL around it for a shape rule to match: only the configured value,
+      // registered before anything prints, can mask this one.
+      ["earn", "balance", "--account", ACCOUNT, "--lookback_blocks", KEY],
+      [KEY],
+    ];
+    for (const argv of cases) {
+      // A FRESH module per case, as each real run is a fresh process: secrets registered by an earlier
+      // test (any `buildCommands()` call registers them) must not be what masks this one.
+      vi.resetModules();
+      const { run: freshRun } = await import("../src/cli.js");
+      const r = await freshRun(argv);
+      expect(r.code, argv.join(" ")).toBe(1);
+      expect(r.stderr, argv.join(" ")).not.toContain(KEY);
+    }
   });
 });

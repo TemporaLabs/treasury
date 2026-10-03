@@ -1,5 +1,5 @@
 /**
- * Unit — the MCP tool surface itself. A tool rename and the `account` normalisation
+ * Unit — the command surface itself. A tool rename and the `account` normalisation
  * touch only this boundary, and the boundary is exactly the layer no existing test covered: the
  * library tests call `buildWithdraw`/`getPosition` directly and never go through a handler.
  *
@@ -678,9 +678,9 @@ describe("earn_quote", () => {
 
 export { ACCOUNT };
 
-describe("earn_balance wires the fallback — the server line, not just the position layer", () => {
+describe("earn_balance wires the fallback — the command line, not just the position layer", () => {
   // Two LOCAL mock RPCs that answer the position's reads and refuse eth_getLogs with different errors.
-  // Mutating server.ts's `fallbackClient` to undefined leaves position-scan's tests green; this one fails.
+  // Mutating commands.ts's `fallbackClient` to undefined leaves position-scan's tests green; this one fails.
   const chainReply = (method: string): unknown =>
     method === "eth_blockNumber" ? "0x30f0000" : method === "eth_chainId" ? "0x2105" : "0x" + "0".repeat(64);
   const startRpc = async (logsError: string) => {

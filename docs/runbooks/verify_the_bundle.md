@@ -2,7 +2,7 @@
 
 Treasury ships as a Claude Code plugin installed **from git**: the marketplace copies this
 repository's `plugin/` folder, and the CLI that runs is its `dist/treasury.mjs` — a byte
-copy of this repository's `dist/treasury.mjs`, made in the same commit and checked by CI (1.4 MB,
+copy of this repository's `dist/treasury.mjs`, made in the same commit and checked by CI (1.5 MB,
 dependencies inlined, no `npm install` on your side).
 Nothing about "it came from GitHub" tells you that file was built by this repository's CI from the
 commit it claims. This runbook is how a stranger checks that, with no membership in the org and no

@@ -12,7 +12,7 @@ Carries `@temporalabs/treasury` v0.1.2.
 - **Headless: the plugin declares no MCP server.** The `earn` skill runs the bundled CLI,
   `node "${CLAUDE_PLUGIN_ROOT}/dist/treasury.mjs" earn <command>`, through the shell, one command at a
   time, and pre-approves that command for the turn it is used in. `plugin/.mcp.json` is gone, and so
-  is the session restart a server needed before its tools appeared.
+  is the session restart a server needed before its tools appeared: `/reload-plugins` loads the skill.
 
 ### Added
 - **The `earn` skill works on more than one chain.** Its description now names Base and Arbitrum,

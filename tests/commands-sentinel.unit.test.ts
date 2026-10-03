@@ -47,7 +47,7 @@ vi.mock("../src/client.js", async (importOriginal) => {
 
 type Handler = (a: unknown, extra: unknown) => Promise<string>;
 
-describe("the sentinel survives the MCP handler, not just the library function", () => {
+describe("the sentinel survives the command handler, not just the library function", () => {
   it("earn_balance reports basis and yield as UNKNOWN when the event scan fails", async () => {
     const { buildCommands } = await import("../src/earn/commands.js");
     const tools = (buildCommands() as unknown as Record<string, { handler: Handler }>);

@@ -2,10 +2,10 @@
 # Every place this repository declares its own version must say the same thing.
 #
 # Why this is not bookkeeping: a package.json version is a RUNTIME value, not metadata. The bundled
-# server reads `../package.json` at module load and reports what it finds as `serverInfo.version`,
-# so the plugin's server reports plugin/package.json and an npm install reports the root one. The
-# manifests are what the marketplaces and the plugin hosts advertise. When any of them disagree, a
-# user installing "0.1.0" gets a server that introduces itself as something else: measured, the
+# CLI reads `../package.json` at module load and reports what it finds as `treasury --version` and in
+# `earn status`, so the plugin's copy reports plugin/package.json and an npm install reports the root
+# one. The manifests are what the marketplaces and the plugin hosts advertise. When any of them
+# disagree, a user installing "0.1.0" gets a CLI that introduces itself as something else: measured, the
 # identical bundle reported `0.1.1` from one tree and `0.1.0` from another, decided entirely by the
 # package.json beside it.
 #
@@ -64,7 +64,7 @@ done <<< "$DECLARATIONS"
 distinct=$(printf '%b' "$seen" | sed '/^$/d' | sort -u)
 if [ "$(printf '%s\n' "$distinct" | wc -l)" -ne 1 ]; then
   echo "::error::this repository declares more than one version: $(printf '%s' "$distinct" | tr '\n' ' ')"
-  echo "::error::package.json is what the server reports as serverInfo.version; the manifests are what the marketplace advertises. A release cannot ship them disagreeing."
+  echo "::error::package.json is what the CLI reports as treasury --version; the manifests are what the marketplace advertises. A release cannot ship them disagreeing."
   exit 1
 fi
 

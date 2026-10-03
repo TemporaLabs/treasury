@@ -76,7 +76,7 @@ each row on its own chain and reports a chain it could not reach as not checked.
 - **A change to the skill's `description:` is a behavioural change**: it decides whether the skill is
   reached at all. Measure it by running the plugin (`claude -p --plugin-dir <absolute path to this
   repository>/plugin`, from a working directory that is not this repository and with no `treasury`
-  plugin installed) and checking which tools the run invoked.
+  plugin installed) and checking whether the run invoked the `treasury:earn` skill and ran its CLI.
 - `npm run lint:skill` validates the skill against the official skill spec.
 
 ## Pull requests

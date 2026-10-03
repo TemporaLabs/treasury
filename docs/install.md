@@ -44,8 +44,8 @@ claude plugin marketplace add TemporaLabs/treasury@v0.1.1
 claude plugin install treasury@treasury
 ```
 
-**Start a new Claude Code session after installing** (or after changing the marketplace ref), so the
-`earn` skill is loaded.
+**Run `/reload-plugins` (or start a new Claude Code session) after installing**, or after changing
+the marketplace ref, so the `earn` skill is loaded.
 
 Set an RPC before you rely on it:
 
@@ -69,11 +69,12 @@ up a same-version rebuild, `claude plugin uninstall treasury@treasury` then inst
 
 ## Any agent runtime with a shell — the CLI
 
-The same bundle is published to npm as `@temporalabs/treasury`. Install it, pinned to the exact
-version — a published version is immutable, so the install cannot drift:
+The same bundle is published to npm as `@temporalabs/treasury`. Install it pinned to the exact
+version — a published version is immutable, and `--save-exact` keeps a later `npm install` from moving
+to another one:
 
 ```bash
-npm install @temporalabs/treasury@0.1.1
+npm install --save-exact @temporalabs/treasury@0.1.1
 npx --no-install treasury earn --help     # every command and flag, as JSON
 npx --no-install treasury earn vaults     # or: node <project>/node_modules/@temporalabs/treasury/dist/treasury.mjs earn vaults
 ```

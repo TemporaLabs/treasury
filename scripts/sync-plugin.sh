@@ -58,6 +58,10 @@ if [ "${1:-}" = "--check" ]; then
     const aentry = (ag.plugins || []).find((p) => p.name === "treasury");
     if (!aentry || !aentry.source || aentry.source.path !== "./plugin") bad.push(".agents/plugins/marketplace.json: the treasury entry must have path \"./plugin\"");
     if (fs.existsSync("plugin/.mcp.json")) bad.push("plugin/.mcp.json: the plugin is headless — the skill runs the CLI, and no server is declared");
+    // A server can also be declared INLINE in a manifest, which the file check above cannot see.
+    for (const m of ["plugin/.claude-plugin/plugin.json", "plugin/.codex-plugin/plugin.json"]) {
+      if (fs.existsSync(m) && "mcpServers" in JSON.parse(fs.readFileSync(m, "utf8"))) bad.push(m + ": declares mcpServers — the plugin is headless, and no server is declared");
+    }
     const skill = fs.readFileSync("plugin/skills/earn/SKILL.md", "utf8");
     if (!skill.includes("node \"${CLAUDE_PLUGIN_ROOT}/dist/treasury.mjs\"")) bad.push("plugin/skills/earn/SKILL.md: the skill must run node \"${CLAUDE_PLUGIN_ROOT}/dist/treasury.mjs\", the copy this script checks");
     for (const b of bad) console.log("::error::" + b);

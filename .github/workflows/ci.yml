@@ -191,11 +191,16 @@ jobs:
           want="git+https://github.com/TemporaLabs/treasury.git"
           [ "$got" = "$want" ] || { echo "::error file=package.json::repository.url is '$got' but the public repository is TemporaLabs/treasury — an npm publish with provenance from anywhere else will be refused"; exit 1; }
           echo "repository.url names the public repository"
-      - name: bundled CLI lists exactly the eight earn commands, with no sign/send command
+      - name: bundled CLI opens one skill and exactly the eight earn commands, with no sign/send command
         if: steps.pk.outputs.present == 'yes'
         run: |
           python3 - <<'PY'
           import json, subprocess
+          # Every skill the CLI opens is a word in `treasury --help`; a second one (and whatever it can
+          # do) must be a reviewed change here, so the skill list is pinned before the earn commands are.
+          top = subprocess.run(["node","dist/treasury.mjs","--help"], capture_output=True, text=True, timeout=60)
+          assert top.returncode == 0, top.stderr
+          assert json.loads(top.stdout)["skills"] == ["earn"], top.stdout
           out = subprocess.run(["node","dist/treasury.mjs","earn","--help"], capture_output=True, text=True, timeout=60)
           assert out.returncode == 0, out.stderr
           commands = json.loads(out.stdout)["commands"]

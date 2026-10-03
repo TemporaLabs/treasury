@@ -19,8 +19,10 @@ node "${CLAUDE_PLUGIN_ROOT}/dist/treasury.mjs" earn <command> --flag value …
 
 Below, each command is named by its tool name: `earn_quote` is `earn quote`, and its arguments are its
 flags (`--direction deposit --account 0x… --amount_usdc 25`). `earn --help` lists every command and
-flag. A command prints one JSON document on stdout; a refusal exits non-zero with `{ "error": … }` on
-stderr — report it, never read it as a result. Every prepared call comes back inside
+flag; a switch such as `--all` takes no value. A command prints one JSON document on stdout. When it
+cannot run as asked (an unknown or repeated flag, a vault on another chain, an unreachable RPC) it exits
+non-zero with `{ "error": … }` on stderr — report it, never read it as a result. A verdict such as
+`WHITELIST_GATED` is a result: it exits 0, and its fields say what was found. Every prepared call comes back inside
 `{ requires_signature: true, status: "unsigned", calls }` — that envelope is the command telling you
 nothing has been submitted and no money has moved. It cannot sign or send, and neither can you through it — the operator's own signer
 (a wallet, a policy-engine signer, a token-bound account) does that. That boundary is the
@@ -69,7 +71,7 @@ range; until then `scan` says exactly how much was covered.
 | `earn_status` | **with no `account`**: is the CLI healthy and the chain's RPC reachable (chain, latest block, which RPC variable resolved); pass `chain` to check the chain you are about to use. **With `account`**: the access verdict alone. `mode` tells you which you got |
 | `earn_quote` | with `direction: "deposit"` — expected shares, share price, and the verdict from a **simulated** deposit. No rate is quoted — the vault exposes none and this client calls no yield API. With `direction: "withdraw"` — shares that would burn, a simulated `withdraw` verdict, the vault's `instantLiquidity`, queue depth. `direction` is required and is echoed back on the result |
 | `earn_prepare_deposit` | get the unsigned `approve` + `deposit` calls, enveloped |
-| `earn_prepare_withdraw` | get the unsigned `withdraw` call in USDC terms — or `all=true` with `shares_exact` to empty the account |
+| `earn_prepare_withdraw` | get the unsigned `withdraw` call in USDC terms — or `--all` with `--shares_exact` to empty the account |
 | `earn_balance` | shares (exact), USDC value, entry basis and accrued yield from the vault's own events; `lookback_blocks` / `max_log_requests` set the scan window (see Setup) |
 | `earn_claim` | finalize a queued withdrawal; today no vault queues, and it says so |
 
@@ -192,8 +194,8 @@ than reporting a limit the chain never stated.
   so quote value as a value, not a promise.
 - **Withdraw in USDC.** `earn_quote` with `direction: "withdraw"`, then `earn_prepare_withdraw` with
   `amount_usdc` and the `account` whose shares burn; the vault burns
-  whatever shares that costs at inclusion. To empty the account, pass `all=true` and
-  `shares_exact` copied **verbatim** from `earn_balance.sharesExact` — never a number you rounded
+  whatever shares that costs at inclusion. To empty the account, pass `--all` and
+  `--shares_exact` copied **verbatim** from `earn_balance.sharesExact` — never a number you rounded
   or computed: an 18-decimal balance exceeds 2⁵³, floats round it (sometimes up), and redeeming
   more than is owned reverts.
 - **A withdrawal can be refused for liquidity, not balance.** Some vaults (Fusion) pay a withdrawal
@@ -307,7 +309,7 @@ so `approve` does not appear under the plain "Write Contract" tab — it only ap
 as Proxy"**, which resolves against the implementation contract. The vault contract itself has no
 such wrinkle; `deposit`/`redeem` show up on its plain "Write Contract" tab as expected.
 
-**You never run these commands, and holding a shell is not a reason to.** A key reachable from
+**You never run these `cast send` commands, and holding a shell is not a reason to.** A key reachable from
 your shell is a key in this conversation. The operator runs the send in a shell of theirs; you get
 back the transaction hash.
 

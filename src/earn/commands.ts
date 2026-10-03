@@ -321,9 +321,9 @@ export function buildCommands(): Record<string, Command> {
   register(
     "earn_status",
     {
-      title: "Server health, or a deposit pre-flight verdict",
+      title: "Health check, or a deposit pre-flight verdict",
       description:
-        "With NO `account`: is the server up and the chain's RPC reachable — chain, chain id, latest block, registry version, and which env var supplied the RPC (never the URL). Each chain has its own RPC, so pass `chain` to check the one you are about to use; `rpc` is `ok`, `unreachable`, or `wrong_chain` when the configured endpoint answers for a different chain. `chainVerified: false` beside `ok` means the endpoint answered but did not say which chain it is. When a separate logs RPC is set, `logsRpc` reports it the same way. With `account`: simulates deposit() from that address and reports OPEN_READY, NEEDS_APPROVAL, WHITELIST_GATED, REVERTED_OTHER, REFUSED_BY_CLIENT or UNRESOLVED, never trusting maxDeposit(). The `mode` field says which answer you got.",
+        "With NO `account`: is the CLI working and the chain's RPC reachable — chain, chain id, latest block, registry version, and which env var supplied the RPC (never the URL). Each chain has its own RPC, so pass `chain` to check the one you are about to use; `rpc` is `ok`, `unreachable`, or `wrong_chain` when the configured endpoint answers for a different chain. `chainVerified: false` beside `ok` means the endpoint answered but did not say which chain it is. When a separate logs RPC is set, `logsRpc` reports it the same way. With `account`: simulates deposit() from that address and reports OPEN_READY, NEEDS_APPROVAL, WHITELIST_GATED, REVERTED_OTHER, REFUSED_BY_CLIENT or UNRESOLVED, never trusting maxDeposit(). The `mode` field says which answer you got.",
       inputSchema: { vault: vaultArg, chain, account: accountArg.optional(), amount_usdc: amountArg.optional() },
     },
     guarded(async ({ vault: symbol, chain, account, amount_usdc }) => {
@@ -476,7 +476,7 @@ export function buildCommands(): Record<string, Command> {
     {
       title: "Prepare an unsigned withdrawal",
       description:
-        "Returns the UNSIGNED call for a withdrawal in USDC terms — withdraw(assets, receiver, owner) — inside an envelope with requires_signature: true, which names the `chain` the call is for: a position is withdrawn on the chain it is on, so name the vault (or its chain) and never ask the operator to choose one. To empty the account pass all=true with shares_exact copied verbatim from earn_balance.sharesExact (redeem of the exact balance; never a rounded number). NOTHING IS SUBMITTED and no funds have moved until a signer confirms. Each call also carries `function` and `args` — the same call `data` encodes, decoded, e.g. `approve(address spender, uint256 value)` with `{ spender, value }` — so an operator without a CLI signer can fill a block explorer's Write Contract form directly. `args` values are RAW contract units, which is what the form takes; `description` is the human sentence.",
+        "Returns the UNSIGNED call for a withdrawal in USDC terms — withdraw(assets, receiver, owner) — inside an envelope with requires_signature: true, which names the `chain` the call is for: a position is withdrawn on the chain it is on, so name the vault (or its chain) and never ask the operator to choose one. To empty the account pass --all (a switch: it takes no value) with shares_exact copied verbatim from earn_balance.sharesExact (redeem of the exact balance; never a rounded number). NOTHING IS SUBMITTED and no funds have moved until a signer confirms. Each call also carries `function` and `args` — the same call `data` encodes, decoded, e.g. `approve(address spender, uint256 value)` with `{ spender, value }` — so an operator without a CLI signer can fill a block explorer's Write Contract form directly. `args` values are RAW contract units, which is what the form takes; `description` is the human sentence.",
       inputSchema: {
         vault: vaultArg,
         chain,
@@ -492,10 +492,10 @@ export function buildCommands(): Record<string, Command> {
       // ⚠️ `receiver` and `account` are DIFFERENT slots and both are addresses, so a transposition
       // here type-checks. `account` is the owner whose shares burn; `receiver` is the payee.
       if (all) {
-        if (!shares_exact) throw new Error("all=true requires shares_exact (copy earn_balance.sharesExact verbatim)");
+        if (!shares_exact) throw new Error("--all requires --shares_exact (copy earn_balance.sharesExact verbatim)");
         return unsigned(buildWithdraw(vault, { receiver, owner: account, all: true, sharesExact: shares_exact }), vault, "withdraw");
       }
-      if (!amount_usdc) throw new Error("provide amount_usdc, or all=true with shares_exact");
+      if (!amount_usdc) throw new Error("provide --amount_usdc, or --all with --shares_exact");
       return unsigned(buildWithdraw(vault, { receiver, owner: account, assetsHuman: amount_usdc }), vault, "withdraw");
     }),
   );

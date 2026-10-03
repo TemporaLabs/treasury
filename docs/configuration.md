@@ -23,7 +23,7 @@ endpoint, and `rpc: "wrong_chain"` when that endpoint answers for a different ch
 mistake once there are two variables. A separate logs endpoint is reported beside it as `logsRpc`.
 The tools that read the chain make the same check on every call: a pre-flight, a quote or a balance
 through an endpoint for the wrong chain is refused, and the refusal names the variable that holds
-it. An endpoint is asked which chain it is once per process, with a three-second limit; one that
+it. An endpoint is asked which chain it is once per command run, with a three-second limit; one that
 does not say is reported as `chainVerified: false`, not as a match.
 
 **A keyed RPC URL is a secret.** Treasury treats it as one: no tool output, no error, no health check

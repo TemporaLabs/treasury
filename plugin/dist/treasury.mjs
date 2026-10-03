@@ -39521,8 +39521,8 @@ function buildCommands() {
   register(
     "earn_status",
     {
-      title: "Server health, or a deposit pre-flight verdict",
-      description: "With NO `account`: is the server up and the chain's RPC reachable \u2014 chain, chain id, latest block, registry version, and which env var supplied the RPC (never the URL). Each chain has its own RPC, so pass `chain` to check the one you are about to use; `rpc` is `ok`, `unreachable`, or `wrong_chain` when the configured endpoint answers for a different chain. `chainVerified: false` beside `ok` means the endpoint answered but did not say which chain it is. When a separate logs RPC is set, `logsRpc` reports it the same way. With `account`: simulates deposit() from that address and reports OPEN_READY, NEEDS_APPROVAL, WHITELIST_GATED, REVERTED_OTHER, REFUSED_BY_CLIENT or UNRESOLVED, never trusting maxDeposit(). The `mode` field says which answer you got.",
+      title: "Health check, or a deposit pre-flight verdict",
+      description: "With NO `account`: is the CLI working and the chain's RPC reachable \u2014 chain, chain id, latest block, registry version, and which env var supplied the RPC (never the URL). Each chain has its own RPC, so pass `chain` to check the one you are about to use; `rpc` is `ok`, `unreachable`, or `wrong_chain` when the configured endpoint answers for a different chain. `chainVerified: false` beside `ok` means the endpoint answered but did not say which chain it is. When a separate logs RPC is set, `logsRpc` reports it the same way. With `account`: simulates deposit() from that address and reports OPEN_READY, NEEDS_APPROVAL, WHITELIST_GATED, REVERTED_OTHER, REFUSED_BY_CLIENT or UNRESOLVED, never trusting maxDeposit(). The `mode` field says which answer you got.",
       inputSchema: { vault: vaultArg, chain, account: accountArg.optional(), amount_usdc: amountArg.optional() }
     },
     guarded(async ({ vault: symbol2, chain: chain2, account, amount_usdc }) => {
@@ -39634,7 +39634,7 @@ function buildCommands() {
     "earn_prepare_withdraw",
     {
       title: "Prepare an unsigned withdrawal",
-      description: "Returns the UNSIGNED call for a withdrawal in USDC terms \u2014 withdraw(assets, receiver, owner) \u2014 inside an envelope with requires_signature: true, which names the `chain` the call is for: a position is withdrawn on the chain it is on, so name the vault (or its chain) and never ask the operator to choose one. To empty the account pass all=true with shares_exact copied verbatim from earn_balance.sharesExact (redeem of the exact balance; never a rounded number). NOTHING IS SUBMITTED and no funds have moved until a signer confirms. Each call also carries `function` and `args` \u2014 the same call `data` encodes, decoded, e.g. `approve(address spender, uint256 value)` with `{ spender, value }` \u2014 so an operator without a CLI signer can fill a block explorer's Write Contract form directly. `args` values are RAW contract units, which is what the form takes; `description` is the human sentence.",
+      description: "Returns the UNSIGNED call for a withdrawal in USDC terms \u2014 withdraw(assets, receiver, owner) \u2014 inside an envelope with requires_signature: true, which names the `chain` the call is for: a position is withdrawn on the chain it is on, so name the vault (or its chain) and never ask the operator to choose one. To empty the account pass --all (a switch: it takes no value) with shares_exact copied verbatim from earn_balance.sharesExact (redeem of the exact balance; never a rounded number). NOTHING IS SUBMITTED and no funds have moved until a signer confirms. Each call also carries `function` and `args` \u2014 the same call `data` encodes, decoded, e.g. `approve(address spender, uint256 value)` with `{ spender, value }` \u2014 so an operator without a CLI signer can fill a block explorer's Write Contract form directly. `args` values are RAW contract units, which is what the form takes; `description` is the human sentence.",
       inputSchema: {
         vault: vaultArg,
         chain,
@@ -39648,10 +39648,10 @@ function buildCommands() {
     guarded(async ({ vault: symbol2, chain: chain2, receiver, account, amount_usdc, all, shares_exact }) => {
       const vault = supportedVault(symbol2, chain2);
       if (all) {
-        if (!shares_exact) throw new Error("all=true requires shares_exact (copy earn_balance.sharesExact verbatim)");
+        if (!shares_exact) throw new Error("--all requires --shares_exact (copy earn_balance.sharesExact verbatim)");
         return unsigned(buildWithdraw(vault, { receiver, owner: account, all: true, sharesExact: shares_exact }), vault, "withdraw");
       }
-      if (!amount_usdc) throw new Error("provide amount_usdc, or all=true with shares_exact");
+      if (!amount_usdc) throw new Error("provide --amount_usdc, or --all with --shares_exact");
       return unsigned(buildWithdraw(vault, { receiver, owner: account, assetsHuman: amount_usdc }), vault, "withdraw");
     })
   );
@@ -39708,7 +39708,7 @@ function buildCommands() {
 }
 
 // src/cli.ts
-var SKILLS = ["earn"];
+var SKILLS = { earn: buildCommands };
 function kindOf(schema) {
   let s = schema;
   for (; ; ) {
@@ -39719,18 +39719,25 @@ function kindOf(schema) {
   }
 }
 var isOptional = (schema) => schema.safeParse(void 0).success;
+var SCHEMA_KEYS = ["description", "enum", "pattern", "minimum", "maximum", "exclusiveMinimum", "exclusiveMaximum"];
 function describe3(skill, name, c) {
+  const props = external_exports.toJSONSchema(c.inputSchema, { io: "input" }).properties ?? {};
   return {
     command: `${skill} ${name.slice(skill.length + 1)}`,
     tool: name,
     title: c.title,
     description: c.description,
-    flags: Object.entries(c.inputSchema.shape).map(([flag, schema]) => ({
-      flag: `--${flag}`,
-      type: kindOf(schema),
-      required: !isOptional(schema),
-      ...schema.description ? { description: schema.description } : {}
-    }))
+    flags: Object.entries(c.inputSchema.shape).map(([flag, schema]) => {
+      const kind = kindOf(schema);
+      const js = props[flag] ?? {};
+      return {
+        flag: `--${flag}`,
+        type: kind,
+        required: !isOptional(schema),
+        ...kind === "boolean" ? { takesValue: false } : {},
+        ...Object.fromEntries(SCHEMA_KEYS.filter((k) => js[k] !== void 0).map((k) => [k, js[k]]))
+      };
+    })
   };
 }
 var UsageError = class extends Error {
@@ -39746,17 +39753,26 @@ function parseFlags(c, argv) {
       canonical[spelling] = name;
     }
   }
-  let values;
+  const switches = Object.keys(shape).filter((n) => kindOf(shape[n]) === "boolean");
+  let parsed;
   try {
-    ({ values } = parseArgs({ args: argv, options, strict: true, allowPositionals: false }));
+    parsed = parseArgs({ args: argv, options, strict: true, allowPositionals: false, tokens: true });
   } catch (e) {
-    throw new UsageError(`${e instanceof Error ? e.message : String(e)}. Flags for this command: ${Object.keys(shape).map((f) => `--${f}`).join(", ") || "none"}`);
+    const why = (e instanceof Error ? e.message : String(e)).replace(/\.+$/, "");
+    const hint = switches.length ? ` ${switches.map((n) => `--${n}`).join(", ")} ${switches.length === 1 ? "is a switch" : "are switches"}: give it for true, leave it out for false.` : "";
+    throw new UsageError(`${why}. Flags for this command: ${Object.keys(shape).map((f) => `--${f}`).join(", ") || "none"}.${hint}`);
+  }
+  const seen = /* @__PURE__ */ new Set();
+  for (const t of parsed.tokens ?? []) {
+    if (t.kind !== "option") continue;
+    const name = canonical[t.name];
+    if (seen.has(name)) throw new UsageError(`--${name} was given twice`);
+    seen.add(name);
   }
   const args = {};
-  for (const [spelling, raw] of Object.entries(values)) {
+  for (const [spelling, raw] of Object.entries(parsed.values)) {
     if (raw === void 0) continue;
     const name = canonical[spelling];
-    if (name in args) throw new UsageError(`--${name} was given twice`);
     const kind = kindOf(shape[name]);
     if (kind === "number") {
       if (typeof raw !== "string" || !/^\d+$/.test(raw)) throw new UsageError(`--${name} takes a whole number, got ${JSON.stringify(raw)}`);
@@ -39765,37 +39781,39 @@ function parseFlags(c, argv) {
       args[name] = raw;
     }
   }
-  const parsed = c.inputSchema.strict().safeParse(args);
-  if (!parsed.success) {
-    throw new UsageError(parsed.error.issues.map((i) => `--${i.path.join(".") || "?"}: ${i.message}`).join("; "));
+  const checked = c.inputSchema.strict().safeParse(args);
+  if (!checked.success) {
+    throw new UsageError(checked.error.issues.map((i) => `--${i.path.join(".") || "?"}: ${i.message}`).join("; "));
   }
-  return parsed.data;
+  return checked.data;
 }
 async function run(argv) {
-  const fail = (message) => ({ stderr: JSON.stringify({ error: message }, null, 2), code: 1 });
+  registerSecretSource(resolvedRpcSecrets);
+  const fail = (message) => ({ stderr: JSON.stringify({ error: redactEndpoints(message) }, null, 2), code: 1 });
   const [first, second, ...rest] = argv;
   if (first === "--version" || first === "-v") return { stdout: PACKAGE_VERSION, code: 0 };
   if (first === void 0 || first === "--help" || first === "-h") {
-    return { stdout: JSON.stringify({ usage: "treasury <skill> <command> [--flag value \u2026]", version: PACKAGE_VERSION, skills: [...SKILLS] }, null, 2), code: 0 };
+    return { stdout: JSON.stringify({ usage: "treasury <skill> <command> [--flag value \u2026]", version: PACKAGE_VERSION, skills: Object.keys(SKILLS) }, null, 2), code: 0 };
   }
-  const skill = SKILLS.find((s) => s === first);
-  if (!skill) return fail(`unknown skill ${JSON.stringify(first)}; this CLI carries: ${SKILLS.join(", ")}`);
+  const build = Object.hasOwn(SKILLS, first) ? SKILLS[first] : void 0;
+  if (!build) return fail(`unknown skill ${JSON.stringify(first)}; this CLI carries: ${Object.keys(SKILLS).join(", ")}`);
+  const skill = first;
   let commands;
   try {
-    commands = buildCommands();
+    commands = build();
   } catch (e) {
-    return fail(redactEndpoints(e instanceof Error ? e.message : String(e)));
+    return fail(e instanceof Error ? e.message : String(e));
   }
   const mine = Object.entries(commands).filter(([name2]) => name2.startsWith(`${skill}_`));
   if (second === void 0 || second === "--help" || second === "-h") {
     return { stdout: JSON.stringify({ usage: `treasury ${skill} <command> [--flag value \u2026]`, version: PACKAGE_VERSION, commands: mine.map(([n, c]) => describe3(skill, n, c)) }, null, 2), code: 0 };
   }
   const name = `${skill}_${second.replaceAll("-", "_")}`;
-  const command = commands[name];
-  if (!command || !name.startsWith(`${skill}_`)) {
+  const command = Object.hasOwn(commands, name) && name.startsWith(`${skill}_`) ? commands[name] : void 0;
+  if (!command) {
     return fail(`unknown command ${JSON.stringify(`${skill} ${second}`)}; commands: ${mine.map(([n]) => n.slice(skill.length + 1)).join(", ")}`);
   }
-  if (rest.includes("--help") || rest.includes("-h")) return { stdout: JSON.stringify(describe3(skill, name, command), null, 2), code: 0 };
+  if (rest[0] === "--help" || rest[0] === "-h") return { stdout: JSON.stringify(describe3(skill, name, command), null, 2), code: 0 };
   let args;
   try {
     args = parseFlags(command, rest);
@@ -39805,7 +39823,7 @@ async function run(argv) {
   try {
     return { stdout: await command.handler(args), code: 0 };
   } catch (e) {
-    return fail(redactEndpoints(e instanceof Error ? e.message : String(e)));
+    return fail(e instanceof Error ? e.message : String(e));
   }
 }
 function isEntryPoint() {
@@ -39820,16 +39838,15 @@ function isEntryPoint() {
 if (isEntryPoint()) {
   run(process.argv.slice(2)).then(
     ({ stdout, stderr, code }) => {
-      if (stdout !== void 0) process.stdout.write(`${stdout}
-`);
-      if (stderr !== void 0) process.stderr.write(`${stderr}
-`);
-      process.exitCode = code;
+      const out = stdout === void 0 ? Promise.resolve() : new Promise((done) => process.stdout.write(`${stdout}
+`, () => done()));
+      const err = stderr === void 0 ? Promise.resolve() : new Promise((done) => process.stderr.write(`${stderr}
+`, () => done()));
+      void Promise.all([out, err]).then(() => process.exit(code));
     },
     (e) => {
       process.stderr.write(`${JSON.stringify({ error: redactEndpoints(String(e)) })}
-`);
-      process.exitCode = 1;
+`, () => process.exit(1));
     }
   );
 }

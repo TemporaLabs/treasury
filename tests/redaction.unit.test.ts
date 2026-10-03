@@ -1,7 +1,7 @@
 /**
  * Unit. The tool boundary must never emit an RPC endpoint (found in the first review): viem's
- * error messages carry `URL: https://…/v2/<key>`, a keyed provider URL is a secret, and the MCP SDK
- * forwards a thrown error's message verbatim. Two layers, each tested: `describeError` at every
+ * error messages carry `URL: https://…/v2/<key>`, a keyed provider URL is a secret, and the CLI
+ * prints a thrown error's message verbatim. Two layers, each tested: `describeError` at every
  * String(e) site, and `guarded()` around every handler for anything that escapes unwrapped.
  */
 import { describe, it, expect, beforeAll, afterAll } from "vitest";

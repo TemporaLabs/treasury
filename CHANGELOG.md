@@ -14,14 +14,20 @@ Pre-1.0, minor versions may change tool names, schemas and behaviour.
   tool returned — and a refusal exits 1 with `{ "error": … }` on stderr. Nothing stays running between
   commands.
 - The bundle is `dist/treasury.mjs` and the npm bin is `treasury`. The plugin declares no server: its
-  skill runs `node "${CLAUDE_PLUGIN_ROOT}/dist/treasury.mjs" earn …` through the shell, so the plugin
-  needs no session restart for a server to connect, and the CLI reads the whole environment it was
-  started in — `BASE_RPC_URL` and `ARBITRUM_RPC_URL` now reach it through the plugin too.
+  skill runs `node "${CLAUDE_PLUGIN_ROOT}/dist/treasury.mjs" earn …` through the shell, so no server
+  has to connect at session start (`/reload-plugins` loads the skill), and the CLI reads the whole
+  environment it was started in — `BASE_RPC_URL` and `ARBITRUM_RPC_URL` now reach it through the
+  plugin too.
+- Every command that cannot run as asked exits 1 with `{ "error": … }` on stderr: an unknown flag, a
+  flag given twice (either spelling), a switch given a value (`--all` takes none), a vault on another
+  chain. A verdict such as `WHITELIST_GATED` is still a result and exits 0.
 
 ### Removed
 - The MCP server: `dist/mcp-server.mjs`, the `treasury-mcp` bin, `plugin/.mcp.json`, and the
-  `@modelcontextprotocol/sdk` dependency (90 fewer installed packages; the bundle is 1.4 MB, was 2.1 MB).
-  An MCP host configured with the old bundle path stays on v0.1.1 until it switches to the CLI.
+  `@modelcontextprotocol/sdk` dependency (about 90 fewer installed packages; the bundle is 1.5 MB,
+  was 2.1 MB). **An MCP host that runs the old bundle must pin v0.1.1 exactly**
+  (`npm install --save-exact @temporalabs/treasury@0.1.1`): a `^0.1.1` range resolves to this release,
+  which has no `dist/mcp-server.mjs`.
 
 ### Added
 - **Earn on more than one chain: Arbitrum One joins Base** (#62). Every tool that takes `vault` also

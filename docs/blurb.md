@@ -50,14 +50,14 @@ claude plugin marketplace add TemporaLabs/treasury@v0.1.1
 claude plugin install treasury@treasury
 ```
 
-Start a new Claude Code session so the Earn skill loads. The plugin ships from the `plugin/` folder of the main
+Run `/reload-plugins` (or start a new session) so the Earn skill loads. The plugin ships from the `plugin/` folder of the main
 repository as of v0.1.1. If you installed from the earlier `treasury-plugin` repository, run
 `claude plugin marketplace remove treasury` first, then the two lines above.
 
 ### Any agent with a shell
 
 ```bash
-npm install @temporalabs/treasury@0.1.1
+npm install --save-exact @temporalabs/treasury@0.1.1
 npx --no-install treasury earn --help
 ```
 

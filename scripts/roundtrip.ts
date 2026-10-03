@@ -3,7 +3,7 @@
  * same boundary an agent uses — and stopping exactly where the skill stops: at unsigned calls.
  *
  *   TREASURY_RPC_BASE=… npx tsx scripts/roundtrip.ts --account 0x… --receiver 0x… \
- *     [--vault <ticker>] [--amount 0.05] [--out ./roundtrip-out] [--server dist|src]
+ *     [--vault <ticker>] [--amount 0.05] [--out ./roundtrip-out] [--cli dist|src]
  *
  * `--vault` decides the chain: a vault is on one chain, and the run uses that chain's RPC variable
  * (`TREASURY_RPC_ARBITRUM` for a vault on Arbitrum One).
@@ -39,7 +39,7 @@ const flag = (name: string): string | undefined => {
   return i >= 0 ? argv[i + 1] : undefined;
 };
 const usage = (msg: string): never => {
-  console.error(`roundtrip: ${msg}\nusage: --account <0x…> --receiver <0x…> [--vault <ticker>] [--amount <usdc>] [--out dir] [--server dist|src]`);
+  console.error(`roundtrip: ${msg}\nusage: --account <0x…> --receiver <0x…> [--vault <ticker>] [--amount <usdc>] [--out dir] [--cli dist|src]`);
   process.exit(2);
 };
 const vault = flag("vault") ?? EARN.roundTripVault;
@@ -57,11 +57,12 @@ const receiver = getAddress(receiverRaw);
 const here = dirname(fileURLToPath(import.meta.url));
 const pkg = resolve(here, "..");
 const dist = resolve(pkg, "dist/treasury.mjs");
-const useDist = (flag("server") ?? (existsSync(dist) ? "dist" : "src")) === "dist";
+const useDist = (flag("cli") ?? (existsSync(dist) ? "dist" : "src")) === "dist";
 
 /** `earn_quote` + `{ direction: "deposit" }` → `treasury earn quote --direction deposit`, run exactly as an agent runs it. */
 function tool<T = Record<string, unknown>>(name: string, args: Record<string, unknown> = {}): Promise<T> {
-  const flags = Object.entries(args).flatMap(([k, v]) => (v === true ? [`--${k}`] : [`--${k}`, String(v)]));
+  // A switch is given bare or not at all; an unset argument is left out rather than sent as "undefined".
+  const flags = Object.entries(args).flatMap(([k, v]) => (v === undefined || v === false ? [] : v === true ? [`--${k}`] : [`--${k}`, String(v)]));
   const argv = ["earn", name.replace(/^earn_/, ""), ...flags];
   const child = useDist
     ? spawn("node", [dist, ...argv], { cwd: pkg, stdio: ["ignore", "pipe", "pipe"] })
@@ -119,7 +120,7 @@ check(Object.keys(terms).length > 0, "disclosures returned (an operator must ack
 
 console.log("\n3. earn_status — health, then preflight");
 const health = await tool<{ mode: string; rpc?: string; rpcSource?: string; rpcConfigured?: boolean; chainId?: number }>("earn_status", { chain: row.chain });
-check(health.mode === "health" && health.chainId === row.chainId && health.rpc === "ok", `server up, and the ${row.chain} RPC answers for chain ${row.chainId}`, health);
+check(health.mode === "health" && health.chainId === row.chainId && health.rpc === "ok", `CLI healthy, and the ${row.chain} RPC answers for chain ${row.chainId}`, health);
 check(health.rpcConfigured === true, `RPC configured (source: ${health.rpcSource ?? "none"}) — on the public endpoint the steps below rate-limit`, health);
 const pre = await tool<{ mode: string; status: string; canDeposit: boolean; findings: string[]; balances?: { asset: string; shares: string } }>("earn_status", { vault, account, amount_usdc: amount });
 check(pre.mode === "preflight", "preflight mode", pre);

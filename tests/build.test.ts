@@ -172,7 +172,7 @@ describe("the prepare tools tell an agent the decoded form exists (#11)", () => 
   const registered = (buildCommands() as unknown as Registered);
   const described = (name: string) => (registered[name] ?? {}).description ?? "";
 
-  // The population is DERIVED from what the server registers, not written down here: a third
+  // The population is DERIVED from what the commands register, not written down here: a third
   // money-committing tool is subject to this requirement the moment it exists, rather than only
   // tripping the census and being waved through once the count is bumped (#17). A derived loop
   // over nothing would generate no tests and pass vacuously, so the population is asserted first,

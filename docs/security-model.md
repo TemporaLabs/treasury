@@ -27,8 +27,8 @@ library directly, you are the boundary.)
 **`tests/boundary.unit.test.ts`** parses every TypeScript file under the package with the TypeScript
 compiler and fails the build if any file:
 
-- imports, requires or dynamically loads anything outside the package and its three declared
-  dependencies (`@modelcontextprotocol/sdk`, `viem`, `zod`);
+- imports, requires or dynamically loads anything outside the package and its two declared
+  dependencies (`viem`, `zod`);
 - reads an environment variable that is not on the allowlist of seven
   ([`configuration.md`](configuration.md)), or reads one with a computed key;
 - starts a process, except three named files — two test tiers that spawn the reconciliation script and
