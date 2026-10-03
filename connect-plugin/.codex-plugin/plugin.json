@@ -1,0 +1,10 @@
+{
+  "name": "connect",
+  "version": "0.7.0",
+  "description": "Agent Treasury by Tempora Labs — wallet connect plugin for AI agents. The connect skill opens one browser page with two separate choices: Google or email through Privy (an embedded wallet), or a directly connected wallet such as MetaMask or Rabby with no Privy involved. Every deposit or withdrawal then shows a confirmation page with the decoded call (action, amount, vault, receiver) and is signed only after the operator clicks Confirm. Never holds a key and never decides what a transaction contains; that is Earn's job. A companion to the earn plugin: earn calls connect when no account is known, and hands connect its prepared calls to get signed.",
+  "author": {
+    "name": "Tempora Labs"
+  },
+  "repository": "https://github.com/TemporaLabs/treasury-connect-plugin",
+  "skills": "./skills/"
+}
