@@ -1,0 +1,9 @@
+{
+  "name": "@temporalabs/treasury-sign",
+  "private": true,
+  "description": "Opens a local page that hands Treasury's unsigned calls to the wallet extension in your browser. Holds no key; sends nothing itself.",
+  "type": "module",
+  "license": "Apache-2.0",
+  "bin": { "treasury-sign": "./open.mjs" },
+  "files": ["open.mjs", "index.html", "app.mjs", "validate.mjs", "README.md"]
+}

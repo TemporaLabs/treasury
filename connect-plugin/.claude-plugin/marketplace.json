@@ -1,0 +1,19 @@
+{
+  "name": "connect",
+  "owner": {
+    "name": "Tempora Labs"
+  },
+  "metadata": {
+    "description": "Agent Treasury by Tempora Labs — wallet connect plugin for AI agents. Open source. Connects a wallet (Google/email via Privy, or a wallet connected directly) for Tempora Labs treasury skills, with a confirmation page before every send. Never holds a key."
+  },
+  "plugins": [
+    {
+      "name": "connect",
+      "description": "Agent Treasury by Tempora Labs — wallet connect plugin for AI agents. Ships the connect skill: sign-in with Google/email or a direct wallet, session status, disconnect, switch, and relaying one prepared call through a confirmation page for a signature. Holds no keys.",
+      "source": "./",
+      "version": "0.7.0",
+      "category": "finance",
+      "homepage": "https://temporalabs.com"
+    }
+  ]
+}
