@@ -150,12 +150,12 @@ jobs:
         run: |
           git clone --depth 1 https://github.com/anthropics/claude-plugins-official /tmp/cpo
           python3 /tmp/cpo/plugins/skill-creator/skills/skill-creator/scripts/quick_validate.py plugin/skills/earn
-      - name: bundled MCP server is current, and so are the plugin's copies of it
+      - name: bundled CLI is current, and so are the plugin's copies of it
         if: steps.pk.outputs.present == 'yes'
         run: |
           npm run build
-          git diff --exit-code --stat -- dist/mcp-server.mjs \
-            || { echo "::error::dist/mcp-server.mjs is stale — run npm run build and commit it"; exit 1; }
+          git diff --exit-code --stat -- dist/treasury.mjs \
+            || { echo "::error::dist/treasury.mjs is stale — run npm run build and commit it"; exit 1; }
           git diff --exit-code --stat -- THIRD_PARTY_NOTICES.md \
             || { echo "::error::THIRD_PARTY_NOTICES.md is stale — run npm run build and commit it"; exit 1; }
           # Only the files the build WRITES into plugin/; the manifests and the skill there are edited by hand.
@@ -171,7 +171,7 @@ jobs:
           npm pack --dry-run --json --ignore-scripts > /tmp/pack.json
           node -e '
             const files = new Set(require("/tmp/pack.json")[0].files.map((f) => f.path));
-            const need = ["LICENSE", "NOTICE", "THIRD_PARTY_NOTICES.md", "dist/mcp-server.mjs"];
+            const need = ["LICENSE", "NOTICE", "THIRD_PARTY_NOTICES.md", "dist/treasury.mjs"];
             const missing = need.filter((f) => !files.has(f));
             if (missing.length) { console.log("::error file=package.json::the packed artifact is missing " + missing.join(", ")); process.exit(1); }
             console.log("packed artifact carries " + need.join(", "));
@@ -191,25 +191,23 @@ jobs:
           want="git+https://github.com/TemporaLabs/treasury.git"
           [ "$got" = "$want" ] || { echo "::error file=package.json::repository.url is '$got' but the public repository is TemporaLabs/treasury — an npm publish with provenance from anywhere else will be refused"; exit 1; }
           echo "repository.url names the public repository"
-      - name: bundled server answers tools/list with no sign/send tool
+      - name: bundled CLI lists exactly the eight earn commands, with no sign/send command
         if: steps.pk.outputs.present == 'yes'
         run: |
           python3 - <<'PY'
           import json, subprocess
-          p = subprocess.Popen(["node","dist/mcp-server.mjs"], stdin=subprocess.PIPE, stdout=subprocess.PIPE, text=True)
-          def send(o): p.stdin.write(json.dumps(o)+"\n"); p.stdin.flush()
-          send({"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-06-18","capabilities":{},"clientInfo":{"name":"ci","version":"0"}}}); p.stdout.readline()
-          send({"jsonrpc":"2.0","method":"notifications/initialized"})
-          send({"jsonrpc":"2.0","id":2,"method":"tools/list","params":{}})
-          tools = json.loads(p.stdout.readline())["result"]["tools"]
-          names = [t["name"] for t in tools]
+          out = subprocess.run(["node","dist/treasury.mjs","earn","--help"], capture_output=True, text=True, timeout=60)
+          assert out.returncode == 0, out.stderr
+          commands = json.loads(out.stdout)["commands"]
+          names = [c["tool"] for c in commands]
           print(names)
           assert set(names) == {"earn_vaults","earn_terms","earn_quote","earn_status","earn_prepare_deposit","earn_prepare_withdraw","earn_balance","earn_claim"}, names
-          assert not any(k in n for n in names for k in ("sign","send","transfer")), "a signing tool leaked in"
-          # EXACT property set per tool, re-derived from the live bundle — not a superset or a
+          assert len(names) == 8, names
+          assert not any(k in n for n in names for k in ("sign","send","transfer")), "a signing command leaked in"
+          # EXACT flag set per command, re-derived from the live bundle — not a superset or a
           # membership check (an earlier version would let a stray extra
-          # property through on the six tools it did not name).
-          props = {t["name"]: set((t.get("inputSchema") or {}).get("properties", {})) for t in tools}
+          # flag through on the six commands it did not name).
+          props = {c["tool"]: {f["flag"].removeprefix("--") for f in c["flags"]} for c in commands}
           expected = {
               "earn_vaults": set(),
               "earn_terms": set(),
@@ -224,31 +222,26 @@ jobs:
           for old in ("depositor", "principal", "owner"):
               leaked = [n for n, pr in props.items() if old in pr]
               assert not leaked, f"{old!r} survives in {leaked}"
-          p.stdin.close(); p.wait(5)
           PY
-      - name: SKILL.md's tool table matches the server's real tools/list
+      - name: SKILL.md's command table matches the CLI's real command list
         if: steps.pk.outputs.present == 'yes' && steps.sk.outputs.present == 'yes'
         run: |
           python3 - <<'PY'
           import json, re, subprocess, pathlib, sys
           # The copy the plugin actually runs, not the root bundle: a later step holds the two
           # identical, and this one checks the skill against what an install executes.
-          p = subprocess.Popen(["node","plugin/dist/mcp-server.mjs"], stdin=subprocess.PIPE, stdout=subprocess.PIPE, text=True)
-          def send(o): p.stdin.write(json.dumps(o)+"\n"); p.stdin.flush()
-          send({"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-06-18","capabilities":{},"clientInfo":{"name":"ci","version":"0"}}}); p.stdout.readline()
-          send({"jsonrpc":"2.0","method":"notifications/initialized"})
-          send({"jsonrpc":"2.0","id":2,"method":"tools/list","params":{}})
-          live = {t["name"] for t in json.loads(p.stdout.readline())["result"]["tools"]}
-          p.stdin.close(); p.wait(5)
+          out = subprocess.run(["node","plugin/dist/treasury.mjs","earn","--help"], capture_output=True, text=True, timeout=60)
+          assert out.returncode == 0, out.stderr
+          live = {c["tool"] for c in json.loads(out.stdout)["commands"]}
           md = pathlib.Path("plugin/skills/earn/SKILL.md").read_text()
-          # ANCHORED ON THE TOOL TABLE'S FIRST COLUMN ONLY. A free prose scan had
+          # ANCHORED ON THE TABLE'S FIRST COLUMN ONLY. A free prose scan had
           # both failure modes: a forward-looking sentence ("future work may add `earn_transfer`")
-          # read as a phantom tool, and an unbackticked or call-style mention
+          # read as a phantom command, and an unbackticked or call-style mention
           # (`earn_balance(vault, account)`) extracted nothing at all and read as undocumented.
           # The table is the contract; prose is not.
           # ⚠️ PLAIN-TEXT CONTRACT for the table's first column: it must be exactly
           #    | `tool_name` | … |   — no bold, no icon, no leading indent. A reviewer measured that
-          #    all three produce FALSE NEGATIVES (a documented tool reads as undocumented). That is
+          #    all three produce FALSE NEGATIVES (a documented command reads as undocumented). That is
           #    the safe direction — a spurious CI failure asks a person to look, rather than passing
           #    silently — but it is invisible from reading the regex, so it is stated here.
           documented = set(re.findall(r"^\|\s*`(earn_[a-z_]+)`", md, re.M))
@@ -256,11 +249,11 @@ jobs:
           phantom = documented - live
           print("live:", sorted(live)); print("documented:", sorted(documented))
           if missing: print("::error::SKILL.md never mentions:", sorted(missing))
-          if phantom: print("::error::SKILL.md names tools the server does not have:", sorted(phantom))
+          if phantom: print("::error::SKILL.md names commands the CLI does not have:", sorted(phantom))
           sys.exit(1 if (missing or phantom) else 0)
           PY
       # A package.json version is a RUNTIME value: the bundle reports the one beside it as
-      # serverInfo.version, and the manifests are what the marketplaces advertise.
+      # `treasury --version` and `earn status`, and the manifests are what the marketplaces advertise.
       - name: every declaration of this repository's own version agrees
         if: steps.pk.outputs.present == 'yes'
         run: bash scripts/check-versions.sh
@@ -308,8 +301,8 @@ jobs:
           JS
 
   # ── Bundle provenance ──────────────────────────────────────────────────────────────────────────
-  # This job attests the COMMITTED root dist/mcp-server.mjs. A marketplace install runs
-  # plugin/dist/mcp-server.mjs, which the plugin-folder step holds byte-identical to it in the
+  # This job attests the COMMITTED root dist/treasury.mjs. A marketplace install runs
+  # plugin/dist/treasury.mjs, which the plugin-folder step holds byte-identical to it in the
   # committed tree, so the same attestation verifies the installed copy by digest (git install, no npm). `check` proved, on this same commit, that the committed bundle equals a
   # rebuild of the committed source (its stale-dist step) — `needs: check` is what carries that
   # across. This job attests THAT file with GitHub's OIDC identity and verifies it back, so a
@@ -352,7 +345,7 @@ jobs:
         continue-on-error: true   # the assert step below turns a failure here into the job's red, with the reason
         uses: actions/attest-build-provenance@v4
         with:
-          subject-path: dist/mcp-server.mjs
+          subject-path: dist/treasury.mjs
           show-summary: true
       - name: verify the attestation against the committed bundle (what a stranger runs)
         id: verify
@@ -363,7 +356,7 @@ jobs:
           ATTESTATION_URL: ${{ steps.attest.outputs.attestation-url }}
         run: |
           set -euo pipefail
-          f=dist/mcp-server.mjs
+          f=dist/treasury.mjs
           gh attestation verify "$f" --repo "$GITHUB_REPOSITORY" \
             --signer-workflow "$GITHUB_REPOSITORY/.github/workflows/ci.yml" --format json > /tmp/verify.json
           # the subject digest inside the verified attestation must be the digest of the file on disk

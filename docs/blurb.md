@@ -50,31 +50,18 @@ claude plugin marketplace add TemporaLabs/treasury@v0.1.1
 claude plugin install treasury@treasury
 ```
 
-Restart Claude Code so the tools connect. The plugin ships from the `plugin/` folder of the main
+Start a new Claude Code session so the Earn skill loads. The plugin ships from the `plugin/` folder of the main
 repository as of v0.1.1. If you installed from the earlier `treasury-plugin` repository, run
 `claude plugin marketplace remove treasury` first, then the two lines above.
 
-### Any MCP host
+### Any agent with a shell
 
 ```bash
 npm install @temporalabs/treasury@0.1.1
+npx --no-install treasury earn --help
 ```
 
-Then add the server to your host's MCP configuration:
-
-```json
-{
-  "mcpServers": {
-    "treasury": {
-      "command": "node",
-      "args": ["<project>/node_modules/@temporalabs/treasury/dist/mcp-server.mjs"],
-      "env": { "TREASURY_RPC_BASE": "https://..." }
-    }
-  }
-}
-```
-
-The same package works as a TypeScript/JavaScript library.
+Each command prints one JSON document. The same package works as a TypeScript/JavaScript library.
 
 ### Try it
 

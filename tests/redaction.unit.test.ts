@@ -11,7 +11,7 @@ import { base } from "viem/chains";
 import { preflightDeposit } from "../src/preflight.js";
 import { getPosition, UNKNOWN_AFTER_SCAN_FAILURE } from "../src/position.js";
 import { getVault } from "../src/registry.js";
-import { buildServer } from "../src/mcp/server.js";
+import { buildCommands } from "../src/earn/commands.js";
 import { EARN } from "../src/config/earn.js";
 import { FIXTURE, fixtureVault, useFixtureRegistry, useShippedRegistry } from "./fixtures/registry.js";
 
@@ -142,9 +142,8 @@ describe("no tool output carries the RPC key when the RPC fails", () => {
     process.env["TREASURY_RPC_BASE"] = FAKE_URL;
     process.env["TREASURY_LOGS_RPC_BASE"] = FAKE_URL;
     try {
-      const server = buildServer();
-      // Reach the registered handler the way the SDK does, without a transport.
-      const tools = (server as unknown as { _registeredTools: Record<string, { handler: (a: unknown, extra: unknown) => Promise<unknown> }> })._registeredTools;
+      // Reach the registered handler directly, the way `src/cli.ts` does after parsing flags.
+      const tools = buildCommands() as unknown as Record<string, { handler: (a: unknown, extra: unknown) => Promise<unknown> }>;
       expect(Object.keys(tools)).toContain("earn_balance");
       let thrown: unknown;
       try {

@@ -40,7 +40,7 @@ case "$mode" in
     if [ "$attest" = "skip" ]; then echo "::notice title=bundle attestation skipped::$why"; else echo "::notice title=bundle attestation $attest::$why"; fi
     # Loud in the job SUMMARY too, not only in annotations: a skipped attestation must be visible
     # to someone who opens the run and reads nothing else.
-    { echo "### Bundle attestation: **${attest^^}**"; echo; echo "$why"; echo; echo "subject: \`dist/mcp-server.mjs\` sha256 \`$(sha256sum dist/mcp-server.mjs 2>/dev/null | cut -d' ' -f1)\`"; } >> "${GITHUB_STEP_SUMMARY:-/dev/null}"
+    { echo "### Bundle attestation: **${attest^^}**"; echo; echo "$why"; echo; echo "subject: \`dist/treasury.mjs\` sha256 \`$(sha256sum dist/treasury.mjs 2>/dev/null | cut -d' ' -f1)\`"; } >> "${GITHUB_STEP_SUMMARY:-/dev/null}"
     ;;
   assert)
     read -r attest why < <(decide)

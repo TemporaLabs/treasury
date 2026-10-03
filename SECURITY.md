@@ -39,14 +39,14 @@ Anything that lets this package do what it promises never to do, or fail to do w
   reverse, on a supported chassis;
 - a balance, basis or yield figure presented as a measurement when the scan did not cover the history;
 - any way for a registry row to point somewhere other than the on-chain contract it names;
-- a dependency or build-pipeline issue that lets the committed `dist/mcp-server.mjs` differ from what
+- a dependency or build-pipeline issue that lets the committed `dist/treasury.mjs` differ from what
   the committed source builds to.
 
 ## Scope
 
 In scope: everything in this repository — the client source, the workflows, the documentation where
 it makes a claim the code should honour, and the Claude Code plugin in `plugin/`: its manifests, a
-`.mcp.json` that misdirects the plugin's own install or launch, and the `earn` skill text itself.
+command in the skill that misdirects what the plugin runs, and the `earn` skill text itself.
 
 Out of scope: the vault contracts themselves and the protocols they hold positions in (report those to
 their maintainers; we will pass along anything you send us), the RPC providers, and the agent

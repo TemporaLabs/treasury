@@ -19,7 +19,7 @@ return unsigned calls. There is no EXECUTE kind, and adding one is a design chan
 The envelope is the point: an unsigned build is **structurally distinguishable** from anything that
 has happened. A consumer, a test, or a policy engine can assert on `requires_signature` and
 `status: "unsigned"` rather than parsing prose. (The library functions `buildDeposit` /
-`buildWithdraw` return bare arrays; the envelope belongs to the MCP boundary. If you consume the
+`buildWithdraw` return bare arrays; the envelope belongs to the command boundary. If you consume the
 library directly, you are the boundary.)
 
 ## What enforces it
@@ -39,8 +39,8 @@ It is written as an analysis of the AST, not a grep for a string, because a rena
 a template literal defeats a regex. It has a control: fixtures that *must* fail it, so the gate cannot
 go vacuous.
 
-**CI** rebuilds `dist/mcp-server.mjs` from source and fails if the committed bundle differs by a byte;
-starts the bundle and asserts the exact tool list, the exact property set of every tool's schema, and
+**CI** rebuilds `dist/treasury.mjs` from source and fails if the committed bundle differs by a byte;
+runs the bundle and asserts the exact command list, the exact flag set of every command, and
 the absence of `sign`, `send` and `transfer`; and, on the public repository, mints a provenance
 attestation for the bundle and verifies it before the run can go green
 ([`runbooks/verify_the_bundle.md`](runbooks/verify_the_bundle.md)).
@@ -73,5 +73,5 @@ The parts of a vault's interface that lie are not trusted:
 
 The vault contracts and the protocols they hold, the RPC provider's honesty, and the agent runtime
 that hosts the plugin. Treasury believes the RPC; it cannot verify the chain. And Treasury cannot
-stop a model from *reporting* that something was deposited — nothing at an MCP boundary can. What it
+stop a model from *reporting* that something was deposited — nothing at a command boundary can. What it
 can do is make an unsigned build impossible to mistake for a completed one, by shape.

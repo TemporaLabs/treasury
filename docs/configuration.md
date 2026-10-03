@@ -12,10 +12,10 @@ with "returned no data", which looks like a broken vault, not like a misconfigur
 |---|---|---|
 | `TREASURY_RPC_BASE` | the Base RPC every tool reads through for a vault on Base | falls back to `BASE_RPC_URL`, then to Base's public endpoint `https://mainnet.base.org`, which rate-limits after a handful of calls |
 | `TREASURY_LOGS_RPC_BASE` | the RPC `earn_balance` scans `Deposit`/`Withdraw` events through on Base — a provider with a wide `eth_getLogs` window | uses `TREASURY_RPC_BASE` |
-| `BASE_RPC_URL` | a conventional alias, honoured when Treasury runs outside the plugin | — |
+| `BASE_RPC_URL` | a conventional alias, used when `TREASURY_RPC_BASE` is unset — through the plugin too | — |
 | `TREASURY_RPC_ARBITRUM` | the Arbitrum One RPC every tool reads through for a vault on Arbitrum One | falls back to `ARBITRUM_RPC_URL`, then to Arbitrum's public endpoint `https://arb1.arbitrum.io/rpc`, which also rate-limits |
 | `TREASURY_LOGS_RPC_ARBITRUM` | the RPC `earn_balance` scans events through on Arbitrum One | uses `TREASURY_RPC_ARBITRUM` |
-| `ARBITRUM_RPC_URL` | a conventional alias, honoured when Treasury runs outside the plugin | — |
+| `ARBITRUM_RPC_URL` | a conventional alias, used when `TREASURY_RPC_ARBITRUM` is unset — through the plugin too | — |
 | `TREASURY_LOGS_FALLBACK` | where a scan goes when the configured RPC cannot cover the range: an `http(s)` URL for a Base endpoint, or anything that is not a URL (`off`, `disabled`, …) to forbid a fallback on every chain | the chain's own public endpoint |
 
 **Check a chain's RPC with `earn_status` and `chain`.** It reports which variable supplied the
@@ -38,13 +38,10 @@ as a `429`.
 
 ## Through the plugin
 
-The plugin (the [`plugin/`](../plugin/) folder of this repository; its server declaration is
-[`plugin/.mcp.json`](../plugin/.mcp.json)) forwards exactly `TREASURY_RPC_BASE`, `TREASURY_LOGS_RPC_BASE`, `TREASURY_RPC_ARBITRUM` and `TREASURY_LOGS_RPC_ARBITRUM` from the host environment — that is
-the contract its manifest honours. The server it spawns also inherits its parent's environment, so
-`TREASURY_LOGS_FALLBACK` reaches it on the plugin path too. When a forwarded variable is unset, the
-`${VAR:-}` default in `.mcp.json` passes an empty string. Treasury treats an empty value, or an
-unexpanded `${…}` placeholder from a host that does not apply the default, as unset and falls back,
-so an unset variable is never mistaken for an endpoint.
+The plugin (the [`plugin/`](../plugin/) folder of this repository) declares no server: its skill runs
+the CLI through Claude Code's shell, so every variable above reaches it from the environment Claude
+Code was started in. Export them before you start it. Treasury treats an empty value, or an unexpanded
+`${…}` placeholder, as unset and falls back, so an unset variable is never mistaken for an endpoint.
 
 ## `eth_getLogs` windows — why each chain has two RPC variables
 
