@@ -32,7 +32,7 @@ const result = await build({
   platform: "browser",
   target: ["es2020"],
   define: { "process.env.NODE_ENV": '"production"' },
-  loader: { ".svg": "dataurl" },
+  loader: { ".woff2": "dataurl" },
   legalComments: "none",
   outfile: "../dist/connect-page.js",
   metafile: true,

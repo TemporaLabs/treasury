@@ -51,7 +51,7 @@ export function signInMessage(a: { address: string; origin: string; nonce: strin
     `${new URL(a.origin).host} wants you to sign in with your Ethereum account:`,
     a.address,
     "",
-    "Connect this wallet to Tempora Treasury. This signature costs no gas and authorizes no transaction.",
+    "Connect this wallet to Open Agent Treasury. This signature costs no gas and authorizes no transaction.",
     "",
     `URI: ${a.origin}`,
     "Version: 1",
@@ -79,11 +79,21 @@ export interface ConnectDeps {
 }
 
 export async function runConnect(deps: ConnectDeps = {}): Promise<{ result: Settled<Session>; url: string; opened: boolean }> {
-  const verify = deps.verifySignature ?? (async (a) => verifyMessage(a).catch(() => false));
+  // An ordinary wallet's signature is checked offline. A smart-contract wallet (a Coinbase smart
+  // wallet, for one) has no key of its own to recover, so its signature is checked by asking the
+  // wallet's contract on Base (ERC-1271 / ERC-6492) — the fallback, and only when the first fails.
+  const verify =
+    deps.verifySignature ??
+    (async (a) => {
+      if (await verifyMessage(a).catch(() => false)) return true;
+      return makePublicClient(8453, rpcUrlFromEnv(8453))
+        .verifyMessage(a)
+        .catch(() => false);
+    });
   const handle = await serveOnce<Session>({
     mode: "connect",
     ttlMs: CONNECT_TTL_MS,
-    html: (s) => shell(s, "Connect to Tempora Treasury"),
+    html: (s) => shell(s, "Connect to Open Agent Treasury"),
     csp: PAGE_CSP,
     assets: assets(),
     port: connectPort(),
@@ -144,7 +154,7 @@ export async function runConfirm(
   const handle = await serveOnce<TxOutcome[]>({
     mode: "confirm",
     ttlMs: CONFIRM_TTL_MS,
-    html: (s) => shell(s, "Confirm — Tempora Treasury"),
+    html: (s) => shell(s, "Confirm — Open Agent Treasury"),
     csp: PAGE_CSP,
     assets: assets(),
     port: connectPort(),
@@ -164,7 +174,7 @@ export async function runConfirm(
         to: c.to,
         data: c.data,
         value: c.value,
-        vault: { symbol: admitted[i]!.vault.symbol, name: admitted[i]!.vault.name, address: admitted[i]!.vault.address, links: linksFor(admitted[i]!.vault) },
+        vault: { symbol: admitted[i]!.vault.symbol, name: admitted[i]!.vault.name, address: admitted[i]!.vault.address, asset: admitted[i]!.vault.asset.symbol, links: linksFor(admitted[i]!.vault) },
       })),
     }),
     accept: async (body) => {

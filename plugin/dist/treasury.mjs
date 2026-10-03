@@ -39959,7 +39959,7 @@ var PAGE_CSP = [
   "script-src 'self' https://challenges.cloudflare.com",
   "style-src 'self' 'unsafe-inline'",
   "img-src 'self' data: blob: https:",
-  "font-src 'self'",
+  "font-src 'self' data:",
   "object-src 'none'",
   "base-uri 'self'",
   "form-action 'none'",
@@ -40120,7 +40120,7 @@ function signInMessage(a) {
     `${new URL(a.origin).host} wants you to sign in with your Ethereum account:`,
     a.address,
     "",
-    "Connect this wallet to Tempora Treasury. This signature costs no gas and authorizes no transaction.",
+    "Connect this wallet to Open Agent Treasury. This signature costs no gas and authorizes no transaction.",
     "",
     `URI: ${a.origin}`,
     "Version: 1",
@@ -40137,11 +40137,14 @@ function announce(url2) {
   return opened;
 }
 async function runConnect(deps = {}) {
-  const verify = deps.verifySignature ?? (async (a) => verifyMessage(a).catch(() => false));
+  const verify = deps.verifySignature ?? (async (a) => {
+    if (await verifyMessage(a).catch(() => false)) return true;
+    return makePublicClient(8453, rpcUrlFromEnv(8453)).verifyMessage(a).catch(() => false);
+  });
   const handle = await serveOnce({
     mode: "connect",
     ttlMs: CONNECT_TTL_MS,
-    html: (s) => shell(s, "Connect to Tempora Treasury"),
+    html: (s) => shell(s, "Connect to Open Agent Treasury"),
     csp: PAGE_CSP,
     assets: assets(),
     port: connectPort(),
@@ -40186,7 +40189,7 @@ async function runConfirm(calls, admitted, session, deps = {}) {
   const handle = await serveOnce({
     mode: "confirm",
     ttlMs: CONFIRM_TTL_MS,
-    html: (s) => shell(s, "Confirm \u2014 Tempora Treasury"),
+    html: (s) => shell(s, "Confirm \u2014 Open Agent Treasury"),
     csp: PAGE_CSP,
     assets: assets(),
     port: connectPort(),
@@ -40206,7 +40209,7 @@ async function runConfirm(calls, admitted, session, deps = {}) {
         to: c.to,
         data: c.data,
         value: c.value,
-        vault: { symbol: admitted[i].vault.symbol, name: admitted[i].vault.name, address: admitted[i].vault.address, links: linksFor(admitted[i].vault) }
+        vault: { symbol: admitted[i].vault.symbol, name: admitted[i].vault.name, address: admitted[i].vault.address, asset: admitted[i].vault.asset.symbol, links: linksFor(admitted[i].vault) }
       }))
     }),
     accept: async (body) => {

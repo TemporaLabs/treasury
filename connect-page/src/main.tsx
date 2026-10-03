@@ -1,13 +1,13 @@
 /**
  * The page behind `treasury connect`. Two views, chosen by the local process's /info:
  *
- *   connect  One Connect button → Privy's window (email, Google, Apple, X, browser wallets). The
- *            chosen wallet signs a free sign-in message the local process issued; the process checks
- *            the signature. An email/social login gets a Privy embedded wallet, which signs the same
- *            message — so both paths prove the account the same way.
+ *   connect  One button → Privy's window (email, Google, Apple, X, browser wallets). The chosen
+ *            wallet signs a free sign-in message the local process issued; the process checks the
+ *            signature. An email/social login gets a Privy wallet, which signs the same message — so
+ *            both paths prove the account the same way.
  *   confirm  The calls the process built and admitted, shown decoded. The operator confirms each one;
- *            the wallet (their extension, or Privy's own confirmation for an embedded wallet) sends
- *            it; the process reads the receipt and says whether the next step may go.
+ *            the wallet (their extension, or Privy's own confirmation for a Privy wallet) sends it;
+ *            the process reads the receipt and says whether the next step may go.
  *
  * Nothing here holds a key. Every request back to the process carries the flow's secret.
  */
@@ -15,23 +15,24 @@ import React, { useCallback, useEffect, useRef, useState } from "react";
 import { createRoot } from "react-dom/client";
 import { PrivyProvider, useLogin, usePrivy, useWallets, type ConnectedWallet } from "@privy-io/react-auth";
 import { arbitrum, base } from "viem/chains";
-import logo from "./logo.svg";
+import { CSS } from "./styles";
 
 const secret = new URLSearchParams(location.search).get("s") ?? "";
 
+type WalletType = "external" | "embedded";
 type Call = {
   step: number;
   of: number;
-  kind: string;
+  kind: "approve" | "deposit" | "withdraw" | "redeem";
   description: string;
   to: `0x${string}`;
   data: `0x${string}`;
   value: string;
-  vault: { symbol: string; name: string; address: string; links: { explorer: string; app?: string } };
+  vault: { symbol: string; name: string; address: string; asset: string; links: { explorer: string; app?: string } };
 };
 type Info =
   | { mode: "connect"; appId: string }
-  | { mode: "confirm"; appId: string; account: string; walletType: "external" | "embedded"; chainId: number; chainName: string; next: number; calls: Call[] };
+  | { mode: "confirm"; appId: string; account: string; walletType: WalletType; chainId: number; chainName: string; next: number; calls: Call[] };
 
 async function post(path: string, body: Record<string, unknown>): Promise<Record<string, unknown> & { ok: boolean; reason?: string }> {
   const r = await fetch(path, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ s: secret, ...body }) });
@@ -40,37 +41,98 @@ async function post(path: string, body: Record<string, unknown>): Promise<Record
 const reject = (reason: string) => post("/result", { rejected: true, reason }).catch(() => undefined);
 const errText = (e: unknown) => (e instanceof Error ? e.message : typeof e === "object" && e && "message" in e ? String((e as { message: unknown }).message) : String(e));
 
-const S = {
-  main: { maxWidth: 560, margin: "0 auto", padding: "48px 20px", display: "flex", flexDirection: "column", gap: 18 } as React.CSSProperties,
-  logo: { height: 22, alignSelf: "flex-start" } as React.CSSProperties,
-  card: { background: "rgba(255,255,255,.85)", border: "1px solid var(--hair)", borderRadius: 16, padding: 24, boxShadow: "0 1px 2px rgba(15,35,64,.04), 0 12px 32px -20px rgba(15,35,64,.18)", display: "flex", flexDirection: "column", gap: 14 } as React.CSSProperties,
-  eyebrow: { fontFamily: '"IBM Plex Mono",ui-monospace,Menlo,monospace', fontSize: 11.5, letterSpacing: ".14em", textTransform: "uppercase", color: "var(--slate)", margin: 0 } as React.CSSProperties,
-  h1: { fontSize: 22, margin: 0, color: "var(--steel)", fontWeight: 600 } as React.CSSProperties,
-  p: { margin: 0, color: "var(--slate)" } as React.CSSProperties,
-  btn: { font: "inherit", fontWeight: 500, padding: "14px 22px", borderRadius: 10, border: "1px solid var(--navy)", background: "var(--navy)", color: "#fff", cursor: "pointer" } as React.CSSProperties,
-  ghost: { font: "inherit", padding: "14px 22px", borderRadius: 10, border: "1px solid var(--hair)", background: "#fff", color: "var(--ink)", cursor: "pointer" } as React.CSSProperties,
-  mono: { fontFamily: "ui-monospace,SFMono-Regular,Menlo,monospace", fontSize: 13, wordBreak: "break-all" } as React.CSSProperties,
-  row: { display: "grid", gridTemplateColumns: "7.5em 1fr", gap: "6px 12px", fontSize: 14 } as React.CSSProperties,
-};
+type Phase = { text: string; tone?: "ok" | "bad"; busy?: boolean; done?: boolean };
 
-function Frame({ eyebrow, title, children }: { eyebrow: string; title: string; children: React.ReactNode }) {
+const actionName = (c: Call) =>
+  c.kind === "approve" ? `Approve ${c.vault.asset}` : c.kind === "deposit" ? `Deposit ${c.vault.asset}` : c.kind === "withdraw" ? `Withdraw ${c.vault.asset}` : "Withdraw everything";
+
+const actionLede = (c: Call) =>
+  c.kind === "approve"
+    ? `Allow the vault to take this deposit from your wallet. It covers this amount only.`
+    : c.kind === "deposit"
+      ? `Move your ${c.vault.asset} into the vault. Your wallet receives vault shares in return.`
+      : `Take ${c.vault.asset} out of the vault, back to your wallet.`;
+
+/** How a Privy login method reads to a person; a wallet login has no "signed in with". */
+const methodName = (m: string | null): string | undefined =>
+  ({ email: "email", google: "Google", apple: "Apple", twitter: "X" } as Record<string, string>)[m ?? ""];
+
+/** One centred column: a mark, what is being asked, and the one action. */
+function Page({ mark, title, lede, children }: { mark: React.ReactNode; title: string; lede: React.ReactNode; children: React.ReactNode }) {
   return (
-    <main style={S.main}>
-      <img src={logo} alt="Tempora Labs" style={S.logo} />
-      <section style={S.card}>
-        <p style={S.eyebrow}>{eyebrow}</p>
-        <h1 style={S.h1}>{title}</h1>
-        {children}
-      </section>
+    <main className="oat-wrap">
+      <div className="oat-intro">
+        <span className="oat-mark">{mark}</span>
+        <h1 className="oat-h1">{title}</h1>
+        <p className="oat-lede">{lede}</p>
+      </div>
+      {children}
     </main>
   );
 }
 
-function Status({ text, tone }: { text: string; tone?: "ok" | "bad" }) {
-  return <p style={{ ...S.p, color: tone === "ok" ? "var(--ok)" : tone === "bad" ? "var(--bad)" : "var(--slate)" }} aria-live="polite">{text}</p>;
+const Tick = () => (
+  <svg width="18" height="18" viewBox="0 0 18 18" fill="none" stroke="#2f6fb0" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+    <path d="m4 9.5 3.2 3.2L14 5.8" />
+  </svg>
+);
+
+function Status({ phase }: { phase: Phase }) {
+  return phase.text ? (
+    <p className="oat-status" data-tone={phase.tone} aria-live="polite">
+      {phase.text}
+    </p>
+  ) : null;
 }
 
-/** The wallet that matches how the operator just signed in: a browser wallet for a wallet login, Privy's embedded one otherwise. */
+/** The connected wallet: which kind it is, and its address in full. */
+function WalletBox({ address, walletType, name, signedInWith, network }: { address: string; walletType: WalletType; name?: string; signedInWith?: string; network?: string }) {
+  const [copied, setCopied] = useState(false);
+  const kind = walletType === "embedded" ? "Privy wallet" : name ? `${name} · browser wallet` : "Browser wallet";
+  const foot = signedInWith ? `Signed in with ${signedInWith}` : network ? `Network: ${network}` : walletType === "embedded" ? "Created by Privy for your login" : "Your own wallet";
+  return (
+    <div className="oat-wallet">
+      <div className="oat-wallet-top">
+        <span className="oat-label">Connected wallet</span>
+        <span className="oat-badge" data-kind={walletType}>
+          {kind}
+        </span>
+      </div>
+      <p className="oat-addr">{address}</p>
+      <div className="oat-wallet-foot">
+        <span>{foot}</span>
+        <button
+          className="oat-copy"
+          onClick={() => {
+            void navigator.clipboard.writeText(address).then(() => setCopied(true));
+          }}
+        >
+          {copied ? "Copied" : "Copy address"}
+        </button>
+      </div>
+    </div>
+  );
+}
+
+const WalletMark = () => (
+  <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="#1E3553" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+    <path d="M4 7.5A2.5 2.5 0 0 1 6.5 5H17a2 2 0 0 1 2 2v1" />
+    <rect x="4" y="8" width="16" height="11" rx="2.5" />
+    <path d="M16 13.5h1.5" />
+  </svg>
+);
+const CheckMark = () => (
+  <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="#1F7A4A" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+    <path d="m5 12.5 4.5 4.5L19 7.5" />
+  </svg>
+);
+const ButtonIcon = () => (
+  <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+    <path d="M6.5 3H4a1.5 1.5 0 0 0-1.5 1.5v7A1.5 1.5 0 0 0 4 13h2.5M10 5l3 3-3 3M13 8H6.5" />
+  </svg>
+);
+
+/** The wallet that matches how the operator just signed in: a browser wallet for a wallet login, the Privy wallet otherwise. */
 function pick(wallets: ConnectedWallet[], method: string | null): ConnectedWallet | undefined {
   if (method === "siwe") return wallets.find((w) => w.walletClientType !== "privy");
   return wallets.find((w) => w.walletClientType === "privy");
@@ -80,7 +142,8 @@ function Connect() {
   const { ready, authenticated, logout } = usePrivy();
   const { wallets, ready: walletsReady } = useWallets();
   const [method, setMethod] = useState<string | null>(null);
-  const [phase, setPhase] = useState<{ text: string; tone?: "ok" | "bad"; busy?: boolean; done?: boolean }>({ text: "" });
+  const [phase, setPhase] = useState<Phase>({ text: "" });
+  const [connected, setConnected] = useState<{ address: string; walletType: WalletType; name?: string } | null>(null);
   const cleared = useRef(false);
   const started = useRef(false);
 
@@ -100,16 +163,17 @@ function Connect() {
     },
   });
 
-  const prove = useCallback(async (wallet: ConnectedWallet, walletType: "external" | "embedded") => {
+  const prove = useCallback(async (wallet: ConnectedWallet, walletType: WalletType) => {
     try {
-      setPhase({ text: walletType === "external" ? "Check your wallet: sign the free sign-in message." : "Approve the free sign-in message.", busy: true });
+      setPhase({ text: walletType === "external" ? "Check your wallet and sign the sign-in message. It is free." : "Approve the sign-in message. It is free.", busy: true });
       const ch = await post("/challenge", { address: wallet.address });
       if (!ch.ok || typeof ch["message"] !== "string") throw new Error(ch.reason ?? "no sign-in message was issued");
       const provider = await wallet.getEthereumProvider();
       const signature = await provider.request({ method: "personal_sign", params: [ch["message"], wallet.address] });
       const r = await post("/result", { address: wallet.address, signature, walletType });
       if (!r.ok) throw new Error(r.reason ?? "the sign-in was refused");
-      setPhase({ text: "Connected. You can close this tab and go back to your agent.", tone: "ok", done: true });
+      setConnected({ address: wallet.address, walletType, ...(walletType === "external" && wallet.meta?.name ? { name: wallet.meta.name } : {}) });
+      setPhase({ text: "", done: true });
     } catch (e) {
       const text = errText(e);
       setPhase({ text: `Not connected: ${text}`, tone: "bad", done: true });
@@ -125,16 +189,45 @@ function Connect() {
     void prove(wallet, wallet.walletClientType === "privy" ? "embedded" : "external");
   }, [ready, walletsReady, authenticated, method, wallets, prove]);
 
+  if (connected) {
+    return (
+      <Page mark={<CheckMark />} title="Wallet connected" lede="You can close this tab and go back to your agent.">
+        <WalletBox address={connected.address} walletType={connected.walletType} name={connected.name} signedInWith={connected.walletType === "embedded" ? methodName(method) : undefined} />
+        <p className="oat-fine">Each deposit or withdrawal will open a page like this one for you to confirm.</p>
+      </Page>
+    );
+  }
+
   return (
-    <Frame eyebrow="Tempora Treasury" title="Connect a wallet">
-      <p style={S.p}>Use a browser wallet such as MetaMask, or continue with email, Google, Apple or X. Connecting costs nothing and moves no money; every deposit or withdrawal is shown to you and confirmed separately.</p>
+    <Page mark={<WalletMark />} title="Connect wallet" lede="Open Agent Treasury would like to connect to your wallet.">
+      <section className="oat-panel" aria-labelledby="used-to">
+        <h2 className="oat-label" id="used-to">
+          Your wallet will be used to
+        </h2>
+        <ul className="oat-points">
+          <li>
+            <Tick />
+            Show your agent your address and balance
+          </li>
+          <li>
+            <Tick />
+            Deposit into Tempora vaults, once you confirm
+          </li>
+          <li>
+            <Tick />
+            Withdraw back to this wallet, once you confirm
+          </li>
+        </ul>
+      </section>
       {!phase.done && (
-        <button style={{ ...S.btn, opacity: ready && !phase.busy ? 1 : 0.5 }} disabled={!ready || phase.busy} onClick={() => login()}>
-          Connect
+        <button className="oat-btn" disabled={!ready || phase.busy} onClick={() => login()}>
+          <ButtonIcon />
+          Connect wallet
         </button>
       )}
-      <Status text={phase.text} tone={phase.tone} />
-    </Frame>
+      <Status phase={phase} />
+      <p className="oat-fine">Connecting is free. Sign in through Privy with a browser wallet, email, Google, Apple or X.</p>
+    </Page>
   );
 }
 
@@ -143,9 +236,10 @@ function Confirm({ info }: { info: Extract<Info, { mode: "confirm" }> }) {
   const { wallets } = useWallets();
   const { login } = useLogin();
   const [next, setNext] = useState(info.next);
-  const [phase, setPhase] = useState<{ text: string; tone?: "ok" | "bad"; busy?: boolean; done?: boolean }>({ text: "" });
+  const [phase, setPhase] = useState<Phase>({ text: "" });
   const wallet = wallets.find((w) => w.address.toLowerCase() === info.account.toLowerCase());
   const call = info.calls[next];
+  const shown = call ?? info.calls[info.calls.length - 1]!;
 
   const send = useCallback(async () => {
     if (!wallet || !call) return;
@@ -157,22 +251,23 @@ function Confirm({ info }: { info: Extract<Info, { mode: "confirm" }> }) {
       // Gas: the estimate × 1.5. A Morpho Vault V2 call can run out of gas on an unbuffered estimate.
       const est = BigInt((await provider.request({ method: "eth_estimateGas", params: [tx] })) as string);
       const hash = (await provider.request({ method: "eth_sendTransaction", params: [{ ...tx, gas: `0x${((est * 3n) / 2n).toString(16)}` }] })) as string;
-      setPhase({ text: "Sent. Waiting for it to land…", busy: true });
+      setPhase({ text: "Sent. Waiting for it to land.", busy: true });
       const r = await post("/result", { index: next, hash });
       if (!r.ok) throw new Error(r.reason ?? "refused");
       const verdict = (r["verdict"] ?? {}) as { verified?: string; detail?: string };
       if (r["stop"]) return setPhase({ text: `Stopped: ${verdict.detail ?? String(r["reason"] ?? "the step did not land as confirmed")}`, tone: "bad", done: true });
       if (r["finished"]) {
-        return setPhase({ text: verdict.verified === "extra_transfer" ? `Done — but note: ${verdict.detail}` : "Done. You can close this tab and go back to your agent.", tone: "ok", done: true });
+        setNext(info.calls.length);
+        return setPhase({ text: verdict.verified === "extra_transfer" ? `Done, with a note: ${verdict.detail}` : "Done. You can close this tab and go back to your agent.", tone: "ok", done: true });
       }
       setNext(Number(r["next"]));
-      setPhase({ text: "Step confirmed on chain. Review the next one." });
+      setPhase({ text: "Confirmed on chain. Review the next step." });
     } catch (e) {
       const text = errText(e);
       setPhase({ text: `Not sent: ${text}`, tone: "bad", done: true });
       await reject(text);
     }
-  }, [wallet, call, info.chainId, next]);
+  }, [wallet, call, info.chainId, info.calls.length, next]);
 
   const cancel = async () => {
     setPhase({ text: "Cancelled. Nothing more will be sent.", tone: "bad", done: true });
@@ -180,44 +275,64 @@ function Confirm({ info }: { info: Extract<Info, { mode: "confirm" }> }) {
   };
 
   return (
-    <Frame eyebrow={`Tempora Treasury · ${info.chainName}`} title={call ? `Confirm step ${call.step} of ${call.of}` : "Confirm"}>
-      {call && !phase.done && (
-        <>
-          <p style={S.p}>{call.description}</p>
-          <div style={S.row}>
-            <span style={S.p}>Vault</span>
-            <span>
-              {call.vault.name} ({call.vault.symbol}) ·{" "}
-              <a href={call.vault.links.explorer} target="_blank" rel="noreferrer">explorer</a>
-            </span>
-            <span style={S.p}>Vault address</span>
-            <span style={S.mono}>{call.vault.address}</span>
-            <span style={S.p}>Calls</span>
-            <span style={S.mono}>{call.to}</span>
-            <span style={S.p}>Account</span>
-            <span style={S.mono}>{info.account}</span>
-            <span style={S.p}>Chain</span>
-            <span>{info.chainName} ({info.chainId})</span>
-          </div>
-          {!ready ? (
-            <Status text="Loading…" />
-          ) : !authenticated || !wallet ? (
-            <>
-              <p style={S.p}>Sign in with the connected account ({info.walletType === "embedded" ? "the same email or social login" : "the same browser wallet"}) to continue.</p>
-              <button style={S.btn} onClick={() => login()}>Sign in</button>
-            </>
-          ) : (
-            <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
-              <button style={{ ...S.btn, opacity: phase.busy ? 0.5 : 1 }} disabled={phase.busy} onClick={() => void send()}>
-                Confirm in wallet
-              </button>
-              <button style={S.ghost} disabled={phase.busy} onClick={() => void cancel()}>Cancel</button>
-            </div>
-          )}
-        </>
+    <Page mark={phase.tone === "ok" ? <CheckMark /> : <WalletMark />} title={actionName(shown)} lede={actionLede(shown)}>
+      {info.calls.length > 1 && (
+        <ol className="oat-steps">
+          {info.calls.map((c, i) => (
+            <li key={c.step} data-state={i < next ? "done" : i === next ? "current" : "upcoming"}>
+              <span className="oat-step-mark" aria-hidden="true">
+                {i < next ? "✓" : c.step}
+              </span>
+              <span>{actionName(c)}</span>
+            </li>
+          ))}
+        </ol>
       )}
-      <Status text={phase.text} tone={phase.tone} />
-    </Frame>
+      <WalletBox address={info.account} walletType={info.walletType} network={info.chainName} />
+      <section className="oat-panel">
+        <p className="oat-what">{shown.description}</p>
+        <dl className="oat-dl">
+          <dt>Vault</dt>
+          <dd>
+            {shown.vault.name} ({shown.vault.symbol})
+          </dd>
+          <dt>Vault address</dt>
+          <dd>
+            <a className="oat-mono" href={shown.vault.links.explorer} target="_blank" rel="noreferrer">
+              {shown.vault.address}
+            </a>
+          </dd>
+          <dt>Contract called</dt>
+          <dd className="oat-mono">{shown.to}</dd>
+          <dt>Network</dt>
+          <dd>
+            {info.chainName} (chain {info.chainId})
+          </dd>
+        </dl>
+      </section>
+      {!phase.done &&
+        (!ready ? (
+          <p className="oat-status">Loading.</p>
+        ) : !authenticated || !wallet ? (
+          <>
+            <button className="oat-btn" onClick={() => login()}>
+              <ButtonIcon />
+              Sign in with Privy
+            </button>
+            <p className="oat-fine">Sign in again with the connected wallet ({info.walletType === "embedded" ? "the same email or social login" : "the same browser wallet"}) to continue.</p>
+          </>
+        ) : (
+          <>
+            <button className="oat-btn" disabled={phase.busy} onClick={() => void send()}>
+              Confirm in wallet
+            </button>
+            <button className="oat-text" disabled={phase.busy} onClick={() => void cancel()}>
+              Cancel
+            </button>
+          </>
+        ))}
+      <Status phase={phase} />
+    </Page>
   );
 }
 
@@ -226,15 +341,19 @@ function App({ info }: { info: Info }) {
 }
 
 async function main() {
+  const style = document.createElement("style");
+  style.textContent = CSS;
+  document.head.appendChild(style);
   const root = createRoot(document.getElementById("root")!);
   const info = (await (await fetch(`/info?s=${encodeURIComponent(secret)}`)).json()) as Info;
   root.render(
     <PrivyProvider
       appId={info.appId}
       config={{
-        appearance: { theme: "light", accentColor: "#1E3553", logo, landingHeader: "Connect to Tempora Treasury", walletChainType: "ethereum-only", walletList: ["detected_ethereum_wallets"] },
-        // Every option on the first screen; only wallets already installed in this browser (no WalletConnect).
-        loginMethodsAndOrder: { primary: ["email", "google", "apple", "twitter", "detected_ethereum_wallets"] },
+        appearance: { theme: "light", accentColor: "#1E3553", landingHeader: "Connect wallet", walletChainType: "ethereum-only", walletList: ["detected_ethereum_wallets", "metamask", "coinbase_wallet"] },
+        // One window: Google, email, X, Apple, and "Continue with a wallet", which lists only the
+        // wallets already installed in this browser (no WalletConnect).
+        loginMethods: ["google", "email", "twitter", "apple", "wallet"],
         externalWallets: { walletConnect: { enabled: false } },
         embeddedWallets: { ethereum: { createOnLogin: "users-without-wallets" } },
         supportedChains: [base, arbitrum],
