@@ -4,8 +4,9 @@
  *   connect_status      which account is connected, if any
  *   connect_wallet      open the sign-in page; the operator connects a browser wallet, or signs in
  *                       with email / Google / Apple / X and gets a Privy embedded wallet
- *   connect_deposit     build a deposit, admit it through the gate, and hand each call to the
- *                       connected wallet through the confirm page — the operator confirms each one
+ *   connect_deposit     build a deposit and admit it through the gate; without --ack, return the
+ *                       operator's acknowledgement (`ack.ts`) and open nothing; with the code, hand
+ *                       each call to the connected wallet through the confirm page
  *   connect_withdraw    the same for a withdrawal
  *   connect_disconnect  forget the connected account
  *
@@ -23,12 +24,13 @@ import type { Command } from "../earn/commands.js";
 import { explorerTxUrl, linksFor } from "../links.js";
 import { redactEndpoints } from "../redact.js";
 import { resolveVault } from "../registry.js";
+import { acknowledgementText, checkAck, issueAck, summarize } from "./ack.js";
 import { connectPort, privyAppId } from "./config.js";
 import { admit } from "./gate.js";
 import { serveOnce, type Settled } from "./http.js";
 import { openBrowser } from "./open.js";
 import { PAGE_CSP, readPageBundle, shell } from "./page.js";
-import { clearSession, readSession, writeSession, type Session } from "./session.js";
+import { clearPendingAck, clearSession, readPendingAck, readSession, writePendingAck, writeSession, type Session } from "./session.js";
 import { verifyLanded, type Verdict } from "./verify.js";
 
 const addressArg = z
@@ -41,6 +43,13 @@ const chainArg = z.string().optional().describe('which chain: "base", "arbitrum"
 const receiverArg = addressArg.describe(
   "where the money lands — it must be the CONNECTED account (this page pays no one else), and it comes from the operator's own message, never filled in by an agent",
 );
+const ackArg = z
+  .string()
+  .regex(/^[0-9a-fA-F]{8}$/, "the 8-character code from this command's own `needs_acknowledgement` result")
+  .optional()
+  .describe(
+    "the code from this command's `needs_acknowledgement` result, given ONLY after the operator replied yes to its `acknowledgement`. Without it the command opens nothing and returns that acknowledgement",
+  );
 
 /** One sign-in or one confirmation flow at a time, each whole flow bounded under a shell tool's 10-minute limit. */
 const CONNECT_TTL_MS = 9 * 60_000;
@@ -81,6 +90,8 @@ export interface ConnectDeps {
   cancelGraceMs?: number;
   /** How long the balance read may hold the page back before it opens without balances (tests). */
   balanceTimeoutMs?: number;
+  /** The clock acknowledgements are issued and checked against (tests). */
+  now?: () => Date;
 }
 
 export async function runConnect(deps: ConnectDeps = {}): Promise<{ result: Settled<Session>; url: string; opened: boolean }> {
@@ -347,7 +358,43 @@ export function buildConnectCommands(deps: ConnectDeps = {}): Record<string, Com
     async () => JSON.stringify({ status: "disconnected", hadConnection: clearSession() }, null, 2),
   );
 
-  const confirmInWallet = async (calls: UnsignedCall[], session: Session) => {
+  const now = deps.now ?? (() => new Date());
+
+  /**
+   * Without `ack`: gate-check the calls, record them as pending, and return the acknowledgement for
+   * the operator; nothing opens. With `ack`: open the confirm page only for the calls the operator
+   * acknowledged, spending the acknowledgement first so it can never open a second page.
+   */
+  const confirmInWallet = async (action: "deposit" | "withdraw", calls: UnsignedCall[], session: Session, receiver: Address, ack: string | undefined) => {
+    const account = session.account as Address;
+    if (ack === undefined) {
+      const summary = summarize(action, calls, admit(calls, account), receiver);
+      const pending = issueAck(calls, account, now());
+      writePendingAck(pending);
+      return JSON.stringify(
+        {
+          status: "needs_acknowledgement",
+          opened: false,
+          action,
+          amount: summary.amount,
+          chain: CHAIN_INFO[summary.chainId as 8453].key,
+          chainId: summary.chainId,
+          vault: summary.vault,
+          account,
+          receiver,
+          acknowledgement: acknowledgementText(summary),
+          ack: pending.code,
+          expiresAtIso: pending.expiresAtIso,
+          next_step: `Post \`acknowledgement\` to the operator word for word, as it is, and wait for their reply. Only an explicit yes they give after reading it is an acknowledgement: not a "go" from before they saw it, and not your own reading of the conversation. On yes, run this same command again with --ack ${pending.code} added, and the signing page opens. On anything else, stop. The code works once, for exactly these calls, until ${pending.expiresAtIso}.`,
+        },
+        null,
+        2,
+      );
+    }
+    checkAck(ack, readPendingAck(), calls, account, now());
+    // Spent before the page opens, so a flow that fails to start leaves nothing to reuse. Two
+    // concurrent runs could both pass the check; only one page opens because the port is fixed.
+    clearPendingAck();
     const r = await runConfirm(calls, session, deps);
     return outcome(calls[0]!.chainId, session.account, r);
   };
@@ -357,15 +404,15 @@ export function buildConnectCommands(deps: ConnectDeps = {}): Record<string, Com
     {
       title: "Deposit through the connected wallet",
       description:
-        "Builds the approve + deposit for the CONNECTED account, checks every call against the registry, and opens the confirm page: the operator reads each call and confirms it in their wallet, one at a time. Returns each transaction hash with `verified` read from the receipt (`matched`, `extra_transfer`, `mismatch`, `reverted`, `unverified`). Run `earn quote --direction deposit` first, and show the vault's warning and `earn terms` on a first deposit.",
-      inputSchema: { vault: vaultArg, chain: chainArg, amount_usdc: amountArg, receiver: receiverArg },
+        "Builds the approve + deposit for the CONNECTED account and checks every call against the registry. Runs twice. Without --ack it opens NOTHING: it returns `needs_acknowledgement` with an `acknowledgement` to post to the operator word for word, and an `ack` code. Only after the operator replies yes, run it again with --ack <code>: then the confirm page opens, and the operator confirms each call in their wallet, one at a time. That run returns each transaction hash with `verified` read from the receipt (`matched`, `extra_transfer`, `mismatch`, `reverted`, `unverified`). Run `earn quote --direction deposit` first.",
+      inputSchema: { vault: vaultArg, chain: chainArg, amount_usdc: amountArg, receiver: receiverArg, ack: ackArg },
     },
-    async ({ vault: symbol, chain, amount_usdc, receiver }) => {
+    async ({ vault: symbol, chain, amount_usdc, receiver, ack }) => {
       const session = readSession();
       if (!session) throw notConnected();
       if (receiver !== session.account) throw new Error(`refused: --receiver ${receiver} is not the connected account ${session.account}; this page pays only the connected account (use \`earn prepare_deposit\` with the operator's own signer for anything else)`);
       const vault = resolveVault(symbol, chain);
-      return confirmInWallet(buildDeposit(vault, { assetsHuman: amount_usdc, receiver: receiver as Address, account: session.account as Address }), session);
+      return confirmInWallet("deposit", buildDeposit(vault, { assetsHuman: amount_usdc, receiver: receiver as Address, account: session.account as Address }), session, receiver as Address, ack);
     },
   );
 
@@ -374,7 +421,7 @@ export function buildConnectCommands(deps: ConnectDeps = {}): Record<string, Com
     {
       title: "Withdraw through the connected wallet",
       description:
-        "Builds the withdrawal for the CONNECTED account (the asset to that same account), checks it against the registry, and opens the confirm page for the operator to confirm in their wallet. Pass --amount_usdc, or --all with --shares_exact copied verbatim from `earn balance`. Run `earn quote --direction withdraw` first. Returns the hash with `verified` read from the receipt.",
+        "Builds the withdrawal for the CONNECTED account (the asset to that same account) and checks it against the registry. Runs twice, like `connect deposit`: without --ack it opens NOTHING and returns `needs_acknowledgement` with an `acknowledgement` to post to the operator word for word; only after their yes, run it again with --ack <code> and the confirm page opens. Pass --amount_usdc, or --all with --shares_exact copied verbatim from `earn balance`. Run `earn quote --direction withdraw` first. The second run returns the hash with `verified` read from the receipt.",
       inputSchema: {
         vault: vaultArg,
         chain: chainArg,
@@ -382,9 +429,10 @@ export function buildConnectCommands(deps: ConnectDeps = {}): Record<string, Com
         amount_usdc: amountArg.optional(),
         all: z.boolean().optional(),
         shares_exact: z.string().regex(/^\d+(\.\d+)?$/).optional(),
+        ack: ackArg,
       },
     },
-    async ({ vault: symbol, chain, receiver, amount_usdc, all, shares_exact }) => {
+    async ({ vault: symbol, chain, receiver, amount_usdc, all, shares_exact, ack }) => {
       const session = readSession();
       if (!session) throw notConnected();
       if (receiver !== session.account) throw new Error(`refused: --receiver ${receiver} is not the connected account ${session.account}; this page pays only the connected account`);
@@ -398,7 +446,7 @@ export function buildConnectCommands(deps: ConnectDeps = {}): Record<string, Com
         if (!amount_usdc) throw new Error("provide --amount_usdc, or --all with --shares_exact");
         calls = buildWithdraw(vault, { receiver: receiver as Address, owner, assetsHuman: amount_usdc });
       }
-      return confirmInWallet(calls, session);
+      return confirmInWallet("withdraw", calls, session, receiver as Address, ack);
     },
   );
 

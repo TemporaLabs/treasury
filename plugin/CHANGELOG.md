@@ -19,6 +19,11 @@ Carries `@temporalabs/treasury` v0.1.2.
   sign-in page with one Connect button (browser wallet, or an email, Google, Apple or X login), then
   a confirm page that shows each call in turn. The prepare-and-sign path stays for any other receiver or when there
   is no browser on the machine.
+- **The skill makes the operator acknowledge before any signing page opens.** `connect deposit` and
+  `connect withdraw` now run twice: the first run opens nothing and returns one fixed acknowledgement
+  (amount, chain, vault, receiver, the vault's warning and the disclosures); the skill posts it word for
+  word and re-runs with `--ack <code>` only on the operator's yes. The code works once, for 15 minutes,
+  for exactly those calls. The skill no longer treats the page's own confirm as a substitute.
 - `dist/connect-page.js`, the connect page, and its notices in `THIRD_PARTY_NOTICES.connect-page.md`.
 - **The `earn` skill works on more than one chain.** Its description now names Base and Arbitrum,
   and it has a section on choosing the chain: the agent asks the operator which chain before

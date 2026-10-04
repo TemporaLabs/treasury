@@ -82,7 +82,9 @@ The vault contracts and the protocols they hold, the RPC provider's honesty, the
 that hosts the plugin, and, for `treasury connect`, Privy's service and the keys it manages for an
 embedded wallet, and the browser and wallet extension the operator confirms in. Treasury believes the RPC; it cannot verify the chain. And Treasury cannot
 stop a model from *reporting* that something was deposited — nothing at a command boundary can. What it
-can do is make an unsigned build impossible to mistake for a completed one, by shape.
+can do is make an unsigned build impossible to mistake for a completed one, by shape. For the same
+reason it cannot prove an operator answered `connect`'s acknowledgement: it can only make the page
+open for nothing but the calls that text described.
 
 ## The wallet connection (`treasury connect`)
 
@@ -106,6 +108,14 @@ can do is make an unsigned build impossible to mistake for a completed one, by s
   decodes to (no trailing bytes, no stray bits in an address). The allowance the deposit waits for is
   read from those checked calls, not from the call's own `precondition` field. Anything else is
   refused before the operator is asked anything.
+- **The operator acknowledges before any page opens.** `connect deposit` and `connect withdraw` first
+  return a fixed text, written by the CLI, naming the amount, chain, vault and explorer link, receiver,
+  the vault's warning and the disclosures, and open nothing. The page opens only on a second run that
+  carries that acknowledgement's code: single-use, valid for 15 minutes, and bound to a digest of the
+  exact calls and connected account. The code binds the page to the text the CLI issued: one page, for
+  exactly those calls. It does not prove the operator read the text or said yes, because the agent
+  that receives the code can pass it back; asking is the agent's conduct, which the skill requires,
+  and the wallet's own prompt remains the confirmation no agent can give.
 - **The operator confirms every call twice:** on the page, which shows the builder's description of the call
   (amount, vault, receiver), the vault, its address and explorer link; and in the wallet's own prompt
   (the extension, or Privy's dialog, which the page always asks Privy to show).

@@ -38052,6 +38052,8 @@ init_encodeFunctionData();
 init_getAbiItem();
 init_getAddress();
 init_isAddress();
+init_toHex();
+init_keccak256();
 
 // node_modules/viem/_esm/op-stack/contracts.js
 var contracts = {
@@ -39778,6 +39780,73 @@ function buildCommands() {
   return commands;
 }
 
+// src/connect/ack.ts
+var ACK_TTL_MS = 15 * 6e4;
+function callsDigest(calls, account) {
+  return keccak256(stringToHex(JSON.stringify([account, calls.map((c) => [c.chainId, c.to, c.data, c.value])])));
+}
+function issueAck(calls, account, now) {
+  const digest = callsDigest(calls, account);
+  const issuedAtIso = now.toISOString();
+  return {
+    code: keccak256(stringToHex(`${digest}|${issuedAtIso}`)).slice(2, 10),
+    digest,
+    issuedAtIso,
+    expiresAtIso: new Date(now.getTime() + ACK_TTL_MS).toISOString()
+  };
+}
+function checkAck(code, pending, calls, account, now) {
+  const again = "run the same command without --ack, post its `acknowledgement` to the operator, and wait for their yes";
+  if (!pending) throw new Error(`refused: no acknowledgement is pending; ${again}`);
+  if (code.trim().toLowerCase() !== pending.code) throw new Error(`refused: --ack ${code} is not the pending acknowledgement's code; ${again}`);
+  if (now.getTime() > Date.parse(pending.expiresAtIso)) throw new Error(`refused: the acknowledgement expired at ${pending.expiresAtIso}; ${again}`);
+  if (callsDigest(calls, account) !== pending.digest) {
+    throw new Error(`refused: these calls are not the ones the operator acknowledged (the amount, vault, chain, receiver or connected account changed); ${again}`);
+  }
+}
+function operatorWarning(w) {
+  return w.replace(/\s*Show this warning before preparing any deposit\.\s*$/, "").trim();
+}
+function summarize(action, calls, admitted, receiver) {
+  const main = admitted.find((a) => a.kind !== "approve");
+  const v = main.vault;
+  const chainId = calls[0].chainId;
+  const amount = main.kind === "redeem" ? `${formatUnits(main.amount, v.shareDecimals)} ${v.symbol} (every share the account holds)` : `${formatUnits(main.amount, v.asset.decimals)} ${v.asset.symbol}`;
+  return {
+    action,
+    amount,
+    asset: v.asset.symbol,
+    chain: CHAIN_INFO[chainId].name,
+    chainId,
+    vault: { symbol: v.symbol, name: v.name, address: v.address, explorer: linksFor(v).explorer },
+    receiver,
+    warning: operatorWarning(v.warning),
+    // Before a deposit, the full pre-deposit disclosures; before a withdrawal, what the client is.
+    disclosures: action === "deposit" ? [...DISCLOSURES.items, ...DISCLOSURES.clientNotes] : [...DISCLOSURES.clientNotes]
+  };
+}
+function acknowledgementText(s) {
+  const lands = s.action === "deposit" ? "Shares go to" : `${s.asset} goes to`;
+  const prompts = s.action === "deposit" ? `Your wallet will ask you twice: first to approve ${s.amount} to the vault, then to make the deposit.` : `Your wallet will ask you once, to make the withdrawal.`;
+  return [
+    `Confirm before the signing page opens. Nothing has been sent.`,
+    ``,
+    `  ${s.action === "deposit" ? "Deposit" : "Withdraw"}: ${s.amount}`,
+    `  Chain: ${s.chain} (chainId ${s.chainId})`,
+    `  Vault: ${s.vault.name} (${s.vault.symbol})`,
+    `         ${s.vault.explorer}`,
+    `  ${lands}: ${s.receiver} (the connected wallet)`,
+    `  ${prompts}`,
+    ``,
+    `WARNING: ${s.warning}`,
+    ``,
+    `Before you agree:`,
+    ...s.disclosures.map((d) => `  - ${d}`),
+    ``,
+    `Do you acknowledge and want the signing page opened for exactly this ${s.action}? Reply yes or no.`
+  ].join("\n");
+}
+
 // src/connect/config.ts
 var DEFAULT_PRIVY_APP_ID = "cmubfegl2028d0ci3n0f2u6z5";
 var DEFAULT_CONNECT_PORT = 53682;
@@ -40123,16 +40192,37 @@ function readSession() {
     return void 0;
   }
 }
-function writeSession(s) {
+function writeOwnerOnly(path, value) {
   mkdirSync(dir(), { recursive: true, mode: 448 });
-  writeFileSync(sessionPath(), `${JSON.stringify(s, null, 2)}
+  writeFileSync(path, `${JSON.stringify(value, null, 2)}
 `, { mode: 384 });
-  chmodSync(sessionPath(), 384);
+  chmodSync(path, 384);
+}
+function writeSession(s) {
+  writeOwnerOnly(sessionPath(), s);
+  clearPendingAck();
 }
 function clearSession() {
   const had = readSession() !== void 0;
   rmSync(sessionPath(), { force: true });
+  clearPendingAck();
   return had;
+}
+var pendingAckPath = () => join(dir(), "connect-ack.json");
+function writePendingAck(a) {
+  writeOwnerOnly(pendingAckPath(), a);
+}
+function readPendingAck() {
+  try {
+    const v = JSON.parse(readFileSync4(pendingAckPath(), "utf8"));
+    if (typeof v.code !== "string" || typeof v.digest !== "string" || typeof v.issuedAtIso !== "string" || typeof v.expiresAtIso !== "string") return void 0;
+    return { code: v.code, digest: v.digest, issuedAtIso: v.issuedAtIso, expiresAtIso: v.expiresAtIso };
+  } catch {
+    return void 0;
+  }
+}
+function clearPendingAck() {
+  rmSync(pendingAckPath(), { force: true });
 }
 
 // src/connect/verify.ts
@@ -40207,6 +40297,9 @@ var vaultArg2 = external_exports.string().optional().describe("the vault's ERC-2
 var chainArg2 = external_exports.string().optional().describe('which chain: "base", "arbitrum" or "robinhood"; omit for the default chain, or when `vault` names one');
 var receiverArg = addressArg2.describe(
   "where the money lands \u2014 it must be the CONNECTED account (this page pays no one else), and it comes from the operator's own message, never filled in by an agent"
+);
+var ackArg = external_exports.string().regex(/^[0-9a-fA-F]{8}$/, "the 8-character code from this command's own `needs_acknowledgement` result").optional().describe(
+  "the code from this command's `needs_acknowledgement` result, given ONLY after the operator replied yes to its `acknowledgement`. Without it the command opens nothing and returns that acknowledgement"
 );
 var CONNECT_TTL_MS = 9 * 6e4;
 var CONFIRM_TTL_MS = 9 * 6e4;
@@ -40442,7 +40535,35 @@ function buildConnectCommands(deps = {}) {
     { title: "Forget the connected wallet", description: "Deletes the local connection record. It moves nothing and revokes nothing in the wallet itself.", inputSchema: {} },
     async () => JSON.stringify({ status: "disconnected", hadConnection: clearSession() }, null, 2)
   );
-  const confirmInWallet = async (calls, session) => {
+  const now = deps.now ?? (() => /* @__PURE__ */ new Date());
+  const confirmInWallet = async (action, calls, session, receiver, ack) => {
+    const account = session.account;
+    if (ack === void 0) {
+      const summary = summarize(action, calls, admit(calls, account), receiver);
+      const pending = issueAck(calls, account, now());
+      writePendingAck(pending);
+      return JSON.stringify(
+        {
+          status: "needs_acknowledgement",
+          opened: false,
+          action,
+          amount: summary.amount,
+          chain: CHAIN_INFO[summary.chainId].key,
+          chainId: summary.chainId,
+          vault: summary.vault,
+          account,
+          receiver,
+          acknowledgement: acknowledgementText(summary),
+          ack: pending.code,
+          expiresAtIso: pending.expiresAtIso,
+          next_step: `Post \`acknowledgement\` to the operator word for word, as it is, and wait for their reply. Only an explicit yes they give after reading it is an acknowledgement: not a "go" from before they saw it, and not your own reading of the conversation. On yes, run this same command again with --ack ${pending.code} added, and the signing page opens. On anything else, stop. The code works once, for exactly these calls, until ${pending.expiresAtIso}.`
+        },
+        null,
+        2
+      );
+    }
+    checkAck(ack, readPendingAck(), calls, account, now());
+    clearPendingAck();
     const r = await runConfirm(calls, session, deps);
     return outcome(calls[0].chainId, session.account, r);
   };
@@ -40450,32 +40571,33 @@ function buildConnectCommands(deps = {}) {
     "connect_deposit",
     {
       title: "Deposit through the connected wallet",
-      description: "Builds the approve + deposit for the CONNECTED account, checks every call against the registry, and opens the confirm page: the operator reads each call and confirms it in their wallet, one at a time. Returns each transaction hash with `verified` read from the receipt (`matched`, `extra_transfer`, `mismatch`, `reverted`, `unverified`). Run `earn quote --direction deposit` first, and show the vault's warning and `earn terms` on a first deposit.",
-      inputSchema: { vault: vaultArg2, chain: chainArg2, amount_usdc: amountArg2, receiver: receiverArg }
+      description: "Builds the approve + deposit for the CONNECTED account and checks every call against the registry. Runs twice. Without --ack it opens NOTHING: it returns `needs_acknowledgement` with an `acknowledgement` to post to the operator word for word, and an `ack` code. Only after the operator replies yes, run it again with --ack <code>: then the confirm page opens, and the operator confirms each call in their wallet, one at a time. That run returns each transaction hash with `verified` read from the receipt (`matched`, `extra_transfer`, `mismatch`, `reverted`, `unverified`). Run `earn quote --direction deposit` first.",
+      inputSchema: { vault: vaultArg2, chain: chainArg2, amount_usdc: amountArg2, receiver: receiverArg, ack: ackArg }
     },
-    async ({ vault: symbol2, chain, amount_usdc, receiver }) => {
+    async ({ vault: symbol2, chain, amount_usdc, receiver, ack }) => {
       const session = readSession();
       if (!session) throw notConnected();
       if (receiver !== session.account) throw new Error(`refused: --receiver ${receiver} is not the connected account ${session.account}; this page pays only the connected account (use \`earn prepare_deposit\` with the operator's own signer for anything else)`);
       const vault = resolveVault(symbol2, chain);
-      return confirmInWallet(buildDeposit(vault, { assetsHuman: amount_usdc, receiver, account: session.account }), session);
+      return confirmInWallet("deposit", buildDeposit(vault, { assetsHuman: amount_usdc, receiver, account: session.account }), session, receiver, ack);
     }
   );
   register(
     "connect_withdraw",
     {
       title: "Withdraw through the connected wallet",
-      description: "Builds the withdrawal for the CONNECTED account (the asset to that same account), checks it against the registry, and opens the confirm page for the operator to confirm in their wallet. Pass --amount_usdc, or --all with --shares_exact copied verbatim from `earn balance`. Run `earn quote --direction withdraw` first. Returns the hash with `verified` read from the receipt.",
+      description: "Builds the withdrawal for the CONNECTED account (the asset to that same account) and checks it against the registry. Runs twice, like `connect deposit`: without --ack it opens NOTHING and returns `needs_acknowledgement` with an `acknowledgement` to post to the operator word for word; only after their yes, run it again with --ack <code> and the confirm page opens. Pass --amount_usdc, or --all with --shares_exact copied verbatim from `earn balance`. Run `earn quote --direction withdraw` first. The second run returns the hash with `verified` read from the receipt.",
       inputSchema: {
         vault: vaultArg2,
         chain: chainArg2,
         receiver: receiverArg,
         amount_usdc: amountArg2.optional(),
         all: external_exports.boolean().optional(),
-        shares_exact: external_exports.string().regex(/^\d+(\.\d+)?$/).optional()
+        shares_exact: external_exports.string().regex(/^\d+(\.\d+)?$/).optional(),
+        ack: ackArg
       }
     },
-    async ({ vault: symbol2, chain, receiver, amount_usdc, all, shares_exact }) => {
+    async ({ vault: symbol2, chain, receiver, amount_usdc, all, shares_exact, ack }) => {
       const session = readSession();
       if (!session) throw notConnected();
       if (receiver !== session.account) throw new Error(`refused: --receiver ${receiver} is not the connected account ${session.account}; this page pays only the connected account`);
@@ -40489,7 +40611,7 @@ function buildConnectCommands(deps = {}) {
         if (!amount_usdc) throw new Error("provide --amount_usdc, or --all with --shares_exact");
         calls = buildWithdraw(vault, { receiver, owner, assetsHuman: amount_usdc });
       }
-      return confirmInWallet(calls, session);
+      return confirmInWallet("withdraw", calls, session, receiver, ack);
     }
   );
   return commands;
