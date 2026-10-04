@@ -5,8 +5,8 @@
  * (measured 2026-10-03 on Base: a MetaMask 7702 account, its call executed inside DelegationManager,
  * plus a 0.06 USDC transfer to a third address in the same batch).
  *
- * So the evidence is the event the vault or token itself emits for the connected account — exactly
- * one `Approval`, `Deposit` or `Withdraw` naming that account and that amount — and every OTHER
+ * So the evidence is the event the vault or token itself emits for the connected account — an
+ * `Approval`, `Deposit` or `Withdraw` naming that account and that amount — and every OTHER
  * movement of the asset out of the account in the same transaction is reported beside it, never
  * folded into a "matched".
  */

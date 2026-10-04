@@ -33,7 +33,7 @@ A transaction goes out only from your own wallet, after you approve it there. Yo
 Earn currently supports **USDC in, USDC out** through Tempora's ERC-4626 vaults on Base and
 Arbitrum One. Base is the default; the agent asks which chain when you have not said, and the USDC
 has to be on that chain already.
-See the [eight `earn` commands](docs/tools.md) for inputs, outputs, and limits.
+See the [command reference](docs/tools.md), the eight `earn` commands and the five `connect` commands, for inputs, outputs, and limits.
 
 ## Quick start
 
@@ -54,7 +54,7 @@ earlier install? Run `claude plugin marketplace remove treasury` first, then the
 ([details](docs/install.md#upgrading-an-earlier-install)).
 
 The plugin is the [`plugin/`](plugin/) folder of this repository: its manifests, the Earn skill, and a
-copy of this repository's own CLI bundle, made in the same commit. The skill runs it with `node`, one
+copy of this repository's own CLI bundle and the page `treasury connect` serves, made in the same commit. The skill runs it with `node`, one
 command at a time; nothing stays running.
 
 ### Any agent with a shell
@@ -73,7 +73,7 @@ Ask your agent:
 
 > Show me the available vaults and their risks. Then prepare a 25 USDC deposit into the default vault.
 
-OAT returns unsigned calls for your signer to review and execute. Preparing a deposit moves no money.
+With a browser on the machine, the agent opens a page where you confirm each call in your own wallet; otherwise OAT returns unsigned calls for your signer. Preparing a deposit moves no money.
 Later, ask: **“What is my position worth, and how much can I withdraw now?”**
 
 ## Vaults
@@ -98,9 +98,9 @@ See [vault details](docs/vaults.md) for addresses, access rules, fees, and dated
 
 ## Security
 
-- **No keys or custody:** your wallet holds the position; only your signer can move funds.
-- **Direct RPC access:** the `earn` commands talk only to your RPC, with no Tempora service in the request path and no telemetry. Keyed RPC URLs are redacted.
-- **Sign-in through Privy:** `treasury connect` signs you in through [Privy](https://privy.io), using Tempora's Privy app unless you set `PRIVY_APP_ID`. Privy, and Tempora as that app's owner, see your login and wallet address, and Privy's script on the page sends its own analytics.
+- **No keys or custody:** your wallet holds the position; Treasury never holds a key. With an email or social login, that wallet's keys are managed by Privy; see [risks](docs/risks.md).
+- **Direct RPC access:** the `earn` commands talk only to the chain's RPC (yours, or the chain's public endpoint when none is set or a history scan needs it; see [configuration](docs/configuration.md)), with no Tempora service in the request path and no telemetry. Keyed RPC URLs are redacted.
+- **Sign-in through Privy:** `treasury connect` signs you in through [Privy](https://privy.io), using Tempora's Privy app unless you set `PRIVY_APP_ID`. Privy, and Tempora as that app's owner, see your login and wallet address, and Privy's script on the page sends its own analytics. The page also loads Cloudflare's bot check (challenges.cloudflare.com) for Privy's sign-in.
 - **Verifiable builds:** CI checks the committed bundle; [verify its provenance](docs/runbooks/verify_the_bundle.md).
 - **Private vulnerability reporting:** follow [SECURITY.md](SECURITY.md), not a public issue.
 
