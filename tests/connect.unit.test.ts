@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach } from "vitest";
-import { existsSync, mkdtempSync, rmSync, statSync } from "node:fs";
+import { existsSync, mkdtempSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { createServer } from "node:net";
@@ -64,6 +64,11 @@ describe("the gate admits exactly the registry's own calls for the connected acc
     ["an unsupported chain", [{ ...deposit(), chainId: 1 }], /not supported/],
     ["a plain token transfer", [{ chainId: vault.chainId, to: usdc, data: ("0xa9059cbb" + "00".repeat(64)) as Hex, value: "0x0" }], /not an approve, deposit, withdraw or redeem/],
     ["nothing at all", [], /nothing to confirm/],
+    [
+      "an approval to one vault followed by a deposit of that amount into another vault on the chain",
+      [approve(), { ...deposit(), to: listVaults().find((v) => v.chainId === vault.chainId && v.address !== vault.address && v.asset.address === usdc)!.address }],
+      /must be followed by a deposit of exactly that amount into the same vault/,
+    ],
   ];
   for (const [what, calls, why] of refused) {
     it(`refuses ${what}`, () => {
@@ -127,6 +132,7 @@ const ev = {
   approval: parseAbiItem("event Approval(address indexed owner, address indexed spender, uint256 value)"),
   transfer: parseAbiItem("event Transfer(address indexed from, address indexed to, uint256 value)"),
   deposit: parseAbiItem("event Deposit(address indexed sender, address indexed owner, uint256 assets, uint256 shares)"),
+  withdraw: parseAbiItem("event Withdraw(address indexed sender, address indexed receiver, address indexed owner, uint256 assets, uint256 shares)"),
 };
 const log = (address: Address, topics: Hex[], data: Hex) => ({ address, topics, data, blockHash: "0x" as Hex, blockNumber: 1n, logIndex: 0, transactionHash: "0x" as Hex, transactionIndex: 0, removed: false });
 const transferLog = (from: Address, to: Address, value: bigint) =>
@@ -141,6 +147,8 @@ const receiptClient = (r: { status: "success" | "reverted"; logs: ReturnType<typ
     return r as never;
   },
 });
+const withdrawLog = (receiver: Address, owner: Address, assets: bigint, shares: bigint) =>
+  log(vault.address, encodeEventTopics({ abi: [ev.withdraw], eventName: "Withdraw", args: { sender: owner, receiver, owner } }) as Hex[], encodeAbiParameters([{ type: "uint256" }, { type: "uint256" }], [assets, shares]));
 const HASH = `0x${"ab".repeat(32)}` as Hex;
 const depositCall = { kind: "deposit" as const, vault, amount: 600_000n };
 
@@ -177,6 +185,18 @@ describe("verification reads the receipt, not the transaction envelope", () => {
     const client = { getTransactionReceipt: async () => (reads++, Promise.reject(new Error("not yet"))) as never };
     const v = await verifyLanded(client, HASH, { kind: "deposit", vault, amount: 1n }, ACCOUNT, { attempts: 30, delayMs: 1, deadline: Date.now() - 1 });
     expect([v.verified, reads]).toEqual(["unverified", 0]);
+  });
+
+  it("a withdrawal is matched only when the vault paid the connected account itself", async () => {
+    const call = { kind: "withdraw" as const, vault, amount: 600_000n };
+    expect((await verifyLanded(receiptClient({ status: "success", logs: [withdrawLog(ACCOUNT, ACCOUNT, 600_000n, 5n)] }), HASH, call, ACCOUNT)).verified).toBe("matched");
+    expect((await verifyLanded(receiptClient({ status: "success", logs: [withdrawLog(OTHER, ACCOUNT, 600_000n, 5n)] }), HASH, call, ACCOUNT)).verified).toBe("mismatch");
+  });
+
+  it("a redeem is matched on the shares it burned, not on the assets it paid", async () => {
+    const call = { kind: "redeem" as const, vault, amount: 5n };
+    expect((await verifyLanded(receiptClient({ status: "success", logs: [withdrawLog(ACCOUNT, ACCOUNT, 600_000n, 5n)] }), HASH, call, ACCOUNT)).verified).toBe("matched");
+    expect((await verifyLanded(receiptClient({ status: "success", logs: [withdrawLog(ACCOUNT, ACCOUNT, 600_000n, 4n)] }), HASH, call, ACCOUNT)).verified).toBe("mismatch");
   });
 
   it("an approval is matched by its own Approval event, to the vault, for the amount", async () => {
@@ -613,6 +633,29 @@ describe("confirm: one call at a time, each checked on its receipt before the ne
   });
 });
 
+describe("confirm: one result at a time", () => {
+  it("a second result posted while the first is being checked is refused, so one call is never handed over twice", async () => {
+    writeSession({ account: ACCOUNT, walletType: "external", connectedAtIso: "" });
+    const calls = buildDeposit(vault, { assetsHuman: "0.6", receiver: ACCOUNT, account: ACCOUNT });
+    const client = () => ({
+      getTransactionReceipt: async () => (await new Promise((r) => setTimeout(r, 300)), { status: "success", logs: [approvalLog(ACCOUNT, vault.address, 600_000n)] }) as never,
+      readContract: async () => 600_000n as never,
+    });
+    let url = "";
+    const run = runConfirm(calls, readSession()!, { open: (u) => ((url = u), true), client, verifyOpts: { attempts: 1, delayMs: 1 } });
+    await new Promise((r) => setTimeout(r, 50));
+    const p = page(url);
+    const first = p.post("/result", { index: 0, hash: `0x${"01".repeat(32)}` });
+    await new Promise((r) => setTimeout(r, 50));
+    const second = await p.post("/result", { index: 0, hash: `0x${"02".repeat(32)}` });
+    expect(second.status).toBe(409);
+    expect(((await second.json()) as { reason: string }).reason).toMatch(/already in progress/);
+    expect((await first).status).toBe(200);
+    await p.post("/result", { rejected: true });
+    await run;
+  });
+});
+
 describe("confirm: what the page reports with a rejection, and the deadline", () => {
   const matchedApprove = () => ({
     getTransactionReceipt: async () => ({ status: "success", logs: [approvalLog(ACCOUNT, vault.address, 600_000n)] }) as never,
@@ -703,6 +746,13 @@ describe("confirm: what the page reports with a rejection, and the deadline", ()
     await p.post("/result", { rejected: true, reason: "cancelled by the operator" });
     const out = JSON.parse(outcome(vault.chainId, ACCOUNT, await run)) as { reason: string };
     expect(out.reason).toBe("cancelled by the operator");
+  });
+
+  it("a flow that ended before every call was reported says so, even with no step's own reason", () => {
+    const tx = { step: 1, description: "approve", hash: `0x${"01".repeat(32)}`, verified: "matched" as const };
+    const out = JSON.parse(outcome(vault.chainId, ACCOUNT, { result: { ok: true, value: [tx] }, opened: true, done: [tx], total: 2 })) as { status: string; reason?: string };
+    expect(out.status).toBe("stopped");
+    expect(out.reason).toBe("the flow ended after 1 of 2 transactions");
   });
 
   it("a stop on a step that did not land carries a reason", async () => {
@@ -831,8 +881,15 @@ describe("the acknowledgement before any signing page opens", () => {
 
     it("an exit of every share is named in shares, as such", async () => {
       const text = String((await connect("connect_withdraw", { all: true, shares_exact: "0.5" }))["acknowledgement"]);
-      expect(text).toContain(`Withdraw: 0.5 ${vault.symbol} (every share the account holds)`);
+      expect(text).toContain(`Withdraw: 0.5 ${vault.symbol} shares (the amount given; it is the whole position only if it equals the account's share balance, which is not checked here)`);
+      expect(text).not.toMatch(/every share the account holds/);
     });
+  });
+
+  it("a withdrawal given both an amount and --all, or --shares_exact without --all, is refused rather than half-read", async () => {
+    await expect(connect("connect_withdraw", { all: true, shares_exact: "5", amount_usdc: "100" })).rejects.toThrow(/not both/);
+    await expect(connect("connect_withdraw", { amount_usdc: "1", shares_exact: "3" })).rejects.toThrow(/--shares_exact goes with --all/);
+    expect(existsSync(pendingAckPath())).toBe(false);
   });
 
   describe("with --ack, the page opens only for the calls the operator acknowledged, once", () => {
@@ -867,6 +924,14 @@ describe("the acknowledgement before any signing page opens", () => {
       clock = new Date(clock.getTime() + 1_000);
       await connect("connect_deposit", { amount_usdc: "1" });
       await expect(connect("connect_deposit", { amount_usdc: "1", ack: first["ack"] })).rejects.toThrow(/not the pending acknowledgement's code/);
+      expect(opened).toEqual([]);
+    });
+
+    it("an acknowledgement whose expiry cannot be read counts as expired", async () => {
+      const { ack } = await connect("connect_deposit", { amount_usdc: "1" });
+      const pending = JSON.parse(readFileSync(pendingAckPath(), "utf8")) as Record<string, unknown>;
+      writeFileSync(pendingAckPath(), JSON.stringify({ ...pending, expiresAtIso: "not-a-date" }));
+      await expect(connect("connect_deposit", { amount_usdc: "1", ack })).rejects.toThrow(/expired/);
       expect(opened).toEqual([]);
     });
 

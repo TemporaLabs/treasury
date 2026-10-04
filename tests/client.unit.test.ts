@@ -399,6 +399,20 @@ describe("logsFallbackUrlFromEnv on a second chain — TREASURY_LOGS_FALLBACK na
     delete process.env.TREASURY_LOGS_FALLBACK;
     expect(logsFallbackUrlFromEnv(42161, ARB_PUBLIC)).toBeUndefined(); // equal to the primary: not a fallback
   });
+  it("Robinhood Chain: its own public endpoint, and a set TREASURY_LOGS_FALLBACK means no fallback there either", () => {
+    const RH_PUBLIC = "https://rpc.mainnet.chain.robinhood.com";
+    const RH_PRIMARY = "https://rh.example.invalid/v2/KEY";
+    clearAll(); delete process.env.TREASURY_LOGS_FALLBACK;
+    expect(rpcUrlFromEnv(4663)).toBe(RH_PUBLIC);
+    expect(logsRpcUrlFromEnv(4663)).toBe(RH_PUBLIC);
+    expect(logsFallbackUrlFromEnv(4663, RH_PRIMARY)).toBe(RH_PUBLIC);
+    process.env.TREASURY_LOGS_FALLBACK = "https://my-base-archive.invalid/rpc";
+    try {
+      expect(logsFallbackUrlFromEnv(4663, RH_PRIMARY)).toBeUndefined();
+    } finally {
+      delete process.env.TREASURY_LOGS_FALLBACK;
+    }
+  });
   it("🔴 a URL there is NEVER used for Arbitrum: it is a Base endpoint, and Base's logs are not this chain's history", () => {
     clearAll();
     process.env.TREASURY_LOGS_FALLBACK = "https://my-base-archive.invalid/rpc";

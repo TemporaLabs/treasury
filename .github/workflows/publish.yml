@@ -106,6 +106,18 @@ jobs:
       # surfaces that failure before the publish step rather than inside it.
       - run: npm pack --dry-run
 
+      # The connect page is a second committed bundle, built from its own lockfile; `prepack` does not
+      # rebuild it. Refuse a tag whose page is not what its source builds, as CI does on every push.
+      - name: the connect page is what its source builds
+        run: |
+          set -euo pipefail
+          cd connect-page
+          npm ci --no-audit --no-fund
+          npm run build
+          cd ..
+          git diff --exit-code --stat -- dist/connect-page.js THIRD_PARTY_NOTICES.connect-page.md \
+            || { echo "::error::dist/connect-page.js or THIRD_PARTY_NOTICES.connect-page.md is stale at this tag"; exit 1; }
+
       - name: publish (provenance comes from this job's OIDC identity)
         if: ${{ !inputs.dry_run }}
         env:

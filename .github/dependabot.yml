@@ -16,6 +16,15 @@ updates:
       - dependency-name: "@types/node"
         update-types: ["version-update:semver-major"]
 
+  # The connect page's own dependencies (Privy, React, viem), bundled into the committed
+  # dist/connect-page.js. A bump here changes only the lockfile, so CI's "connect page is current"
+  # step fails until the page is rebuilt and committed with it: that rebuild is part of taking it.
+  - package-ecosystem: "npm"
+    directory: "/connect-page"
+    schedule:
+      interval: "weekly"
+    open-pull-requests-limit: 5
+
   - package-ecosystem: "github-actions"
     directory: "/"
     schedule:

@@ -201,6 +201,7 @@ describe("the shipped registry", () => {
     // page exists. 2B is the case that needs the per-ADDRESS list: it is a Morpho V2 vault on Base.
     expect(linksFor(getVault("tlCashPlusUSDC2C"))).toEqual({ explorer: "https://arbiscan.io/address/0x4057a63953142Ac2b3E5dB1954Fc14d578662587" });
     expect(linksFor(getVault("tlCashPlusUSDC2B"))).toEqual({ explorer: "https://basescan.org/address/0x91BcEbA5feCB9E92d80F1845B55cC56621E9352F" });
+    expect(linksFor(getVault("tlCashPlusUSDG2D"))).toEqual({ explorer: "https://robinhoodchain.blockscout.com/address/0x758f00731943aA88e8C7fB709e0B727903B4F833" });
   });
 
   it("names no depositor: who may deposit is on the chain, not in this repository", () => {

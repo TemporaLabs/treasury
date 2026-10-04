@@ -120,6 +120,18 @@ Pre-1.0, minor versions may change tool names, schemas and behaviour.
   (#78). The Fusion note now carries the revert reason too. `earn balance` likewise keeps its
   "the rest needs an unwind" note for Fusion; on Morpho V2 a paid idle-balance withdrawal is reported
   as what can come out now, with more possibly withdrawable.
+- From the release review of `treasury connect`:
+  - A full withdrawal's acknowledgement no longer says it redeems "every share the account holds":
+    `--shares_exact` is not checked against the chain there, so the text now says the amount given is
+    the whole position only if it equals the account's share balance. The confirm page names such a
+    step "Redeem <vault> shares".
+  - The confirm page sends each transaction with its `chainId`, so a wallet whose network changed after
+    the switch refuses it rather than sending it on the wrong chain.
+  - A second tab of the same confirm page cannot send a step that is already being handled, and a flow
+    that ends before every call was reported always gives a `reason`.
+  - An acknowledgement whose expiry cannot be read counts as expired.
+  - `connect withdraw` and `earn prepare_withdraw` refuse `--amount_usdc` together with `--all`, and
+    `--shares_exact` without `--all`, instead of silently using one of them.
 - A chain's own name in an RPC URL (`…/arbitrum/<key>`) is no longer treated as a secret, so an
   error that names the chain is not masked.
 - `scripts/registry-check.ts` reports a failed `eth_getCode` as not checked, through the same
