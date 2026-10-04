@@ -26,6 +26,24 @@ builders for **unsigned** deposit and withdraw calls, served as a library and as
    process or path that reaches outside this repository's allowlist. Do not weaken that test to make
    a change pass.
 
+## This repository is public: nothing internal goes into it
+
+Every file, commit message, pull request, review, issue and comment here is public and permanent:
+it is cloned and mirrored beyond anyone's reach, and an edit leaves the old text in the edit history.
+None of them may carry anything from outside this repository:
+
+- **names of private repositories**, internal projects, codenames or unreleased products;
+- **file paths, directory layouts, variable names or source structure** from a private repository, or
+  from the machine you work on: workspace folders, home or temporary directories, the name of your clone;
+- **links or IDs from your agent tooling or private systems**: agent session URLs and session trailers
+  in commits, run IDs, internal chat or document links;
+- **names of internal tools, skills, slash commands, checklists or review procedures.** Following a
+  private process is fine. Naming it is not.
+
+Do not list what you filtered out either: "scanned for X, Y and Z" publishes X, Y and Z. Before you
+post anything, search it for the above. If you are not sure whether something is internal, leave it out.
+`Signed-off-by` (see [`DCO.md`](DCO.md)) and a `Co-Authored-By` naming the tool are fine.
+
 ## Commands
 
 Node.js 22 or later. The fork tier also needs [Foundry](https://getfoundry.sh) for `anvil`.
