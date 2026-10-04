@@ -59,11 +59,12 @@ Two rules decide most reviews. A change that breaks either is a design change, n
 
 1. **Nothing in this repository holds, reads, derives or is handed a private key. Nothing signs. A
    call reaches the chain only from the operator's own wallet, after the operator approves it
-   there.** Treasury prepares unsigned calls. A wallet connection may hand a prepared call to the
-   operator's connected wallet for approval; it never builds or alters a call, and it refuses any
-   destination outside `registry/vaults.json` (a listed vault, or its asset for the approval). A
-   private-key variable, a local signer, a tool that signs, or a relay that accepts an arbitrary
-   destination will not merge.
+   there.** Treasury prepares unsigned calls. The wallet connection (`treasury connect`) may hand a
+   call to the operator's connected wallet for approval; it builds calls only through the same
+   builders, and it refuses any destination outside `registry/vaults.json` (a listed vault, or its
+   asset for the approval) and any receiver other than the connected account. A private-key
+   variable, a local signer, a tool that signs, or a relay that accepts an arbitrary destination
+   will not merge.
 2. **The client knows only the chain.** It has a vault address and an RPC endpoint. Code may not
    depend on any fund's internal source, deploy records, operators or private services. A vault's row
    in `registry/vaults.json` is a set of measurements that
@@ -87,7 +88,7 @@ A vault on a chain Treasury does not support yet needs that chain added first:
   others does not build;
 - its default vault in `src/config/earn.ts` (`defaultVaultByChain`). Each chain has exactly one vault
   marked `isDefault`;
-- its RPC variables in the plugin's `.mcp.json`, in [`docs/configuration.md`](docs/configuration.md),
+- its RPC variables in [`docs/configuration.md`](docs/configuration.md), in the skill's Setup section,
   and in the allowlist and the exact-set assertion of `tests/boundary.unit.test.ts`. That is the one
   edit to the boundary test a new chain needs; the rule that it is not weakened to pass still holds;
 - the tests that pin the supported chains (`tests/registry.test.ts`, `tests/client.unit.test.ts`),
@@ -101,7 +102,7 @@ Requires Node.js 22 or later. Fork tests also need [Foundry](https://getfoundry.
 
 ```bash
 npm ci
-npm run build                     # compiles, bundles dist/mcp-server.mjs, regenerates the notices and plugin/
+npm run build                     # compiles, bundles dist/treasury.mjs, regenerates the notices and plugin/
 npm run typecheck
 npm test                          # unit tests
 TREASURY_RPC_BASE=https://... npm test          # adds live read-only checks against Base
@@ -113,11 +114,15 @@ Each chain's live and fork tiers run when that chain's RPC variable is set. For 
 and shown as skipped.
 
 - **Use `npm ci`, not `npm install`.** It fails on a stale lockfile, which is what CI does.
-- **Rebuild the bundle when source changes.** `dist/mcp-server.mjs` is committed,
+- **Rebuild the bundle when source changes.** `dist/treasury.mjs` is committed,
   because a plugin install runs no build. After any change under `src/`, or to `registry/vaults.json`,
   `LICENSE` or `NOTICE`, run `npm run build` and commit the result; the same build refreshes the
   plugin's copies in `plugin/`, and `npm run plugin:check` confirms them. CI fails on a stale bundle
   or copy. The build uses `bash` for that last step, so on Windows run it from Git Bash or WSL.
+- **Rebuild the connect page when its source changes.** `dist/connect-page.js` and
+  `THIRD_PARTY_NOTICES.connect-page.md` are committed and built from `connect-page/` with its own
+  dependencies: run `npm ci && npm run build` there, then `npm run build` at the root to copy the page
+  into `plugin/`. CI rebuilds the page and fails on a difference.
 - **Say which test tier ran.** Unit tests say nothing about the chain. State in the pull request
   whether you ran unit, live read-only or fork tests.
 - **Tests never need a real key.** A test that moves funds runs on a fork and impersonates the
@@ -138,11 +143,11 @@ and shown as skipped.
   request, so it can merge without waiting on the feature's review.
 - **Show that a new test can fail.** Break the behaviour it guards, confirm the test goes red, then
   restore it. A test that passes both ways proves nothing.
-- **The skill lives in `plugin/`, beside the server it describes.** The Claude Code plugin is the
+- **The skill lives in `plugin/`, beside the CLI it runs.** The Claude Code plugin is the
   [`plugin/`](plugin/) folder: its manifests, the `earn` skill
   ([`plugin/skills/earn/SKILL.md`](plugin/skills/earn/SKILL.md)) and its trigger cases. A change that
-  adds, removes or renames a tool updates the skill in the same pull request; CI checks the skill's
-  tool table against the server's real `tools/list`. The server bundle, registry and licence files
+  adds, removes or renames a command updates the skill in the same pull request; CI checks the skill's
+  command table against the CLI's real `earn --help`. The CLI bundle, registry and licence files
   in `plugin/` are copies that `npm run build` writes; never edit them by hand. A change to the
   skill's `description:` decides whether the skill is reached at all, so treat it as a behavioural
   change and measure it by running the plugin, not by reading it.

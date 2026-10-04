@@ -7,7 +7,7 @@ deposit → withdraw round trip against a Tempora Morpho V2 vault on Base mainne
 key the operator already held on their own host — not a fork, not a testnet,
 real signed transactions (`0xd34111…`, `0x3bad94…`, `0x7a64b7…`, all `status: success`).
 
-This is the shape a real consumer of Treasury takes: **call the MCP tools to get intent and unsigned
+This is the shape a real consumer of Treasury takes: **run the `treasury earn` commands to get intent and unsigned
 calls, then hand those calls to something that holds a key and never let the key touch the same
 process the calls came from.** The two are deliberately different trust domains.
 
@@ -23,10 +23,11 @@ should refuse a call whose `chainId` is not the chain it is connected to.
    blocked — `maxDeposit()` is not trusted, the simulated call is).
 2. **Prepare** (`earn_prepare_deposit` / `earn_prepare_withdraw`) — pure computation, no key
    involved. Returns `{ requires_signature: true, status: "unsigned", calls }`, each call
-   `{to, data, value, gasAdvice}`. This is the entire handoff surface: nothing else crosses from
-   Treasury's process into the signer's. ⚠️ Consuming the LIBRARY directly rather than the MCP
-   server — as this runbook's own script does — gets the bare `UnsignedCall[]` with no envelope;
-   the envelope is a property of the tool boundary, not of `buildDeposit`/`buildWithdraw`.
+   `{ chainId, to, data, value, gasAdvice, precondition? }` plus display fields (`function`, `args`,
+   `description`, `step`, `of`). This is the entire handoff surface: nothing else crosses from
+   Treasury's process into the signer's. ⚠️ Consuming the LIBRARY directly rather than the CLI
+   — as this runbook's own script does — gets the bare `UnsignedCall[]` with no envelope;
+   the envelope is a property of the command boundary, not of `buildDeposit`/`buildWithdraw`.
 3. **Sign and send** — outside Treasury entirely. The runbook below is one way to do this when the
    signer is a key held on a remote host the operator runs, rather than a local wallet.
 

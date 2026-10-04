@@ -5,21 +5,23 @@ Current release: **v0.1.1** (29 September 2026).
 
 Open Agent Treasury gives an AI agent a safe way to manage on-chain capital. The agent reads the
 chain directly, works out what it wants to do, and hands back unsigned transactions. A human, or
-the agent's own signer, reviews and signs them. OAT never holds a private key, never signs, never
-sends, and sends no telemetry.
+the agent's own signer, reviews and signs them. OAT never holds a private key and never signs: a
+transaction goes out only from the operator's own wallet, after they approve it there. Treasury itself
+sends no telemetry; the optional sign-in page loads Privy, whose script sends its own analytics.
 
 ## The first skill: Earn
 
-Earn puts idle USDC to work in Tempora-curated vaults on Base. With it, an agent can:
+Earn puts idle USDC to work in Tempora-curated vaults on Base and Arbitrum One. With it, an agent can:
 
 - **Inspect vaults:** assets, fees, deposit access, and links to verify each contract independently.
 - **Prepare a deposit:** review the terms, simulate access, then build unsigned calls.
 - **Track a position:** its value, deposits and earnings, read from on-chain records.
 - **Prepare a withdrawal:** check what is withdrawable right now, then build unsigned calls.
 
-Earn is USDC in, USDC out. It has eight `earn_*` tools, split into READ tools that return facts
-from the chain and PREPARE tools that return unsigned calls. Nothing else. CI asserts the exact
-tool list on every build, so a signing or sending tool cannot slip in.
+Earn is USDC in, USDC out. It runs as a command line: eight `earn` commands, READ commands that
+return facts from the chain and PREPARE commands that return unsigned calls, and five `connect`
+commands that hand calls to the operator's own wallet for approval. CI asserts both command lists on
+every build, so a signing command cannot slip in.
 
 ## The default vault
 
@@ -50,31 +52,18 @@ claude plugin marketplace add TemporaLabs/treasury@v0.1.1
 claude plugin install treasury@treasury
 ```
 
-Restart Claude Code so the tools connect. The plugin ships from the `plugin/` folder of the main
+Run `/reload-plugins` (or start a new session) so the Earn skill loads. The plugin ships from the `plugin/` folder of the main
 repository as of v0.1.1. If you installed from the earlier `treasury-plugin` repository, run
 `claude plugin marketplace remove treasury` first, then the two lines above.
 
-### Any MCP host
+### Any agent with a shell
 
 ```bash
-npm install @temporalabs/treasury@0.1.1
+npm install --save-exact @temporalabs/treasury@0.1.1
+npx --no-install treasury earn --help
 ```
 
-Then add the server to your host's MCP configuration:
-
-```json
-{
-  "mcpServers": {
-    "treasury": {
-      "command": "node",
-      "args": ["<project>/node_modules/@temporalabs/treasury/dist/mcp-server.mjs"],
-      "env": { "TREASURY_RPC_BASE": "https://..." }
-    }
-  }
-}
-```
-
-The same package works as a TypeScript/JavaScript library.
+Each command prints one JSON document. The same package works as a TypeScript/JavaScript library.
 
 ### Try it
 
@@ -82,13 +71,13 @@ Ask your agent:
 
 > Show me the available vaults and their risks. Then prepare a 25 USDC deposit into the default vault.
 
-The agent returns unsigned calls for your signer. Preparing a deposit moves no money. Later:
+With a browser on the machine, the agent opens a page where you confirm each call in your own wallet; otherwise it returns unsigned calls for your signer. Preparing a deposit moves no money. Later:
 
 > What is my position worth, and how much can I withdraw now?
 
 ## For agents reading this
 
-- Every tool that takes a vault takes its ERC-20 ticker (`tlCashPlusUSDC2` is the default); every
+- Every tool that takes a vault takes its ERC-20 ticker (`tlCashPlusUSDC2B` is the default on Base); every
   tool that takes an address takes it as `account`.
 - Amounts are decimal USDC strings. Shares are exact strings and never cross the boundary as numbers.
 - `earn_vaults` returns a `warning` for each vault. Show it to the operator before any deposit.
@@ -99,17 +88,17 @@ The agent returns unsigned calls for your signer. Preparing a deposit moves no m
 ## Security
 
 - **No keys, no custody:** the operator's wallet holds the position. Only its signer can move funds.
-- **Direct RPC:** no Tempora service in the request path, no telemetry. Keyed RPC URLs are redacted
+- **Direct RPC:** no Tempora service in the request path, and no telemetry from Treasury itself. Keyed RPC URLs are redacted
   from every output.
 - **Verifiable builds:** CI checks the committed bundle, and each npm release carries provenance.
 - Vulnerabilities go through private reporting, not public issues.
 
 ## What is next
 
-The v0.1.2 cycle is open. In development: a wallet connection so an agent can hand its prepared
-transactions to the operator's own wallet for approval, with no copy-paste; and deposits on more
-chains, starting with Arbitrum. More yield configurations across the risk/return spectrum are
-coming.
+The v0.1.2 cycle adds `treasury connect`, which hands each transaction to the operator's own
+wallet (a browser wallet, or an email or social login) for approval in the browser, with no
+copy-paste, and deposits on Arbitrum One beside Base. More yield configurations across the
+risk/return spectrum are coming.
 
 ## Links
 

@@ -5,7 +5,7 @@ involves npm. Getting that distinction wrong is the reason this page exists.
 
 | what ships | from | channel | needs an npm publish? |
 |---|---|---|---|
-| `@temporalabs/treasury` — the library and the MCP server bundle | this repository | **npm registry** | **yes, every release** |
+| `@temporalabs/treasury` — the library and the CLI bundle | this repository | **npm registry** | **yes, every release** |
 | the `earn` plugin and skill | this repository's [`plugin/`](../plugin/) folder | **git ref**, via `claude plugin marketplace add` | **no, never** |
 
 The plugin is installed by pointing Claude Code at a git ref; there is no registry in the path, so
@@ -54,12 +54,12 @@ signal that anything happened.
    refuses a tag that is not an ancestor of `main`. Re-run with `dry_run: false` once it is green.
 7. Verify both channels as a user would.
    - **npm:** `npm view @temporalabs/treasury@X.Y.Z version` answers, and a clean project that
-     installs it gets a `treasury-mcp` whose `initialize` reports `X.Y.Z`.
+     installs it gets a `treasury` whose `--version` reports `X.Y.Z`.
    - **The plugin**, which ships with the same tag and involves no npm: in a clean configuration
      (`CLAUDE_CONFIG_DIR` pointing at an empty directory), run
      `claude plugin marketplace add TemporaLabs/treasury@vX.Y.Z` and
      `claude plugin install treasury@treasury`. Then check that `claude plugin list` shows `X.Y.Z`
-     and that a new session lists the eight `earn_*` tools.
+     and that a new session runs `earn vaults` through the skill.
 
 ## Why the publish is `workflow_dispatch`, not a tag trigger
 

@@ -220,7 +220,7 @@ describe("makePublicClient — a provider at its quota is reported as a 429, not
 
 describe("resolvedRpcSecrets — every URL the package will actually call is a secret source", () => {
   it("registers the key in TREASURY_LOGS_FALLBACK — a real transport, not only a flag", () => {
-    // Measured in review, 2026-09-17: the fallback URL builds a real client (mcp/server.ts) that
+    // Measured in review, 2026-09-17: the fallback URL builds a real client (earn/commands.ts) that
     // getPosition scans through, and a provider body echoing ITS key survived redaction because only the
     // three primary variables were registered. Dormant until describeError started reading `details`.
     clearAll();

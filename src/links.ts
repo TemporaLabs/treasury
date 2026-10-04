@@ -35,13 +35,22 @@ const EXPLORER: Record<VaultEntry["chainId"], string> = {
  * operator to someone else's vault, which is worse than sending them nowhere, and a dead one teaches
  * them the links are not worth opening.
  *
- * Morpho's app: Base only. Measured 2026-10-02: `app.morpho.org/arbitrum/vault/<address>` answers
- * 404 for the Arbitrum vault in the registry, and Morpho's API does not know that address on chain
- * 42161, while the Base page and API both resolve. Add Arbitrum's slug here once that page exists.
+ * Morpho's app: Base only, and only for vaults it lists. Measured 2026-10-02:
+ * `app.morpho.org/arbitrum/vault/<address>` answers 404 for the Arbitrum vault in the registry, and
+ * Morpho's API does not know that address on chain 42161; Test 2B on Base is absent the same way.
+ * Test 2's Base page and API both resolve.
  */
 const MORPHO_APP_CHAIN: Record<number, string> = { 8453: "base" };
+/**
+ * Vaults Morpho's app is KNOWN to list, by address. A chain slug alone is not enough: Morpho's app
+ * and API list only some Vault V2 vaults, and the registry's Tempora vaults are not all among them
+ * (measured 2026-10-02: Test 2 resolves; Test 2B answers 404 and is absent from Morpho's API).
+ * Add an address here once its page resolves — never before.
+ */
+const MORPHO_LISTED = new Set(["0x040fCA12673778FEED5DA7b2ccFbbAb0cc0134Cf"]);
 const APP: Record<string, (chainId: number, address: string) => string | undefined> = {
-  "morpho-v2": (chainId, address) => (MORPHO_APP_CHAIN[chainId] ? `https://app.morpho.org/${MORPHO_APP_CHAIN[chainId]}/vault/${address}` : undefined),
+  "morpho-v2": (chainId, address) =>
+    MORPHO_APP_CHAIN[chainId] && MORPHO_LISTED.has(address) ? `https://app.morpho.org/${MORPHO_APP_CHAIN[chainId]}/vault/${address}` : undefined,
 };
 
 export interface VaultLinks {

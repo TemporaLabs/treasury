@@ -12,7 +12,7 @@
  */
 import { describe, it, expect, afterEach, beforeAll, afterAll } from "vitest";
 import { createServer, type Server } from "node:http";
-import { buildServer } from "../src/mcp/server.js";
+import { buildCommands } from "../src/earn/commands.js";
 import { FIXTURE, useFixtureRegistry, useShippedRegistry } from "./fixtures/registry.js";
 
 // The unit tiers exercise code paths (18-decimal shares, an open vault) that the shipped
@@ -44,15 +44,15 @@ afterEach(async () => {
   delete process.env["TREASURY_LOGS_RPC_BASE"];
 });
 
-type Handler = (a: unknown, extra: unknown) => Promise<{ content: { text: string }[] }>;
-const tools = () => (buildServer() as unknown as { _registeredTools: Record<string, { handler: Handler }> })._registeredTools;
+type Handler = (a: unknown, extra: unknown) => Promise<string>;
+const tools = () => (buildCommands() as unknown as Record<string, { handler: Handler }>);
 
 describe("a provider that echoes the rejected key back in its BODY", () => {
   it("earn_status returns a verdict and the key is not in it", async () => {
     await start(JSON.stringify({ error: { message: `invalid api key: ${KEY}` } }));
     process.env["TREASURY_RPC_BASE"] = `http://127.0.0.1:${PORT}/v2/${encodeURIComponent(KEY)}`;
     const res = await tools()["earn_status"]!.handler({}, {});
-    const out = res.content[0]!.text;
+    const out = res;
     expect(out).not.toContain(KEY); // the whole point
     expect(JSON.parse(out).rpc).toBe("unreachable"); // and it still ANSWERS
   });
@@ -74,7 +74,7 @@ describe("a provider that echoes the rejected key back in its BODY", () => {
   it("the key is masked even in a shape with no scheme, errno or header keyword", async () => {
     await start(JSON.stringify({ error: `auth failed for token ${KEY}` }));
     process.env["TREASURY_RPC_BASE"] = `http://127.0.0.1:${PORT}/v2/${encodeURIComponent(KEY)}`;
-    const out = (await tools()["earn_status"]!.handler({}, {})).content[0]!.text;
+    const out = (await tools()["earn_status"]!.handler({}, {}));
     expect(out).not.toContain(KEY);
   });
 
@@ -83,7 +83,7 @@ describe("a provider that echoes the rejected key back in its BODY", () => {
     const enc = encodeURIComponent(KEY);
     expect(enc).not.toBe(KEY); // the guard on this test: the transformation must be real
     process.env["TREASURY_RPC_BASE"] = `http://127.0.0.1:${PORT}/v2/${enc}`;
-    const out = (await tools()["earn_status"]!.handler({}, {})).content[0]!.text;
+    const out = (await tools()["earn_status"]!.handler({}, {}));
     expect(out).not.toContain(KEY); // decoded — what the provider echoes
     expect(out).not.toContain(enc); // encoded — what sits in the URL
   });
@@ -95,7 +95,7 @@ describe("a provider that echoes the rejected key back in its BODY", () => {
     expect(new URL(`http://x/y?k=${QKEY}`).searchParams.get("k")).not.toBe(QKEY); // premise is real
     await start(JSON.stringify({ error: { message: `invalid api key: ${QKEY}` } }));
     process.env["TREASURY_RPC_BASE"] = `http://127.0.0.1:${PORT}/rpc?apikey=${QKEY}`;
-    const out = (await tools()["earn_status"]!.handler({}, {})).content[0]!.text;
+    const out = (await tools()["earn_status"]!.handler({}, {}));
     expect(out).not.toContain(QKEY);
   });
 });

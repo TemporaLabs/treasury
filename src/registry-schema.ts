@@ -14,7 +14,7 @@ export type Chassis = z.infer<typeof chassisSchema>;
 /**
  * Which chassis expose a standard ERC-4626 `deposit`/`redeem` to a depositor. Enzyme does not
  * (`buyShares` via the comptroller), which is what every refusal path in this client is measured
- * against: build, pre-flight, the MCP boundary and the default-vault rule all discriminate on it.
+ * against: build, pre-flight, the command boundary and the default-vault rule all discriminate on it.
  */
 export const erc4626Chassis: ReadonlySet<Chassis> = new Set<Chassis>(["morpho-v2", "fusion"]);
 
