@@ -14,7 +14,7 @@ import { parseAbi } from "viem";
 import { makePublicClient, endpointChainId, rpcUrlFromEnv, PUBLIC_RPC } from "../src/client.js";
 import { preflightDeposit } from "../src/preflight.js";
 import { quoteDeposit, quoteWithdraw } from "../src/quote.js";
-import { getPosition } from "../src/position.js";
+import { getPosition, UNKNOWN_INCOMPLETE_SCAN } from "../src/position.js";
 import { defaultVault, getVault } from "../src/registry.js";
 import { EARN } from "../src/config/earn.js";
 import { findRoleHolder } from "./access.js";
@@ -145,18 +145,38 @@ live("preflight against live Base (read-only)", () => {
     expect(p).not.toHaveProperty("currentApy");
   });
 
-  it("with the public fallback, a real position's whole history reconciles on any configured RPC", async () => {
+  it("with the public fallback, a real position's history is read whole or reported as cut short, never silently partial", async () => {
     // The account with history on the default vault is whoever the chain says OWNS it — the operator
     // seeded it from that wallet. Read from the contract, never written here. `owner()` is a Morpho
     // Vault V2 surface, not ERC-4626: a default on another chassis fails here loudly, by revert.
     const owner = await client.readContract({ address: defaultVault().address, abi: parseAbi(["function owner() view returns (address)"]), functionName: "owner" });
     const fallbackClient = makePublicClient(8453, PUBLIC_RPC[8453]);
     const p = await getPosition({ vault: defaultVault(), principal: owner, client, fallbackClient });
-    expect(p.scan.fromBlock).toBe(String(defaultVault().deployedAtBlock));
-    expect(p.scan.deposits).toBeGreaterThanOrEqual(1);
-    // Reconciliation is the property: shares in − shares out equals the balance, whatever it is now.
-    if (!p.scan.capped) expect(p.scan.complete).toBe(true);
-  });
+    const deployed = BigInt(defaultVault().deployedAtBlock!);
+    // Two outcomes, and which one this is depends on the configured endpoint, not on the code. An
+    // endpoint with a wide eth_getLogs window (10,000 blocks) reads the whole history in a few
+    // seconds. One with a narrow window (Alchemy's free tier: 10 blocks) hands over to the public
+    // fallback, which serves 2,000 blocks a request: reaching the deployment block from the head now
+    // takes several hundred requests per event, which no request cap or time budget the client
+    // defaults to allows, and every day of the vault's age adds more. A scan that is cut short must
+    // SAY so and must not claim a lifetime figure; it is not a failure.
+    if (!p.scan.capped) {
+      expect(p.scan.fromBlock).toBe(String(deployed));
+      expect(p.scan.deposits).toBeGreaterThanOrEqual(1);
+      // Reconciliation is the property: shares in − shares out equals the balance, whatever it is now.
+      expect(p.scan.complete).toBe(true);
+      expect(p.scan.wholeHistory).toBe(true);
+      expect(p.entryBasisUsdc).toMatch(/^\d+(\.\d+)? USDC$/);
+    } else {
+      expect(BigInt(p.scan.fromBlock)).toBeGreaterThan(deployed); // it did not reach the deployment block...
+      expect(p.scan.wholeHistory).toBe(false); // ...so it must not say it did,
+      expect(p.scan.note).toMatch(/CUT SHORT/); // ...it says where it stopped,
+      expect(p.entryBasisUsdc).toBe(UNKNOWN_INCOMPLETE_SCAN); // ...and gives no lifetime figure
+      expect(p.accruedYieldUsdc).toBe(UNKNOWN_INCOMPLETE_SCAN);
+    }
+    // The client's own budgets are 12 s for the exit simulations and 30 s for the scan, taken one
+    // after the other, so a cut-short read takes about 45 s: past the 20 s default every test gets.
+  }, 120_000);
 });
 
 const hasArbitrumRpc = Boolean(process.env["TREASURY_RPC_ARBITRUM"] || process.env["ARBITRUM_RPC_URL"]);
