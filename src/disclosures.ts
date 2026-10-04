@@ -39,6 +39,8 @@ export const DISCLOSURES = {
       "You can withdraw, but in stressed markets part of your money may not come out right away.",
       "Tempora runs this vault and can charge fees on it. It is offered because it is Tempora's, not because it pays the most. Its holdings and fees are public on-chain.",
     ],
+    /** Added before a deposit into a vault whose registry row is not open to every account. */
+    gatedDeposit: "This vault only accepts deposits from accounts Tempora has admitted. If yours is not one, the deposit will fail.",
     always: [
       "This software never signs or moves your money. You approve every transaction in your own wallet, and you are responsible for what you approve.",
       "You are responsible for being allowed to use this where you live.",

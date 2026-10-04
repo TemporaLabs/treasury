@@ -101,7 +101,10 @@ export function summarize(action: "deposit" | "withdraw", calls: UnsignedCall[],
     warning: operatorWarning(v.warning),
     // The disclosures in plain words (`DISCLOSURES.plain`): the operator reads this before every page,
     // so it is the short form. Before a withdrawal, only what holds for every action.
-    disclosures: action === "deposit" ? [...DISCLOSURES.plain.deposit, ...DISCLOSURES.plain.always] : [...DISCLOSURES.plain.always],
+    disclosures:
+      action === "deposit"
+        ? [...DISCLOSURES.plain.deposit, ...(v.depositOpen.open ? [] : [DISCLOSURES.plain.gatedDeposit]), ...DISCLOSURES.plain.always]
+        : [...DISCLOSURES.plain.always],
   };
 }
 

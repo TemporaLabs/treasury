@@ -873,6 +873,15 @@ describe("the acknowledgement before any signing page opens", () => {
       }
     });
 
+    it("a deposit into a vault that is not open to every account says so; an open vault's text does not", async () => {
+      const gated = getVault("tlCashPlusUSDC2A");
+      expect(gated.depositOpen.open, "premise: this vault is whitelist-gated").toBe(false);
+      expect(vault.depositOpen.open, "premise: the default vault is open").toBe(true);
+      expect(String((await connect("connect_deposit", { amount_usdc: "1", vault: gated.symbol }))["acknowledgement"])).toContain(DISCLOSURES.plain.gatedDeposit);
+      expect(String((await connect("connect_deposit", { amount_usdc: "1" }))["acknowledgement"])).not.toContain(DISCLOSURES.plain.gatedDeposit);
+      expect(String((await connect("connect_withdraw", { amount_usdc: "1", vault: gated.symbol }))["acknowledgement"])).not.toContain(DISCLOSURES.plain.gatedDeposit);
+    });
+
     it("carries the disclosures in plain words, short enough to read every time; the full text stays in earn terms", async () => {
       const text = String((await connect("connect_deposit", { amount_usdc: "1" }))["acknowledgement"]);
       // The full, formal items are what `earn terms` returns; none of them is pasted here.
