@@ -14,8 +14,9 @@ import { PAGE_CSP } from "../src/connect/page.js";
 import { ACK_TTL_MS } from "../src/connect/ack.js";
 import { run } from "../src/cli.js";
 import { DISCLOSURES } from "../src/disclosures.js";
+import { operatorWarning } from "../src/connect/ack.js";
 import { linksFor } from "../src/links.js";
-import { defaultVault, listVaults } from "../src/registry.js";
+import { defaultVault, getVault, listVaults } from "../src/registry.js";
 
 /**
  * `treasury connect`, offline. No browser and no key: the tests play the page by speaking its HTTP
@@ -757,13 +758,29 @@ describe("the acknowledgement before any signing page opens", () => {
         vault.symbol,
         linksFor(vault).explorer,
         `Shares go to: ${ACCOUNT}`,
-        vault.warning,
+        operatorWarning(vault.warning),
         ...DISCLOSURES.items,
         ...DISCLOSURES.clientNotes,
         "Reply yes or no.",
       ]) {
         expect(text).toContain(part);
       }
+    });
+
+    it("the operator reads the vault's warning, not the instruction to the agent that ends it in the registry", async () => {
+      expect(vault.warning, "premise: the registry's warning carries that instruction").toMatch(/Show this warning before preparing any deposit\./);
+      for (const name of ["connect_deposit", "connect_withdraw"] as const) {
+        const text = String((await connect(name, { amount_usdc: "1" }))["acknowledgement"]);
+        expect(text).toContain("WARNING: TEST VAULT");
+        expect(text).not.toMatch(/Show this warning/);
+      }
+    });
+
+    it("a deposit says the wallet will ask twice, approve then deposit; a withdrawal says once", async () => {
+      const dep = String((await connect("connect_deposit", { amount_usdc: "1" }))["acknowledgement"]);
+      expect(dep).toContain("Your wallet will ask you twice: first to approve 1 USDC to the vault, then to make the deposit.");
+      const wd = String((await connect("connect_withdraw", { amount_usdc: "1" }))["acknowledgement"]);
+      expect(wd).toContain("Your wallet will ask you once, to make the withdrawal.");
     });
 
     it("is generated, not composed: the same calls always produce the same text, under a fresh code", async () => {
@@ -842,6 +859,16 @@ describe("the acknowledgement before any signing page opens", () => {
       expect(other, "a second vault on the default chain").toBeDefined();
       const { ack } = await connect("connect_deposit", { amount_usdc: "1" });
       await expect(connect("connect_deposit", { amount_usdc: "1", vault: other!.symbol, ack })).rejects.toThrow(/not the ones the operator acknowledged/);
+      expect(opened).toEqual([]);
+    });
+
+    it("refused for the same withdrawal from a different vault on the same chain: a withdraw's calldata is the same on every vault, so only its destination tells them apart", async () => {
+      const a = getVault("tlCashPlusUSDC2B");
+      const b = getVault("tlCashPlusUSDC2A");
+      expect(a.chainId, "premise: both vaults are on one chain").toBe(b.chainId);
+      expect(a.address).not.toBe(b.address);
+      const { ack } = await connect("connect_withdraw", { amount_usdc: "1", vault: a.symbol });
+      await expect(connect("connect_withdraw", { amount_usdc: "1", vault: b.symbol, ack })).rejects.toThrow(/not the ones the operator acknowledged/);
       expect(opened).toEqual([]);
     });
 

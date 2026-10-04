@@ -277,7 +277,8 @@ the calls, then return
 `{ status: "needs_acknowledgement", opened: false, action, amount, chain, chainId, vault, account, receiver, acknowledgement, ack, expiresAtIso, next_step }`
 
 `acknowledgement` is one fixed text, written by the CLI and not by the agent: the action and amount,
-the chain, the vault's name, symbol and explorer link, the receiver, the vault's warning, and the
+the chain, the vault's name, symbol and explorer link, the receiver, how many wallet prompts to
+expect (a deposit asks twice, approve then deposit; a withdrawal once), the vault's warning, and the
 disclosures (all of [`earn terms`](#earn_terms--read) before a deposit, its client notes before a
 withdrawal). It ends by asking for a yes or a no. The agent posts it to the operator word for word.
 

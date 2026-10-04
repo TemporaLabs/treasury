@@ -71,6 +71,15 @@ export interface AckSummary {
   disclosures: string[];
 }
 
+/**
+ * The registry's `warning` is written for both audiences, so it ends with an instruction to the agent
+ * ("Show this warning before preparing any deposit."). The operator is reading the warning itself, so
+ * that sentence is dropped here. The registry text is unchanged: `earn` output and the registry check use it.
+ */
+export function operatorWarning(w: string): string {
+  return w.replace(/\s*Show this warning before preparing any deposit\.\s*$/, "").trim();
+}
+
 export function summarize(action: "deposit" | "withdraw", calls: UnsignedCall[], admitted: Admitted[], receiver: Address): AckSummary {
   const main = admitted.find((a) => a.kind !== "approve")!;
   const v = main.vault;
@@ -87,7 +96,7 @@ export function summarize(action: "deposit" | "withdraw", calls: UnsignedCall[],
     chainId,
     vault: { symbol: v.symbol, name: v.name, address: v.address, explorer: linksFor(v).explorer },
     receiver,
-    warning: v.warning,
+    warning: operatorWarning(v.warning),
     // Before a deposit, the full pre-deposit disclosures; before a withdrawal, what the client is.
     disclosures: action === "deposit" ? [...DISCLOSURES.items, ...DISCLOSURES.clientNotes] : [...DISCLOSURES.clientNotes],
   };
@@ -96,6 +105,10 @@ export function summarize(action: "deposit" | "withdraw", calls: UnsignedCall[],
 /** The text the operator reads. Generated, never paraphrased: the same calls always produce the same words. */
 export function acknowledgementText(s: AckSummary): string {
   const lands = s.action === "deposit" ? "Shares go to" : `${s.asset} goes to`;
+  const prompts =
+    s.action === "deposit"
+      ? `Your wallet will ask you twice: first to approve ${s.amount} to the vault, then to make the deposit.`
+      : `Your wallet will ask you once, to make the withdrawal.`;
   return [
     `Confirm before the signing page opens. Nothing has been sent.`,
     ``,
@@ -104,6 +117,7 @@ export function acknowledgementText(s: AckSummary): string {
     `  Vault: ${s.vault.name} (${s.vault.symbol})`,
     `         ${s.vault.explorer}`,
     `  ${lands}: ${s.receiver} (the connected wallet)`,
+    `  ${prompts}`,
     ``,
     `WARNING: ${s.warning}`,
     ``,

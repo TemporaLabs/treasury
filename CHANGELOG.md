@@ -30,7 +30,8 @@ Pre-1.0, minor versions may change tool names, schemas and behaviour.
 - **`connect deposit` and `connect withdraw` now run twice.** The first run builds and gate-checks the
   calls, opens nothing, and returns `status: "needs_acknowledgement"` with `acknowledgement`: one fixed
   text, written by the CLI rather than the agent, naming the amount, chain, vault and its explorer link,
-  the receiver, the vault's warning and the disclosures, ending in a yes-or-no question. On the
+  the receiver, that a deposit asks the wallet twice (approve, then deposit), the vault's warning and the
+  disclosures, ending in a yes-or-no question. On the
   operator's yes, the same command with `--ack <code>` opens the page. The code works once, for 15
   minutes, and only for exactly the calls acknowledged; a new connection or a disconnect voids it. The
   `earn` skill posts the acknowledgement word for word before every page open, so an operator's earlier

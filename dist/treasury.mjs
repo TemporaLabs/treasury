@@ -39804,6 +39804,9 @@ function checkAck(code, pending, calls, account, now) {
     throw new Error(`refused: these calls are not the ones the operator acknowledged (the amount, vault, chain, receiver or connected account changed); ${again}`);
   }
 }
+function operatorWarning(w) {
+  return w.replace(/\s*Show this warning before preparing any deposit\.\s*$/, "").trim();
+}
 function summarize(action, calls, admitted, receiver) {
   const main = admitted.find((a) => a.kind !== "approve");
   const v = main.vault;
@@ -39817,13 +39820,14 @@ function summarize(action, calls, admitted, receiver) {
     chainId,
     vault: { symbol: v.symbol, name: v.name, address: v.address, explorer: linksFor(v).explorer },
     receiver,
-    warning: v.warning,
+    warning: operatorWarning(v.warning),
     // Before a deposit, the full pre-deposit disclosures; before a withdrawal, what the client is.
     disclosures: action === "deposit" ? [...DISCLOSURES.items, ...DISCLOSURES.clientNotes] : [...DISCLOSURES.clientNotes]
   };
 }
 function acknowledgementText(s) {
   const lands = s.action === "deposit" ? "Shares go to" : `${s.asset} goes to`;
+  const prompts = s.action === "deposit" ? `Your wallet will ask you twice: first to approve ${s.amount} to the vault, then to make the deposit.` : `Your wallet will ask you once, to make the withdrawal.`;
   return [
     `Confirm before the signing page opens. Nothing has been sent.`,
     ``,
@@ -39832,6 +39836,7 @@ function acknowledgementText(s) {
     `  Vault: ${s.vault.name} (${s.vault.symbol})`,
     `         ${s.vault.explorer}`,
     `  ${lands}: ${s.receiver} (the connected wallet)`,
+    `  ${prompts}`,
     ``,
     `WARNING: ${s.warning}`,
     ``,
