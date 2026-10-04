@@ -14,7 +14,7 @@
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import { createRoot } from "react-dom/client";
 import { PrivyProvider, useLogin, usePrivy, useWallets, type ConnectedWallet } from "@privy-io/react-auth";
-import { arbitrum, base } from "viem/chains";
+import { arbitrum, base, robinhood } from "viem/chains";
 import { CSS } from "./styles";
 
 const secret = new URLSearchParams(location.search).get("s") ?? "";
@@ -387,7 +387,7 @@ async function main() {
         loginMethods: ["google", "email", "twitter", "apple", "wallet"],
         externalWallets: { walletConnect: { enabled: false } },
         embeddedWallets: { ethereum: { createOnLogin: "users-without-wallets" }, showWalletUIs: true },
-        supportedChains: [base, arbitrum],
+        supportedChains: [base, arbitrum, robinhood],
         defaultChain: base,
       }}
     >

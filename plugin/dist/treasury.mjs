@@ -38256,8 +38256,37 @@ var basePreconf = /* @__PURE__ */ defineChain({
   }
 });
 
+// node_modules/viem/_esm/chains/definitions/robinhood.js
+var robinhood = /* @__PURE__ */ defineChain({
+  id: 4663,
+  name: "Robinhood Chain",
+  nativeCurrency: { name: "Ether", symbol: "ETH", decimals: 18 },
+  blockTime: 100,
+  rpcUrls: {
+    default: {
+      http: [
+        "https://rpc.mainnet.chain.robinhood.com",
+        "https://rpc.ordofi.network"
+      ],
+      webSocket: ["wss://rpc.ordofi.network"]
+    }
+  },
+  blockExplorers: {
+    default: {
+      name: "Blockscout",
+      url: "https://robinhoodchain.blockscout.com",
+      apiUrl: "https://robinhoodchain.blockscout.com/api"
+    }
+  },
+  contracts: {
+    multicall3: {
+      address: "0xca11bde05977b3631167028862be2a173976ca11"
+    }
+  }
+});
+
 // src/client.ts
-var chains = { 8453: base, 42161: arbitrum };
+var chains = { 8453: base, 42161: arbitrum, 4663: robinhood };
 function isSupportedChainId(id) {
   return id in chains;
 }
@@ -38269,13 +38298,24 @@ var CHAIN_INFO = {
     rpcEnv: ["TREASURY_RPC_ARBITRUM", "ARBITRUM_RPC_URL"],
     logsRpcEnv: "TREASURY_LOGS_RPC_ARBITRUM",
     publicRpc: "https://arb1.arbitrum.io/rpc"
+  },
+  4663: {
+    key: "robinhood",
+    name: "Robinhood Chain",
+    rpcEnv: ["TREASURY_RPC_ROBINHOOD", "ROBINHOOD_RPC_URL"],
+    logsRpcEnv: "TREASURY_LOGS_RPC_ROBINHOOD",
+    publicRpc: "https://rpc.mainnet.chain.robinhood.com"
   }
 };
-var supportedChainIds = Object.keys(chains).map(Number);
+var supportedChainIds = [8453, 42161, 4663];
 function chainIdForKey(key) {
   return supportedChainIds.find((id) => CHAIN_INFO[id].key === key);
 }
-var PUBLIC_RPC = { 8453: CHAIN_INFO[8453].publicRpc, 42161: CHAIN_INFO[42161].publicRpc };
+var PUBLIC_RPC = {
+  8453: CHAIN_INFO[8453].publicRpc,
+  42161: CHAIN_INFO[42161].publicRpc,
+  4663: CHAIN_INFO[4663].publicRpc
+};
 var RATE_LIMIT_WAIT_MS = 15500;
 var RPC_TIMEOUT_MS = 1e4;
 var QUOTA_EXHAUSTED = /\b(monthly|daily) capacity limit exceeded\b/i;
@@ -38453,7 +38493,7 @@ var vaultEntrySchema = external_exports.object({
    * 🔴 Adding a chain here also needs its row in `CHAIN_INFO` (a compile error until it has one) and
    * in `links.ts`'s explorer map (which throws on a chain it does not know).
    */
-  chainId: external_exports.union([external_exports.literal(8453), external_exports.literal(42161)]),
+  chainId: external_exports.union([external_exports.literal(8453), external_exports.literal(42161), external_exports.literal(4663)]),
   address,
   chassis: chassisSchema,
   backend: backendSchema,
@@ -38534,11 +38574,15 @@ var EARN = {
    * `arbitrum`: Tempora Labs Cash Plus USDC (Test 2C) — a Morpho Vault V2 on Arbitrum One, open to
    * any account by the same measurement.
    *
+   * `robinhood`: Tempora Labs Cash Plus USDG (Test 2D) — a Morpho Vault V2 on Robinhood Chain over
+   * USDG, the first vault whose asset is not USDC. Open to any account by the same measurement.
+   *
    * `Record<ChainKey, …>`: a chain added to `CHAIN_INFO` without a default here does not compile.
    */
   defaultVaultByChain: {
     base: "tlCashPlusUSDC2B",
-    arbitrum: "tlCashPlusUSDC2C"
+    arbitrum: "tlCashPlusUSDC2C",
+    robinhood: "tlCashPlusUSDG2D"
   },
   /** The round-trip target. The same vault as the default; open, so the fork tier deposits from the whale directly. */
   roundTripVault: "tlCashPlusUSDC2B",
@@ -38591,7 +38635,7 @@ function defaultChainId() {
 function offeredChains() {
   const present = new Set(loadRegistry().vaults.map((v) => v.chainId));
   const first = defaultChainId();
-  return supportedChainIds.filter((id) => present.has(id)).sort((a, b) => a === first ? -1 : b === first ? 1 : a - b).map((id) => ({ key: CHAIN_INFO[id].key, chainId: id, name: CHAIN_INFO[id].name }));
+  return supportedChainIds.filter((id) => present.has(id)).sort((a, b) => a === first ? -1 : b === first ? 1 : 0).map((id) => ({ key: CHAIN_INFO[id].key, chainId: id, name: CHAIN_INFO[id].name }));
 }
 function defaultVault(chainId = defaultChainId()) {
   const key = CHAIN_INFO[chainId].key;
@@ -38633,7 +38677,8 @@ function depositableVaults() {
 // src/links.ts
 var EXPLORER = {
   8453: "https://basescan.org/address/",
-  42161: "https://arbiscan.io/address/"
+  42161: "https://arbiscan.io/address/",
+  4663: "https://robinhoodchain.blockscout.com/address/"
 };
 var MORPHO_APP_CHAIN = { 8453: "base" };
 var MORPHO_LISTED = /* @__PURE__ */ new Set(["0x040fCA12673778FEED5DA7b2ccFbbAb0cc0134Cf"]);
@@ -39378,7 +39423,7 @@ var DISCLOSURES = {
 
 // src/earn/commands.ts
 var addressArg = external_exports.string().refine((s) => isAddress(s), "must be an EVM address").transform((s) => getAddress(s));
-var amountArg = external_exports.string().regex(/^\d+(\.\d+)?$/, 'plain decimal USDC amount, e.g. "25" or "12.5"');
+var amountArg = external_exports.string().regex(/^\d+(\.\d+)?$/, `plain decimal amount of the vault's asset (USDC; USDG on Robinhood Chain), e.g. "25" or "12.5"`);
 var vaultArg = external_exports.string().optional().describe("the vault's ERC-20 ticker, e.g. tlCashPlusUSDC2 (`earn vaults` lists them); omit for the default vault of `chain`, or of the default chain when `chain` is omitted too");
 var accountArg = addressArg.describe("the account whose shares these are \u2014 the depositor, the owner, the holder");
 var chainArg = () => {
@@ -39608,7 +39653,7 @@ function buildCommands() {
     "earn_quote",
     {
       title: "Quote a deposit or a withdrawal",
-      description: "Pre-trade quote, in USDC. direction=deposit: expected shares (previewDeposit), share price, and the access verdict from a simulated deposit(). This client quotes no rate: an ERC-4626 vault exposes none, and it calls no yield API. direction=withdraw: shares burned (previewWithdraw), shares held, a simulated withdraw() verdict, `instantLiquidity` \u2014 the vault's own liquid balance of the asset, which is chassis-specific in BOTH directions: a Fusion vault without instant-withdrawal fuses pays only from it, so there it is the ceiling maxWithdraw() does not know; a Morpho V2 vault holds almost none and still pays out of its markets, so there it is near zero and NOT a ceiling \u2014 the simulated verdict is what decides \u2014 maxWithdraw advisory only (Morpho V2 returns 0 by design), and queue depth. Run before the matching `earn prepare_*` command.",
+      description: "Pre-trade quote, in the vault's asset (USDC; USDG on Robinhood Chain). direction=deposit: expected shares (previewDeposit), share price, and the access verdict from a simulated deposit(). This client quotes no rate: an ERC-4626 vault exposes none, and it calls no yield API. direction=withdraw: shares burned (previewWithdraw), shares held, a simulated withdraw() verdict, `instantLiquidity` \u2014 the vault's own liquid balance of the asset, which is chassis-specific in BOTH directions: a Fusion vault without instant-withdrawal fuses pays only from it, so there it is the ceiling maxWithdraw() does not know; a Morpho V2 vault holds almost none and still pays out of its markets, so there it is near zero and NOT a ceiling \u2014 the simulated verdict is what decides \u2014 maxWithdraw advisory only (Morpho V2 returns 0 by design), and queue depth. Run before the matching `earn prepare_*` command.",
       inputSchema: {
         vault: vaultArg,
         chain,
@@ -39637,7 +39682,7 @@ function buildCommands() {
     "earn_prepare_deposit",
     {
       title: "Prepare an unsigned deposit",
-      description: "Returns the UNSIGNED calls for a deposit \u2014 [approve(asset \u2192 vault), deposit(assets, receiver)] \u2014 inside an envelope with requires_signature: true. Amount is USDC. The envelope names the `chain` and `chainId` the calls are for: say which chain to the operator, and if they have not chosen one, ask before calling this. NOTHING IS SUBMITTED: hand the calls to a signer in order. This tool cannot sign or send, and the deposit has not happened until the signer's transactions confirm. Each call also carries `function` and `args` \u2014 the same call `data` encodes, decoded, e.g. `approve(address spender, uint256 value)` with `{ spender, value }` \u2014 so an operator without a CLI signer can fill a block explorer's Write Contract form directly. `args` values are RAW contract units, which is what the form takes; `description` is the human sentence.",
+      description: "Returns the UNSIGNED calls for a deposit \u2014 [approve(asset \u2192 vault), deposit(assets, receiver)] \u2014 inside an envelope with requires_signature: true. Amount is in the vault's asset \u2014 USDC, or USDG on Robinhood Chain; `amount_usdc` keeps its name for every asset. The envelope names the `chain` and `chainId` the calls are for: say which chain to the operator, and if they have not chosen one, ask before calling this. NOTHING IS SUBMITTED: hand the calls to a signer in order. This tool cannot sign or send, and the deposit has not happened until the signer's transactions confirm. Each call also carries `function` and `args` \u2014 the same call `data` encodes, decoded, e.g. `approve(address spender, uint256 value)` with `{ spender, value }` \u2014 so an operator without a CLI signer can fill a block explorer's Write Contract form directly. `args` values are RAW contract units, which is what the form takes; `description` is the human sentence.",
       inputSchema: {
         vault: vaultArg,
         chain,
@@ -39655,11 +39700,11 @@ function buildCommands() {
     "earn_prepare_withdraw",
     {
       title: "Prepare an unsigned withdrawal",
-      description: "Returns the UNSIGNED call for a withdrawal in USDC terms \u2014 withdraw(assets, receiver, owner) \u2014 inside an envelope with requires_signature: true, which names the `chain` the call is for: a position is withdrawn on the chain it is on, so name the vault (or its chain) and never ask the operator to choose one. To empty the account pass --all (a switch: it takes no value) with shares_exact copied verbatim from sharesExact from `earn balance` (redeem of the exact balance; never a rounded number). NOTHING IS SUBMITTED and no funds have moved until a signer confirms. Each call also carries `function` and `args` \u2014 the same call `data` encodes, decoded, e.g. `withdraw(uint256 assets, address receiver, address owner)` with `{ assets, receiver, owner }` \u2014 so an operator without a CLI signer can fill a block explorer's Write Contract form directly. `args` values are RAW contract units, which is what the form takes; `description` is the human sentence.",
+      description: "Returns the UNSIGNED call for a withdrawal in asset terms \u2014 withdraw(assets, receiver, owner) \u2014 inside an envelope with requires_signature: true, which names the `chain` the call is for: a position is withdrawn on the chain it is on, so name the vault (or its chain) and never ask the operator to choose one. To empty the account pass --all (a switch: it takes no value) with shares_exact copied verbatim from sharesExact from `earn balance` (redeem of the exact balance; never a rounded number). NOTHING IS SUBMITTED and no funds have moved until a signer confirms. Each call also carries `function` and `args` \u2014 the same call `data` encodes, decoded, e.g. `withdraw(uint256 assets, address receiver, address owner)` with `{ assets, receiver, owner }` \u2014 so an operator without a CLI signer can fill a block explorer's Write Contract form directly. `args` values are RAW contract units, which is what the form takes; `description` is the human sentence.",
       inputSchema: {
         vault: vaultArg,
         chain,
-        receiver: addressArg.describe("where the USDC lands \u2014 NOT necessarily the account"),
+        receiver: addressArg.describe("where the asset lands \u2014 NOT necessarily the account"),
         account: accountArg.describe("whose shares are burnt"),
         amount_usdc: amountArg.optional(),
         all: external_exports.boolean().optional(),
@@ -39680,7 +39725,7 @@ function buildCommands() {
     "earn_balance",
     {
       title: "Earn position",
-      description: "A position in ONE vault, on that vault's chain (`chain` in the result) \u2014 an account's positions on different chains are separate calls. Shares held (exact string + display), current USDC value, WHAT CAN ACTUALLY BE WITHDRAWN NOW (`exit`, measured by simulating the withdrawal \u2014 `usdcValue` is what the position is worth, `exit.exitableNow` is what the vault can pay, `exit.instantLiquidity` is the vault's own liquid balance of the asset, chassis-specific in both directions \u2014 a Fusion vault without instant-withdrawal fuses pays only from it, so there it is the ceiling and `usdcValue` can exceed `exitableNow` by 10x while `maxWithdraw()` \u2014 `exit.maxWithdrawSays` \u2014 reports the larger one; a Morpho V2 vault holds almost none and still pays out of its markets, so there a near-zero `instantLiquidity` is not a ceiling and `exitableNow` is the verdict), entry basis and accrued yield derived from the vault's own Deposit/Withdraw events for this account, and share price. `scan.complete` says whether the event window covered the whole position; `sharesExact` is what `earn prepare_withdraw --all` needs. `scan.depositTxs` and `scan.withdrawTxs` carry the transactions behind those events \u2014 `{ txHash, blockNumber, amountUsdc }`, oldest first \u2014 so an operator can be shown an explorer link without anyone rebuilding the log query; each list holds at most the 100 most recent, while `scan.deposits`/`scan.withdrawals` stay the totals.",
+      description: "A position in ONE vault, on that vault's chain (`chain` in the result) \u2014 an account's positions on different chains are separate calls. Shares held (exact string + display), current value in the vault's asset (`usdcValue` keeps its name; on Robinhood Chain it is USDG), WHAT CAN ACTUALLY BE WITHDRAWN NOW (`exit`, measured by simulating the withdrawal \u2014 `usdcValue` is what the position is worth, `exit.exitableNow` is what the vault can pay, `exit.instantLiquidity` is the vault's own liquid balance of the asset, chassis-specific in both directions \u2014 a Fusion vault without instant-withdrawal fuses pays only from it, so there it is the ceiling and `usdcValue` can exceed `exitableNow` by 10x while `maxWithdraw()` \u2014 `exit.maxWithdrawSays` \u2014 reports the larger one; a Morpho V2 vault holds almost none and still pays out of its markets, so there a near-zero `instantLiquidity` is not a ceiling and `exitableNow` is the verdict), entry basis and accrued yield derived from the vault's own Deposit/Withdraw events for this account, and share price. `scan.complete` says whether the event window covered the whole position; `sharesExact` is what `earn prepare_withdraw --all` needs. `scan.depositTxs` and `scan.withdrawTxs` carry the transactions behind those events \u2014 `{ txHash, blockNumber, amountUsdc }`, oldest first \u2014 so an operator can be shown an explorer link without anyone rebuilding the log query; each list holds at most the 100 most recent, while `scan.deposits`/`scan.withdrawals` stay the totals.",
       inputSchema: {
         vault: vaultArg,
         chain,
@@ -39788,7 +39833,7 @@ function admit(calls, account) {
     if (name === "withdraw" || name === "redeem") {
       const [amount, receiver, owner] = args;
       if (amount === 0n) throw new Error(`refused (${at}): a ${name} of 0`);
-      if (!same(receiver, account)) throw new Error(`refused (${at}): the USDC would go to ${receiver}, not the connected account ${account}`);
+      if (!same(receiver, account)) throw new Error(`refused (${at}): the funds would go to ${receiver}, not the connected account ${account}`);
       if (!same(owner, account)) throw new Error(`refused (${at}): it burns the shares of ${owner}, not the connected account ${account}`);
       out.push({ kind: name, vault, amount });
       return;
@@ -40146,9 +40191,9 @@ async function verifyLanded(client, hash4, call2, account, opts = {}) {
 
 // src/connect/commands.ts
 var addressArg2 = external_exports.string().refine((s) => isAddress(s), "must be an EVM address").transform((s) => getAddress(s));
-var amountArg2 = external_exports.string().regex(/^\d+(\.\d+)?$/, 'plain decimal USDC amount, e.g. "25" or "12.5"');
+var amountArg2 = external_exports.string().regex(/^\d+(\.\d+)?$/, `plain decimal amount of the vault's asset (USDC; USDG on Robinhood Chain), e.g. "25" or "12.5"`);
 var vaultArg2 = external_exports.string().optional().describe("the vault's ERC-20 ticker, as `earn vaults` lists them; omit for the default vault of `chain`");
-var chainArg2 = external_exports.string().optional().describe('which chain: "base" or "arbitrum"; omit for the default chain, or when `vault` names one');
+var chainArg2 = external_exports.string().optional().describe('which chain: "base", "arbitrum" or "robinhood"; omit for the default chain, or when `vault` names one');
 var receiverArg = addressArg2.describe(
   "where the money lands \u2014 it must be the CONNECTED account (this page pays no one else), and it comes from the operator's own message, never filled in by an agent"
 );
@@ -40394,7 +40439,7 @@ function buildConnectCommands(deps = {}) {
     "connect_withdraw",
     {
       title: "Withdraw through the connected wallet",
-      description: "Builds the withdrawal for the CONNECTED account (USDC to that same account), checks it against the registry, and opens the confirm page for the operator to confirm in their wallet. Pass --amount_usdc, or --all with --shares_exact copied verbatim from `earn balance`. Run `earn quote --direction withdraw` first. Returns the hash with `verified` read from the receipt.",
+      description: "Builds the withdrawal for the CONNECTED account (the asset to that same account), checks it against the registry, and opens the confirm page for the operator to confirm in their wallet. Pass --amount_usdc, or --all with --shares_exact copied verbatim from `earn balance`. Run `earn quote --direction withdraw` first. Returns the hash with `verified` read from the receipt.",
       inputSchema: {
         vault: vaultArg2,
         chain: chainArg2,

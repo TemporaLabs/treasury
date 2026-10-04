@@ -1,7 +1,7 @@
 /**
  * Registry reconciliation: does every row agree with the CHAIN?
  *
- *   TREASURY_RPC_BASE=https://... TREASURY_RPC_ARBITRUM=https://... npx tsx scripts/registry-check.ts
+ *   TREASURY_RPC_BASE=https://... TREASURY_RPC_ARBITRUM=https://... TREASURY_RPC_ROBINHOOD=https://... npx tsx scripts/registry-check.ts
  *
  * Each row is checked on ITS chain, through that chain's endpoint (`rpcUrlFromEnv`: the chain's
  * variable, else its public endpoint). A row whose chain's endpoint did not answer, or answered for
@@ -193,7 +193,7 @@ if (unresolved) {
   console.error(
     `\n${unresolved} check(s) COULD NOT BE MADE — the endpoint failed, which says nothing about the registry.` +
       `\nThis is not a disagreement. Retry, or point the chain's variable at an endpoint with headroom:` +
-      `\n  TREASURY_RPC_BASE=https://... TREASURY_RPC_ARBITRUM=https://... npx tsx scripts/registry-check.ts`,
+      `\n  TREASURY_RPC_BASE=https://... TREASURY_RPC_ARBITRUM=https://... TREASURY_RPC_ROBINHOOD=https://... npx tsx scripts/registry-check.ts`,
   );
 }
 if (failures || unresolved) process.exit(1);

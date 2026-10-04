@@ -12,11 +12,11 @@ kind: they hand calls to the operator's own wallet for approval. Their list is p
 Every tool that takes a vault takes it as `vault`, the vault's ERC-20 ticker (e.g. `tlCashPlusUSDC2`), and uses the default when it is
 omitted. Every tool that takes an address takes it as `account` — whose shares these are.
 Both prepare commands also take `receiver`, which is a different thing: where the shares land on a
-deposit, where the USDC lands on a withdrawal.
+deposit, where the asset (USDC; USDG on Robinhood Chain) lands on a withdrawal.
 
 ## `chain` — which chain a call is for
 
-A vault is on one chain. Every tool that takes `vault` also takes `chain`: `"base"` or `"arbitrum"`
+A vault is on one chain. Every tool that takes `vault` also takes `chain`: `"base"`, `"arbitrum"` or `"robinhood"`
 — the chains with a vault in the registry, as `earn_vaults` lists them under `chains`.
 
 | `vault` | `chain` | resolves to |
@@ -40,8 +40,9 @@ nothing.
 on, the skill has the agent show `earn_vaults` → `chains` and ask. Withdrawals, quotes and balances
 on an existing position need no question: the vault names the chain.
 
-Amounts are decimal strings in USDC (`"25"`, `"0.05"`). More fractional digits than USDC has (6) are
-refused, never truncated. Shares never cross the boundary as numbers — only as an exact string.
+Amounts are decimal strings in the vault's asset (`"25"`, `"0.05"`): USDC, or USDG on Robinhood Chain.
+The arguments and fields named for USDC (`amount_usdc`, `usdcValue`) keep those names for every asset.
+More fractional digits than the asset has (6 for both) are refused, never truncated. Shares never cross the boundary as numbers — only as an exact string.
 
 ---
 
@@ -100,7 +101,8 @@ result stays the same JSON; it names the program, not a running process. `rpc` i
 | `unreachable` | the endpoint did not answer; `reason` says why, without the URL |
 | `wrong_chain` | the configured endpoint answers for a different chain (`rpcChainId`). Reads through it fail with "returned no data", because the vault has no contract there. Point the variable `reason` names at an endpoint for this chain |
 
-When a separate logs endpoint is configured (`TREASURY_LOGS_RPC_BASE`, `TREASURY_LOGS_RPC_ARBITRUM`),
+When a separate logs endpoint is configured (`TREASURY_LOGS_RPC_BASE`, `TREASURY_LOGS_RPC_ARBITRUM`,
+`TREASURY_LOGS_RPC_ROBINHOOD`),
 the result also carries `logsRpc` (`ok`, `wrong_chain` or `unreachable`) and `logsRpcSource`: that is
 the endpoint `earn_balance` reads through, and it can be wrong on its own.
 
@@ -191,8 +193,9 @@ Returns `{ requires_signature: true, status: "unsigned", chain, chainId, warning
 **in order**, on the chain `chainId` names; the deposit's precondition names the allowance the approve must have set. Nothing has
 happened until the signer's transactions confirm.
 
-The approve is on that chain's USDC and names that chain's vault as the spender. USDC on one chain
-cannot be deposited into a vault on another; Treasury does not bridge.
+The approve is on the vault's own asset on that chain (USDC, or USDG on Robinhood Chain) and names that
+chain's vault as the spender. An asset on one chain cannot be deposited into a vault on another;
+Treasury does not bridge.
 
 `function` and `args` are the same call `data` encodes, in the form a block explorer's **Write
 Contract** tab asks for — for an operator with no CLI signer, that is often the friendliest way to
@@ -227,8 +230,8 @@ disclosure repeated where it does not apply is what teaches a reader to skip it.
 | `vault` | optional ticker |
 | `chain` | optional; see [`chain`](#chain--which-chain-a-call-is-for). A position is withdrawn on the chain it is on: name the vault |
 | `account` | required; whose shares are burnt |
-| `receiver` | required; where the **USDC** lands — not necessarily the account |
-| `amount_usdc` | the USDC to withdraw (`withdraw(assets, receiver, owner)`) |
+| `receiver` | required; where the **asset** (USDC; USDG on Robinhood Chain) lands — not necessarily the account |
+| `amount_usdc` | the amount of the vault's asset to withdraw (`withdraw(assets, receiver, owner)`) |
 | `all` + `shares_exact` | instead of an amount: empty the account by `redeem` of the exact share string from `earn_balance.sharesExact`, verbatim |
 
 Same envelope, without `warning`. Quote first: the simulated verdict is what tells you whether the vault can pay this
