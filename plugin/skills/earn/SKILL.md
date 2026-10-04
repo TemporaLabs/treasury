@@ -6,7 +6,7 @@ allowed-tools: Bash(node "${CLAUDE_PLUGIN_ROOT}/dist/treasury.mjs" *)
 
 # Earn — put idle USDC to work in a Tempora vault
 
-You are the depositor. A Tempora fund is an ERC-4626 vault on Base or on Arbitrum One: you put USDC in, you hold
+You are the depositor. A Tempora fund is an ERC-4626 vault on Base, Arbitrum One or Robinhood Chain: you put USDC in (USDG on Robinhood Chain), you hold
 shares, the shares' USDC value moves with what the vault earns or loses, you redeem when you need
 cash. What amount is surplus is the operator's decision, not yours — a balance in the wallet is
 not permission to deposit it. The
@@ -38,13 +38,13 @@ whole design: a skill that supplies judgement must never hold the gate that supp
 
 ## Setup
 
-**Each chain has its own RPC.** The CLI reads Base through `TREASURY_RPC_BASE` and Arbitrum One
-through `TREASURY_RPC_ARBITRUM` (and `TREASURY_LOGS_RPC_BASE` / `TREASURY_LOGS_RPC_ARBITRUM` for the
-event scans `earn_balance` does), from the shell's environment. A chain never reads
+**Each chain has its own RPC.** The CLI reads Base through `TREASURY_RPC_BASE`, Arbitrum One
+through `TREASURY_RPC_ARBITRUM` and Robinhood Chain through `TREASURY_RPC_ROBINHOOD` (and the matching
+`TREASURY_LOGS_RPC_*` variable for the event scans `earn_balance` does), from the shell's environment. A chain never reads
 another chain's variable. Unset, a chain falls back to its public endpoint (`mainnet.base.org`,
-`arb1.arbitrum.io`), which rate-limits after a handful of calls — an `RPC Request failed …
+`arb1.arbitrum.io`, `rpc.mainnet.chain.robinhood.com`), which rate-limits after a handful of calls — an `RPC Request failed …
 over rate limit` error from any tool means set a keyed RPC URL for that chain, not that the vault
-is down. The CLI also accepts `BASE_RPC_URL` and `ARBITRUM_RPC_URL` as fallbacks. A keyed URL is a
+is down. The CLI also accepts `BASE_RPC_URL`, `ARBITRUM_RPC_URL` and `ROBINHOOD_RPC_URL` as fallbacks. A keyed URL is a
 secret: command output never repeats it — errors are reported without the endpoint.
 
 `earn_status` with `chain` checks that chain's RPC. 🔴 **`rpc: "wrong_chain"` means the variable for
@@ -83,10 +83,12 @@ range; until then `scan` says exactly how much was covered.
 | `earn_balance` | shares (exact), USDC value, entry basis and accrued yield from the vault's own events; `lookback_blocks` / `max_log_requests` set the scan window (see Setup) |
 | `earn_claim` | finalize a queued withdrawal; today no vault queues, and it says so |
 
-Everything is USDC in, USDC out. Vault shares exist only inside `earn_balance` (as an exact
+Everything is USDC in, USDC out — except on Robinhood Chain, where the vault's asset is **USDG** and every
+amount is USDG: say USDG to the operator there, even though the argument is still named `amount_usdc`
+and the result field `usdcValue`. A vault's own asset is `asset.symbol` in `earn_vaults`. Vault shares exist only inside `earn_balance` (as an exact
 string you hand back to `earn_prepare_withdraw` unchanged) — you never compute with them.
 
-Every tool that takes `vault` also takes **`chain`** (`"base"` or `"arbitrum"`). A vault is on one
+Every tool that takes `vault` also takes **`chain`** (`"base"`, `"arbitrum"` or `"robinhood"`). A vault is on one
 chain, so naming the vault is enough; naming only the chain selects that chain's default vault; naming
 both when they disagree is refused, and the error says which chain the vault is on. Every result that
 names a vault carries `chain` and `chainId`.
@@ -105,7 +107,7 @@ bridge. **Which chain is the operator's decision. Ask; do not pick.**
 
 - **Before preparing a deposit, if the operator has not said which chain, show them `earn_vaults` →
   `chains` and ask.** Each entry is a chain with its default vault; the first is the default chain.
-  Put it as a choice they can answer in a word: "Base (default) or Arbitrum?"
+  Put it as a choice they can answer in a word: "Base (default), Arbitrum or Robinhood Chain?"
 - **Do not ask again once it is settled.** If they named a chain, named a vault, or said where
   their USDC is, that is the answer for the rest of the task.
 - **Never ask for a withdrawal, a balance or a quote on an existing position.** A position is on
@@ -125,7 +127,7 @@ bridge. **Which chain is the operator's decision. Ask; do not pick.**
 
 1. **Settle the chain first (above), then the vault.** If the operator names no vault, use that
    chain's default (`earn_vaults` → `chains[].default`; today Tempora Labs Cash Plus USDC (Test 2B) on
-   Base and Tempora Labs Cash Plus USDC (Test 2C) on Arbitrum One, both open to any account; Test 2 on Base is the demo vault, used only when it is named). Every listed vault is a Tempora vault.
+   Base, Tempora Labs Cash Plus USDC (Test 2C) on Arbitrum One and Tempora Labs Cash Plus USDG (Test 2D) on Robinhood Chain, all open to any account; Test 2 on Base is the demo vault, used only when it is named). Every listed vault is a Tempora vault.
    Read that chain's `defaultAccess` (`chains[].defaultAccess`; the top-level one is the default
    chain's): when it is `"whitelist"`, run `earn_status` for the account first, and if
    it returns `WHITELIST_GATED`, **tell the operator the account is not admitted to that vault and that
@@ -191,7 +193,7 @@ right on both chassis; `exit.maxWithdrawSays` is reported only because other int
 2026-09-15 on a live Tempora vault: with a key, both the exit and a whole-history scan complete in
 about 15-22 s; with no key, one of them usually degrades — the exit reports `not measured`, or the
 scan reports CUT SHORT. Each says so in its own result, so the answer is smaller, never wrong. A
-keyed RPC for the vault's chain (`TREASURY_RPC_BASE`, `TREASURY_RPC_ARBITRUM`) is what makes both available in one call.
+keyed RPC for the vault's chain (`TREASURY_RPC_BASE`, `TREASURY_RPC_ARBITRUM`, `TREASURY_RPC_ROBINHOOD`) is what makes both available in one call.
 
 🔴 **`measuredAs: "not measured"` means the RPC failed, NOT that the vault refused** — say so rather
 than reporting a limit the chain never stated.
@@ -298,8 +300,8 @@ calls themselves, raw — no re-encoding by you, no key near you. Give them, for
 the `to` and `data` exactly as the envelope carries them:
 
 ```bash
-# The RPC of the chain the envelope names. chainId 8453 is Base, 42161 is Arbitrum One.
-export RPC=https://mainnet.base.org     # Base; for Arbitrum One: https://arb1.arbitrum.io/rpc — or their keyed RPC for that chain
+# The RPC of the chain the envelope names. chainId 8453 is Base, 42161 is Arbitrum One, 4663 is Robinhood Chain.
+export RPC=https://mainnet.base.org     # Base; Arbitrum One: https://arb1.arbitrum.io/rpc; Robinhood Chain: https://rpc.mainnet.chain.robinhood.com — or their keyed RPC for that chain
 cast chain-id --rpc-url $RPC            # must print the envelope's chainId before anything is sent
 cast send <to> <data> --account <keystore-name> --rpc-url $RPC \
   --gas-limit $(( $(cast estimate <to> <data> --from <account> --rpc-url $RPC) * 3 / 2 )) \
@@ -344,7 +346,7 @@ names `receiver` and `owner` separately, and they are both addresses — a trans
 invisible in hex is legible here. Have them read `receiver` back before signing; that is the
 destination check, done on something they can actually read.
 
-**Use the explorer of the call's chain** — BaseScan for chainId 8453, Arbiscan for 42161. The same
+**Use the explorer of the call's chain** — BaseScan for chainId 8453, Arbiscan for 42161, Robinhood Chain's Blockscout for 4663. The same
 address on the other chain's explorer is a different contract, or nothing.
 
 One gotcha specific to the approve call: **USDC is deployed as a proxy on both chains** (`FiatTokenProxy`),
@@ -396,8 +398,8 @@ who is told "it didn't work" cannot.
 **Show the transactions, not just the totals.** `earn_balance`'s `scan.depositTxs` and
 `scan.withdrawTxs` carry `{ txHash, blockNumber, amountUsdc }` for the events behind the basis, and
 a transaction link is `https://basescan.org/tx/<txHash>` on Base and `https://arbiscan.io/tx/<txHash>`
-on Arbitrum One. ⚠️ That is a DIFFERENT path from the
-vault's `links.explorer`, which is `https://basescan.org/address/<vault>` (or `https://arbiscan.io/address/<vault>`) — swap the `/address/…`
+on Arbitrum One and `https://robinhoodchain.blockscout.com/tx/<txHash>` on Robinhood Chain. ⚠️ That is a DIFFERENT path from the
+vault's `links.explorer`, which is `https://basescan.org/address/<vault>` (or the Arbiscan or Blockscout equivalent) — swap the `/address/…`
 segment for `/tx/<txHash>`, never append to it, or the result is a URL that resolves to nothing.
 With the link the operator can open what actually landed instead of taking your word for it. ⚠️ **Each list holds at most the
 100 most recent, while `scan.deposits`/`scan.withdrawals` stay the TOTALS** — when the two disagree

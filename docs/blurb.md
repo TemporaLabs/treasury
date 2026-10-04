@@ -11,7 +11,7 @@ sends no telemetry; the optional sign-in page loads Privy, whose script sends it
 
 ## The first skill: Earn
 
-Earn puts idle USDC to work in Tempora-curated vaults on Base and Arbitrum One. With it, an agent can:
+Earn puts idle USDC to work in Tempora-curated vaults on Base and Arbitrum One, and idle USDG on Robinhood Chain. With it, an agent can:
 
 - **Inspect vaults:** assets, fees, deposit access, and links to verify each contract independently.
 - **Prepare a deposit:** review the terms, simulate access, then build unsigned calls.
@@ -97,7 +97,7 @@ With a browser on the machine, the agent opens a page where you confirm each cal
 
 The v0.1.2 cycle adds `treasury connect`, which hands each transaction to the operator's own
 wallet (a browser wallet, or an email or social login) for approval in the browser, with no
-copy-paste, and deposits on Arbitrum One beside Base. More yield configurations across the
+copy-paste, and deposits on Arbitrum One and Robinhood Chain beside Base. More yield configurations across the
 risk/return spectrum are coming.
 
 ## Links

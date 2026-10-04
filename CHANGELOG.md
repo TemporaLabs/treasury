@@ -62,6 +62,14 @@ Pre-1.0, minor versions may change tool names, schemas and behaviour.
   `chain` and `chainId` ahead of its calls.
 - **Tempora Labs Cash Plus USDC (Test 2C)**, `tlCashPlusUSDC2C`, the default vault on Arbitrum One: a
   Morpho Vault V2 over native USDC, measured open to any account at block 511,070,816.
+- **Robinhood Chain joins as the third chain** (#89), `chain: "robinhood"`, with
+  **Tempora Labs Cash Plus USDG (Test 2D)**, `tlCashPlusUSDG2D`, its default vault: a Morpho Vault V2
+  over **USDG**, the first vault whose asset is not USDC. Measured open to any account at block
+  79,974,900; deployed at block 79,381,803. Amounts for it are USDG, in USDG's own decimals; the
+  argument `amount_usdc` and the field `usdcValue` keep their names for every asset. Its variables are
+  `TREASURY_RPC_ROBINHOOD`, `TREASURY_LOGS_RPC_ROBINHOOD` and the alias `ROBINHOOD_RPC_URL`; its explorer
+  link is Robinhood Chain's Blockscout; the connect page offers it as a wallet chain.
+- Chains are listed in a declared order — Base, Arbitrum One, Robinhood Chain — rather than by chain id.
 - `earn_vaults` returns `chains` — the chains a deposit can go to, the default first, each with its
   default vault — and `defaultChain`. The `earn` skill has the agent ask the operator which chain
   before preparing a deposit when they have not said, and never for a withdrawal or a balance.

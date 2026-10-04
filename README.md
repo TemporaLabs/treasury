@@ -11,7 +11,7 @@
 
 
 Open Agent Treasury (OAT) helps agents manage on-chain capital. Its first skill, **Earn**, lets
-agents inspect Tempora-curated vaults on Base and Arbitrum One, track USDC positions, and prepare deposits and
+agents inspect Tempora-curated vaults on Base, Arbitrum One and Robinhood Chain, track positions, and prepare deposits and
 withdrawals. It ships as an agent plugin, a command-line program, and a TypeScript/JavaScript library.
 
 **OAT prepares transactions. Your wallet executes them.** It never holds private keys or signs: with
@@ -31,8 +31,9 @@ A transaction goes out only from your own wallet, after you approve it there. Yo
 - **Prepare a withdrawal:** check how much is withdrawable now and build unsigned calls.
 
 Earn currently supports **USDC in, USDC out** through Tempora's ERC-4626 vaults on Base and
-Arbitrum One. Base is the default chain, and Test 2B its default vault; the agent asks which chain when
-you have not said, and the USDC has to be on that chain already. See [Vaults](#vaults).
+Arbitrum One, and **USDG in, USDG out** on Robinhood Chain. Base is the default chain, and Test 2B its
+default vault; the agent asks which chain when you have not said, and the funds have to be on that
+chain already. See [Vaults](#vaults).
 See the [command reference](docs/tools.md), the eight `earn` commands and the five `connect` commands, for inputs, outputs, and limits.
 
 ## Quick start
@@ -44,6 +45,7 @@ See the [command reference](docs/tools.md), the eight `earn` commands and the fi
 ```bash
 export TREASURY_RPC_BASE=https://...      # replace with your Base RPC URL
 export TREASURY_RPC_ARBITRUM=https://...  # only if you will use a vault on Arbitrum One
+export TREASURY_RPC_ROBINHOOD=https://... # only if you will use a vault on Robinhood Chain
 claude plugin marketplace add TemporaLabs/treasury@v0.1.1
 claude plugin install treasury@treasury
 ```
@@ -88,6 +90,7 @@ which chain first when you have not said. There are other options, and a demo.
 | **Default** | **Cash Plus USDC (Test 2B)** | Base | naming nothing, or `--chain base` |
 | **Demo** | **Cash Plus USDC (Test 2)** | Base | `--vault tlCashPlusUSDC2` |
 | Option | **Cash Plus USDC (Test 2C)** | Arbitrum One | `--chain arbitrum` |
+| Option | **Cash Plus USDG (Test 2D)** | Robinhood Chain | `--chain robinhood` |
 | Option | **Cash Plus USDC (Test 2A)** | Base | `--vault tlCashPlusUSDC2A` (whitelist only) |
 
 - **Test 2B, the default.** A Morpho Vault V2 on Base, open to any account. Its first position is a
@@ -101,6 +104,9 @@ which chain first when you have not said. There are other options, and a demo.
 - **Test 2C, Arbitrum One.** A Morpho Vault V2 over native USDC, open to any account.
   [Arbiscan](https://arbiscan.io/address/0x4057a63953142Ac2b3E5dB1954Fc14d578662587). The USDC has to
   be on Arbitrum already; OAT does not bridge.
+- **Test 2D, Robinhood Chain.** A Morpho Vault V2 over **USDG**, not USDC, open to any account.
+  [Blockscout](https://robinhoodchain.blockscout.com/address/0x758f00731943aA88e8C7fB709e0B727903B4F833).
+  The USDG has to be on Robinhood Chain already.
 - **Test 2A.** IPOR Fusion, listed so an admitted account can read and exit its position.
 
 When you have not said which chain, the agent shows these and asks before it prepares a deposit.

@@ -107,7 +107,7 @@ describe("the gate admits exactly the registry's own calls for the connected acc
       data: encodeFunctionData({ abi: erc4626Abi, functionName: "withdraw", args: [1n, receiver, owner] }),
       value: "0x0",
     });
-    expect(() => admit([w(OTHER, ACCOUNT)], ACCOUNT)).toThrow(/USDC would go to/);
+    expect(() => admit([w(OTHER, ACCOUNT)], ACCOUNT)).toThrow(/the funds would go to/);
     expect(() => admit([w(ACCOUNT, OTHER)], ACCOUNT)).toThrow(/burns the shares of/);
     expect(admit([w(ACCOUNT, ACCOUNT)], ACCOUNT)).toHaveLength(1);
   });

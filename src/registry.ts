@@ -68,7 +68,7 @@ export function offeredChains(): { key: ChainKey; chainId: SupportedChainId; nam
   const first = defaultChainId();
   return supportedChainIds
     .filter((id) => present.has(id))
-    .sort((a, b) => (a === first ? -1 : b === first ? 1 : a - b))
+    .sort((a, b) => (a === first ? -1 : b === first ? 1 : 0)) // stable: the rest keep `supportedChainIds` order
     .map((id) => ({ key: CHAIN_INFO[id].key, chainId: id, name: CHAIN_INFO[id].name }));
 }
 

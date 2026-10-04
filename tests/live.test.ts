@@ -236,3 +236,56 @@ liveArbitrum("preflight, quotes and position against live Arbitrum One (read-onl
     expect(p.measuredAtBlock).toBeGreaterThan(510_270_114);
   }, 120_000);
 });
+
+const hasRobinhoodRpc = Boolean(process.env["TREASURY_RPC_ROBINHOOD"] || process.env["ROBINHOOD_RPC_URL"]);
+const liveRobinhood = hasRobinhoodRpc ? describe : describe.skip;
+
+/**
+ * The third chain, and the first asset that is not USDC. What these establish that the unit tier
+ * cannot: the same Morpho Vault V2 revert selectors come back over USDG on Robinhood Chain, and the
+ * amounts this client prints are in USDG's own units — the row's asset, never an assumed USDC.
+ */
+liveRobinhood("preflight, quotes and position against live Robinhood Chain (read-only)", () => {
+  const client = makePublicClient(4663, rpcUrlFromEnv(4663));
+  const vault = () => defaultVault(4663);
+
+  it("the configured endpoint IS Robinhood Chain — and the check that says so can say otherwise", async () => {
+    expect(await endpointChainId(client, rpcUrlFromEnv(4663))).toBe(4663);
+    expect(await endpointChainId(makePublicClient(8453, PUBLIC_RPC[8453]), PUBLIC_RPC[8453])).toBe(8453);
+  });
+
+  it("the Robinhood default (Morpho V2 over USDG, open) classifies NEEDS_APPROVAL from a stranger while maxDeposit() reads 0", async () => {
+    const r = await preflightDeposit({ vault: vault(), depositor: STRANGER, client });
+    expect(r.status, JSON.stringify(r, null, 2)).toBe("NEEDS_APPROVAL");
+    expect(r.canDeposit).toBe(true);
+    expect(r.findings[0]).toMatch(/identity OK/); // asset() is USDG and decimals() agree with the row
+    expect(r.findings.at(-1)).toMatch(/TransferFromReverted \(0xe65b7a77\)/);
+    expect(r.advisory!.maxDepositRaw).toBe("0");
+    expect(r.measuredAtBlock).toBeGreaterThan(vault().deployedAtBlock!);
+  });
+
+  it("quote_deposit on the Robinhood default: expected shares in ITS ticker, and no rate quoted", async () => {
+    const q = await quoteDeposit({ vault: vault(), depositor: STRANGER, assetsHuman: "100", client });
+    expect(q.preflight.status).toBe("NEEDS_APPROVAL");
+    expect(q.expectedShares).toMatch(/tlCashPlusUSDG2D$/);
+    expect(Number(q.expectedShares.split(" ")[0])).toBeGreaterThan(50); // ~1 USDG/share
+    expect(q).not.toHaveProperty("currentApy");
+  });
+
+  it("a real position's whole history reconciles from the vault's deployment block, in USDG", async () => {
+    // The account with history is the receiver of the vault's FIRST Deposit event — read from the
+    // chain, never written here.
+    const [first] = await client.getContractEvents({ address: vault().address, abi: parseAbi(["event Deposit(address indexed sender, address indexed owner, uint256 assets, uint256 shares)"]), eventName: "Deposit", fromBlock: BigInt(vault().deployedAtBlock!), toBlock: "latest" });
+    expect(first, "precondition: the vault has taken a deposit").toBeDefined();
+    const holder = first!.args.owner!;
+    const p = await getPosition({ vault: vault(), principal: holder, client, fallbackClient: makePublicClient(4663, PUBLIC_RPC[4663]) });
+    expect(p.scan.fromBlock).toBe(String(vault().deployedAtBlock));
+    expect(p.scan.deposits).toBeGreaterThanOrEqual(1);
+    if (!p.scan.capped) {
+      expect(p.scan.complete).toBe(true);
+      expect(p.scan.wholeHistory).toBe(true);
+      expect(p.entryBasisUsdc).toMatch(/^\d+(\.\d+)? USDG$/); // the row's asset, not USDC
+    }
+    expect(p.usdcValue).toMatch(/^\d+(\.\d+)? USDG$/);
+  }, 120_000);
+});

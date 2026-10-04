@@ -110,7 +110,8 @@ TREASURY_RPC_BASE=https://... npm run test:fork # anvil fork round trips with im
 ```
 
 Each chain's live and fork tiers run when that chain's RPC variable is set. For Arbitrum One, add
-`TREASURY_RPC_ARBITRUM=https://...` to the same commands; a chain with no variable set is skipped
+`TREASURY_RPC_ARBITRUM=https://...` to the same commands, and `TREASURY_RPC_ROBINHOOD=https://...` for
+Robinhood Chain; a chain with no variable set is skipped
 and shown as skipped.
 
 - **Use `npm ci`, not `npm install`.** It fails on a stale lockfile, which is what CI does.

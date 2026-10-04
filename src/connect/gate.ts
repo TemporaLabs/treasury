@@ -95,7 +95,7 @@ export function admit(calls: GateCall[], account: Address): Admitted[] {
     if (name === "withdraw" || name === "redeem") {
       const [amount, receiver, owner] = args as [bigint, Address, Address];
       if (amount === 0n) throw new Error(`refused (${at}): a ${name} of 0`);
-      if (!same(receiver, account)) throw new Error(`refused (${at}): the USDC would go to ${receiver}, not the connected account ${account}`);
+      if (!same(receiver, account)) throw new Error(`refused (${at}): the funds would go to ${receiver}, not the connected account ${account}`);
       if (!same(owner, account)) throw new Error(`refused (${at}): it burns the shares of ${owner}, not the connected account ${account}`);
       out.push({ kind: name, vault, amount });
       return;

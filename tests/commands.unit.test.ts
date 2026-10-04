@@ -131,6 +131,7 @@ describe("earn_vaults — Tempora vaults only, and the access of each is reporte
     expect(out.chains.map((c) => [c.chain, c.chainId, c.name, c.default, c.defaultAccess])).toEqual([
       ["base", 8453, "Base", "tlCashPlusUSDC2B", "open"],
       ["arbitrum", 42161, "Arbitrum One", "tlCashPlusUSDC2C", "open"],
+      ["robinhood", 4663, "Robinhood Chain", "tlCashPlusUSDG2D", "open"],
     ]);
     // the global default is the default CHAIN's default — the two fields cannot disagree
     expect(out.default).toBe(out.chains[0]!.default);

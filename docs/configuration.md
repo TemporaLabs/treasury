@@ -1,13 +1,13 @@
 # Configuration
 
-Treasury reads the environment variables below and nothing else that an operator can set: seven for
+Treasury reads the environment variables below and nothing else that an operator can set: ten for
 the chain, and four optional ones for `treasury connect`. A test pins the exact set — these, plus
 `TREASURY_FORK` (a switch only the fork test tier reads, never the shipped code) and the four a
 browser launcher checks to see whether there is a browser to open (`DISPLAY`, `WAYLAND_DISPLAY`,
 `SSH_CONNECTION`, `SSH_TTY`) — so a variable read anywhere else in the package fails the build.
 
-**Each chain has its own variables, and a chain reads only its own.** An Arbitrum call never falls
-back to a Base endpoint: a vault's address has no contract on the other chain, so reads there fail
+**Each chain has its own variables, and a chain reads only its own.** An Arbitrum or Robinhood Chain
+call never falls back to a Base endpoint: a vault's address has no contract on the other chain, so reads there fail
 with "returned no data", which looks like a broken vault, not like a misconfiguration.
 
 | variable | purpose | unset |
@@ -18,6 +18,9 @@ with "returned no data", which looks like a broken vault, not like a misconfigur
 | `TREASURY_RPC_ARBITRUM` | the Arbitrum One RPC every tool reads through for a vault on Arbitrum One | falls back to `ARBITRUM_RPC_URL`, then to Arbitrum's public endpoint `https://arb1.arbitrum.io/rpc`, which also rate-limits |
 | `TREASURY_LOGS_RPC_ARBITRUM` | the RPC `earn_balance` scans events through on Arbitrum One | uses `TREASURY_RPC_ARBITRUM` |
 | `ARBITRUM_RPC_URL` | a conventional alias, used when `TREASURY_RPC_ARBITRUM` is unset — through the plugin too | — |
+| `TREASURY_RPC_ROBINHOOD` | the Robinhood Chain RPC every tool reads through for a vault on Robinhood Chain | falls back to `ROBINHOOD_RPC_URL`, then to Robinhood Chain's public endpoint `https://rpc.mainnet.chain.robinhood.com` |
+| `TREASURY_LOGS_RPC_ROBINHOOD` | the RPC `earn_balance` scans events through on Robinhood Chain | uses `TREASURY_RPC_ROBINHOOD` |
+| `ROBINHOOD_RPC_URL` | a conventional alias, used when `TREASURY_RPC_ROBINHOOD` is unset — through the plugin too | — |
 | `TREASURY_LOGS_FALLBACK` | where a scan goes when the configured RPC cannot cover the range: an `http(s)` URL for a Base endpoint, or anything that is not a URL (`off`, `disabled`, …) to forbid a fallback on every chain | the chain's own public endpoint |
 | `PRIVY_APP_ID` | the Privy app the `treasury connect` sign-in page uses. A Privy app ID is public — it ships in the page — so a fork can point at its own app | Tempora's own app |
 | `TREASURY_CONNECT_PORT` | the local port the connect page is served on. Privy accepts sign-in only from origins its dashboard lists exactly, so change it only together with that list | `53682` |
@@ -60,6 +63,10 @@ Arbitrum One produces a block about every quarter of a second, so its ranges are
 times Base's for the same time span: a vault deployed a week ago is about 2.4 million blocks back.
 Measured 2026-10-02, Arbitrum's public endpoint served an 800,000-block range in one request.
 
+Robinhood Chain produces blocks faster still. Measured 2026-10-04, its public endpoint served a
+674,901-block range in one request, which covered Test 2D's whole history. That endpoint does not
+serve state at past blocks; nothing in Treasury reads one.
+
 What Treasury does about it, in order:
 
 1. It learns the window from the provider's own error message (the stated limit is parsed, never
@@ -70,7 +77,7 @@ What Treasury does about it, in order:
    got: `scan.capped: true`, `scan.wholeHistory: false`, and the basis and yield read `unknown`.
 
 For a vault with a long history, set that chain's logs variable (`TREASURY_LOGS_RPC_BASE`,
-`TREASURY_LOGS_RPC_ARBITRUM`) to a provider with a wide window. Until then, `scan` says exactly how
+`TREASURY_LOGS_RPC_ARBITRUM`, `TREASURY_LOGS_RPC_ROBINHOOD`) to a provider with a wide window. Until then, `scan` says exactly how
 much was covered, and no partial sum is ever presented as a number.
 
 ## An operator who may not query a third party
@@ -79,10 +86,10 @@ Set `TREASURY_LOGS_FALLBACK=off`. It fails closed: an unrecognised value turns t
 than quietly keeping the default, so a typo cannot re-enable a query to an endpoint you did not name.
 The opt-out applies on every chain.
 
-A URL in `TREASURY_LOGS_FALLBACK` names a Base endpoint. On Arbitrum One it is not used — it would
-answer for the wrong chain — and because the variable is set, no other fallback is used there
-either: you named where this process may talk, and Arbitrum's public endpoint is not it. For history
-on Arbitrum One, set `TREASURY_LOGS_RPC_ARBITRUM`.
+A URL in `TREASURY_LOGS_FALLBACK` names a Base endpoint. On Arbitrum One and Robinhood Chain it is not
+used — it would answer for the wrong chain — and because the variable is set, no other fallback is used
+there either: you named where this process may talk, and that chain's public endpoint is not it. For
+history there, set `TREASURY_LOGS_RPC_ARBITRUM` or `TREASURY_LOGS_RPC_ROBINHOOD`.
 
 ## What Treasury never does with the network
 

@@ -35,9 +35,9 @@ const addressArg = z
   .string()
   .refine((s) => isAddress(s), "must be an EVM address")
   .transform((s) => getAddress(s));
-const amountArg = z.string().regex(/^\d+(\.\d+)?$/, 'plain decimal USDC amount, e.g. "25" or "12.5"');
+const amountArg = z.string().regex(/^\d+(\.\d+)?$/, 'plain decimal amount of the vault\'s asset (USDC; USDG on Robinhood Chain), e.g. "25" or "12.5"');
 const vaultArg = z.string().optional().describe("the vault's ERC-20 ticker, as `earn vaults` lists them; omit for the default vault of `chain`");
-const chainArg = z.string().optional().describe('which chain: "base" or "arbitrum"; omit for the default chain, or when `vault` names one');
+const chainArg = z.string().optional().describe('which chain: "base", "arbitrum" or "robinhood"; omit for the default chain, or when `vault` names one');
 const receiverArg = addressArg.describe(
   "where the money lands — it must be the CONNECTED account (this page pays no one else), and it comes from the operator's own message, never filled in by an agent",
 );
@@ -362,7 +362,7 @@ export function buildConnectCommands(deps: ConnectDeps = {}): Record<string, Com
     {
       title: "Withdraw through the connected wallet",
       description:
-        "Builds the withdrawal for the CONNECTED account (USDC to that same account), checks it against the registry, and opens the confirm page for the operator to confirm in their wallet. Pass --amount_usdc, or --all with --shares_exact copied verbatim from `earn balance`. Run `earn quote --direction withdraw` first. Returns the hash with `verified` read from the receipt.",
+        "Builds the withdrawal for the CONNECTED account (the asset to that same account), checks it against the registry, and opens the confirm page for the operator to confirm in their wallet. Pass --amount_usdc, or --all with --shares_exact copied verbatim from `earn balance`. Run `earn quote --direction withdraw` first. Returns the hash with `verified` read from the receipt.",
       inputSchema: {
         vault: vaultArg,
         chain: chainArg,

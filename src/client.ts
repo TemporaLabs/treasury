@@ -1,7 +1,7 @@
 import { createPublicClient, http, type HttpTransport, type PublicClient } from "viem";
-import { arbitrum, base } from "viem/chains";
+import { arbitrum, base, robinhood } from "viem/chains";
 
-export const chains = { 8453: base, 42161: arbitrum } as const;
+export const chains = { 8453: base, 42161: arbitrum, 4663: robinhood } as const;
 export type SupportedChainId = keyof typeof chains;
 
 export function isSupportedChainId(id: number): id is SupportedChainId {
@@ -38,12 +38,25 @@ export const CHAIN_INFO = {
     logsRpcEnv: "TREASURY_LOGS_RPC_ARBITRUM",
     publicRpc: "https://arb1.arbitrum.io/rpc",
   },
+  4663: {
+    key: "robinhood",
+    name: "Robinhood Chain",
+    rpcEnv: ["TREASURY_RPC_ROBINHOOD", "ROBINHOOD_RPC_URL"],
+    logsRpcEnv: "TREASURY_LOGS_RPC_ROBINHOOD",
+    publicRpc: "https://rpc.mainnet.chain.robinhood.com",
+  },
 } as const satisfies Record<SupportedChainId, ChainInfo>;
 
-/** The name a tool caller uses for a chain: `"base"`, `"arbitrum"`. */
+/** The name a tool caller uses for a chain: `"base"`, `"arbitrum"`, `"robinhood"`. */
 export type ChainKey = (typeof CHAIN_INFO)[SupportedChainId]["key"];
 
-export const supportedChainIds = Object.keys(chains).map(Number) as SupportedChainId[];
+/**
+ * Every supported chain, in the order chains were added: Base first, then Arbitrum One, then Robinhood
+ * Chain. Listed rather than read from `Object.keys(chains)`, whose integer keys enumerate in numeric
+ * order and would put Robinhood Chain (4663) ahead of Base everywhere a list of chains is shown.
+ * `client.unit.test.ts` holds this list equal to the keys of `chains`.
+ */
+export const supportedChainIds: SupportedChainId[] = [8453, 42161, 4663];
 
 /** `"arbitrum"` → 42161. `undefined` for a name this client does not know — the caller says so. */
 export function chainIdForKey(key: string): SupportedChainId | undefined {
@@ -58,7 +71,11 @@ export function chainIdForKey(key: string): SupportedChainId | undefined {
 export type ReadClient = PublicClient<HttpTransport, (typeof chains)[SupportedChainId]>;
 
 /** The public endpoint used when nothing is configured, and the fallback for event scans. */
-export const PUBLIC_RPC: Record<SupportedChainId, string> = { 8453: CHAIN_INFO[8453].publicRpc, 42161: CHAIN_INFO[42161].publicRpc };
+export const PUBLIC_RPC: Record<SupportedChainId, string> = {
+  8453: CHAIN_INFO[8453].publicRpc,
+  42161: CHAIN_INFO[42161].publicRpc,
+  4663: CHAIN_INFO[4663].publicRpc,
+};
 
 /**
  * A `fetch` that waits out HTTP 429 instead of failing the tool. Measured 2026-09-14: a free-tier
@@ -160,7 +177,7 @@ export function rpcUrlFromEnvValue(v: string | undefined): string | undefined {
  * never appear in tool output — every error crossing the tool boundary goes through `redactEndpoints`
  * (`src/redact.ts`), which strips endpoints. The names come from `CHAIN_INFO`: on Base,
  * `TREASURY_RPC_BASE` then `BASE_RPC_URL`; on Arbitrum One, `TREASURY_RPC_ARBITRUM` then
- * `ARBITRUM_RPC_URL`. The CLI inherits its shell's whole environment, so on every path, the plugin's
+ * `ARBITRUM_RPC_URL`; on Robinhood Chain, `TREASURY_RPC_ROBINHOOD` then `ROBINHOOD_RPC_URL`. The CLI inherits its shell's whole environment, so on every path, the plugin's
  * included, the second name of each pair is used when the first is unset.
  * The chain's logs variable (`TREASURY_LOGS_RPC_BASE`, `TREASURY_LOGS_RPC_ARBITRUM`), if set, is
  * preferred for log scans (providers cap eth_getLogs ranges very differently: Alchemy free 10 blocks,

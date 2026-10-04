@@ -55,6 +55,7 @@ export TREASURY_RPC_BASE=https://...          # a keyed Base RPC (Alchemy, Infur
 export TREASURY_LOGS_RPC_BASE=https://...     # optional: a wide-window provider for earn_balance's event scans
 export TREASURY_RPC_ARBITRUM=https://...      # a keyed Arbitrum One RPC, if you will use a vault on Arbitrum
 export TREASURY_LOGS_RPC_ARBITRUM=https://... # optional, the same for Arbitrum
+export TREASURY_RPC_ROBINHOOD=https://...     # a keyed Robinhood Chain RPC, if you will use a vault there
 ```
 
 Each chain reads only its own variable. Unset, a chain falls back to its public RPC, which rate-limits

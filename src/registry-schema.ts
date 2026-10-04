@@ -67,7 +67,7 @@ export const vaultEntrySchema = z
      * 🔴 Adding a chain here also needs its row in `CHAIN_INFO` (a compile error until it has one) and
      * in `links.ts`'s explorer map (which throws on a chain it does not know).
      */
-    chainId: z.union([z.literal(8453), z.literal(42161)]),
+    chainId: z.union([z.literal(8453), z.literal(42161), z.literal(4663)]),
     address,
     chassis: chassisSchema,
     backend: backendSchema,

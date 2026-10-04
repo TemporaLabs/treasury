@@ -27,6 +27,9 @@ Carries `@temporalabs/treasury` v0.1.2.
 - `TREASURY_RPC_ARBITRUM` and `TREASURY_LOGS_RPC_ARBITRUM` reach the CLI from the environment, beside
   the two Base variables.
 - A trigger case for a deposit on Arbitrum.
+- Robinhood Chain (#89): the skill body names it, its USDG vault and its variables
+  (`TREASURY_RPC_ROBINHOOD`, `TREASURY_LOGS_RPC_ROBINHOOD`), and tells the agent to say USDG there.
+  The skill's `description` is unchanged.
 
 ## [v0.1.1] - 2026-09-29
 
