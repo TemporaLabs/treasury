@@ -345,8 +345,11 @@ function Confirm({ info }: { info: Extract<Info, { mode: "confirm" }> }) {
       // leave a minute for the wallet's own prompt.
       const live = (await fetch(`/info?s=${secret}`).then((r) => (r.ok ? r.json() : undefined), () => undefined)) as { msLeft?: number; next?: number } | undefined;
       if (!live) throw new Error("this page has expired; run the command again");
-      // Another tab of this page may have handled this step already: never send it twice.
-      if (live.next !== next) throw new Error("this step was already handled, perhaps in another tab; close this tab and use the other one");
+      // Another tab of this page may have handled this step already: never send it twice. Only this
+      // tab is stale, so it stops here without reporting a rejection, which would end the whole flow.
+      if (live.next !== next) {
+        return setPhase({ text: "This step was already handled, perhaps in another tab. Close this tab and use the other one.", tone: "bad", done: true });
+      }
       if ((live.msLeft ?? 0) < 60_000) throw new Error("less than a minute is left on this page; run the command again");
       stage = "send";
       hash = (await provider.request({ method: "eth_sendTransaction", params: [{ ...tx, chainId: `0x${info.chainId.toString(16)}`, gas: `0x${((est * 3n) / 2n).toString(16)}` }] })) as string;
