@@ -39720,6 +39720,8 @@ function buildCommands() {
     },
     guarded(async ({ vault: symbol2, chain: chain2, receiver, account, amount_usdc, all, shares_exact }) => {
       const vault = supportedVault(symbol2, chain2);
+      if (all && amount_usdc) throw new Error("give --amount_usdc or --all with --shares_exact, not both");
+      if (!all && shares_exact) throw new Error("--shares_exact goes with --all; for an amount in the asset, use --amount_usdc alone");
       if (all) {
         if (!shares_exact) throw new Error("--all requires --shares_exact (copy sharesExact from `earn balance` verbatim)");
         return unsigned(buildWithdraw(vault, { receiver, owner: account, all: true, sharesExact: shares_exact }), vault, "withdraw");
@@ -39738,7 +39740,7 @@ function buildCommands() {
         chain,
         account: accountArg,
         lookback_blocks: external_exports.number().int().positive().optional().describe("how far back to scan for Deposit/Withdraw events; default: from the vault's deployment block, i.e. the whole history. The EFFECTIVE window is max_log_requests \xD7 the provider's eth_getLogs cap (Alchemy free 10 blocks, Base public 2,000, Infura on Arbitrum 10,000); if the configured RPC cannot cover it, the chain's public endpoint serves the scan and scan.source says so"),
-        max_log_requests: external_exports.number().int().positive().max(400).optional().describe("cap on eth_getLogs calls per event per scan; default 100 (= 1,000 blocks on Alchemy free, 200,000 on Base public). scan.wholeHistory says whether the scan actually covered every block since the vault was deployed \u2014 scan.complete alone is only a reconciliation and can be vacuously true. For an older vault, a provider with a wide eth_getLogs range (TREASURY_LOGS_RPC_BASE, or TREASURY_LOGS_RPC_ARBITRUM on Arbitrum) is what makes it whole")
+        max_log_requests: external_exports.number().int().positive().max(400).optional().describe("cap on eth_getLogs calls per event per scan; default 100 (= 1,000 blocks on Alchemy free, 200,000 on Base public). scan.wholeHistory says whether the scan actually covered every block since the vault was deployed \u2014 scan.complete alone is only a reconciliation and can be vacuously true. For an older vault, a provider with a wide eth_getLogs range (TREASURY_LOGS_RPC_BASE; TREASURY_LOGS_RPC_ARBITRUM on Arbitrum One; TREASURY_LOGS_RPC_ROBINHOOD on Robinhood Chain) is what makes it whole")
       }
     },
     guarded(async ({ vault: symbol2, chain: chain2, account, lookback_blocks, max_log_requests }) => {
@@ -39774,7 +39776,7 @@ function buildCommands() {
     guarded(async ({ receipt_id }) => text({
       receipt_id,
       status: "nothing_to_claim",
-      note: "No chassis in the registry queues withdrawals; a withdraw() that succeeded already delivered the USDC. When an async chassis is added, this tool will finalize its claim handle."
+      note: "No chassis in the registry queues withdrawals; a withdraw() that succeeded already delivered the asset (USDC; USDG on Robinhood Chain). When an async chassis is added, this tool will finalize its claim handle."
     }))
   );
   return commands;
@@ -39799,7 +39801,8 @@ function checkAck(code, pending, calls, account, now) {
   const again = "run the same command without --ack, post its `acknowledgement` to the operator, and wait for their yes";
   if (!pending) throw new Error(`refused: no acknowledgement is pending; ${again}`);
   if (code.trim().toLowerCase() !== pending.code) throw new Error(`refused: --ack ${code} is not the pending acknowledgement's code; ${again}`);
-  if (now.getTime() > Date.parse(pending.expiresAtIso)) throw new Error(`refused: the acknowledgement expired at ${pending.expiresAtIso}; ${again}`);
+  const expires = Date.parse(pending.expiresAtIso);
+  if (!Number.isFinite(expires) || now.getTime() > expires) throw new Error(`refused: the acknowledgement expired at ${pending.expiresAtIso}; ${again}`);
   if (callsDigest(calls, account) !== pending.digest) {
     throw new Error(`refused: these calls are not the ones the operator acknowledged (the amount, vault, chain, receiver or connected account changed); ${again}`);
   }
@@ -39811,7 +39814,7 @@ function summarize(action, calls, admitted, receiver) {
   const main = admitted.find((a) => a.kind !== "approve");
   const v = main.vault;
   const chainId = calls[0].chainId;
-  const amount = main.kind === "redeem" ? `${formatUnits(main.amount, v.shareDecimals)} ${v.symbol} (every share the account holds)` : `${formatUnits(main.amount, v.asset.decimals)} ${v.asset.symbol}`;
+  const amount = main.kind === "redeem" ? `${formatUnits(main.amount, v.shareDecimals)} ${v.symbol} shares (the amount given; it is the whole position only if it equals the account's share balance, which is not checked here)` : `${formatUnits(main.amount, v.asset.decimals)} ${v.asset.symbol}`;
   return {
     action,
     amount,
@@ -40478,7 +40481,7 @@ function outcome(chainId, account, r) {
   const txs = r.result.ok ? r.result.value : r.done;
   const all = txs.length === r.total && txs.every((t) => t.verified === "matched" || t.verified === "extra_transfer");
   const status = r.result.ok ? all ? "completed" : "stopped" : txs.length ? "stopped" : "not_reported";
-  const reason = r.result.ok ? r.stopReason : r.result.reason;
+  const reason = (r.result.ok ? r.stopReason : r.result.reason) ?? (status === "stopped" ? `the flow ended after ${txs.length} of ${r.total} transactions` : void 0);
   return JSON.stringify(
     {
       status,
@@ -40605,6 +40608,8 @@ function buildConnectCommands(deps = {}) {
       const vault = resolveVault(symbol2, chain);
       const owner = session.account;
       let calls;
+      if (all && amount_usdc) throw new Error("give --amount_usdc or --all with --shares_exact, not both");
+      if (!all && shares_exact) throw new Error("--shares_exact goes with --all; for an amount in the asset, use --amount_usdc alone");
       if (all) {
         if (!shares_exact) throw new Error("--all requires --shares_exact (copy it verbatim from `earn balance`)");
         calls = buildWithdraw(vault, { receiver, owner, all: true, sharesExact: shares_exact });

@@ -52,7 +52,9 @@ export function checkAck(code: string, pending: PendingAck | undefined, calls: U
   const again = "run the same command without --ack, post its `acknowledgement` to the operator, and wait for their yes";
   if (!pending) throw new Error(`refused: no acknowledgement is pending; ${again}`);
   if (code.trim().toLowerCase() !== pending.code) throw new Error(`refused: --ack ${code} is not the pending acknowledgement's code; ${again}`);
-  if (now.getTime() > Date.parse(pending.expiresAtIso)) throw new Error(`refused: the acknowledgement expired at ${pending.expiresAtIso}; ${again}`);
+  const expires = Date.parse(pending.expiresAtIso);
+  // A missing or unreadable expiry counts as expired, never as no expiry.
+  if (!Number.isFinite(expires) || now.getTime() > expires) throw new Error(`refused: the acknowledgement expired at ${pending.expiresAtIso}; ${again}`);
   if (callsDigest(calls, account) !== pending.digest) {
     throw new Error(`refused: these calls are not the ones the operator acknowledged (the amount, vault, chain, receiver or connected account changed); ${again}`);
   }
@@ -86,7 +88,7 @@ export function summarize(action: "deposit" | "withdraw", calls: UnsignedCall[],
   const chainId = calls[0]!.chainId as keyof typeof CHAIN_INFO;
   const amount =
     main.kind === "redeem"
-      ? `${formatUnits(main.amount, v.shareDecimals)} ${v.symbol} (every share the account holds)`
+      ? `${formatUnits(main.amount, v.shareDecimals)} ${v.symbol} shares (the amount given; it is the whole position only if it equals the account's share balance, which is not checked here)`
       : `${formatUnits(main.amount, v.asset.decimals)} ${v.asset.symbol}`;
   return {
     action,

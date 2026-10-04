@@ -128,6 +128,15 @@ describe("refusals are errors with exit 1, never results", () => {
     expect(error(r)).not.toMatch(/\.\./);
   });
 
+  it("a withdrawal given both an amount and --all, or --shares_exact without --all, is refused rather than half-read", async () => {
+    const both = await run(["earn", "prepare_withdraw", "--account", ACCOUNT, "--receiver", ACCOUNT, "--all", "--shares_exact", "5", "--amount_usdc", "1"]);
+    expect(both.code).toBe(1);
+    expect(error(both)).toMatch(/not both/);
+    const stray = await run(["earn", "prepare_withdraw", "--account", ACCOUNT, "--receiver", ACCOUNT, "--amount_usdc", "1", "--shares_exact", "3"]);
+    expect(stray.code).toBe(1);
+    expect(error(stray)).toMatch(/--shares_exact goes with --all/);
+  });
+
   it("`--help` after the flags is refused, and the error says where help goes", async () => {
     const r = await run(["earn", "quote", "--direction", "deposit", "--help"]);
     expect(r.code).toBe(1);

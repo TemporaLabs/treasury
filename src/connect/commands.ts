@@ -292,7 +292,8 @@ export function outcome(chainId: number, account: string, r: { result: Settled<T
   // Completed means every call of the flow landed, never only the ones that were reached.
   const all = txs.length === r.total && txs.every((t) => t.verified === "matched" || t.verified === "extra_transfer");
   const status = r.result.ok ? (all ? "completed" : "stopped") : txs.length ? "stopped" : "not_reported";
-  const reason = r.result.ok ? r.stopReason : r.result.reason;
+  // A stopped flow always says why, even when no single step reported a reason.
+  const reason = (r.result.ok ? r.stopReason : r.result.reason) ?? (status === "stopped" ? `the flow ended after ${txs.length} of ${r.total} transactions` : undefined);
   return JSON.stringify(
     {
       status,
@@ -442,6 +443,8 @@ export function buildConnectCommands(deps: ConnectDeps = {}): Record<string, Com
       const vault = resolveVault(symbol, chain);
       const owner = session.account as Address;
       let calls: UnsignedCall[];
+      if (all && amount_usdc) throw new Error("give --amount_usdc or --all with --shares_exact, not both");
+      if (!all && shares_exact) throw new Error("--shares_exact goes with --all; for an amount in the asset, use --amount_usdc alone");
       if (all) {
         if (!shares_exact) throw new Error("--all requires --shares_exact (copy it verbatim from `earn balance`)");
         calls = buildWithdraw(vault, { receiver: receiver as Address, owner, all: true, sharesExact: shares_exact });

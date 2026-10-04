@@ -179,7 +179,7 @@ export function rpcUrlFromEnvValue(v: string | undefined): string | undefined {
  * `TREASURY_RPC_BASE` then `BASE_RPC_URL`; on Arbitrum One, `TREASURY_RPC_ARBITRUM` then
  * `ARBITRUM_RPC_URL`; on Robinhood Chain, `TREASURY_RPC_ROBINHOOD` then `ROBINHOOD_RPC_URL`. The CLI inherits its shell's whole environment, so on every path, the plugin's
  * included, the second name of each pair is used when the first is unset.
- * The chain's logs variable (`TREASURY_LOGS_RPC_BASE`, `TREASURY_LOGS_RPC_ARBITRUM`), if set, is
+ * The chain's logs variable (`TREASURY_LOGS_RPC_BASE`, `TREASURY_LOGS_RPC_ARBITRUM`, `TREASURY_LOGS_RPC_ROBINHOOD`), if set, is
  * preferred for log scans (providers cap eth_getLogs ranges very differently: Alchemy free 10 blocks,
  * Base public 2,000, Infura 10,000 on Arbitrum) — see `position.ts`.
  *
@@ -207,7 +207,7 @@ export function rpcUrlFromEnv(chainId: SupportedChainId): string {
  * cannot serve the scan — it would answer for the wrong chain — so a SET variable means no fallback
  * on that chain, whatever it holds: either the operator opted out, or they named a Base endpoint and
  * so constrained where this process talks. An operator who wants history on another chain points that
- * chain's logs variable (`TREASURY_LOGS_RPC_ARBITRUM`) at a provider with a wide eth_getLogs range.
+ * chain's logs variable (`TREASURY_LOGS_RPC_ARBITRUM`, `TREASURY_LOGS_RPC_ROBINHOOD`) at a provider with a wide eth_getLogs range.
  */
 export function logsFallbackUrlFromEnv(chainId: SupportedChainId, logsUrl: string): string | undefined {
   const raw = (process.env["TREASURY_LOGS_FALLBACK"] ?? "").trim();

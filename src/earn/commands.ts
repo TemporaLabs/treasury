@@ -491,6 +491,8 @@ export function buildCommands(): Record<string, Command> {
       const vault = supportedVault(symbol, chain);
       // ⚠️ `receiver` and `account` are DIFFERENT slots and both are addresses, so a transposition
       // here type-checks. `account` is the owner whose shares burn; `receiver` is the payee.
+      if (all && amount_usdc) throw new Error("give --amount_usdc or --all with --shares_exact, not both");
+      if (!all && shares_exact) throw new Error("--shares_exact goes with --all; for an amount in the asset, use --amount_usdc alone");
       if (all) {
         if (!shares_exact) throw new Error("--all requires --shares_exact (copy sharesExact from `earn balance` verbatim)");
         return unsigned(buildWithdraw(vault, { receiver, owner: account, all: true, sharesExact: shares_exact }), vault, "withdraw");
@@ -511,7 +513,7 @@ export function buildCommands(): Record<string, Command> {
         chain,
         account: accountArg,
         lookback_blocks: z.number().int().positive().optional().describe("how far back to scan for Deposit/Withdraw events; default: from the vault's deployment block, i.e. the whole history. The EFFECTIVE window is max_log_requests × the provider's eth_getLogs cap (Alchemy free 10 blocks, Base public 2,000, Infura on Arbitrum 10,000); if the configured RPC cannot cover it, the chain's public endpoint serves the scan and scan.source says so"),
-        max_log_requests: z.number().int().positive().max(400).optional().describe("cap on eth_getLogs calls per event per scan; default 100 (= 1,000 blocks on Alchemy free, 200,000 on Base public). scan.wholeHistory says whether the scan actually covered every block since the vault was deployed — scan.complete alone is only a reconciliation and can be vacuously true. For an older vault, a provider with a wide eth_getLogs range (TREASURY_LOGS_RPC_BASE, or TREASURY_LOGS_RPC_ARBITRUM on Arbitrum) is what makes it whole"),
+        max_log_requests: z.number().int().positive().max(400).optional().describe("cap on eth_getLogs calls per event per scan; default 100 (= 1,000 blocks on Alchemy free, 200,000 on Base public). scan.wholeHistory says whether the scan actually covered every block since the vault was deployed — scan.complete alone is only a reconciliation and can be vacuously true. For an older vault, a provider with a wide eth_getLogs range (TREASURY_LOGS_RPC_BASE; TREASURY_LOGS_RPC_ARBITRUM on Arbitrum One; TREASURY_LOGS_RPC_ROBINHOOD on Robinhood Chain) is what makes it whole"),
       },
     },
     guarded(async ({ vault: symbol, chain, account, lookback_blocks, max_log_requests }) => {
@@ -555,7 +557,7 @@ export function buildCommands(): Record<string, Command> {
       text({
         receipt_id,
         status: "nothing_to_claim",
-        note: "No chassis in the registry queues withdrawals; a withdraw() that succeeded already delivered the USDC. When an async chassis is added, this tool will finalize its claim handle.",
+        note: "No chassis in the registry queues withdrawals; a withdraw() that succeeded already delivered the asset (USDC; USDG on Robinhood Chain). When an async chassis is added, this tool will finalize its claim handle.",
       })),
   );
 
