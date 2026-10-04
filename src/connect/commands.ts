@@ -392,6 +392,8 @@ export function buildConnectCommands(deps: ConnectDeps = {}): Record<string, Com
       );
     }
     checkAck(ack, readPendingAck(), calls, account, now());
+    // Spent before the page opens, so a flow that fails to start leaves nothing to reuse. Two
+    // concurrent runs could both pass the check; only one page opens because the port is fixed.
     clearPendingAck();
     const r = await runConfirm(calls, session, deps);
     return outcome(calls[0]!.chainId, session.account, r);

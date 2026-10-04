@@ -851,6 +851,33 @@ describe("the acknowledgement before any signing page opens", () => {
       expect(opened).toEqual([]);
     });
 
+    it("the code is spent before the page opens: a page that fails to start leaves nothing to reuse", async () => {
+      const { ack } = await connect("connect_deposit", { amount_usdc: "1" });
+      const port = Number(process.env["TREASURY_CONNECT_PORT"]);
+      const squatter = createServer();
+      const held = await new Promise<boolean>((resolve) => {
+        squatter.once("error", () => resolve(false));
+        squatter.listen({ port, host: "::1", ipv6Only: true }, () => resolve(true));
+      });
+      // A machine with IPv6 switched off has no `::1` for anyone to hold; there is nothing to test.
+      if (!held) return;
+      try {
+        await expect(connect("connect_deposit", { amount_usdc: "1", ack })).rejects.toThrow(/in use/);
+        expect(existsSync(pendingAckPath())).toBe(false);
+        await expect(connect("connect_deposit", { amount_usdc: "1", ack })).rejects.toThrow(/no acknowledgement is pending/);
+        expect(opened).toEqual([]);
+      } finally {
+        await new Promise((r) => squatter.close(r));
+      }
+    });
+
+    it("connect disconnect voids the pending acknowledgement", async () => {
+      await connect("connect_deposit", { amount_usdc: "1" });
+      expect(existsSync(pendingAckPath())).toBe(true);
+      await buildConnectCommands(deps())["connect_disconnect"]!.handler({} as never);
+      expect(existsSync(pendingAckPath())).toBe(false);
+    });
+
     it("a new wallet connection voids the acknowledgement given before it", async () => {
       const { ack } = await connect("connect_deposit", { amount_usdc: "1" });
       writeSession({ account: ACCOUNT, walletType: "external", connectedAtIso: "2026-10-04T12:01:00Z" });

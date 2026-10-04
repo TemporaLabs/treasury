@@ -143,7 +143,8 @@ bridge. **Which chain is the operator's decision. Ask; do not pick.**
    says, and reaching anywhere else is outside what it will build.
 3. **On a first deposit, present `earn_terms` and get an explicit acknowledgement.** The
    fund requires this on every distribution surface, and an agent talking to its
-   operator is one. Do not paraphrase them into something friendlier.
+   operator is one. Do not paraphrase them into something friendlier. Through `connect`, its
+   acknowledgement carries these terms on every deposit: post that instead, rather than asking twice.
 4. **Always `earn_quote` with `direction: "deposit"`, the real `account`, and the real amount.** It includes the
    pre-flight; read `preflight.status`, not `advisory.maxDepositRaw`: `maxDeposit()` returns "unlimited" on a
    whitelist-gated Fusion vault and `0` on an open Morpho V2 vault — it is wrong in both
