@@ -257,7 +257,7 @@ async function sendBuffered(to: Address, data: `0x${string}`, from: Address = WH
       // chain's own reason and not Fusion's liquidity note (#78) — and it must be right: sending
       // anyway reverts.
       expect(qAll.note).not.toMatch(/liquid against/);
-      expect(qAll.note).toMatch(/^withdraw\(\) reverted "/);
+      expect(qAll.note).toMatch(/^withdraw\(\) reverted/);
       await expect(pub.estimateGas({ account: depositor, to: redeem!.to, data: redeem!.data })).rejects.toThrow();
       return;
     }

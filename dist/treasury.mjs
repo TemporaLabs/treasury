@@ -39072,7 +39072,11 @@ async function measureExit(a) {
       measuredAs: "vault's liquid balance",
       instantLiquidity: liquidText,
       maxWithdrawSays: maxText,
-      note: `the whole position does NOT come out at this block: this chassis pays withdrawals from the vault's own balance, and the rest is deployed. ${fmt(liquid)} of ${fmt(value)} is payable now; the remainder needs the fund to unwind first.${advisory}`
+      // Only Fusion pays a withdrawal from the vault's own balance, so only there is the idle balance the
+      // ceiling and "the rest needs an unwind" the explanation. A Morpho Vault V2 also pays through its
+      // liquidity adapter: there the idle balance is a bound that was probed and paid, not the most that can
+      // come out (#78; sizing the rest is #69).
+      note: vault.chassis === "fusion" ? `the whole position does NOT come out at this block: this chassis pays withdrawals from the vault's own balance, and the rest is deployed. ${fmt(liquid)} of ${fmt(value)} is payable now; the remainder needs the fund to unwind first.${advisory}` : `the whole position does NOT come out at this block; a withdrawal of ${fmt(liquid)}, the vault's idle balance, simulates OK. This chassis also pays out of its markets, so more than that may be withdrawable now; the larger amount was not sized.${advisory}`
     };
   }
   if (bounded === "paid") {

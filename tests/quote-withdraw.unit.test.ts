@@ -94,6 +94,33 @@ describe("a reverted withdraw quote reports the chain's reason on the chassis it
     expect(q.note).toContain("transfer amount exceeds balance");
   });
 
+  it("Fusion: a revert that is not a balance shortfall, with enough idle balance, is not given the liquidity note", async () => {
+    const vault = getVault("tlCashPlusUSDC2A");
+    const q = await quoteWithdraw({
+      vault,
+      owner: OWNER,
+      assetsHuman: "1",
+      client: client({ vaultSymbol: vault.symbol, held: 10n * 10n ** 8n, toBurn: 1n * 10n ** 8n, liquid: 5_000_000n, data: MARKET_INSUFFICIENT }),
+    });
+    expect(q.note).toContain("UsdcVaultL2/insufficient-balance");
+    expect(q.note).toMatch(/not a balance or liquidity shortfall/);
+    expect(q.note).not.toMatch(/liquid against/);
+  });
+
+  it("Morpho V2: when previewWithdraw reverts, the note says the shares needed are unknown instead of claiming they suffice", async () => {
+    const vault = getVault("tlCashPlusUSDC2B");
+    const c = client({ vaultSymbol: vault.symbol, held: 10n * 10n ** 18n, toBurn: 0n, liquid: 0n, data: MARKET_INSUFFICIENT }) as unknown as { readContract: (a: { address: string; functionName: string }) => Promise<bigint> };
+    const read = c.readContract;
+    c.readContract = async (a) => {
+      if (a.functionName === "previewWithdraw") throw new Error("previewWithdraw reverted");
+      return read(a);
+    };
+    const q = await quoteWithdraw({ vault, owner: OWNER, assetsHuman: "10", client: c as never });
+    expect(q.note).toContain("UsdcVaultL2/insufficient-balance");
+    expect(q.note).toMatch(/shares needed are unknown/);
+    expect(q.note).not.toMatch(/holds enough shares/);
+  });
+
   it("any chassis: too few shares is reported as too few shares, before any liquidity reading", async () => {
     for (const symbol of ["tlCashPlusUSDC2A", "tlCashPlusUSDC2B"]) {
       const vault = getVault(symbol);

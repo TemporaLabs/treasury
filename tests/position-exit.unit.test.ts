@@ -65,6 +65,18 @@ describe("earn_balance says what can be withdrawn now, not only what the positio
     expect(v.calls).toEqual(["14999970", "1498873"]); // the full position first, then the liquid bound
   });
 
+  it("the unwind explanation is Fusion's alone: on Morpho V2 the paid idle-balance bound is reported as a lower bound (#78)", async () => {
+    const fusion = await getPosition({ vault, principal: ACCOUNT, client: vaultClient({ shares: 1_500_000_000n, value: 14_999_970n, liquid: 1_498_873n, payable: 1_498_873n }).client, maxLogRequests: 1 });
+    expect(fusion.exit.note).toMatch(/pays withdrawals from the vault's own balance/);
+    const morpho = getVault("tlCashPlusUSDC2B");
+    expect(morpho.chassis).toBe("morpho-v2");
+    const m = await getPosition({ vault: morpho, principal: ACCOUNT, client: vaultClient({ shares: 15n * 10n ** 18n, value: 14_999_970n, liquid: 1_498_873n, payable: 1_498_873n }).client, maxLogRequests: 1 });
+    expect(m.exit.exitableNow).toBe("1.498873 USDC");
+    expect(m.exit.measuredAs).toBe("vault's liquid balance");
+    expect(m.exit.note).not.toMatch(/pays withdrawals from the vault's own balance|unwind/);
+    expect(m.exit.note).toMatch(/more than that may be withdrawable now/);
+  });
+
   it("a vault that pays the whole position says so, and stops after one simulation", async () => {
     const v = vaultClient({ shares: 5n * 10n ** 18n, value: 5_100_000n, liquid: 0n, payable: 5_100_000n });
     const p = await getPosition({ vault, principal: ACCOUNT, client: v.client, maxLogRequests: 1 });
