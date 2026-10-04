@@ -17,7 +17,7 @@ vi.mock("../src/client.js", async (importOriginal) => {
   return { ...actual, makePublicClient: () => dead };
 });
 
-type Handler = (a: unknown, extra: unknown) => Promise<{ content: { text: string }[] }>;
+type Handler = (a: unknown, extra: unknown) => Promise<string>;
 const ACCOUNT = "0x1111111111111111111111111111111111111111";
 let savedBase: string | undefined, savedBaseUrl: string | undefined, savedArb: string | undefined, savedArbUrl: string | undefined;
 beforeEach(() => {
@@ -35,17 +35,17 @@ afterEach(() => {
 
 describe("a failed Arbitrum call hints at ARBITRUM's variable when only Base is configured", () => {
   it("preflight verdict path (returned payload)", async () => {
-    const { buildServer } = await import("../src/mcp/server.js");
-    const tools = (buildServer() as unknown as { _registeredTools: Record<string, { handler: Handler }> })._registeredTools;
-    const out = (await tools["earn_status"]!.handler({ chain: "arbitrum", account: ACCOUNT }, {})).content[0]!.text;
+    const { buildCommands } = await import("../src/earn/commands.js");
+    const tools = buildCommands() as unknown as Record<string, { handler: Handler }>;
+    const out = await tools["earn_status"]!.handler({ chain: "arbitrum", account: ACCOUNT }, {});
     const d = JSON.parse(out);
     expect(d.status).toBe("UNRESOLVED");
     expect(d.setup_required).toMatch(/TREASURY_RPC_ARBITRUM/);
     expect(out).not.toMatch(/TREASURY_RPC_BASE/);
   });
   it("thrown path (guarded)", async () => {
-    const { buildServer } = await import("../src/mcp/server.js");
-    const tools = (buildServer() as unknown as { _registeredTools: Record<string, { handler: Handler }> })._registeredTools;
+    const { buildCommands } = await import("../src/earn/commands.js");
+    const tools = buildCommands() as unknown as Record<string, { handler: Handler }>;
     const err = await tools["earn_balance"]!.handler({ chain: "arbitrum", account: ACCOUNT }, {}).then(() => "", (e: Error) => e.message);
     expect(err).toMatch(/HTTP request failed/);
     expect(err).toMatch(/TREASURY_RPC_ARBITRUM/);

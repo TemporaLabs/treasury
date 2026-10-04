@@ -8,11 +8,12 @@
  */
 import { createServer } from "node:http";
 import { describe, it, expect, afterEach, beforeEach } from "vitest";
-import { buildServer } from "../src/mcp/server.js";
+import { __forgetEndpointChainsForTests } from "../src/client.js";
+import { buildCommands } from "../src/earn/commands.js";
 
-type Handler = (a: unknown, extra: unknown) => Promise<{ content: { text: string }[] }>;
-const tools = () => (buildServer() as unknown as { _registeredTools: Record<string, { handler: Handler }> })._registeredTools;
-const payload = (r: { content: { text: string }[] }) => JSON.parse(r.content[0]!.text);
+type Handler = (a: unknown, extra: unknown) => Promise<string>;
+const tools = () => buildCommands() as unknown as Record<string, { handler: Handler }>;
+const payload = (r: string) => JSON.parse(r);
 const ACCOUNT = "0x1111111111111111111111111111111111111111";
 
 /** A mock endpoint that records every method it was asked, and can refuse eth_getLogs. */
@@ -40,7 +41,7 @@ const start = async (chainIdHex: string, logsError?: string) => {
 };
 
 /**
- * Every RPC variable the server reads, by LITERAL name. The boundary test forbids a computed
+ * Every RPC variable the commands read, by LITERAL name. The boundary test forbids a computed
  * `process.env[k]` outside the files it names, so a loop over a list of names is not available here.
  */
 type Snapshot = Record<"b" | "bl" | "bu" | "a" | "al" | "au" | "fb", string | undefined>;
@@ -56,6 +57,8 @@ beforeEach(() => {
   delete process.env["TREASURY_LOGS_FALLBACK"];
 });
 afterEach(() => {
+  // An endpoint's chain is remembered per URL; every mock is a fresh local port and the OS reuses ports.
+  __forgetEndpointChainsForTests();
   const put = (k: "TREASURY_RPC_BASE" | "TREASURY_LOGS_RPC_BASE" | "BASE_RPC_URL" | "TREASURY_RPC_ARBITRUM" | "TREASURY_LOGS_RPC_ARBITRUM" | "ARBITRUM_RPC_URL" | "TREASURY_LOGS_FALLBACK", v: string | undefined) => {
     if (v === undefined) delete process.env[k]; else process.env[k] = v;
   };
@@ -64,7 +67,7 @@ afterEach(() => {
   put("TREASURY_LOGS_FALLBACK", saved.fb);
 });
 
-describe("an Arbitrum call is read through Arbitrum's endpoint, on every RPC-touching tool, and says so", () => {
+describe("an Arbitrum call is read through Arbitrum's endpoint, on every RPC-touching command, and says so", () => {
   const cases: [string, Record<string, unknown>][] = [
     ["earn_status", { chain: "arbitrum", account: ACCOUNT }],
     ["earn_quote", { chain: "arbitrum", account: ACCOUNT, amount_usdc: "1", direction: "deposit" }],
