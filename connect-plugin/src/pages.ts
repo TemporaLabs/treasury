@@ -1,6 +1,6 @@
 // The plain (no Privy SDK) pages the plugin serves: the connect page with its two separate
 // buttons, and the confirmation page every send goes through. They render server-provided strings
-// with textContent only. The Privy sign-in page is a separate React bundle served at /privy.
+// with textContent only. The Privy page (connect, and the confirmation for an embedded wallet) is a separate React bundle.
 
 export const PLAIN_CSP =
   "default-src 'none'; script-src 'unsafe-inline'; connect-src 'self'; style-src 'unsafe-inline'; base-uri 'none'; form-action 'none'; object-src 'none'; frame-ancestors 'none'";
@@ -9,15 +9,15 @@ export const PRIVY_CSP = [
   "default-src 'self'",
   "script-src 'self' https://challenges.cloudflare.com",
   "style-src 'self' 'unsafe-inline'",
-  "img-src 'self' data: blob:",
-  "font-src 'self'",
+  "img-src 'self' data: blob: https://*.privy.io",
+  "font-src 'self' data:",
   "object-src 'none'",
   "base-uri 'self'",
   "form-action 'none'",
   "frame-ancestors 'none'",
-  "child-src https://auth.privy.io",
-  "frame-src https://auth.privy.io https://challenges.cloudflare.com",
-  "connect-src 'self' https://auth.privy.io https://*.rpc.privy.systems",
+  "child-src https://auth.privy.io https://*.privy.io",
+  "frame-src https://auth.privy.io https://*.privy.io https://challenges.cloudflare.com",
+  "connect-src 'self' https://auth.privy.io https://*.privy.io https://*.rpc.privy.systems",
   "worker-src 'self'",
   "manifest-src 'self'",
 ].join("; ");
@@ -127,14 +127,6 @@ export const CONFIRM_HTML = shell(
     post("/result", { rejected: true, reason: "rejected on the confirmation page" }).catch(function () {});
     done("Rejected", "Nothing was signed. You can close this tab.");
   }
-  async function viaService() {
-    if (busy || finished) return;
-    busy = true; say("Signing\\u2026");
-    try {
-      var r = await post("/result", { confirmed: true });
-      done("Submitted", "Transaction " + r.hash + " was signed and sent. You can close this tab and go back to your terminal.");
-    } catch (e) { busy = false; stop(msgOf(e)); }
-  }
   async function viaWallet(p) {
     if (busy || finished) return;
     busy = true; say("Check your wallet\\u2026");
@@ -154,19 +146,18 @@ export const CONFIRM_HTML = shell(
   }
   function renderActions() {
     $("actions").replaceChildren(); $("actions").hidden = false;
-    if (info.signer === "service") button("Confirm and sign", viaService);
-    else providers.forEach(function (w) { button("Confirm in " + w.name, function () { viaWallet(w.provider); }); });
+    // Offer only the wallet used to sign in; fall back to every wallet if it is not found.
+    var want = (info.walletName || "").toLowerCase();
+    var mine = want ? providers.filter(function (w) { return w.name.toLowerCase() === want; }) : [];
+    (mine.length ? mine : providers).forEach(function (w) { button("Confirm in " + w.name, function () { viaWallet(w.provider); }); });
     button("Reject", reject, true);
   }
   fetch("/info?s=" + encodeURIComponent(s)).then(function (r) { return r.json(); }).then(function (j) {
     info = j;
     $("h").textContent = j.decoded.summary;
-    $("lead").textContent = j.signer === "service"
-      ? "Your agent prepared this transaction. Check it below. It is signed only after you confirm here."
-      : "Your agent prepared this transaction. Check it below, confirm here, then your wallet asks for the signature.";
+    $("lead").textContent = "Your agent prepared this transaction. Check it below, confirm here, then your wallet asks for the signature.";
     j.decoded.warnings.forEach(function (w) { var p = document.createElement("p"); p.className = "warn"; p.textContent = w; $("warnings").append(p); });
     j.decoded.rows.forEach(function (r) { row(r[0], r[1]); });
-    if (j.signer === "service") { renderActions(); return; }
     return discover(renderActions).then(function () {
       if (!providers.length) { say("No wallet extension was found in this browser. Open this link in a browser that has your wallet.", "bad"); button("Reject", reject, true); $("actions").hidden = false; }
     });

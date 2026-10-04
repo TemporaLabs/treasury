@@ -39877,14 +39877,8 @@ var basePreconf = /* @__PURE__ */ defineChain({
 // src/config.ts
 var BASE_CHAIN_ID = 8453;
 var BASE_CHAIN_HEX = "0x2105";
-var DEFAULT_PRIVY_APP_ID = "cmubpge0v00a10cjnb11u973n";
+var DEFAULT_PRIVY_APP_ID = "cmubfegl2028d0ci3n0f2u6z5";
 var privyAppId = () => process.env.PRIVY_APP_ID || DEFAULT_PRIVY_APP_ID;
-var signerUrl = () => {
-  const u = process.env.TREASURY_SIGNER_URL?.trim();
-  return u ? u.replace(/\/+$/, "") : void 0;
-};
-var signerId = () => process.env.PRIVY_SIGNER_ID?.trim() || void 0;
-var signerPolicyIds = () => (process.env.PRIVY_SIGNER_POLICY_IDS ?? "").split(",").map((x) => x.trim()).filter(Boolean);
 var connectPort = () => {
   const n = Number(process.env.TREASURY_CONNECT_PORT);
   return Number.isInteger(n) && n > 1023 && n < 65536 ? n : 53682;
@@ -40009,10 +40003,8 @@ async function serveOnce(flow, deps = {}) {
     if (settled) return;
     settled = true;
     resolveDone(r);
-    setTimeout(() => {
-      server.close();
-      server.closeAllConnections();
-    }, 1500).unref();
+    server.close();
+    setTimeout(() => server.closeAllConnections(), 1500).unref();
   };
   const json = (res, code, body) => {
     res.writeHead(code, { "content-type": "application/json", "cache-control": "no-store", "x-content-type-options": "nosniff" });
@@ -40097,10 +40089,21 @@ async function serveOnce(flow, deps = {}) {
       json(res, 400, { ok: false, reason: e instanceof Error ? e.message : "bad request" });
     }
   });
-  await new Promise((resolve, reject) => {
-    server.once("error", reject);
-    server.listen(flow.port ?? 0, "127.0.0.1", () => resolve());
-  });
+  for (let attempt = 0; ; attempt++) {
+    try {
+      await new Promise((resolve, reject) => {
+        server.once("error", reject);
+        server.listen(flow.port ?? 0, "127.0.0.1", () => {
+          server.off("error", reject);
+          resolve();
+        });
+      });
+      break;
+    } catch (e) {
+      if (!flow.port || e.code !== "EADDRINUSE" || attempt >= 10) throw e;
+      await new Promise((r) => setTimeout(r, 200));
+    }
+  }
   const port = server.address().port;
   origin = `http://${flow.hostname ?? "127.0.0.1"}:${port}`;
   const url = `${origin}/${flow.mode}?s=${secret}`;
@@ -40115,15 +40118,15 @@ var PRIVY_CSP = [
   "default-src 'self'",
   "script-src 'self' https://challenges.cloudflare.com",
   "style-src 'self' 'unsafe-inline'",
-  "img-src 'self' data: blob:",
-  "font-src 'self'",
+  "img-src 'self' data: blob: https://*.privy.io",
+  "font-src 'self' data:",
   "object-src 'none'",
   "base-uri 'self'",
   "form-action 'none'",
   "frame-ancestors 'none'",
-  "child-src https://auth.privy.io",
-  "frame-src https://auth.privy.io https://challenges.cloudflare.com",
-  "connect-src 'self' https://auth.privy.io https://*.rpc.privy.systems",
+  "child-src https://auth.privy.io https://*.privy.io",
+  "frame-src https://auth.privy.io https://*.privy.io https://challenges.cloudflare.com",
+  "connect-src 'self' https://auth.privy.io https://*.privy.io https://*.rpc.privy.systems",
   "worker-src 'self'",
   "manifest-src 'self'"
 ].join("; ");
@@ -40228,14 +40231,6 @@ var CONFIRM_HTML = shell(
     post("/result", { rejected: true, reason: "rejected on the confirmation page" }).catch(function () {});
     done("Rejected", "Nothing was signed. You can close this tab.");
   }
-  async function viaService() {
-    if (busy || finished) return;
-    busy = true; say("Signing\\u2026");
-    try {
-      var r = await post("/result", { confirmed: true });
-      done("Submitted", "Transaction " + r.hash + " was signed and sent. You can close this tab and go back to your terminal.");
-    } catch (e) { busy = false; stop(msgOf(e)); }
-  }
   async function viaWallet(p) {
     if (busy || finished) return;
     busy = true; say("Check your wallet\\u2026");
@@ -40255,19 +40250,18 @@ var CONFIRM_HTML = shell(
   }
   function renderActions() {
     $("actions").replaceChildren(); $("actions").hidden = false;
-    if (info.signer === "service") button("Confirm and sign", viaService);
-    else providers.forEach(function (w) { button("Confirm in " + w.name, function () { viaWallet(w.provider); }); });
+    // Offer only the wallet used to sign in; fall back to every wallet if it is not found.
+    var want = (info.walletName || "").toLowerCase();
+    var mine = want ? providers.filter(function (w) { return w.name.toLowerCase() === want; }) : [];
+    (mine.length ? mine : providers).forEach(function (w) { button("Confirm in " + w.name, function () { viaWallet(w.provider); }); });
     button("Reject", reject, true);
   }
   fetch("/info?s=" + encodeURIComponent(s)).then(function (r) { return r.json(); }).then(function (j) {
     info = j;
     $("h").textContent = j.decoded.summary;
-    $("lead").textContent = j.signer === "service"
-      ? "Your agent prepared this transaction. Check it below. It is signed only after you confirm here."
-      : "Your agent prepared this transaction. Check it below, confirm here, then your wallet asks for the signature.";
+    $("lead").textContent = "Your agent prepared this transaction. Check it below, confirm here, then your wallet asks for the signature.";
     j.decoded.warnings.forEach(function (w) { var p = document.createElement("p"); p.className = "warn"; p.textContent = w; $("warnings").append(p); });
     j.decoded.rows.forEach(function (r) { row(r[0], r[1]); });
-    if (j.signer === "service") { renderActions(); return; }
     return discover(renderActions).then(function () {
       if (!providers.length) { say("No wallet extension was found in this browser. Open this link in a browser that has your wallet.", "bad"); button("Reject", reject, true); $("actions").hidden = false; }
     });
@@ -40275,55 +40269,6 @@ var CONFIRM_HTML = shell(
   `
 );
 var privyShell = (secret) => `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Connect \u2014 Tempora Treasury</title></head><body><div id="root"></div><script src="/app.js?s=${secret}"></script></body></html>`;
-
-// src/signer-client.ts
-var SEND_TIMEOUT_MS = 6e4;
-var SESSION_TIMEOUT_MS = 3e4;
-var REVOKE_TIMEOUT_MS = 15e3;
-async function sendViaSigner(call2, account, sessionToken) {
-  const base2 = signerUrl();
-  if (!base2) throw new Error("TREASURY_SIGNER_URL is not set \u2014 signing an embedded wallet needs the signing service's URL. Use switch_wallet and connect a wallet directly instead.");
-  let res;
-  try {
-    res = await fetch(`${base2}/v1/send`, {
-      method: "POST",
-      headers: { "content-type": "application/json", authorization: `Bearer ${sessionToken}` },
-      body: JSON.stringify({ account, chainId: 8453, call: { to: call2.to, data: call2.data, value: call2.value ?? "0x0" } }),
-      signal: AbortSignal.timeout(SEND_TIMEOUT_MS)
-    });
-  } catch (e) {
-    return { status: "rejected", reason: `the signing service could not be reached: ${e instanceof Error ? e.message : String(e)}` };
-  }
-  const body = await res.json().catch(() => ({}));
-  if (res.ok && typeof body.hash === "string" && /^0x[0-9a-fA-F]{64}$/.test(body.hash)) return { status: "submitted", hash: body.hash };
-  return { status: "rejected", reason: `the signing service refused the call: ${typeof body.error === "string" ? body.error : `HTTP ${res.status}`}` };
-}
-async function createSignerSession(accessToken, address) {
-  const base2 = signerUrl();
-  if (!base2) return { ok: false, reason: "TREASURY_SIGNER_URL is not set, so signing an embedded wallet is not available. Connect a wallet directly instead." };
-  let res;
-  try {
-    res = await fetch(`${base2}/v1/session`, {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({ accessToken, address }),
-      signal: AbortSignal.timeout(SESSION_TIMEOUT_MS)
-    });
-  } catch (e) {
-    return { ok: false, reason: `the signing service could not be reached: ${e instanceof Error ? e.message : String(e)}` };
-  }
-  const body = await res.json().catch(() => ({}));
-  if (res.ok && typeof body.token === "string" && typeof body.account === "string") return { ok: true, token: body.token, account: body.account };
-  return { ok: false, reason: `the signing service refused the sign-in: ${typeof body.error === "string" ? body.error : `HTTP ${res.status}`}` };
-}
-async function revokeSigner(sessionToken) {
-  const base2 = signerUrl();
-  if (!base2) return;
-  try {
-    await fetch(`${base2}/v1/revoke`, { method: "POST", headers: { authorization: `Bearer ${sessionToken}` }, signal: AbortSignal.timeout(REVOKE_TIMEOUT_MS) });
-  } catch {
-  }
-}
 
 // src/flows.ts
 var rpcClient = () => createPublicClient({ chain: base, transport: http(process.env.TREASURY_RPC_BASE || process.env.BASE_RPC_URL || void 0) });
@@ -40361,7 +40306,6 @@ function signInMessage(a) {
 }
 async function startConnect(deps = {}) {
   const verify = deps.verifySignature ?? defaultVerifySignature;
-  const createSession = deps.createSession ?? createSignerSession;
   const bundle = (deps.readBundle ?? defaultReadBundle)();
   return serveOnce(
     {
@@ -40371,24 +40315,18 @@ async function startConnect(deps = {}) {
         "/connect": { html: privyShell, csp: PRIVY_CSP }
       },
       assets: { "/app.js": { type: "text/javascript; charset=utf-8", body: bundle } },
-      info: () => ({ mode: "connect", appId: privyAppId(), signerId: signerId() ?? null, policyIds: signerPolicyIds() }),
+      info: () => ({ mode: "connect", appId: privyAppId() }),
       challenge: (address, origin, nonce) => signInMessage({ address, origin, nonce, issuedAt: (/* @__PURE__ */ new Date()).toISOString() }),
       accept: async (body, ctx) => {
         if (typeof body.address !== "string" || !isAddress(body.address)) return { ok: false, reason: "not an address" };
         const address = getAddress(body.address);
-        if (body.kind === "embedded") {
-          if (typeof body.accessToken !== "string" || body.accessToken.length < 20 || body.accessToken.length > 4096) return { ok: false, reason: "missing Privy access token" };
-          const s = await createSession(body.accessToken, address);
-          if (!s.ok) return { ok: false, reason: s.reason };
-          if (getAddress(s.account) !== address) return { ok: false, reason: "the signing service answered for a different address" };
-          return { ok: true, value: { account: address, chainId: BASE_CHAIN_ID, walletType: "embedded", signerSession: s.token } };
-        }
-        if (body.kind === "external") {
+        if (body.kind === "external" || body.kind === "embedded") {
           if (!ctx.message || ctx.challengedAddress !== address) return { ok: false, reason: "no sign-in message was issued for this address" };
           if (body.chainId !== BASE_CHAIN_HEX) return { ok: false, reason: "the wallet is not on Base" };
           if (typeof body.signature !== "string" || !/^0x[0-9a-fA-F]+$/.test(body.signature)) return { ok: false, reason: "malformed signature" };
           const ok = await verify({ address, message: ctx.message, signature: body.signature });
-          return ok ? { ok: true, value: { account: address, chainId: BASE_CHAIN_ID, walletType: "external" } } : { ok: false, reason: "the signature does not match the address" };
+          const walletName = typeof body.walletName === "string" ? body.walletName.replace(/[^\x20-\x7e]/g, "").trim().slice(0, 60) : "";
+          return ok ? { ok: true, value: { account: address, chainId: BASE_CHAIN_ID, walletType: body.kind, ...walletName ? { walletName } : {} } } : { ok: false, reason: "the signature does not match the address" };
         }
         return { ok: false, reason: "unknown sign-in kind" };
       },
@@ -40422,26 +40360,25 @@ async function verifyLanded(hash3, call2, account, deps = {}) {
   return { verified: "unverified" };
 }
 async function startConfirm(call2, session, deps = {}) {
-  const send = deps.sendViaSigner ?? sendViaSigner;
   const full = { to: call2.to, data: call2.data, value: call2.value ?? "0x0" };
   const decoded = describeCall(full, session.account);
+  const embedded = session.walletType === "embedded";
+  const bundle = embedded ? (deps.readBundle ?? defaultReadBundle)() : void 0;
   return serveOnce(
     {
       mode: "confirm",
       ttlMs: 3 * 6e4,
-      pages: { "/confirm": { html: CONFIRM_HTML, csp: PLAIN_CSP } },
-      info: () => ({ mode: "confirm", signer: session.walletType === "embedded" ? "service" : "wallet", account: session.account, call: full, decoded }),
+      pages: { "/confirm": embedded ? { html: privyShell, csp: PRIVY_CSP } : { html: CONFIRM_HTML, csp: PLAIN_CSP } },
+      ...bundle ? { assets: { "/app.js": { type: "text/javascript; charset=utf-8", body: bundle } } } : {},
+      info: () => ({ mode: "confirm", signer: embedded ? "privy" : "wallet", appId: privyAppId(), account: session.account, walletName: session.walletName ?? null, call: full, decoded }),
+      // Privy accepts one exact origin and keeps its login in that origin's storage, so an embedded
+      // wallet's confirmation must be served from the same host and port as the connect page. An
+      // external wallet gets the same origin so its extension keeps the approval given at sign-in.
+      port: deps.port ?? connectPort(),
+      hostname: "localhost",
       accept: async (body) => {
-        let hash3;
-        if (session.walletType === "embedded") {
-          if (body.confirmed !== true) return { ok: false, reason: "the transaction was not confirmed" };
-          const r = await send(full, session.account, session.signerSession);
-          if (r.status !== "submitted") return { ok: false, reason: r.reason, fatal: true };
-          hash3 = r.hash;
-        } else {
-          if (typeof body.hash !== "string" || !/^0x[0-9a-fA-F]{64}$/.test(body.hash)) return { ok: false, reason: "the wallet returned something that is not a transaction hash" };
-          hash3 = body.hash;
-        }
+        if (typeof body.hash !== "string" || !/^0x[0-9a-fA-F]{64}$/.test(body.hash)) return { ok: false, reason: "the wallet returned something that is not a transaction hash" };
+        const hash3 = body.hash;
         const checked = await verifyLanded(hash3, full, session.account, deps);
         return { ok: true, value: { hash: hash3, ...checked }, reply: { hash: hash3 } };
       }
@@ -40459,7 +40396,8 @@ function readPersisted() {
   try {
     const p = JSON.parse(readFileSync2(SESSION_FILE, "utf8"));
     if (p.via === "browser") return { via: "wallet", account: String(p.account), chainId: Number(p.chainId), walletType: "external", connectedAtIso: String(p.connectedAtIso) };
-    if (p.via === "wallet" || p.via === "privy") return p;
+    if (p.via === "wallet") return p;
+    if (p.via === "privy") return { via: "privy", account: String(p.account), chainId: Number(p.chainId), walletType: "embedded", connectedAtIso: String(p.connectedAtIso) };
     return void 0;
   } catch {
     return void 0;
@@ -40476,13 +40414,7 @@ function writePersisted(p) {
   }
   writeFileSync(SESSION_FILE, JSON.stringify(p, null, 2), { mode: 384 });
 }
-var connectedState = (p) => {
-  if (p.via === "privy") {
-    const { signerSession: _omit, ...rest } = p;
-    return { status: "connected", ...rest };
-  }
-  return { status: "connected", ...p };
-};
+var connectedState = (p) => ({ status: "connected", ...p });
 async function status() {
   if (pending) return { status: "awaiting_approval", url: pending.url, opened: pending.opened, requestedAtIso: pending.requestedAtIso };
   const p = readPersisted();
@@ -40511,7 +40443,7 @@ async function connect(waitMs = 0) {
     const v = r.value;
     const connectedAtIso = (/* @__PURE__ */ new Date()).toISOString();
     writePersisted(
-      v.walletType === "embedded" ? { via: "privy", account: v.account, chainId: v.chainId, walletType: "embedded", delegated: true, signerSession: v.signerSession, connectedAtIso } : { via: "wallet", account: v.account, chainId: v.chainId, walletType: "external", connectedAtIso }
+      v.walletType === "embedded" ? { via: "privy", account: v.account, chainId: v.chainId, walletType: "embedded", connectedAtIso } : { via: "wallet", account: v.account, chainId: v.chainId, walletType: "external", ...v.walletName ? { walletName: v.walletName } : {}, connectedAtIso }
     );
   });
   if (waitMs > 0 && handle.opened) await Promise.race([settled, new Promise((r) => setTimeout(r, waitMs).unref())]);
@@ -40526,7 +40458,6 @@ async function disconnect() {
     writePersisted(void 0);
     return { disconnected: false };
   }
-  if (existing.via === "privy") await revokeSigner(existing.signerSession);
   writePersisted(void 0);
   return { disconnected: true };
 }
@@ -40537,7 +40468,7 @@ async function switchWallet(waitMs = 0) {
 async function sendTransaction(call2) {
   const existing = readPersisted();
   if (!existing) throw new Error("no wallet is connected \u2014 call connect_wallet first, then connect_status until it reports connected");
-  const session = existing.via === "privy" ? { account: existing.account, chainId: existing.chainId, walletType: "embedded", signerSession: existing.signerSession } : { account: existing.account, chainId: existing.chainId, walletType: "external" };
+  const session = { account: existing.account, chainId: existing.chainId, walletType: existing.walletType, ...existing.via === "wallet" && existing.walletName ? { walletName: existing.walletName } : {} };
   const handle = await startConfirm(call2, session);
   if (!handle.opened) {
     handle.close();
@@ -40571,7 +40502,7 @@ function present(s) {
   if (s.status === "awaiting_approval") {
     return {
       ...s,
-      instructions: s.opened ? "A browser tab opened with two choices: Continue with Google or email (Privy), or Connect a wallet (direct, no Privy). Tell the operator to pick one there. Call connect_status to see whether it finished." : "No browser could be opened on this machine. If the operator is at this machine, give them the url to open in a browser. Otherwise this plugin cannot sign in from here."
+      instructions: s.opened ? "A browser tab opened with one Connect button. It opens a single modal with email, Google and the browser wallets installed. Tell the operator to pick one there. Call connect_status to see whether it finished." : "No browser could be opened on this machine. If the operator is at this machine, give them the url to open in a browser. Otherwise this plugin cannot sign in from here."
     };
   }
   if (s.status === "connected") {
@@ -40594,7 +40525,7 @@ function buildServer() {
     "connect_wallet",
     {
       title: "Connect a wallet",
-      description: "Opens one page in the operator's browser with two separate choices: Continue with Google or email (a Privy embedded wallet), or Connect a wallet (MetaMask, Rabby, Coinbase Wallet or any browser wallet, connected directly with a free sign-in message and no Privy). Waits up to `wait_seconds` and returns `connected` directly. If a wallet is already connected, returns that state instead \u2014 use switch_wallet to replace it.",
+      description: "Opens one page in the operator's browser with one Connect button and a single modal: email, Google (a Privy embedded wallet) or an installed browser wallet (MetaMask, Rabby and others), each proving the address with a free sign-in message. Waits up to `wait_seconds` and returns `connected` directly. If a wallet is already connected, returns that state instead \u2014 use switch_wallet to replace it.",
       inputSchema: { wait_seconds: waitArg }
     },
     async ({ wait_seconds }) => text(present(await connect((wait_seconds ?? DEFAULT_WAIT_S) * 1e3)))
@@ -40603,7 +40534,7 @@ function buildServer() {
     "disconnect_wallet",
     {
       title: "Disconnect the wallet",
-      description: "Ends the current session and clears the local record of it. For a Google/email embedded wallet it also asks the signing service to revoke this machine's session token (it does not remove the signer inside Privy). Returns `disconnected: false` if nothing was connected.",
+      description: "Ends the current session and clears the local record of it. Nothing is revoked remotely: this plugin holds no signing authority, and the Privy login lives only in the browser. Returns `disconnected: false` if nothing was connected.",
       inputSchema: {}
     },
     async () => text(await disconnect())
@@ -40621,7 +40552,7 @@ function buildServer() {
     "connect_send_transaction",
     {
       title: "Send one call through the connected wallet",
-      description: 'Relays exactly one unsigned call \u2014 `to`, `data`, optional `value` \u2014 through the connected wallet. A confirmation page always opens in the operator\'s browser first, showing the decoded call (action, amount, vault, receiver, chain); nothing is signed until the operator clicks Confirm there. A Google/email embedded wallet is then signed by the signing service; a directly connected wallet then shows its own prompt. Waits up to 3 minutes. This tool builds nothing: hand it one call at a time from Earn\'s earn_prepare_deposit/earn_prepare_withdraw envelope, IN ORDER, following that envelope\'s own signer_rules (destination check, gasAdvice, any precondition). Returns `{status: "submitted", hash, verified}` once signed and broadcast \u2014 NOT once confirmed on chain; confirm with Earn\'s earn_balance or earn_status. `verified: "mismatch"` means stop and tell the operator. Returns `{status: "rejected", reason}` for a decline, a timeout, or a refusal from the signing service; do not retry with the fields changed.',
+      description: 'Relays exactly one unsigned call \u2014 `to`, `data`, optional `value` \u2014 through the connected wallet. A confirmation page always opens in the operator\'s browser first, showing the decoded call (action, amount, vault, receiver, chain); nothing is signed until the operator clicks Confirm there. The wallet then asks for the signature itself: a browser extension shows its own prompt, and a Google/email embedded wallet shows Privy\'s confirmation modal on the same page. Waits up to 3 minutes. This tool builds nothing: hand it one call at a time from Earn\'s earn_prepare_deposit/earn_prepare_withdraw envelope, IN ORDER, following that envelope\'s own signer_rules (destination check, gasAdvice, any precondition). Returns `{status: "submitted", hash, verified}` once signed and broadcast \u2014 NOT once confirmed on chain; confirm with Earn\'s earn_balance or earn_status. `verified: "mismatch"` means stop and tell the operator. Returns `{status: "rejected", reason}` for a decline or a timeout; do not retry with the fields changed.',
       inputSchema: { to: addressArg, data: hexArg("data"), value: hexArg("value").optional() }
     },
     async ({ to, data, value }) => text(await sendTransaction({ to, data, ...value === void 0 ? {} : { value } }))

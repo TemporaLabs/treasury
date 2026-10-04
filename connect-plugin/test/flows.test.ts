@@ -10,7 +10,7 @@ const VAULT = "0x3333333333333333333333333333333333333333";
 const HASH = `0x${"ab".repeat(32)}`;
 const data = encodeFunctionData({ abi: parseAbi(["function deposit(uint256 assets, address receiver)"]), functionName: "deposit", args: [1_000_000n, ME] });
 const call = { to: VAULT, data };
-const noOpen = { openBrowser: () => true };
+const noOpen = { openBrowser: () => true, port: 0 };
 const txFor = (over: Partial<{ from: string; to: string; input: string; value: bigint }> = {}) => async () => ({ from: ME, to: VAULT, input: data, value: 0n, ...over });
 
 const secretOf = (url: string) => new URL(url).searchParams.get("s")!;
@@ -20,13 +20,14 @@ async function postResult(url: string, body: Record<string, unknown>, path = "/r
   return { status: r.status, body: (await r.json()) as Record<string, unknown> };
 }
 
-const embedded: Connected = { account: ME, chainId: 8453, walletType: "embedded", signerSession: "tok" };
+const bundle = { readBundle: () => "// bundle", port: 0 };
+const embedded: Connected = { account: ME, chainId: 8453, walletType: "embedded" };
 const external: Connected = { account: ME, chainId: 8453, walletType: "external" };
 
 test("confirm page info shows the decoded call and who signs", async () => {
-  const h = await startConfirm(call, embedded, noOpen);
+  const h = await startConfirm(call, embedded, { ...noOpen, ...bundle });
   const info = (await (await fetch(`${originOf(h.url)}/info?s=${secretOf(h.url)}`)).json()) as { signer: string; decoded: { summary: string; rows: string[][] } };
-  assert.equal(info.signer, "service");
+  assert.equal(info.signer, "privy");
   assert.equal(info.decoded.summary, "Deposit USDC into a vault");
   h.close();
   const w = await startConfirm(call, external, noOpen);
@@ -34,32 +35,35 @@ test("confirm page info shows the decoded call and who signs", async () => {
   w.close();
 });
 
-test("embedded wallet: nothing is signed until Confirm, then the service signs exactly once", async () => {
-  let sends = 0;
-  const h = await startConfirm(call, embedded, { ...noOpen, sendViaSigner: async () => (sends++, { status: "submitted" as const, hash: HASH }), getTransaction: txFor() });
-  const early = await postResult(h.url, {});
-  assert.equal(early.status, 400);
-  assert.equal(sends, 0, "no signing without confirmed:true");
-  const [a, b] = await Promise.all([postResult(h.url, { confirmed: true }), postResult(h.url, { confirmed: true })]);
-  assert.equal(sends, 1, "a double click never signs twice");
-  assert.ok([a.status, b.status].includes(200));
+test("embedded wallet: the confirm page is the Privy bundle, an external wallet's is the plain page", async () => {
+  const e = await startConfirm(call, embedded, { ...noOpen, ...bundle });
+  assert.match(await (await fetch(`${originOf(e.url)}/confirm?s=${secretOf(e.url)}`)).text(), /app\.js/);
+  assert.equal((await fetch(`${originOf(e.url)}/app.js?s=${secretOf(e.url)}`)).status, 200);
+  e.close();
+  const x = await startConfirm(call, external, noOpen);
+  assert.equal((await fetch(`${originOf(x.url)}/app.js?s=${secretOf(x.url)}`)).status, 404);
+  x.close();
+});
+
+test("embedded wallet: the hash Privy returns is verified against the requested call", async () => {
+  const h = await startConfirm(call, embedded, { ...noOpen, ...bundle, getTransaction: txFor() });
+  assert.equal((await postResult(h.url, {})).status, 400, "no hash, no result");
+  assert.equal((await postResult(h.url, { hash: "0x12" })).status, 400);
+  assert.equal((await postResult(h.url, { hash: HASH })).status, 200);
+  assert.deepEqual(await h.done, { ok: true, value: { hash: HASH, verified: "matched" } });
+});
+
+test("embedded wallet: a transaction that is not the requested call is reported as a mismatch", async () => {
+  const h = await startConfirm(call, embedded, { ...noOpen, ...bundle, getTransaction: txFor({ input: "0xdeadbeef" }) });
+  await postResult(h.url, { hash: HASH });
   const r = await h.done;
-  assert.deepEqual(r, { ok: true, value: { hash: HASH, verified: "matched" } });
+  assert.ok(r.ok && r.value.verified === "mismatch");
 });
 
-test("embedded wallet: a refusal from the signing service ends the flow with its reason", async () => {
-  const h = await startConfirm(call, embedded, { ...noOpen, sendViaSigner: async () => ({ status: "rejected" as const, reason: "the signing service refused the call: over the cap" }) });
-  const res = await postResult(h.url, { confirmed: true });
-  assert.equal(res.status, 400);
-  assert.deepEqual(await h.done, { ok: false, reason: "the signing service refused the call: over the cap" });
-});
-
-test("rejecting on the page settles as rejected and never signs", async () => {
-  let sends = 0;
-  const h = await startConfirm(call, embedded, { ...noOpen, sendViaSigner: async () => (sends++, { status: "submitted" as const, hash: HASH }) });
+test("rejecting on the page settles as rejected", async () => {
+  const h = await startConfirm(call, embedded, { ...noOpen, ...bundle });
   await postResult(h.url, { rejected: true, reason: "rejected on the confirmation page" });
   assert.deepEqual(await h.done, { ok: false, reason: "rejected on the confirmation page" });
-  assert.equal(sends, 0);
 });
 
 test("external wallet: a returned hash is verified against the requested call", async () => {
@@ -99,16 +103,14 @@ test("verifyLanded reports unverified when the lookup never answers", async () =
   assert.deepEqual(r, { verified: "unverified" });
 });
 
-test("connect: an external wallet is verified locally and the signing service is never called", async () => {
+test("connect: an external wallet is verified locally", async () => {
   const acct = privateKeyToAccount(`0x${"11".repeat(32)}`);
-  let sessions = 0;
-  const h = await startConnect({ ...noOpen, port: 0, readBundle: () => "// bundle", createSession: async () => (sessions++, { ok: false as const, reason: "must not be called" }) });
+  const h = await startConnect({ ...noOpen, port: 0, readBundle: () => "// bundle" });
   const ch = await postResult(h.url, { address: acct.address }, "/challenge");
   const signature = await acct.signMessage({ message: ch.body.message as string });
   const res = await postResult(h.url, { kind: "external", address: acct.address, signature, chainId: "0x2105" });
   assert.equal(res.status, 200);
   assert.deepEqual(await h.done, { ok: true, value: { account: acct.address, chainId: 8453, walletType: "external" } });
-  assert.equal(sessions, 0);
 });
 
 test("connect: a wrong signature, or a wallet not on Base, is refused", async () => {
@@ -122,11 +124,19 @@ test("connect: a wrong signature, or a wallet not on Base, is refused", async ()
   h.close();
 });
 
-test("connect: an embedded sign-in goes to the signing service and keeps its session token", async () => {
-  const h = await startConnect({ ...noOpen, port: 0, readBundle: () => "// bundle", createSession: async (_t, address) => ({ ok: true as const, token: "sess", account: address }) });
-  const res = await postResult(h.url, { kind: "embedded", address: ME, accessToken: "x".repeat(40) });
-  assert.equal(res.status, 200);
-  assert.deepEqual(await h.done, { ok: true, value: { account: ME, chainId: 8453, walletType: "embedded", signerSession: "sess" } });
+test("connect: an embedded wallet proves its address by signing the challenge, like any other", async () => {
+  const acct = privateKeyToAccount(`0x${"33".repeat(32)}`);
+  const h = await startConnect({ ...noOpen, port: 0, readBundle: () => "// bundle" });
+  const ch = await postResult(h.url, { address: acct.address }, "/challenge");
+  const signature = await acct.signMessage({ message: ch.body.message as string });
+  assert.equal((await postResult(h.url, { kind: "embedded", address: acct.address, signature, chainId: "0x2105" })).status, 200);
+  assert.deepEqual(await h.done, { ok: true, value: { account: acct.address, chainId: 8453, walletType: "embedded" } });
+});
+
+test("connect: an embedded sign-in with a Privy token but no signature is refused", async () => {
+  const h = await startConnect({ ...noOpen, port: 0, readBundle: () => "// bundle" });
+  assert.equal((await postResult(h.url, { kind: "embedded", address: ME, accessToken: "x".repeat(40) })).status, 400);
+  h.close();
 });
 
 test("connect page is one page: the Privy bundle at /connect, no second path", async () => {
@@ -138,4 +148,21 @@ test("connect page is one page: the Privy bundle at /connect, no second path", a
   assert.equal((await fetch(`${originOf(h.url)}/privy?s=${s}`)).status, 404);
   assert.equal((await fetch(`${originOf(h.url)}/app.js?s=${s}`)).status, 200);
   h.close();
+});
+
+test("confirm info carries the wallet the operator signed in with", async () => {
+  const h = await startConfirm(call, { ...external, walletName: "MetaMask" }, noOpen);
+  const info = (await (await fetch(`${originOf(h.url)}/info?s=${secretOf(h.url)}`)).json()) as { walletName: string | null };
+  assert.equal(info.walletName, "MetaMask");
+  h.close();
+});
+
+test("confirm uses the fixed port and frees it as soon as the flow settles", async () => {
+  const port = 53998;
+  const a = await startConfirm(call, external, { ...noOpen, port });
+  assert.equal(new URL(a.url).host, `localhost:${port}`);
+  a.close();
+  const b = await startConfirm(call, external, { ...noOpen, port });
+  assert.equal(new URL(b.url).host, `localhost:${port}`);
+  b.close();
 });

@@ -1,35 +1,33 @@
 import { readFileSync } from "node:fs";
 import { createPublicClient, getAddress, http, isAddress, verifyMessage } from "viem";
 import { base } from "viem/chains";
-import { BASE_CHAIN_HEX, BASE_CHAIN_ID, connectPort, privyAppId, signerId, signerPolicyIds } from "./config.ts";
+import { BASE_CHAIN_HEX, BASE_CHAIN_ID, connectPort, privyAppId } from "./config.ts";
 import { describeCall } from "./decode.ts";
 import type { Call } from "./decode.ts";
 import { serveOnce } from "./http.ts";
 import type { Handle, ServeDeps } from "./http.ts";
 import { CONFIRM_HTML, PLAIN_CSP, PRIVY_CSP, privyShell } from "./pages.ts";
-import { createSignerSession, sendViaSigner } from "./signer-client.ts";
-import type { SendResult } from "./signer-client.ts";
 
 const rpcClient = () => createPublicClient({ chain: base, transport: http(process.env.TREASURY_RPC_BASE || process.env.BASE_RPC_URL || undefined) });
 
-// A connected wallet is either an external one signed in directly (no Privy involved) or a Privy
-// embedded wallet that the operator delegated to the signing service.
-export type Connected =
-  | { account: string; chainId: number; walletType: "external" }
-  | { account: string; chainId: number; walletType: "embedded"; signerSession: string };
+// A connected wallet is either an external one (a browser extension) or the Privy embedded wallet
+// created by a Google/email login. Both prove the address by signing the server's challenge; neither
+// is ever signed for by this process: the operator's own wallet, or Privy's modal, signs each send.
+// `walletName` is the wallet the operator signed in with (e.g. "MetaMask"), so the confirm page can offer only that one.
+export type Connected = { account: string; chainId: number; walletType: "external" | "embedded"; walletName?: string };
 
 type Verified = { verified: "matched" | "mismatch" | "unverified"; detail?: string };
 export type Confirmed = { hash: string } & Verified;
 
 export interface ConnectDeps extends ServeDeps {
   verifySignature?: (a: { address: `0x${string}`; message: string; signature: `0x${string}` }) => Promise<boolean>;
-  createSession?: typeof createSignerSession;
   readBundle?: () => string | Buffer;
   port?: number;
 }
 
 export interface ConfirmDeps extends ServeDeps {
-  sendViaSigner?: typeof sendViaSigner;
+  readBundle?: () => string | Buffer;
+  port?: number;
   getTransaction?: (hash: `0x${string}`) => Promise<{ from: string; to: string | null; input: string; value: bigint }>;
 }
 
@@ -70,11 +68,10 @@ export function signInMessage(a: { address: string; origin: string; nonce: strin
 }
 
 // One connect page. /connect serves the Privy bundle: one "Connect" button, one modal with email,
-// Google and browser wallets. An embedded wallet goes through the signing service; a browser wallet
-// signs the server's challenge and the signature is checked locally.
+// Google and browser wallets. Whichever wallet results signs the server's challenge, and the
+// signature is checked locally; Privy's login is never trusted for who controls the address.
 export async function startConnect(deps: ConnectDeps = {}): Promise<Handle<Connected>> {
   const verify = deps.verifySignature ?? defaultVerifySignature;
-  const createSession = deps.createSession ?? createSignerSession;
   const bundle = (deps.readBundle ?? defaultReadBundle)();
   return serveOnce<Connected>(
     {
@@ -84,24 +81,18 @@ export async function startConnect(deps: ConnectDeps = {}): Promise<Handle<Conne
         "/connect": { html: privyShell, csp: PRIVY_CSP },
       },
       assets: { "/app.js": { type: "text/javascript; charset=utf-8", body: bundle } },
-      info: () => ({ mode: "connect", appId: privyAppId(), signerId: signerId() ?? null, policyIds: signerPolicyIds() }),
+      info: () => ({ mode: "connect", appId: privyAppId() }),
       challenge: (address, origin, nonce) => signInMessage({ address, origin, nonce, issuedAt: new Date().toISOString() }),
       accept: async (body, ctx) => {
         if (typeof body.address !== "string" || !isAddress(body.address)) return { ok: false, reason: "not an address" };
         const address = getAddress(body.address);
-        if (body.kind === "embedded") {
-          if (typeof body.accessToken !== "string" || body.accessToken.length < 20 || body.accessToken.length > 4096) return { ok: false, reason: "missing Privy access token" };
-          const s = await createSession(body.accessToken, address);
-          if (!s.ok) return { ok: false, reason: s.reason };
-          if (getAddress(s.account) !== address) return { ok: false, reason: "the signing service answered for a different address" };
-          return { ok: true, value: { account: address, chainId: BASE_CHAIN_ID, walletType: "embedded", signerSession: s.token } };
-        }
-        if (body.kind === "external") {
+        if (body.kind === "external" || body.kind === "embedded") {
           if (!ctx.message || ctx.challengedAddress !== address) return { ok: false, reason: "no sign-in message was issued for this address" };
           if (body.chainId !== BASE_CHAIN_HEX) return { ok: false, reason: "the wallet is not on Base" };
           if (typeof body.signature !== "string" || !/^0x[0-9a-fA-F]+$/.test(body.signature)) return { ok: false, reason: "malformed signature" };
           const ok = await verify({ address, message: ctx.message, signature: body.signature as `0x${string}` });
-          return ok ? { ok: true, value: { account: address, chainId: BASE_CHAIN_ID, walletType: "external" } } : { ok: false, reason: "the signature does not match the address" };
+          const walletName = typeof body.walletName === "string" ? body.walletName.replace(/[^\x20-\x7e]/g, "").trim().slice(0, 60) : "";
+          return ok ? { ok: true, value: { account: address, chainId: BASE_CHAIN_ID, walletType: body.kind, ...(walletName ? { walletName } : {}) } } : { ok: false, reason: "the signature does not match the address" };
         }
         return { ok: false, reason: "unknown sign-in kind" };
       },
@@ -147,29 +138,29 @@ export async function verifyLanded(hash: `0x${string}`, call: Call, account: str
 }
 
 // Every send goes through this one-shot confirmation page, whichever wallet is connected. An
-// embedded wallet is signed by the signing service only after the click on the page; an external
-// wallet gets its own prompt after the click.
+// external wallet gets its own prompt after the click. An embedded wallet loads the Privy bundle on
+// this page and sends from the browser: Privy's own modal is the signature, and nothing here holds
+// a key or signs for it.
 export async function startConfirm(call: Call, session: Connected, deps: ConfirmDeps = {}): Promise<Handle<Confirmed>> {
-  const send = deps.sendViaSigner ?? sendViaSigner;
   const full: Call = { to: call.to, data: call.data, value: call.value ?? "0x0" };
   const decoded = describeCall(full, session.account);
+  const embedded = session.walletType === "embedded";
+  const bundle = embedded ? (deps.readBundle ?? defaultReadBundle)() : undefined;
   return serveOnce<Confirmed>(
     {
       mode: "confirm",
       ttlMs: 3 * 60_000,
-      pages: { "/confirm": { html: CONFIRM_HTML, csp: PLAIN_CSP } },
-      info: () => ({ mode: "confirm", signer: session.walletType === "embedded" ? "service" : "wallet", account: session.account, call: full, decoded }),
+      pages: { "/confirm": embedded ? { html: privyShell, csp: PRIVY_CSP } : { html: CONFIRM_HTML, csp: PLAIN_CSP } },
+      ...(bundle ? { assets: { "/app.js": { type: "text/javascript; charset=utf-8", body: bundle } } } : {}),
+      info: () => ({ mode: "confirm", signer: embedded ? "privy" : "wallet", appId: privyAppId(), account: session.account, walletName: session.walletName ?? null, call: full, decoded }),
+      // Privy accepts one exact origin and keeps its login in that origin's storage, so an embedded
+      // wallet's confirmation must be served from the same host and port as the connect page. An
+      // external wallet gets the same origin so its extension keeps the approval given at sign-in.
+      port: deps.port ?? connectPort(),
+      hostname: "localhost",
       accept: async (body) => {
-        let hash: string;
-        if (session.walletType === "embedded") {
-          if (body.confirmed !== true) return { ok: false, reason: "the transaction was not confirmed" };
-          const r: SendResult = await send(full, session.account, session.signerSession);
-          if (r.status !== "submitted") return { ok: false, reason: r.reason, fatal: true };
-          hash = r.hash;
-        } else {
-          if (typeof body.hash !== "string" || !/^0x[0-9a-fA-F]{64}$/.test(body.hash)) return { ok: false, reason: "the wallet returned something that is not a transaction hash" };
-          hash = body.hash;
-        }
+        if (typeof body.hash !== "string" || !/^0x[0-9a-fA-F]{64}$/.test(body.hash)) return { ok: false, reason: "the wallet returned something that is not a transaction hash" };
+        const hash = body.hash;
         const checked = await verifyLanded(hash as `0x${string}`, full, session.account, deps);
         return { ok: true, value: { hash, ...checked }, reply: { hash } };
       },

@@ -5,16 +5,15 @@ import { startConfirm, startConnect } from "./flows.ts";
 import type { Connected } from "./flows.ts";
 import type { Handle } from "./http.ts";
 import type { Call } from "./decode.ts";
-import { revokeSigner } from "./signer-client.ts";
 
 const CONFIG_DIR = process.env.TREASURY_CONNECT_HOME ?? join(homedir(), ".config", "treasury");
 const SESSION_FILE = join(CONFIG_DIR, "connect-session.json");
 
-// `via` says which sign-in made the session: "wallet" (connected directly, no Privy) or "privy"
-// (a Google/email embedded wallet delegated to the signing service).
+// `via` says which sign-in made the session: "wallet" (a browser extension) or "privy" (the embedded
+// wallet a Google/email login created). Neither holds a signing authority here.
 type Persisted =
-  | { via: "wallet"; account: string; chainId: number; walletType: "external"; connectedAtIso: string }
-  | { via: "privy"; account: string; chainId: number; walletType: "embedded"; delegated: true; signerSession: string; connectedAtIso: string };
+  | { via: "wallet"; account: string; chainId: number; walletType: "external"; walletName?: string; connectedAtIso: string }
+  | { via: "privy"; account: string; chainId: number; walletType: "embedded"; connectedAtIso: string };
 
 type Rejection = { reason: string; requestedAtIso: string };
 type Pending = { url: string; opened: boolean; requestedAtIso: string; handle: Handle<Connected> };
@@ -28,7 +27,10 @@ function readPersisted(): Persisted | undefined {
     // Sessions from before 0.7 said "browser" for a directly connected wallet. Every other old kind
     // (WalletConnect) is no longer supported and reads as disconnected.
     if (p.via === "browser") return { via: "wallet", account: String(p.account), chainId: Number(p.chainId), walletType: "external", connectedAtIso: String(p.connectedAtIso) };
-    if (p.via === "wallet" || p.via === "privy") return p as Persisted;
+    if (p.via === "wallet") return p as Persisted;
+    // A session from the signing-service design carried a delegation token; it is dropped and the
+    // embedded wallet signs in the browser now.
+    if (p.via === "privy") return { via: "privy", account: String(p.account), chainId: Number(p.chainId), walletType: "embedded", connectedAtIso: String(p.connectedAtIso) };
     return undefined;
   } catch {
     return undefined;
@@ -48,14 +50,7 @@ function writePersisted(p: Persisted | undefined): void {
   writeFileSync(SESSION_FILE, JSON.stringify(p, null, 2), { mode: 0o600 });
 }
 
-// The signer session token never leaves this process; it is not part of what status reports.
-const connectedState = (p: Persisted) => {
-  if (p.via === "privy") {
-    const { signerSession: _omit, ...rest } = p;
-    return { status: "connected" as const, ...rest };
-  }
-  return { status: "connected" as const, ...p };
-};
+const connectedState = (p: Persisted) => ({ status: "connected" as const, ...p });
 
 export async function status() {
   if (pending) return { status: "awaiting_approval" as const, url: pending.url, opened: pending.opened, requestedAtIso: pending.requestedAtIso };
@@ -87,8 +82,8 @@ export async function connect(waitMs = 0) {
     const connectedAtIso = new Date().toISOString();
     writePersisted(
       v.walletType === "embedded"
-        ? { via: "privy", account: v.account, chainId: v.chainId, walletType: "embedded", delegated: true, signerSession: v.signerSession, connectedAtIso }
-        : { via: "wallet", account: v.account, chainId: v.chainId, walletType: "external", connectedAtIso },
+        ? { via: "privy", account: v.account, chainId: v.chainId, walletType: "embedded", connectedAtIso }
+        : { via: "wallet", account: v.account, chainId: v.chainId, walletType: "external", ...(v.walletName ? { walletName: v.walletName } : {}), connectedAtIso },
     );
   });
   if (waitMs > 0 && handle.opened) await Promise.race([settled, new Promise((r) => setTimeout(r, waitMs).unref())]);
@@ -104,7 +99,6 @@ export async function disconnect() {
     writePersisted(undefined);
     return { disconnected: false };
   }
-  if (existing.via === "privy") await revokeSigner(existing.signerSession);
   writePersisted(undefined);
   return { disconnected: true };
 }
@@ -117,10 +111,7 @@ export async function switchWallet(waitMs = 0) {
 export async function sendTransaction(call: Call) {
   const existing = readPersisted();
   if (!existing) throw new Error("no wallet is connected — call connect_wallet first, then connect_status until it reports connected");
-  const session: Connected =
-    existing.via === "privy"
-      ? { account: existing.account, chainId: existing.chainId, walletType: "embedded", signerSession: existing.signerSession }
-      : { account: existing.account, chainId: existing.chainId, walletType: "external" };
+  const session: Connected = { account: existing.account, chainId: existing.chainId, walletType: existing.walletType, ...(existing.via === "wallet" && existing.walletName ? { walletName: existing.walletName } : {}) };
   const handle = await startConfirm(call, session);
   if (!handle.opened) {
     handle.close();

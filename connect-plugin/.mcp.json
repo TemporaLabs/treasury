@@ -7,9 +7,7 @@
         "${CLAUDE_PLUGIN_ROOT}/dist/connect-server.mjs"
       ],
       "env": {
-        "TREASURY_SIGNER_URL": "${TREASURY_SIGNER_URL:-}",
         "PRIVY_APP_ID": "${PRIVY_APP_ID:-cmubfegl2028d0ci3n0f2u6z5}",
-        "PRIVY_SIGNER_ID": "${PRIVY_SIGNER_ID:-}",
         "TREASURY_CONNECT_PORT": "${TREASURY_CONNECT_PORT:-53682}"
       }
     }

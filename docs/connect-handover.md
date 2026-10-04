@@ -1,5 +1,10 @@
 # Connect: Privy and wallet sign-in, handover
 
+> **Update (0.8.0):** the signing service and delegation described below are gone. A Google/email
+> embedded wallet now signs in the browser (free challenge at connect; Privy's modal on the confirm
+> page, served from `localhost:53682`). `TREASURY_SIGNER_URL` and `PRIVY_SIGNER_ID` are no longer
+> read. See `connect-plugin/CHANGELOG.md`. Sections below that mention the service are historical.
+
 State of the wallet and Privy work as of 2026-10-03, written for whoever picks it up next. It
 describes what exists, what was observed running it, and what is not done. Nothing here is a
 claim that the flows are production-ready.

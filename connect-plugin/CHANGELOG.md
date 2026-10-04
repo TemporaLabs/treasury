@@ -3,6 +3,20 @@
 All notable changes to the Agent Treasury Connect plugin are recorded here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versions follow [SemVer](https://semver.org/).
 
+## [0.8.0] - Unreleased
+
+### Changed
+- **No signing service.** A Google/email embedded wallet signs in the browser, as the signer page
+  did: connecting signs the server's free challenge (checked locally, like a browser wallet), and
+  each send opens the confirmation page on `localhost:53682`, where Privy's own modal is the
+  signature. `TREASURY_SIGNER_URL`, `PRIVY_SIGNER_ID` and the delegation step are gone, and so is
+  `signer-client.ts`. This fixes "the signing service could not be reached: fetch failed".
+- **Wallets on the first screen of the modal.** `loginMethodsAndOrder` lists email, Google and
+  every detected browser wallet together; `loginMethods` with `"wallet"` hid them behind a
+  "Continue with a wallet" click.
+- The Privy page's CSP allows `*.privy.io` for images, frames and requests.
+- Existing `via: "privy"` sessions keep working; their old delegation token is dropped.
+
 ## [0.7.0] - Unreleased
 
 Rebuilt from source in this repository. The server logic now lives in `src/` and is built to `dist/`

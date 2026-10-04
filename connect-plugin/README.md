@@ -18,8 +18,8 @@ Confirm, fresh, every time.
 with email, Google and the browser wallets Privy detects (no WalletConnect, no QR):
 
 - **Google or email** — [Privy](https://privy.io) signs you in and opens (or creates)
-  an *embedded* wallet. After a one-time delegation, a separately hosted signing service can sign
-  deposits and withdrawals for it within a fixed policy.
+  an *embedded* wallet. It proves the address by signing a free sign-in message, and signs each
+  deposit or withdrawal itself, in your browser, through Privy's own confirmation modal.
 - **A browser wallet** — MetaMask, Rabby, Coinbase Wallet or any detected extension. Privy only shows
   the picker: you sign a free sign-in message, which the plugin checks locally. A stored Privy session
   is cleared on load and never resumed.
@@ -28,7 +28,7 @@ Then, for every deposit or withdrawal, whichever wallet is connected, a **confir
 showing the decoded call: action, amount, vault, receiver and chain, with warnings if the receiver or
 owner is not your account, if an approval is unlimited, or if the call is not one Earn would build.
 Nothing is signed until you click **Confirm** there. A directly connected wallet then shows its own
-prompt; an embedded wallet is signed by the signing service.
+prompt; an embedded wallet opens Privy's modal on the same page.
 
 WalletConnect is not supported and is never offered.
 
@@ -49,9 +49,8 @@ WalletConnect is not supported and is never offered.
 
 - No key belonging to the operator. A directly connected wallet signs on its own side; a Privy
   embedded wallet is signed inside Privy.
-- No Privy app secret and no Privy authorization key. A delegated embedded wallet is signed by a
-  separately hosted signing service that holds those; this plugin carries only an opaque, revocable
-  session token (in a `0600` file, never printed) and public identifiers.
+- No Privy app secret, no Privy authorization key and no signing service. This plugin stores only
+  public identifiers (your address and the Privy app id).
 - No say over what gets sent. `connect_send_transaction` relays a call it did not build and cannot
   alter — deciding an amount, a vault, or a destination is Earn's job entirely.
 - No persistent server and no dashboard. Each sign-in and each confirmation opens one page on a
@@ -76,23 +75,15 @@ Needs a browser on the same machine as the agent (not SSH), and `node` 20 or lat
 
 ### Setting up Google / email
 
-A directly connected wallet needs no setup. Google or email needs, once:
+A directly connected wallet needs no setup. Google or email needs one thing, once: **a Privy app**
+with embedded wallets on Base and email/Google login enabled, and `http://localhost:53682` added as an
+allowed origin. Privy only accepts listed origins, so the page uses a fixed port; change it with
+`TREASURY_CONNECT_PORT` and list that origin instead. `PRIVY_APP_ID` defaults to Tempora's app; set it
+to use your own.
 
-1. **A Privy app.** In the Privy dashboard, enable embedded wallets on Base and email/Google login,
-   and add `http://localhost:53682` as an allowed origin. Privy only accepts listed origins, so the
-   page uses a fixed port; change it with `TREASURY_CONNECT_PORT` and list that origin instead.
-   `PRIVY_APP_ID` defaults to Tempora's app; set it to use your own.
-2. **The signing service** running somewhere (`signer-service/` in
-   [TemporaLabs/treasury](https://github.com/TemporaLabs/treasury)), a Privy authorization key (key
-   quorum) registered as a signer, and these exported before starting Claude Code:
-   `TREASURY_SIGNER_URL` (the service) and `PRIVY_SIGNER_ID` (the key-quorum id).
-
-If the service is not running, a Google/email sign-in stops with "the signing service could not be
-reached"; connect a wallet directly instead.
-
-The service signs only USDC `approve` to a registry vault, vault `deposit` to you, and vault
-`withdraw`/`redeem` to you, under per-transaction and daily caps. Disconnecting revokes the service's
-session token; it does not remove the signer from the wallet inside Privy.
+There is no signing service. The embedded wallet signs in your browser: connecting signs a free
+sign-in message that the plugin checks locally, and each send opens the confirmation page, where
+Privy's own modal is the signature. Nothing in this plugin holds a key or an authorization key.
 
 ### Developing
 

@@ -85,10 +85,9 @@ export async function serveOnce<T>(flow: Flow<T>, deps: ServeDeps = {}): Promise
     if (settled) return;
     settled = true;
     resolveDone(r);
-    setTimeout(() => {
-      server.close();
-      server.closeAllConnections();
-    }, 1500).unref();
+    // Stop listening at once so a pinned port is free for the next flow; let the reply in flight finish.
+    server.close();
+    setTimeout(() => server.closeAllConnections(), 1500).unref();
   };
 
   const json = (res: http.ServerResponse, code: number, body: unknown) => {
@@ -183,10 +182,22 @@ export async function serveOnce<T>(flow: Flow<T>, deps: ServeDeps = {}): Promise
     }
   });
 
-  await new Promise<void>((resolve, reject) => {
-    server.once("error", reject);
-    server.listen(flow.port ?? 0, "127.0.0.1", () => resolve());
-  });
+  // A pinned port may still be held for a moment by the previous flow, so retry briefly.
+  for (let attempt = 0; ; attempt++) {
+    try {
+      await new Promise<void>((resolve, reject) => {
+        server.once("error", reject);
+        server.listen(flow.port ?? 0, "127.0.0.1", () => {
+          server.off("error", reject);
+          resolve();
+        });
+      });
+      break;
+    } catch (e) {
+      if (!flow.port || (e as NodeJS.ErrnoException).code !== "EADDRINUSE" || attempt >= 10) throw e;
+      await new Promise((r) => setTimeout(r, 200));
+    }
+  }
   const port = (server.address() as { port: number }).port;
   origin = `http://${flow.hostname ?? "127.0.0.1"}:${port}`;
   const url = `${origin}/${flow.mode}?s=${secret}`;

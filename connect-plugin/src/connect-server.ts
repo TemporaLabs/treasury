@@ -19,7 +19,7 @@ function present(s: State) {
     return {
       ...s,
       instructions: s.opened
-        ? "A browser tab opened with two choices: Continue with Google or email (Privy), or Connect a wallet (direct, no Privy). Tell the operator to pick one there. Call connect_status to see whether it finished."
+        ? "A browser tab opened with one Connect button. It opens a single modal with email, Google and the browser wallets installed. Tell the operator to pick one there. Call connect_status to see whether it finished."
         : "No browser could be opened on this machine. If the operator is at this machine, give them the url to open in a browser. Otherwise this plugin cannot sign in from here.",
     };
   }
@@ -48,7 +48,7 @@ export function buildServer(): McpServer {
     {
       title: "Connect a wallet",
       description:
-        "Opens one page in the operator's browser with two separate choices: Continue with Google or email (a Privy embedded wallet), or Connect a wallet (MetaMask, Rabby, Coinbase Wallet or any browser wallet, connected directly with a free sign-in message and no Privy). Waits up to `wait_seconds` and returns `connected` directly. If a wallet is already connected, returns that state instead — use switch_wallet to replace it.",
+        "Opens one page in the operator's browser with one Connect button and a single modal: email, Google (a Privy embedded wallet) or an installed browser wallet (MetaMask, Rabby and others), each proving the address with a free sign-in message. Waits up to `wait_seconds` and returns `connected` directly. If a wallet is already connected, returns that state instead — use switch_wallet to replace it.",
       inputSchema: { wait_seconds: waitArg },
     },
     async ({ wait_seconds }) => text(present(await connect((wait_seconds ?? DEFAULT_WAIT_S) * 1000))),
@@ -59,7 +59,7 @@ export function buildServer(): McpServer {
     {
       title: "Disconnect the wallet",
       description:
-        "Ends the current session and clears the local record of it. For a Google/email embedded wallet it also asks the signing service to revoke this machine's session token (it does not remove the signer inside Privy). Returns `disconnected: false` if nothing was connected.",
+        "Ends the current session and clears the local record of it. Nothing is revoked remotely: this plugin holds no signing authority, and the Privy login lives only in the browser. Returns `disconnected: false` if nothing was connected.",
       inputSchema: {},
     },
     async () => text(await disconnect()),
@@ -81,7 +81,7 @@ export function buildServer(): McpServer {
     {
       title: "Send one call through the connected wallet",
       description:
-        "Relays exactly one unsigned call — `to`, `data`, optional `value` — through the connected wallet. A confirmation page always opens in the operator's browser first, showing the decoded call (action, amount, vault, receiver, chain); nothing is signed until the operator clicks Confirm there. A Google/email embedded wallet is then signed by the signing service; a directly connected wallet then shows its own prompt. Waits up to 3 minutes. This tool builds nothing: hand it one call at a time from Earn's earn_prepare_deposit/earn_prepare_withdraw envelope, IN ORDER, following that envelope's own signer_rules (destination check, gasAdvice, any precondition). Returns `{status: \"submitted\", hash, verified}` once signed and broadcast — NOT once confirmed on chain; confirm with Earn's earn_balance or earn_status. `verified: \"mismatch\"` means stop and tell the operator. Returns `{status: \"rejected\", reason}` for a decline, a timeout, or a refusal from the signing service; do not retry with the fields changed.",
+        "Relays exactly one unsigned call — `to`, `data`, optional `value` — through the connected wallet. A confirmation page always opens in the operator's browser first, showing the decoded call (action, amount, vault, receiver, chain); nothing is signed until the operator clicks Confirm there. The wallet then asks for the signature itself: a browser extension shows its own prompt, and a Google/email embedded wallet shows Privy's confirmation modal on the same page. Waits up to 3 minutes. This tool builds nothing: hand it one call at a time from Earn's earn_prepare_deposit/earn_prepare_withdraw envelope, IN ORDER, following that envelope's own signer_rules (destination check, gasAdvice, any precondition). Returns `{status: \"submitted\", hash, verified}` once signed and broadcast — NOT once confirmed on chain; confirm with Earn's earn_balance or earn_status. `verified: \"mismatch\"` means stop and tell the operator. Returns `{status: \"rejected\", reason}` for a decline or a timeout; do not retry with the fields changed.",
       inputSchema: { to: addressArg, data: hexArg("data"), value: hexArg("value").optional() },
     },
     async ({ to, data, value }) => text(await sendTransaction({ to, data, ...(value === undefined ? {} : { value }) })),

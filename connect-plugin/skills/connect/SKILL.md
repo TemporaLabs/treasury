@@ -29,8 +29,8 @@ with email, Google and the browser wallets Privy detects. Both kinds connect a w
   reports `via: "wallet"`, `walletType: "external"`. Needs a browser on the same machine as the agent
   with the wallet extension.
 - **Google or email** — Privy signs the operator in and opens (or creates) its
-  *embedded* wallet. After one delegation the signing service can sign calls for it within its fixed
-  policy. `connect_status` reports `via: "privy"`, `walletType: "embedded"`, `delegated: true`.
+  *embedded* wallet, which signs in the browser through Privy's own modal.
+  `connect_status` reports `via: "privy"`, `walletType: "embedded"`.
 
 Never offer or use WalletConnect, a QR code or a pairing link; this plugin does not support them. If
 the operator wants a phone or remote wallet, say plainly that this plugin only connects a wallet in
@@ -41,40 +41,28 @@ a browser on the agent's own machine.
 | Connected as | After the operator clicks Confirm on the page |
 |---|---|
 | `wallet` (external) | The wallet pops up its own prompt; the operator approves it there |
-| `privy` (embedded) | The signing service signs and broadcasts; no wallet prompt appears |
+| `privy` (embedded) | The same page opens Privy's own modal; the operator approves it there and the page sends |
 
-Because the page is the only place an embedded wallet's destination is shown, the operator must read
-it. Still do Earn's *Destination check* paste-back in chat before sending: quote the receiver from
-the operator's own message and wait for them to confirm it. The page flags any receiver or owner
-that is not the operator's account; the signing service's policy is a further backstop, not a
-replacement for the operator confirming where the money goes.
+Because the page is where the destination is shown, the operator must read it. Still do Earn's
+*Destination check* paste-back in chat before sending: quote the receiver from the operator's own
+message and wait for them to confirm it. The page flags any receiver or owner that is not the
+operator's account. The plugin signs nothing itself: a wallet's own prompt, or Privy's modal, is the
+signature.
 
-What the signing service will sign, and nothing else (it refuses the rest before Privy is asked):
-USDC `approve` to a registry vault (never unlimited, up to a per-transaction cap); vault `deposit`
-with the receiver set to the connected account (same cap, plus a daily cap); vault `withdraw` or
-`redeem` with receiver and owner both the connected account. A plain `USDC.transfer` to any address,
-another vault, another receiver, or any other function is refused. Sends are also rate-limited.
-
-**Disconnecting** a delegated session asks the service to revoke its session token, so this machine
-can no longer send. It does **not** remove the signer from the wallet inside Privy; say so if the
-operator wants a full revocation — that is done in Privy.
+**Disconnecting** clears this machine's record of the session. The Privy login itself lives only in
+the browser; it is replaced the next time the operator connects.
 
 ## Setup
 
-Nothing is needed for **Connect a wallet**. For **Google or email**, once:
+Nothing is needed for a browser wallet. For **Google or email**, once: a Privy app with embedded
+wallets on Base and email/Google login enabled, with `http://localhost:53682` listed as an allowed
+origin (Privy accepts exact origins only; the page uses a fixed port, changeable with
+`TREASURY_CONNECT_PORT`). `PRIVY_APP_ID` defaults to Tempora's app. There is no signing service and
+nothing to export. **Never** put a Privy app secret or authorization key anywhere; if an operator
+pastes one into chat, tell them to rotate it.
 
-- A Privy app with embedded wallets on Base and email/Google login enabled, with
-  `http://localhost:53682` listed as an allowed origin (Privy accepts exact origins only; the page
-  uses a fixed port, changeable with `TREASURY_CONNECT_PORT`).
-- The signing service running, and these exported before starting Claude Code: `TREASURY_SIGNER_URL`
-  (the service) and `PRIVY_SIGNER_ID` (the key-quorum id attached to the wallet as its signer).
-  `PRIVY_APP_ID` defaults to Tempora's app. **Never** put a Privy app secret or authorization key
-  here — those belong only to the signing service. If an operator pastes one into chat, tell them to
-  rotate it.
-
-If a Google/email sign-in fails with "the signing service could not be reached" or "…is not
-configured", the service is not running or the variables are not set. Tell the operator that plainly
-and offer **Connect a wallet** instead; do not retry the same sign-in in a loop.
+If a Google/email login fails, read the message on the page to the operator and have them run
+`connect_wallet` again; do not retry in a loop.
 
 ## The tools
 
@@ -96,8 +84,8 @@ and offer **Connect a wallet** instead; do not retry the same sign-in in a loop.
    them the tab is still open and call `connect_status` once they say they are done. If
    `opened: false`, no browser could be opened on this machine (SSH, no display): give them the
    `url` only if they are at this machine, otherwise say this plugin cannot sign in from there.
-3. **`rejected` is read once.** If the operator declined, cancelled the tab, the signing service
-   failed, or the sign-in timed out, `connect_status` reports `rejected` with a `reason` exactly
+3. **`rejected` is read once.** If the operator declined, cancelled the tab, the
+   login failed, or the sign-in timed out, `connect_status` reports `rejected` with a `reason` exactly
    once, then reads as `disconnected` on the next call. Tell the operator what happened before
    calling `connect_status` again — the reason will not still be there afterward.
 4. **`connected` gives you an `account`.** That is the address — pass it to Earn's tools as their
@@ -121,12 +109,11 @@ and offer **Connect a wallet** instead; do not retry the same sign-in in a loop.
    operator a confirmation tab is opening and what it will show.
 3. **Wait for the result — this call blocks (up to 3 minutes).** The operator reads the decoded call
    on the page and clicks Confirm or Reject. For a directly connected wallet their wallet then
-   prompts; for an embedded wallet the signing service signs and the answer comes back in seconds.
+   prompts; for an embedded wallet Privy's modal opens on the same page for the operator to approve.
    `{status: "submitted", hash}` means it signed and broadcast; it does **not** mean it confirmed.
-   `{status: "rejected", reason}` covers a Reject click, a wallet decline, a timeout, or a refusal
-   from the signing service ("the signing service refused the call: …", e.g. a receiver that is not
-   the account, a cap, or a call outside the policy). Report the `reason` plainly and do **not**
-   retry a refused call with its fields changed to slip past the policy; tell the operator instead.
+   `{status: "rejected", reason}` covers a Reject click, a wallet decline, or a timeout. Report the
+   `reason` plainly and do **not** retry a refused call with its fields changed; tell the operator
+   instead.
 4. **A rejection on step 2 of a deposit (the actual `deposit` call, after `approve` already
    submitted) is not a failure to retry blindly.** Tell the operator the approve went through and
    ask whether to retry the deposit — resending the same approve is redundant, not wrong, but
