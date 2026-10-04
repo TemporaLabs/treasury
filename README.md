@@ -77,7 +77,9 @@ Ask your agent:
 
 To try the demo vault or another chain, name it: *“…into the demo vault”*, or *“…on Arbitrum”*.
 
-With a browser on the machine, the agent opens a page where you confirm each call in your own wallet; otherwise OAT returns unsigned calls for your signer. Preparing a deposit moves no money.
+With a browser on the machine, you sign in once with `treasury connect`. For each deposit the agent first
+shows you a fixed confirmation text, and only on your yes opens a page where you confirm each call in your
+own wallet. Otherwise OAT returns unsigned calls for your signer. Preparing a deposit moves no money.
 Later, ask: **“What is my position worth, and how much can I withdraw now?”**
 
 ## Vaults
@@ -111,7 +113,7 @@ which chain first when you have not said. There are other options, and a demo.
 
 When you have not said which chain, the agent shows these and asks before it prepares a deposit.
 
-All of them are experimental vaults using real USDC, not bank savings accounts. None currently has a
+All of them are experimental vaults using real funds (USDC, or USDG on Robinhood Chain), not bank savings accounts. None currently has a
 lock-up, but liquidity can limit withdrawals.
 
 Tempora Labs curates these vaults and can set fees. OAT offers Tempora's vaults; it does not compare

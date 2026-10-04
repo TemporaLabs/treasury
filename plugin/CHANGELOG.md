@@ -35,6 +35,9 @@ Carries `@temporalabs/treasury` v0.1.2.
 - Robinhood Chain (#89): the skill body names it, its USDG vault and its variables
   (`TREASURY_RPC_ROBINHOOD`, `TREASURY_LOGS_RPC_ROBINHOOD`), and tells the agent to say USDG there.
   The skill's `description` is unchanged.
+- The manifests' descriptions name Robinhood Chain and USDG, and their keywords add `robinhood` and
+  `usdg`. The skill body names the vault's asset (USDC, or USDG on Robinhood Chain) where it said USDC
+  alone, and says what `opened: false` means on each `connect` run.
 
 ## [v0.1.1] - 2026-09-29
 

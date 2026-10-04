@@ -18,24 +18,27 @@ Earn puts idle USDC to work in Tempora-curated vaults on Base and Arbitrum One, 
 - **Track a position:** its value, deposits and earnings, read from on-chain records.
 - **Prepare a withdrawal:** check what is withdrawable right now, then build unsigned calls.
 
-Earn is USDC in, USDC out. It runs as a command line: eight `earn` commands, READ commands that
+Earn takes the vault's own asset in and pays it out: USDC on Base and Arbitrum One, USDG on Robinhood
+Chain. It runs as a command line: eight `earn` commands, READ commands that
 return facts from the chain and PREPARE commands that return unsigned calls, and five `connect`
 commands that hand calls to the operator's own wallet for approval. CI asserts both command lists on
 every build, so a signing command cannot slip in.
 
 ## The default vault
 
-Earn deposits into **Tempora Labs Cash Plus USDC (Test 2)** by default, a Morpho Vault V2 on Base
-that any account can deposit into. Over the last seven days it has earned about **4.4% APY**,
-measured from its on-chain share price; Morpho's dashboard shows 4.3%.
+Earn deposits into **Tempora Labs Cash Plus USDC (Test 2B)** by default, a Morpho Vault V2 on Base
+that any account can deposit into. Arbitrum One and Robinhood Chain each have their own default, and
+the agent asks which chain when the operator has not said.
 
-Vault page: https://app.morpho.org/base/vault/0x040fCA12673778FEED5DA7b2ccFbbAb0cc0134Cf
+Vault: https://basescan.org/address/0x91BcEbA5feCB9E92d80F1845B55cC56621E9352F
 
-The vault is small by design: it is a test vault, seeded with a few dollars so the product can be
-exercised end to end with real USDC. Tempora is adding to it as testing continues, and its size will
-grow from here. Check the vault page for the current total.
+**Tempora Labs Cash Plus USDC (Test 2)** is the demo vault: the one Morpho's app lists, used only when
+it is named. Vault page: https://app.morpho.org/base/vault/0x040fCA12673778FEED5DA7b2ccFbbAb0cc0134Cf
 
-> **Both the software and the vault are in testing.** Real USDC, real risk, pre-1.0. Returns are
+These are test vaults, there to exercise the product end to end with real funds. Check a vault's
+page for its current total.
+
+> **Both the software and the vaults are in testing.** Real funds, real risk, pre-1.0. Returns are
 > variable, and withdrawals depend on available liquidity. Review every transaction before signing
 > and keep deposits small. OAT reports what your position is worth and what it earned; it does not
 > promise a yield.
@@ -71,7 +74,10 @@ Ask your agent:
 
 > Show me the available vaults and their risks. Then prepare a 25 USDC deposit into the default vault.
 
-With a browser on the machine, the agent opens a page where you confirm each call in your own wallet; otherwise it returns unsigned calls for your signer. Preparing a deposit moves no money. Later:
+With a browser on the machine, you sign in once with `treasury connect`. For each deposit the agent
+first shows you a fixed confirmation text, and only on your yes opens a page where you confirm each
+call in your own wallet. Otherwise it returns unsigned calls for your signer. Preparing a deposit moves
+no money. Later:
 
 > What is my position worth, and how much can I withdraw now?
 
@@ -79,7 +85,7 @@ With a browser on the machine, the agent opens a page where you confirm each cal
 
 - Every tool that takes a vault takes its ERC-20 ticker (`tlCashPlusUSDC2B` is the default on Base); every
   tool that takes an address takes it as `account`.
-- Amounts are decimal USDC strings. Shares are exact strings and never cross the boundary as numbers.
+- Amounts are decimal strings in the vault's asset (USDC; USDG on Robinhood Chain). Shares are exact strings and never cross the boundary as numbers.
 - `earn_vaults` returns a `warning` for each vault. Show it to the operator before any deposit.
 - A deposit is two calls, `approve` then `deposit`, returned in order with signer rules attached.
 - Whether a balance is surplus is the operator's decision. A balance in the wallet is not
@@ -93,12 +99,15 @@ With a browser on the machine, the agent opens a page where you confirm each cal
 - **Verifiable builds:** CI checks the committed bundle, and each npm release carries provenance.
 - Vulnerabilities go through private reporting, not public issues.
 
+## New in v0.1.2
+
+`treasury connect` hands each transaction to the operator's own wallet (a browser wallet, or an
+email or social login) for approval in the browser, with no copy-paste, after the operator answers a
+fixed acknowledgement. Deposits work on Arbitrum One and Robinhood Chain beside Base.
+
 ## What is next
 
-The v0.1.2 cycle adds `treasury connect`, which hands each transaction to the operator's own
-wallet (a browser wallet, or an email or social login) for approval in the browser, with no
-copy-paste, and deposits on Arbitrum One and Robinhood Chain beside Base. More yield configurations across the
-risk/return spectrum are coming.
+More yield configurations across the risk/return spectrum.
 
 ## Links
 

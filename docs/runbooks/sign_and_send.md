@@ -149,15 +149,15 @@ logged, only in the process's own environment.
 
 ## The trap `earn_balance` exists to catch — and did
 
-Before withdrawing, `earn_balance` was called to get `sharesExact` for `earn_prepare_withdraw({all:
-true})`. The wallet used for this test already held ~5.0 unrelated shares of that vault from prior
-work — `sharesExact` is the **whole balance**, not "whatever this session deposited." Using
-`all: true` here would have withdrawn someone else's position along with the test's own 0.05 USDC.
+Before withdrawing, `earn balance` was run to get `sharesExact` for `earn prepare_withdraw --all
+--shares_exact <sharesExact>`. The wallet used for this test already held ~5.0 unrelated shares of that
+vault from prior work — `sharesExact` is the **whole balance**, not "whatever this test deposited."
+Using `--all` here would have withdrawn someone else's position along with the test's own 0.05 USDC.
 
-**The fix was the tool doing what it's for**, not a special case: `earn_prepare_withdraw` also accepts a
-USDC-denominated `amount_usdc`, which withdraws exactly that much and leaves the rest of the
-position untouched. `all: true` is for actually emptying an account; a bounded test withdraws a
-bounded amount. Before assuming a wallet is "empty enough to use `all`," check its existing
+**The fix was the tool doing what it's for**, not a special case: `earn prepare_withdraw` also accepts
+`--amount_usdc`, in the vault's asset, which withdraws exactly that much and leaves the rest of the
+position untouched. `--all` is for actually emptying an account; a bounded test withdraws a
+bounded amount. Before assuming a wallet is "empty enough to use `--all`," check its existing
 position first — the tool will tell you, but only if asked before, not after.
 
 ## Verifying the round trip actually closed cleanly
