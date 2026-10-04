@@ -39811,6 +39811,7 @@ async function serveOnce(flow) {
   const origin = `http://localhost:${flow.port}`;
   let settled = false;
   let busy = false;
+  let deferred;
   let resolveDone;
   const done = new Promise((r) => resolveDone = r);
   let issued;
@@ -39841,14 +39842,14 @@ async function serveOnce(flow) {
     });
     req.on("error", reject);
   });
-  const server = http2.createServer((req, res) => {
+  const onRequest = (req, res) => {
     void (async () => {
       try {
         if (String(req.headers.host ?? "") !== new URL(origin).host) return json2(res, 403, { ok: false, reason: "bad host" });
         const url2 = new URL(req.url ?? "/", origin);
         if (req.method === "GET") {
           if (!same2(url2.searchParams.get("s") ?? "", secret)) return json2(res, 404, { ok: false, reason: "not found" });
-          if (url2.pathname === "/info") return json2(res, 200, flow.info());
+          if (url2.pathname === "/info") return settled ? json2(res, 410, { ok: false, reason: "already finished" }) : json2(res, 200, flow.info());
           if (url2.pathname === `/${flow.mode}`) {
             res.writeHead(200, {
               "content-type": "text/html; charset=utf-8",
@@ -39883,7 +39884,7 @@ async function serveOnce(flow) {
           }
           if (body["rejected"] === true) {
             const reason = typeof body["reason"] === "string" ? body["reason"].slice(0, 300) : "declined in the browser";
-            finish({ ok: false, reason });
+            finishWhenIdle({ ok: false, reason });
             return json2(res, 200, { ok: true });
           }
           if (busy) return json2(res, 409, { ok: false, reason: "already in progress" });
@@ -39898,6 +39899,7 @@ async function serveOnce(flow) {
             return json2(res, 200, { ok: true, ...r.reply });
           } finally {
             busy = false;
+            if (deferred) finish(deferred);
           }
         }
         return json2(res, 405, { ok: false, reason: "method not allowed" });
@@ -39905,26 +39907,42 @@ async function serveOnce(flow) {
         return json2(res, 400, { ok: false, reason: e instanceof Error ? e.message : "bad request" });
       }
     })();
-  });
+  };
+  const servers = [http2.createServer(onRequest), http2.createServer(onRequest)];
+  const closeAll = () => {
+    for (const s of servers) {
+      s.close();
+      s.closeAllConnections();
+    }
+  };
   const finish = (r) => {
     if (settled) return;
     settled = true;
     resolveDone(r);
-    setTimeout(() => {
-      server.close();
-      server.closeAllConnections();
-    }, 1500).unref();
+    setTimeout(closeAll, 1500).unref();
   };
-  await new Promise((resolve, reject) => {
-    server.once(
-      "error",
-      (e) => reject(
-        e.code === "EADDRINUSE" ? new Error(`port ${flow.port} is in use \u2014 another sign-in or confirmation page is probably still open; finish or close it, then retry`) : e
-      )
-    );
-    server.listen(flow.port, "127.0.0.1", () => resolve());
+  const finishWhenIdle = (r) => {
+    if (busy) deferred ??= r;
+    else finish(r);
+  };
+  const listen = (server, host, optional2) => new Promise((resolve, reject) => {
+    server.once("error", (e) => {
+      if (e.code === "EADDRINUSE") {
+        return reject(new Error(`port ${flow.port} is in use on ${host} \u2014 another sign-in or confirmation page is probably still open; finish or close it, then retry`));
+      }
+      if (optional2 && (e.code === "EADDRNOTAVAIL" || e.code === "EAFNOSUPPORT")) return resolve();
+      reject(e);
+    });
+    server.listen({ port: flow.port, host, ipv6Only: host === "::1" }, () => resolve());
   });
-  const timer = setTimeout(() => finish({ ok: false, reason: `nothing happened in the browser within ${Math.round(flow.ttlMs / 6e4)} minutes` }), flow.ttlMs);
+  try {
+    await listen(servers[0], "127.0.0.1", false);
+    await listen(servers[1], "::1", true);
+  } catch (e) {
+    closeAll();
+    throw e;
+  }
+  const timer = setTimeout(() => finishWhenIdle({ ok: false, reason: `nothing happened in the browser within ${Math.round(flow.ttlMs / 6e4)} minutes` }), flow.ttlMs);
   timer.unref();
   void done.then(() => clearTimeout(timer));
   return { url: `${origin}/${flow.mode}?s=${secret}`, done, close: () => finish({ ok: false, reason: "cancelled" }) };
@@ -39978,7 +39996,7 @@ function readPageBundle() {
     } catch {
     }
   }
-  throw new Error("the connect page is not built (dist/connect-page.js is missing) \u2014 run `npm run build`");
+  throw new Error("the connect page is not built (dist/connect-page.js is missing) \u2014 run `npm ci && npm run build` in connect-page/");
 }
 function shell(secret, title) {
   return `<!doctype html>
@@ -40008,7 +40026,7 @@ function shell(secret, title) {
 }
 
 // src/connect/session.ts
-import { mkdirSync, readFileSync as readFileSync4, rmSync, writeFileSync } from "fs";
+import { chmodSync, mkdirSync, readFileSync as readFileSync4, rmSync, writeFileSync } from "fs";
 import { homedir } from "os";
 import { join } from "path";
 var dir = () => connectHome() ?? join(homedir(), ".config", "treasury");
@@ -40033,6 +40051,7 @@ function writeSession(s) {
   mkdirSync(dir(), { recursive: true, mode: 448 });
   writeFileSync(sessionPath(), `${JSON.stringify(s, null, 2)}
 `, { mode: 384 });
+  chmodSync(sessionPath(), 384);
 }
 function clearSession() {
   const had = readSession() !== void 0;
@@ -40173,6 +40192,7 @@ async function runConfirm(calls, admitted, session, deps = {}) {
   const account = session.account;
   const client = deps.client ? deps.client(chainId) : makePublicClient(chainId, rpcUrlFromEnv(chainId));
   const done = [];
+  let stopReason;
   const preconditionHolds = async (c) => {
     if (!c.precondition) return true;
     const p = c.precondition;
@@ -40218,27 +40238,32 @@ async function runConfirm(calls, admitted, session, deps = {}) {
       if (index2 !== done.length) return { ok: false, reason: `expected step ${done.length + 1}` };
       if (typeof hash4 !== "string" || !/^0x[0-9a-fA-F]{64}$/.test(hash4)) return { ok: false, reason: "malformed transaction hash" };
       const call2 = calls[index2];
+      if (done.some((t) => t.hash.toLowerCase() === hash4.toLowerCase())) return { ok: false, reason: "this transaction hash was already reported for an earlier step" };
+      const entry = { step: call2.step, description: call2.description, hash: hash4, verified: "unverified", detail: "the flow ended while this transaction was still being checked" };
+      done.push(entry);
       const verdict = await verifyLanded(client, hash4, admitted[index2], account, deps.verifyOpts);
-      done.push({ step: call2.step, description: call2.description, hash: hash4, ...verdict });
+      Object.assign(entry, verdict);
       if (verdict.verified !== "matched" && verdict.verified !== "extra_transfer") {
         return { ok: true, final: true, value: done, reply: { stop: true, verdict } };
       }
       if (index2 + 1 === calls.length) return { ok: true, final: true, value: done, reply: { finished: true, verdict } };
       if (!await preconditionHolds(calls[index2 + 1])) {
-        return { ok: true, final: true, value: done, reply: { stop: true, reason: "the approval is not visible on this RPC yet; nothing more was sent" } };
+        stopReason = "the approval landed, but its allowance is not visible on this RPC yet; the deposit was not sent";
+        return { ok: true, final: true, value: done, reply: { stop: true, reason: stopReason } };
       }
       return { ok: true, final: false, reply: { next: index2 + 1, verdict } };
     }
   });
   const opened = (deps.open ?? announce)(handle.url);
   const result = await handle.done;
-  return { result, url: handle.url, opened, done };
+  return { result, url: handle.url, opened, done, total: calls.length, ...stopReason ? { stopReason } : {} };
 }
 var notConnected = () => new Error("no wallet is connected \u2014 run `treasury connect wallet` first, and let the operator sign in");
 function outcome(chainId, account, r) {
   const txs = r.result.ok ? r.result.value : r.done;
-  const all = txs.length > 0 && txs.every((t) => t.verified === "matched" || t.verified === "extra_transfer");
-  const status = r.result.ok ? all ? "completed" : "stopped" : txs.length ? "stopped" : "not_sent";
+  const all = txs.length === r.total && txs.every((t) => t.verified === "matched" || t.verified === "extra_transfer");
+  const status = r.result.ok ? all ? "completed" : "stopped" : txs.length ? "stopped" : "not_reported";
+  const reason = r.result.ok ? r.stopReason : r.result.reason;
   return JSON.stringify(
     {
       status,
@@ -40246,9 +40271,10 @@ function outcome(chainId, account, r) {
       chainId,
       account,
       opened: r.opened,
-      ...r.result.ok ? {} : { reason: r.result.reason },
+      ...reason ? { reason } : {},
+      calls_total: r.total,
       txs,
-      next_step: status === "completed" ? "Every call landed as confirmed. Report each hash to the operator; any `extra_transfer` is money the wallet moved besides the call \u2014 say so." : status === "stopped" ? "Stopped at the step shown. Do not retry blindly: read its `verified` and `detail`, check the account with `earn balance`, and tell the operator." : "Nothing was sent. Tell the operator why (reason)."
+      next_step: status === "completed" ? "Every call landed as confirmed. Report each hash to the operator; any `extra_transfer` is money the wallet moved besides the call \u2014 say so." : status === "stopped" ? "Stopped before every call landed. Do not retry blindly: read `reason` and the last transaction's `verified` and `detail`, check the account with `earn balance`, and tell the operator." : "No transaction was reported to this command. That is not proof that none was sent: if the wallet showed a confirmation, check the account with `earn balance` before any retry. Tell the operator why (reason)."
     },
     null,
     2

@@ -93,7 +93,7 @@ The agent returns unsigned calls for your signer. Preparing a deposit moves no m
 
 ## What is next
 
-The v0.1.2 cycle is open. In development: `treasury connect`, which hands each transaction to the
+The v0.1.2 cycle is open. It adds `treasury connect`, which hands each transaction to the
 operator's own wallet — a browser wallet, or an email or social login — for approval in the browser,
 with no copy-paste; and deposits on more chains, starting with Arbitrum. More yield configurations across the risk/return spectrum are
 coming.

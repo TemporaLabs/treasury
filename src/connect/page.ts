@@ -6,7 +6,7 @@
  * so it is found next to this module once bundled, and at `../../dist/` when run from source.
  *
  * The shell carries the visual tokens (temporalabs.com's palette) so the page is styled before the
- * bundle runs, and a CSP that admits exactly what Privy's modal needs and nothing else.
+ * bundle runs, and a CSP that admits what Privy's modal needs (scripts and connections by host; images from any HTTPS host).
  */
 import { readFileSync, realpathSync } from "node:fs";
 import { fileURLToPath, pathToFileURL } from "node:url";
@@ -39,7 +39,7 @@ export function readPageBundle(): Buffer {
       // try the next layout
     }
   }
-  throw new Error("the connect page is not built (dist/connect-page.js is missing) — run `npm run build`");
+  throw new Error("the connect page is not built (dist/connect-page.js is missing) — run `npm ci && npm run build` in connect-page/");
 }
 
 /** The HTML shell. `secret` authorises every request the page makes back to this process. */

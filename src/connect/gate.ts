@@ -11,8 +11,8 @@
  *     receiver = owner = the connected account.
  * Every call carries no value and names a supported chain that matches its vault.
  *
- * This is the "relay never builds or alters a call, and refuses any destination outside the
- * registry" rule of AGENTS.md / CONTRIBUTING.md, made executable. Paying an address other than the
+ * This is the rule of AGENTS.md / CONTRIBUTING.md that the relay refuses any destination outside
+ * the registry, made executable. Paying an address other than the
  * connected account is refused here on purpose: that is what the prepare commands are for, with the
  * operator's own signer.
  */

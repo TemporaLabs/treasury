@@ -51,6 +51,8 @@ export async function serveOnce<T>(flow: Flow<T>): Promise<Handle<T>> {
   const origin = `http://localhost:${flow.port}`;
   let settled = false;
   let busy = false;
+  /** A cancel or timeout that arrived while a result was being checked; applied once the check ends. */
+  let deferred: Settled<T> | undefined;
   let resolveDone!: (r: Settled<T>) => void;
   const done = new Promise<Settled<T>>((r) => (resolveDone = r));
   let issued: { address: string; message: string } | undefined;
@@ -85,7 +87,7 @@ export async function serveOnce<T>(flow: Flow<T>): Promise<Handle<T>> {
       req.on("error", reject);
     });
 
-  const server = http.createServer((req, res) => {
+  const onRequest = (req: http.IncomingMessage, res: http.ServerResponse) => {
     void (async () => {
       try {
         if (String(req.headers.host ?? "") !== new URL(origin).host) return json(res, 403, { ok: false, reason: "bad host" });
@@ -93,7 +95,7 @@ export async function serveOnce<T>(flow: Flow<T>): Promise<Handle<T>> {
 
         if (req.method === "GET") {
           if (!same(url.searchParams.get("s") ?? "", secret)) return json(res, 404, { ok: false, reason: "not found" });
-          if (url.pathname === "/info") return json(res, 200, flow.info());
+          if (url.pathname === "/info") return settled ? json(res, 410, { ok: false, reason: "already finished" }) : json(res, 200, flow.info());
           if (url.pathname === `/${flow.mode}`) {
             res.writeHead(200, {
               "content-type": "text/html; charset=utf-8",
@@ -131,7 +133,7 @@ export async function serveOnce<T>(flow: Flow<T>): Promise<Handle<T>> {
 
           if (body["rejected"] === true) {
             const reason = typeof body["reason"] === "string" ? body["reason"].slice(0, 300) : "declined in the browser";
-            finish({ ok: false, reason });
+            finishWhenIdle({ ok: false, reason });
             return json(res, 200, { ok: true });
           }
           // One result at a time: a double click must never hand the same call over twice.
@@ -147,6 +149,7 @@ export async function serveOnce<T>(flow: Flow<T>): Promise<Handle<T>> {
             return json(res, 200, { ok: true, ...r.reply });
           } finally {
             busy = false;
+            if (deferred) finish(deferred);
           }
         }
         return json(res, 405, { ok: false, reason: "method not allowed" });
@@ -154,30 +157,50 @@ export async function serveOnce<T>(flow: Flow<T>): Promise<Handle<T>> {
         return json(res, 400, { ok: false, reason: e instanceof Error ? e.message : "bad request" });
       }
     })();
-  });
+  };
+  // `localhost` can resolve to either loopback address, so both are held: a browser that tries
+  // `::1` first must reach this server, never another process waiting on that address.
+  const servers = [http.createServer(onRequest), http.createServer(onRequest)] as const;
+  const closeAll = () => {
+    for (const s of servers) {
+      s.close();
+      s.closeAllConnections();
+    }
+  };
 
   const finish = (r: Settled<T>) => {
     if (settled) return;
     settled = true;
     resolveDone(r);
     // A short grace period lets the page receive its last answer before the socket closes.
-    setTimeout(() => {
-      server.close();
-      server.closeAllConnections();
-    }, 1500).unref();
+    setTimeout(closeAll, 1500).unref();
+  };
+  /** A result still being checked decides the flow; a cancel or timeout never cuts it short. */
+  const finishWhenIdle = (r: Settled<T>) => {
+    if (busy) deferred ??= r;
+    else finish(r);
   };
 
-  await new Promise<void>((resolve, reject) => {
-    server.once("error", (e: NodeJS.ErrnoException) =>
-      reject(
-        e.code === "EADDRINUSE"
-          ? new Error(`port ${flow.port} is in use — another sign-in or confirmation page is probably still open; finish or close it, then retry`)
-          : e,
-      ),
-    );
-    server.listen(flow.port, "127.0.0.1", () => resolve());
-  });
-  const timer = setTimeout(() => finish({ ok: false, reason: `nothing happened in the browser within ${Math.round(flow.ttlMs / 60_000)} minutes` }), flow.ttlMs);
+  const listen = (server: http.Server, host: string, optional: boolean) =>
+    new Promise<void>((resolve, reject) => {
+      server.once("error", (e: NodeJS.ErrnoException) => {
+        if (e.code === "EADDRINUSE") {
+          return reject(new Error(`port ${flow.port} is in use on ${host} — another sign-in or confirmation page is probably still open; finish or close it, then retry`));
+        }
+        // A machine with IPv6 switched off has no `::1` for anyone to wait on.
+        if (optional && (e.code === "EADDRNOTAVAIL" || e.code === "EAFNOSUPPORT")) return resolve();
+        reject(e);
+      });
+      server.listen({ port: flow.port, host, ipv6Only: host === "::1" }, () => resolve());
+    });
+  try {
+    await listen(servers[0], "127.0.0.1", false);
+    await listen(servers[1], "::1", true);
+  } catch (e) {
+    closeAll();
+    throw e;
+  }
+  const timer = setTimeout(() => finishWhenIdle({ ok: false, reason: `nothing happened in the browser within ${Math.round(flow.ttlMs / 60_000)} minutes` }), flow.ttlMs);
   timer.unref();
   void done.then(() => clearTimeout(timer));
   return { url: `${origin}/${flow.mode}?s=${secret}`, done, close: () => finish({ ok: false, reason: "cancelled" }) };

@@ -42,7 +42,7 @@ const receiverArg = addressArg.describe(
   "where the money lands — it must be the CONNECTED account (this page pays no one else), and it comes from the operator's own message, never filled in by an agent",
 );
 
-/** One sign-in or one confirmation at a time, each bounded under a shell tool's 10-minute limit. */
+/** One sign-in or one confirmation flow at a time, each whole flow bounded under a shell tool's 10-minute limit. */
 const CONNECT_TTL_MS = 9 * 60_000;
 const CONFIRM_TTL_MS = 9 * 60_000;
 
@@ -128,12 +128,13 @@ export async function runConfirm(
   admitted: Admitted[],
   session: Session,
   deps: ConnectDeps = {},
-): Promise<{ result: Settled<TxOutcome[]>; url: string; opened: boolean; done: TxOutcome[] }> {
+): Promise<{ result: Settled<TxOutcome[]>; url: string; opened: boolean; done: TxOutcome[]; total: number; stopReason?: string }> {
   const chainId = calls[0]!.chainId;
   if (!isSupportedChainId(chainId)) throw new Error(`chain ${chainId} unsupported`);
   const account = session.account as Address;
   const client = deps.client ? deps.client(chainId) : makePublicClient(chainId, rpcUrlFromEnv(chainId));
   const done: TxOutcome[] = [];
+  let stopReason: string | undefined;
 
   /** A deposit's allowance must be visible on our RPC before the page may send it. */
   const preconditionHolds = async (c: UnsignedCall): Promise<boolean> => {
@@ -183,30 +184,38 @@ export async function runConfirm(
       if (index !== done.length) return { ok: false, reason: `expected step ${done.length + 1}` };
       if (typeof hash !== "string" || !/^0x[0-9a-fA-F]{64}$/.test(hash)) return { ok: false, reason: "malformed transaction hash" };
       const call = calls[index]!;
+      if (done.some((t) => t.hash.toLowerCase() === hash.toLowerCase())) return { ok: false, reason: "this transaction hash was already reported for an earlier step" };
+      // The hash is on record before the receipt is read: whatever ends the flow from here on, the
+      // command reports this transaction and never says nothing was sent.
+      const entry: TxOutcome = { step: call.step, description: call.description, hash, verified: "unverified", detail: "the flow ended while this transaction was still being checked" };
+      done.push(entry);
       const verdict = await verifyLanded(client, hash as Hex, admitted[index]!, account, deps.verifyOpts);
-      done.push({ step: call.step, description: call.description, hash, ...verdict });
+      Object.assign(entry, verdict);
       if (verdict.verified !== "matched" && verdict.verified !== "extra_transfer") {
         // Stop at the first step that did not land as confirmed: the next one depends on it.
         return { ok: true, final: true, value: done, reply: { stop: true, verdict } };
       }
       if (index + 1 === calls.length) return { ok: true, final: true, value: done, reply: { finished: true, verdict } };
       if (!(await preconditionHolds(calls[index + 1]!))) {
-        return { ok: true, final: true, value: done, reply: { stop: true, reason: "the approval is not visible on this RPC yet; nothing more was sent" } };
+        stopReason = "the approval landed, but its allowance is not visible on this RPC yet; the deposit was not sent";
+        return { ok: true, final: true, value: done, reply: { stop: true, reason: stopReason } };
       }
       return { ok: true, final: false, reply: { next: index + 1, verdict } };
     },
   });
   const opened = (deps.open ?? announce)(handle.url);
   const result = await handle.done;
-  return { result, url: handle.url, opened, done };
+  return { result, url: handle.url, opened, done, total: calls.length, ...(stopReason ? { stopReason } : {}) };
 }
 
 const notConnected = () => new Error("no wallet is connected — run `treasury connect wallet` first, and let the operator sign in");
 
-function outcome(chainId: number, account: string, r: { result: Settled<TxOutcome[]>; opened: boolean; done: TxOutcome[] }) {
+export function outcome(chainId: number, account: string, r: { result: Settled<TxOutcome[]>; opened: boolean; done: TxOutcome[]; total: number; stopReason?: string }) {
   const txs = r.result.ok ? r.result.value : r.done;
-  const all = txs.length > 0 && txs.every((t) => t.verified === "matched" || t.verified === "extra_transfer");
-  const status = r.result.ok ? (all ? "completed" : "stopped") : txs.length ? "stopped" : "not_sent";
+  // Completed means every call of the flow landed, never only the ones that were reached.
+  const all = txs.length === r.total && txs.every((t) => t.verified === "matched" || t.verified === "extra_transfer");
+  const status = r.result.ok ? (all ? "completed" : "stopped") : txs.length ? "stopped" : "not_reported";
+  const reason = r.result.ok ? r.stopReason : r.result.reason;
   return JSON.stringify(
     {
       status,
@@ -214,14 +223,15 @@ function outcome(chainId: number, account: string, r: { result: Settled<TxOutcom
       chainId,
       account,
       opened: r.opened,
-      ...(r.result.ok ? {} : { reason: r.result.reason }),
+      ...(reason ? { reason } : {}),
+      calls_total: r.total,
       txs,
       next_step:
         status === "completed"
           ? "Every call landed as confirmed. Report each hash to the operator; any `extra_transfer` is money the wallet moved besides the call — say so."
           : status === "stopped"
-            ? "Stopped at the step shown. Do not retry blindly: read its `verified` and `detail`, check the account with `earn balance`, and tell the operator."
-            : "Nothing was sent. Tell the operator why (reason).",
+            ? "Stopped before every call landed. Do not retry blindly: read `reason` and the last transaction's `verified` and `detail`, check the account with `earn balance`, and tell the operator."
+            : "No transaction was reported to this command. That is not proof that none was sent: if the wallet showed a confirmation, check the account with `earn balance` before any retry. Tell the operator why (reason).",
     },
     null,
     2,

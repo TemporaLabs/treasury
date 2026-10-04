@@ -5,8 +5,11 @@ how that sentence is made true in code rather than in a promise.
 
 ## The boundary
 
-Treasury has exactly two kinds of tool. READ tools query the chain and return facts. PREPARE tools
-return unsigned calls. There is no EXECUTE kind, and adding one is a design change the project refuses.
+Treasury has three kinds of command. READ commands query the chain and return facts. PREPARE commands
+return unsigned calls. CONNECT commands hand calls that passed a gate to the operator's own wallet,
+which asks for approval each time, and report what landed
+([below](#the-wallet-connection-treasury-connect)). Nothing in the package signs or holds a key, and
+a command that did would be a design change the project refuses.
 
 ```
    agent ──▶ Treasury ──▶ { requires_signature: true, status: "unsigned", calls: [...] }
@@ -83,26 +86,28 @@ can do is make an unsigned build impossible to mistake for a completed one, by s
 `treasury connect` hands calls to the operator's own wallet; it does not sign. What protects that path:
 
 - **A page on the operator's own machine, for one flow.** Each sign-in or confirmation starts a server
-  on `127.0.0.1` that answers only requests carrying its random secret, its own `Host`, and (for
+  on the machine's two loopback addresses (`127.0.0.1` and `::1`) that answers only requests carrying its random secret, its own `Host`, and (for
   every POST) its own `Origin`, takes one result at a time, and closes itself when the flow ends or
   after nine minutes. Nothing is hosted by Tempora.
 - **The account is proven, not claimed.** Both sign-in paths — a browser wallet, or a Privy embedded
   wallet from an email or social login — sign a free sign-in message whose nonce is the flow's
-  secret, and the signature is checked locally. The session file records only the address, how it
-  signed in and when, owner-readable only; it holds no credential.
+  secret. An ordinary wallet's signature is checked offline; a smart-contract wallet's is checked by
+  asking its contract through your Base RPC. The session file records only the address, how the page
+  said it signed in, and when; it is created owner-readable only and holds no credential.
 - **A gate before any page opens** (`src/connect/gate.ts`). Calls are built by the same builders as the
   prepare commands, then re-checked from the calldata alone: an `approve` only on a listed vault's
   asset, only to that vault, for exactly the deposit that follows, never unlimited; a `deposit`,
   `withdraw` or `redeem` only on a listed vault, paying and burning only for the connected account;
   no attached value. Anything else is refused before the operator is asked anything.
-- **The operator confirms every call twice:** on the page, which shows the decoded call, the vault, its
-  address and explorer link; and in the wallet's own prompt (the extension, or Privy's dialog).
+- **The operator confirms every call twice:** on the page, which shows the builder's description of the call
+  (amount, vault, receiver), the vault, its address and explorer link; and in the wallet's own prompt
+  (the extension, or Privy's dialog, which the page always asks Privy to show).
 - **What landed is read from the receipt.** A smart-account wallet relays a call inside a batch, so the
   transaction's own `from`/`to` name a relayer. The check is the vault's or token's own event for the
   connected account and the exact amount; any other movement of the asset out of the account in the
   same transaction is reported as `extra_transfer`, never folded into a match. The next call is
   offered only after the previous one is confirmed this way.
 - **No WalletConnect code ships.** The page bundle stubs out every `@walletconnect` / `@reown` module
-  (their licence is not open source) and its build fails if one returns; the page's CSP also blocks
+  (some are under a licence that is not open source) and its build fails if one returns; the page's CSP also blocks
   WalletConnect's servers. The Privy app ID in the page is a public identifier; no Privy secret
   exists anywhere in this package.

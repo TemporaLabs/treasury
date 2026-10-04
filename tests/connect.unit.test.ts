@@ -8,7 +8,7 @@ import { erc4626Abi } from "../src/abi/erc4626.js";
 import { buildDeposit, buildWithdraw } from "../src/build.js";
 import { admit, type GateCall } from "../src/connect/gate.js";
 import { verifyLanded } from "../src/connect/verify.js";
-import { runConfirm, runConnect, signInMessage } from "../src/connect/commands.js";
+import { outcome, runConfirm, runConnect, signInMessage } from "../src/connect/commands.js";
 import { readSession, writeSession } from "../src/connect/session.js";
 import { defaultVault, listVaults } from "../src/registry.js";
 
@@ -277,6 +277,86 @@ describe("confirm: one call at a time, each checked on its receipt before the ne
     const r = await run;
     expect(r.result.ok && r.result.value).toHaveLength(1);
     expect(r.result.ok && r.result.value[0]!.verified).toBe("reverted");
+  });
+
+  it("an approval whose allowance never shows is reported as stopped, never completed", async () => {
+    writeSession({ account: ACCOUNT, walletType: "external", connectedAtIso: "" });
+    const calls = buildDeposit(vault, { assetsHuman: "0.6", receiver: ACCOUNT, account: ACCOUNT });
+    const client = () => ({
+      getTransactionReceipt: async () => ({ status: "success", logs: [approvalLog(ACCOUNT, vault.address, 600_000n)] }) as never,
+      readContract: async () => 0n as never,
+    });
+    let url = "";
+    const run = runConfirm(calls, admit(asGate(calls), ACCOUNT), readSession()!, { open: (u) => ((url = u), true), client, verifyOpts: { attempts: 1, delayMs: 1 } });
+    await new Promise((r) => setTimeout(r, 50));
+    expect((await (await page(url).post("/result", { index: 0, hash: `0x${"01".repeat(32)}` })).json()) as { stop: boolean }).toMatchObject({ stop: true });
+    const out = JSON.parse(outcome(vault.chainId, ACCOUNT, await run)) as { status: string; reason: string; calls_total: number; txs: unknown[] };
+    expect(out.status).toBe("stopped");
+    expect(out.reason).toMatch(/deposit was not sent/);
+    expect([out.txs.length, out.calls_total]).toEqual([1, 2]);
+  });
+
+  it("a cancel that arrives while a sent transaction is being checked never hides that transaction", async () => {
+    writeSession({ account: ACCOUNT, walletType: "external", connectedAtIso: "" });
+    const calls = buildDeposit(vault, { assetsHuman: "0.6", receiver: ACCOUNT, account: ACCOUNT });
+    const h1 = `0x${"01".repeat(32)}`;
+    const client = () => ({
+      getTransactionReceipt: async () => {
+        await new Promise((r) => setTimeout(r, 300));
+        return { status: "success", logs: [approvalLog(ACCOUNT, vault.address, 600_000n)] } as never;
+      },
+      readContract: async () => 600_000n as never,
+    });
+    let url = "";
+    const run = runConfirm(calls, admit(asGate(calls), ACCOUNT), readSession()!, { open: (u) => ((url = u), true), client, verifyOpts: { attempts: 1, delayMs: 1 } });
+    await new Promise((r) => setTimeout(r, 50));
+    const p = page(url);
+    const inFlight = p.post("/result", { index: 0, hash: h1 });
+    await new Promise((r) => setTimeout(r, 100));
+    let ended = false;
+    void run.then(() => (ended = true));
+    await p.post("/result", { rejected: true, reason: "cancelled in a second tab" });
+    await new Promise((r) => setTimeout(r, 30));
+    // The cancel waits for the check in flight: the command must not return before the verdict.
+    expect(ended).toBe(false);
+    await inFlight;
+    const out = JSON.parse(outcome(vault.chainId, ACCOUNT, await run)) as { status: string; reason: string; txs: { hash: string; verified: string }[] };
+    expect(out.status).toBe("stopped");
+    expect(out.txs.map((t) => [t.hash, t.verified])).toEqual([[h1, "matched"]]);
+    expect(out.reason).toMatch(/second tab/);
+  });
+
+  it("with no transaction reported, the result does not claim that nothing was sent", async () => {
+    writeSession({ account: ACCOUNT, walletType: "external", connectedAtIso: "" });
+    const calls = buildDeposit(vault, { assetsHuman: "0.6", receiver: ACCOUNT, account: ACCOUNT });
+    let url = "";
+    const run = runConfirm(calls, admit(asGate(calls), ACCOUNT), readSession()!, { open: (u) => ((url = u), true), client: () => ({ getTransactionReceipt: async () => ({}) as never, readContract: async () => 0n as never }) });
+    await new Promise((r) => setTimeout(r, 50));
+    const p = page(url);
+    await p.post("/result", { rejected: true, reason: "declined" });
+    const out = JSON.parse(outcome(vault.chainId, ACCOUNT, await run)) as { status: string; next_step: string };
+    expect(out.status).toBe("not_reported");
+    expect(out.next_step).toMatch(/not proof that none was sent/);
+    // A page left open after the flow ended is told so before it asks the wallet for anything.
+    expect((await fetch(url.replace("/confirm?", "/info?"))).status).toBe(410);
+  });
+
+  it("holds both loopback addresses, so no other process can answer for `localhost`", async () => {
+    writeSession({ account: ACCOUNT, walletType: "external", connectedAtIso: "" });
+    const calls = buildWithdraw(vault, { receiver: ACCOUNT, owner: ACCOUNT, assetsHuman: "1" });
+    let url = "";
+    const run = runConfirm(calls, admit(asGate(calls), ACCOUNT), readSession()!, { open: (u) => ((url = u), true), client: () => ({ getTransactionReceipt: async () => ({}) as never, readContract: async () => 0n as never }) });
+    await new Promise((r) => setTimeout(r, 50));
+    const port = Number(new URL(url).port);
+    const code = await new Promise<string>((resolve) => {
+      const s = createServer();
+      s.once("error", (e: NodeJS.ErrnoException) => resolve(e.code ?? "error"));
+      s.listen({ port, host: "::1", ipv6Only: true }, () => s.close(() => resolve("bound")));
+    });
+    // A machine with IPv6 switched off has no `::1` to take; anywhere else the address is ours.
+    expect(["EADDRINUSE", "EADDRNOTAVAIL", "EAFNOSUPPORT"]).toContain(code);
+    await page(url).post("/result", { rejected: true });
+    await run;
   });
 });
 

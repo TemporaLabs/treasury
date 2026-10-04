@@ -6,7 +6,7 @@
  * by itself — every transaction is still confirmed by the operator in the browser and in their
  * wallet — it only fixes WHICH account the confirm page will accept and pay.
  */
-import { mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { chmodSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
 import { getAddress, isAddress } from "viem";
@@ -43,6 +43,8 @@ export function readSession(): Session | undefined {
 export function writeSession(s: Session): void {
   mkdirSync(dir(), { recursive: true, mode: 0o700 });
   writeFileSync(sessionPath(), `${JSON.stringify(s, null, 2)}\n`, { mode: 0o600 });
+  // `mode` applies only when the file is created; an existing file keeps its own.
+  chmodSync(sessionPath(), 0o600);
 }
 
 export function clearSession(): boolean {

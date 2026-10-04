@@ -37,8 +37,8 @@ third party. Review every transaction your signer is asked to sign.
 
 ## The client
 
-- **It prepares; it does not execute.** Nothing has happened until your signer's transactions
-  confirm. If a tool result and the chain disagree, the chain is right.
+- **It prepares; it does not sign.** Nothing has happened until your signer's or your wallet's
+  transactions confirm. If a tool result and the chain disagree, the chain is right.
 - **A quote is a simulation at one block.** State can change between the quote and the signed
   transaction. The builders carry a gas buffer for exactly this; the `precondition` on a call says what
   must still be true when it is sent.

@@ -222,7 +222,7 @@ function Connect() {
       {!phase.done && (
         <button className="oat-btn" disabled={!ready || phase.busy} onClick={() => login()}>
           <ButtonIcon />
-          Connect wallet
+          Connect
         </button>
       )}
       <Status phase={phase} />
@@ -232,7 +232,7 @@ function Connect() {
 }
 
 function Confirm({ info }: { info: Extract<Info, { mode: "confirm" }> }) {
-  const { ready, authenticated } = usePrivy();
+  const { ready, authenticated, logout } = usePrivy();
   const { wallets } = useWallets();
   const { login } = useLogin();
   const [next, setNext] = useState(info.next);
@@ -243,6 +243,7 @@ function Confirm({ info }: { info: Extract<Info, { mode: "confirm" }> }) {
 
   const send = useCallback(async () => {
     if (!wallet || !call) return;
+    let hash: string | undefined;
     try {
       setPhase({ text: "Check your wallet and confirm.", busy: true });
       await wallet.switchChain(info.chainId);
@@ -250,7 +251,9 @@ function Confirm({ info }: { info: Extract<Info, { mode: "confirm" }> }) {
       const tx = { from: wallet.address, to: call.to, data: call.data, value: call.value };
       // Gas: the estimate × 1.5. A Morpho Vault V2 call can run out of gas on an unbuffered estimate.
       const est = BigInt((await provider.request({ method: "eth_estimateGas", params: [tx] })) as string);
-      const hash = (await provider.request({ method: "eth_sendTransaction", params: [{ ...tx, gas: `0x${((est * 3n) / 2n).toString(16)}` }] })) as string;
+      // The page may have sat open past the flow's time limit; ask before the wallet is asked.
+      if (!(await fetch(`/info?s=${secret}`).then((r) => r.ok, () => false))) throw new Error("this page has expired; run the command again");
+      hash = (await provider.request({ method: "eth_sendTransaction", params: [{ ...tx, gas: `0x${((est * 3n) / 2n).toString(16)}` }] })) as string;
       setPhase({ text: "Sent. Waiting for it to land.", busy: true });
       const r = await post("/result", { index: next, hash });
       if (!r.ok) throw new Error(r.reason ?? "refused");
@@ -264,6 +267,8 @@ function Confirm({ info }: { info: Extract<Info, { mode: "confirm" }> }) {
       setPhase({ text: "Confirmed on chain. Review the next step." });
     } catch (e) {
       const text = errText(e);
+      // Once the wallet has returned a hash the transaction is out, whatever failed afterwards.
+      if (hash) return setPhase({ text: `Sent, but not confirmed here: ${hash}. Look it up before trying again. (${text})`, tone: "bad", done: true });
       setPhase({ text: `Not sent: ${text}`, tone: "bad", done: true });
       await reject(text);
     }
@@ -315,11 +320,18 @@ function Confirm({ info }: { info: Extract<Info, { mode: "confirm" }> }) {
           <p className="oat-status">Loading.</p>
         ) : !authenticated || !wallet ? (
           <>
-            <button className="oat-btn" onClick={() => login()}>
+            <button className="oat-btn" onClick={() => void (authenticated ? logout().then(() => login()) : login())}>
               <ButtonIcon />
-              Sign in with Privy
+              {authenticated ? "Sign out and sign in again" : "Sign in with Privy"}
             </button>
-            <p className="oat-fine">Sign in again with the connected wallet ({info.walletType === "embedded" ? "the same email or social login" : "the same browser wallet"}) to continue.</p>
+            <p className="oat-fine">
+              {authenticated
+                ? `The connected wallet ${info.account} is not available here. Unlock it or select it in your wallet, or sign out and sign in with it.`
+                : `Sign in again with the connected wallet (${info.walletType === "embedded" ? "the same email or social login" : "the same browser wallet"}) to continue.`}
+            </p>
+            <button className="oat-text" onClick={() => void cancel()}>
+              Cancel
+            </button>
           </>
         ) : (
           <>
@@ -355,7 +367,7 @@ async function main() {
         // wallets already installed in this browser (no WalletConnect).
         loginMethods: ["google", "email", "twitter", "apple", "wallet"],
         externalWallets: { walletConnect: { enabled: false } },
-        embeddedWallets: { ethereum: { createOnLogin: "users-without-wallets" } },
+        embeddedWallets: { ethereum: { createOnLogin: "users-without-wallets" }, showWalletUIs: true },
         supportedChains: [base, arbitrum],
         defaultChain: base,
       }}
