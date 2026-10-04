@@ -30,7 +30,9 @@ Pre-1.0, minor versions may change tool names, schemas and behaviour.
 - **`treasury connect wallet | deposit | withdraw | status | disconnect`.** `connect wallet` opens a page
   on the operator's machine with one Connect button and Privy's window: a browser wallet (MetaMask,
   Rabby, Coinbase Wallet), or an email, Google, Apple or X login with a Privy embedded wallet. The
-  wallet signs a free sign-in message: checked offline for an ordinary wallet, and through its contract
+  wallets already installed in the browser are on the window's first screen, ahead of email and
+  Google (four entries in all, so several installed wallets push those under "More options"); Apple,
+  X and Coinbase Wallet are one click further. The wallet signs a free sign-in message: checked offline for an ordinary wallet, and through its contract
   on Base for a smart-contract wallet. `connect deposit` / `connect withdraw` build
   the calls for the connected account, refuse anything outside the registry or paying anyone
   else (and any batch other than approve + deposit, withdraw or redeem on one vault and one chain,
