@@ -39368,7 +39368,7 @@ var DISCLOSURES = {
     "A withdrawal is served from the vault's liquid balance and then by unwinding its positions. In stressed conditions part of a position may not be withdrawable immediately; earn_balance reports what is exitable now, simulated at the current block.",
     "Deposits into a whitelist-gated vault are accepted only from accounts the fund has admitted. Withdrawals are public: an account that holds shares can always leave.",
     "The vault's current holdings, weights and fees are on-chain and publicly readable at the vault's address.",
-    "The default vault is a Tempora-curated destination. Tempora can set fees on it as curator (a management fee and a performance fee, both readable on-chain; check them before depositing). This client offers it because it is Tempora's, not because it is the best-yielding vault available."
+    "Each default vault, and the demo vault, is a Tempora-curated destination. Tempora can set fees on it as curator (a management fee and a performance fee, both readable on-chain; check them before depositing). This client offers it because it is Tempora's, not because it is the best-yielding vault available."
   ],
   clientNotes: [
     "This client prepares unsigned calls only. It cannot sign, send, or move funds; the operator's own signer does that, and the operator is responsible for what it signs.",
