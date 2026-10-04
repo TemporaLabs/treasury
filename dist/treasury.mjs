@@ -39228,12 +39228,16 @@ async function quoteWithdraw(args) {
     if (obs) {
       simulated = "REVERTED";
       const reason = obs.reason ?? "";
+      const said = reason || obs.selector || "no reason returned";
       if (toBurn !== void 0 && held < toBurn) {
-        note = `withdraw() reverted: the owner holds ${formatAmount(held, vault.shareDecimals)} ${vault.symbol} against ${formatAmount(toBurn, vault.shareDecimals)} needed \u2014 insufficient shares. (${reason || obs.selector})`;
-      } else if (/transfer amount exceeds balance|ERC20InsufficientBalance/i.test(reason) || liquid < assets2) {
-        note = `withdraw() reverted: the vault holds ${formatAmount(liquid, vault.asset.decimals)} ${vault.asset.symbol} liquid against ${formatAmount(assets2, vault.asset.decimals)} requested \u2014 this chassis pays withdrawals from its own balance in the same block; the rest is deployed and needs the fund to unwind first. Withdraw at most the liquid amount now, or wait. maxWithdraw() (${maxW === void 0 ? "reverted" : formatAmount(maxW, vault.asset.decimals)}) does not know this.`;
+        note = `withdraw() reverted: the owner holds ${formatAmount(held, vault.shareDecimals)} ${vault.symbol} against ${formatAmount(toBurn, vault.shareDecimals)} needed \u2014 insufficient shares. (${said})`;
+      } else if (vault.chassis === "fusion" && (/transfer amount exceeds balance|ERC20InsufficientBalance/i.test(reason) || liquid < assets2)) {
+        note = `withdraw() reverted ("${said}"): the vault holds ${formatAmount(liquid, vault.asset.decimals)} ${vault.asset.symbol} liquid against ${formatAmount(assets2, vault.asset.decimals)} requested \u2014 this chassis pays withdrawals from its own balance in the same block; the rest is deployed and needs the fund to unwind first. Withdraw at most the liquid amount now, or wait. maxWithdraw() (${maxW === void 0 ? "reverted" : formatAmount(maxW, vault.asset.decimals)}) does not know this.`;
+      } else if (vault.chassis === "morpho-v2") {
+        const shares = toBurn === void 0 ? "previewWithdraw reverted, so the shares needed are unknown" : `the owner holds enough shares (${formatAmount(held, vault.shareDecimals)} against ${formatAmount(toBurn, vault.shareDecimals)} needed)`;
+        note = `withdraw() reverted "${said}" for ${formatAmount(assets2, vault.asset.decimals)} ${vault.asset.symbol}; ${shares}. A Morpho Vault V2 pays a withdrawal from its idle ${vault.asset.symbol} and then through its liquidity adapter, so the revert can come from the vault or from a market it withdraws from; the reason above is the chain's own. A smaller amount may still pass: quote it before preparing anything.`;
       } else {
-        note = `withdraw() reverted "${reason || obs.selector}" \u2014 not a balance or liquidity shortfall; treat as a vault-side refusal.`;
+        note = `withdraw() reverted "${said}" \u2014 not a balance or liquidity shortfall; treat as a vault-side refusal.`;
       }
     } else {
       note = `simulation did not return a definite revert: ${describeError(e, 160)}`;
