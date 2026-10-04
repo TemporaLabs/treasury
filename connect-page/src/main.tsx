@@ -32,7 +32,24 @@ type Call = {
 };
 type Info =
   | { mode: "connect"; appId: string }
-  | { mode: "confirm"; appId: string; account: string; walletType: WalletType; chainId: number; chainName: string; next: number; calls: Call[] };
+  | {
+      mode: "confirm";
+      appId: string;
+      account: string;
+      walletType: WalletType;
+      chainId: number;
+      chainName: string;
+      next: number;
+      calls: Call[];
+      /** Prefix of a transaction's explorer page; the hash goes on the end. */
+      txBase: string;
+      asset: { symbol: string; decimals: number };
+      nativeSymbol: string;
+      /** Raw units, read when the page opened; absent when the read failed. */
+      balances?: { asset: string; native?: string };
+      /** Raw units of the asset the deposit pulls; absent for a withdrawal. */
+      needs?: string;
+    };
 
 async function post(path: string, body: Record<string, unknown>): Promise<Record<string, unknown> & { ok: boolean; reason?: string }> {
   const r = await fetch(path, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ s: secret, ...body }) });
@@ -41,7 +58,22 @@ async function post(path: string, body: Record<string, unknown>): Promise<Record
 const reject = (reason: string, sent?: { hash: string; index: number }) => post("/result", { rejected: true, reason, ...sent }).catch(() => undefined);
 const errText = (e: unknown) => (e instanceof Error ? e.message : typeof e === "object" && e && "message" in e ? String((e as { message: unknown }).message) : String(e));
 
-type Phase = { text: string; tone?: "ok" | "bad"; busy?: boolean; done?: boolean };
+type Phase = { text: string; tone?: "ok" | "bad"; busy?: boolean; done?: boolean; retry?: boolean };
+
+/** A wallet's "no": EIP-1193 code 4001, or the words wallets use for it. Nothing was sent. */
+const rejected = (e: unknown) => {
+  const code = typeof e === "object" && e && "code" in e ? (e as { code: unknown }).code : undefined;
+  return code === 4001 || code === "ACTION_REJECTED" || /user (rejected|denied|cancel+ed)|rejected the request|request rejected/i.test(errText(e));
+};
+
+/** Raw units as a person reads them: no trailing zeros, at most six decimals. */
+function fmt(raw: string | bigint, decimals: number): string {
+  const v = BigInt(raw);
+  const unit = 10n ** BigInt(decimals);
+  const whole = v / unit;
+  const frac = (v % unit).toString().padStart(decimals, "0").slice(0, 6).replace(/0+$/, "");
+  return frac ? `${whole}.${frac}` : whole.toString();
+}
 
 const actionName = (c: Call) =>
   c.kind === "approve" ? `Approve ${c.vault.asset}` : c.kind === "deposit" ? `Deposit ${c.vault.asset}` : c.kind === "withdraw" ? `Withdraw ${c.vault.asset}` : "Withdraw everything";
@@ -175,11 +207,37 @@ function Connect() {
       setConnected({ address: wallet.address, walletType, ...(walletType === "external" && wallet.meta?.name ? { name: wallet.meta.name } : {}) });
       setPhase({ text: "", done: true });
     } catch (e) {
-      const text = errText(e);
-      setPhase({ text: `Not connected: ${text}`, tone: "bad", done: true });
-      await reject(text);
+      // The server keeps the flow open after a refused proof, so the operator can sign in again,
+      // with the same account or another one, or cancel.
+      setPhase({ text: `Not connected: ${rejected(e) ? "the sign-in message was declined in the wallet" : errText(e)}.`, tone: "bad", retry: true });
     }
   }, []);
+
+  // Sign out, then open Privy's window once the sign-out has reached Privy's own state: calling
+  // login() while it still reads as signed in does nothing.
+  const [relogin, setRelogin] = useState(false);
+  const again = useCallback(async () => {
+    setPhase({ text: "", busy: true });
+    started.current = false;
+    setMethod(null);
+    setRelogin(true);
+    try {
+      await logout();
+    } catch {
+      // a session that will not end is replaced by the next login anyway
+    }
+  }, [logout]);
+  useEffect(() => {
+    if (!relogin || !ready || authenticated) return;
+    setRelogin(false);
+    setPhase({ text: "" });
+    login();
+  }, [relogin, ready, authenticated, login]);
+
+  const giveUp = async () => {
+    setPhase({ text: "Cancelled. No wallet was connected.", tone: "bad", done: true });
+    await reject("cancelled by the operator on the sign-in page");
+  };
 
   useEffect(() => {
     if (!ready || !walletsReady || !authenticated || !method || started.current) return;
@@ -219,11 +277,23 @@ function Connect() {
           </li>
         </ul>
       </section>
-      {!phase.done && (
-        <button className="oat-btn" disabled={!ready || phase.busy} onClick={() => login()}>
-          <ButtonIcon />
-          Connect
-        </button>
+      {phase.retry ? (
+        <>
+          <button className="oat-btn" onClick={() => void again()}>
+            <ButtonIcon />
+            Sign in again
+          </button>
+          <button className="oat-text" onClick={() => void giveUp()}>
+            Cancel
+          </button>
+        </>
+      ) : (
+        !phase.done && (
+          <button className="oat-btn" disabled={!ready || phase.busy} onClick={() => login()}>
+            <ButtonIcon />
+            Connect
+          </button>
+        )
       )}
       <Status phase={phase} />
       <p className="oat-fine">Connecting is free. Sign in through Privy with a browser wallet, email, Google, Apple or X.</p>
@@ -240,23 +310,46 @@ function Confirm({ info }: { info: Extract<Info, { mode: "confirm" }> }) {
   const wallet = wallets.find((w) => w.address.toLowerCase() === info.account.toLowerCase());
   const call = info.calls[next];
   const shown = call ?? info.calls[info.calls.length - 1]!;
+  const [sent, setSent] = useState<{ step: number; hash: string }[]>([]);
+
+  // What the wallet held when the page opened, and what that means for the steps still to go.
+  const held = info.balances ? BigInt(info.balances.asset) : undefined;
+  const amount = (raw: string | bigint) => `${fmt(raw, info.asset.decimals)} ${info.asset.symbol}`;
+  const depositAhead = info.needs !== undefined && info.calls.slice(next).some((c) => c.kind === "deposit");
+  const shortfall =
+    held === undefined
+      ? undefined
+      : depositAhead && held < BigInt(info.needs!)
+        ? held === 0n && info.balances?.native === "0" && info.walletType === "embedded"
+          ? `This is a new wallet with nothing in it yet: send ${amount(info.needs!)} and a little ${info.nativeSymbol} on ${info.chainName} to ${info.account} first.`
+          : `The deposit needs ${amount(info.needs!)}; this wallet holds ${amount(held)} on ${info.chainName}. Add ${info.asset.symbol} to it first.`
+        : info.balances?.native === "0"
+          ? `This wallet has no ${info.nativeSymbol} on ${info.chainName} for the network fee. Add a little first, unless your wallet pays fees another way.`
+          : undefined;
 
   const send = useCallback(async () => {
     if (!wallet || !call) return;
     let hash: string | undefined;
+    // How far it got decides what an error means: before "send" nothing can have gone out.
+    let stage: "prepare" | "estimate" | "send" = "prepare";
     try {
       setPhase({ text: "Check your wallet and confirm.", busy: true });
       await wallet.switchChain(info.chainId);
       const provider = await wallet.getEthereumProvider();
       const tx = { from: wallet.address, to: call.to, data: call.data, value: call.value };
       // Gas: the estimate × 1.5. A Morpho Vault V2 call can run out of gas on an unbuffered estimate.
+      stage = "estimate";
       const est = BigInt((await provider.request({ method: "eth_estimateGas", params: [tx] })) as string);
+      stage = "prepare";
       // The page may have sat open past the flow's time limit; ask before the wallet is asked, and
       // leave a minute for the wallet's own prompt.
       const live = (await fetch(`/info?s=${secret}`).then((r) => (r.ok ? r.json() : undefined), () => undefined)) as { msLeft?: number } | undefined;
       if (!live) throw new Error("this page has expired; run the command again");
       if ((live.msLeft ?? 0) < 60_000) throw new Error("less than a minute is left on this page; run the command again");
+      stage = "send";
       hash = (await provider.request({ method: "eth_sendTransaction", params: [{ ...tx, gas: `0x${((est * 3n) / 2n).toString(16)}` }] })) as string;
+      const sentHash = hash;
+      setSent((s) => [...s, { step: call.step, hash: sentHash }]);
       setPhase({ text: "Sent. Waiting for it to land.", busy: true });
       const r = await post("/result", { index: next, hash });
       if (!r.ok) throw new Error(r.reason ?? "refused");
@@ -272,13 +365,24 @@ function Confirm({ info }: { info: Extract<Info, { mode: "confirm" }> }) {
       const text = errText(e);
       // Once the wallet has returned a hash the transaction is out, whatever failed afterwards.
       if (hash) {
-        setPhase({ text: `Sent, but not confirmed here: ${hash}. Look it up before trying again. (${text})`, tone: "bad", done: true });
+        setPhase({ text: `Sent, but not confirmed here. Look it up before trying again. (${text})`, tone: "bad", done: true });
         return void (await reject(text, { hash, index: next }));
+      }
+      // A "no" in the wallet sends nothing: the page stays open to confirm again or cancel.
+      if (rejected(e)) return setPhase({ text: "You declined it in your wallet. Nothing was sent. Confirm again, or cancel.", tone: "bad" });
+      // The wallet could not prepare it, most often for want of funds: fix that and try again here.
+      if (stage === "estimate") {
+        return setPhase({ text: `Your wallet could not prepare this transaction: ${text}.${shortfall ? ` ${shortfall}` : ""} Fix that and confirm again, or cancel.`, tone: "bad" });
+      }
+      // The wallet was asked to send and failed without a hash: whether it went out is not known here.
+      if (stage === "send") {
+        setPhase({ text: `Your wallet returned an error without a transaction hash, so this page cannot tell whether it was sent: ${text}. Check your wallet's activity before running the command again.`, tone: "bad", done: true });
+        return void (await reject(`the wallet returned an error without a transaction hash; it may or may not have been sent: ${text}`));
       }
       setPhase({ text: `Not sent: ${text}`, tone: "bad", done: true });
       await reject(text);
     }
-  }, [wallet, call, info.chainId, info.calls.length, next]);
+  }, [wallet, call, info.chainId, info.calls.length, next, shortfall]);
 
   const cancel = async () => {
     setPhase({ text: "Cancelled. Nothing more will be sent.", tone: "bad", done: true });
@@ -300,6 +404,17 @@ function Confirm({ info }: { info: Extract<Info, { mode: "confirm" }> }) {
         </ol>
       )}
       <WalletBox address={info.account} walletType={info.walletType} network={info.chainName} />
+      {held !== undefined && !phase.done && (
+        <p className="oat-fine">
+          When this page opened, this wallet held {amount(held)}
+          {info.balances?.native !== undefined ? ` and ${fmt(info.balances.native, 18)} ${info.nativeSymbol}` : ""} on {info.chainName}.
+        </p>
+      )}
+      {shortfall && !phase.done && (
+        <p className="oat-status" data-tone="bad">
+          {shortfall}
+        </p>
+      )}
       <section className="oat-panel">
         <p className="oat-what">{shown.description}</p>
         <dl className="oat-dl">
@@ -355,6 +470,18 @@ function Confirm({ info }: { info: Extract<Info, { mode: "confirm" }> }) {
           </>
         ))}
       <Status phase={phase} />
+      {sent.length > 0 && (
+        <ul className="oat-fine oat-sent" aria-label="Transactions sent">
+          {sent.map((t) => (
+            <li key={t.hash}>
+              {info.calls.length > 1 ? `Step ${t.step}: ` : "Transaction: "}
+              <a className="oat-mono" href={`${info.txBase}${t.hash}`} target="_blank" rel="noreferrer">
+                {t.hash}
+              </a>
+            </li>
+          ))}
+        </ul>
+      )}
     </Page>
   );
 }

@@ -70,6 +70,7 @@ li[data-state="done"] .oat-step-mark { background: rgba(31, 122, 74, .12); borde
 .oat-dl a { color: var(--navy); }
 
 .oat-status { margin: 0; font-size: 14.5px; color: var(--slate); text-align: center; }
+.oat-sent { list-style: none; padding: 0; display: grid; gap: 4px; }
 .oat-status[data-tone="ok"] { color: var(--ok); }
 .oat-status[data-tone="bad"] { color: var(--bad); }
 `;

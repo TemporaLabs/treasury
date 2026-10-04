@@ -38693,6 +38693,11 @@ function linksFor(vault) {
   if (app) links.app = app;
   return links;
 }
+function explorerTxUrl(chainId, hash4) {
+  const explorer = EXPLORER[chainId];
+  if (explorer === void 0) throw new Error(`no block explorer is recorded for chain ${chainId}; add it to EXPLORER in src/links.ts`);
+  return `${explorer.replace(/address\/$/, "tx/")}${hash4}`;
+}
 
 // src/version.ts
 import { readFileSync as readFileSync2, realpathSync as realpathSync2 } from "fs";
@@ -39813,7 +39818,7 @@ function admit(calls, account) {
     const name = decoded.functionName;
     const args = decoded.args ?? [];
     const canonical = encodeFunctionData({ abi: erc4626Abi, functionName: name, args });
-    if (canonical !== c.data) throw new Error(`refused (${at}): its calldata is not the canonical encoding of ${name} (extra bytes, or stray bits in an address)`);
+    if (canonical !== c.data) throw new Error(`refused (${at}): its calldata is not the canonical encoding of ${name} (trailing bytes, stray bits in an address, or hex not in lowercase)`);
     if (name === "approve") {
       const vault2 = vaults.find((v) => v.chainId === c.chainId && same(v.asset.address, c.to));
       if (!vault2) throw new Error(`refused (${at}): approve on ${c.to}, which is not the asset of a listed vault on chain ${c.chainId}`);
@@ -40257,14 +40262,10 @@ async function runConnect(deps = {}) {
   if (result.ok) writeSession(result.value);
   return { result, url: handle.url, opened };
 }
-async function runConfirm(calls, admitted, session, deps = {}) {
+async function runConfirm(calls, session, deps = {}) {
+  const admitted = admit(calls, session.account);
   const chainId = calls[0].chainId;
   if (!isSupportedChainId(chainId)) throw new Error(`chain ${chainId} unsupported`);
-  const linedUp = calls.length === admitted.length && calls.every((c, i) => {
-    const a = admitted[i];
-    return c.chainId === chainId && a.vault.chainId === chainId && getAddress(c.to) === getAddress(a.kind === "approve" ? a.vault.asset.address : a.vault.address);
-  });
-  if (!linedUp) throw new Error("the calls and their admitted checks do not line up");
   const account = session.account;
   const client = deps.client ? deps.client(chainId) : makePublicClient(chainId, rpcUrlFromEnv(chainId));
   const done = [];
@@ -40287,6 +40288,16 @@ async function runConfirm(calls, admitted, session, deps = {}) {
     }
     return false;
   };
+  const asset = admitted[0].vault.asset;
+  const readBalances = async () => {
+    const [held, native] = await Promise.all([
+      client.readContract({ address: asset.address, abi: erc4626Abi, functionName: "balanceOf", args: [account] }),
+      client.getBalance ? client.getBalance({ address: account }) : Promise.resolve(void 0)
+    ]);
+    return { asset: held.toString(), ...native !== void 0 ? { native: native.toString() } : {} };
+  };
+  const balances = await Promise.race([readBalances().catch(() => void 0), new Promise((r) => setTimeout(() => r(void 0), deps.balanceTimeoutMs ?? 5e3))]);
+  const deposit = admitted.find((a) => a.kind === "deposit");
   const handle = await serveOnce({
     mode: "confirm",
     ttlMs,
@@ -40320,6 +40331,11 @@ async function runConfirm(calls, admitted, session, deps = {}) {
       chainId,
       chainName: CHAIN_INFO[chainId].name,
       next: done.length,
+      txBase: explorerTxUrl(chainId, ""),
+      asset: { symbol: asset.symbol, decimals: asset.decimals },
+      nativeSymbol: chains[chainId].nativeCurrency.symbol,
+      ...balances ? { balances } : {},
+      ...deposit ? { needs: deposit.amount.toString() } : {},
       calls: calls.map((c, i) => ({
         step: c.step,
         of: c.of,
@@ -40427,8 +40443,7 @@ function buildConnectCommands(deps = {}) {
     async () => JSON.stringify({ status: "disconnected", hadConnection: clearSession() }, null, 2)
   );
   const confirmInWallet = async (calls, session) => {
-    const admitted = admit(calls, session.account);
-    const r = await runConfirm(calls, admitted, session, deps);
+    const r = await runConfirm(calls, session, deps);
     return outcome(calls[0].chainId, session.account, r);
   };
   register(

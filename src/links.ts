@@ -69,3 +69,10 @@ export function linksFor(vault: Pick<VaultEntry, "chainId" | "address" | "chassi
   if (app) links.app = app;
   return links;
 }
+
+/** A transaction on the chain's block explorer, from the same table as the address links. */
+export function explorerTxUrl(chainId: VaultEntry["chainId"], hash: string): string {
+  const explorer = EXPLORER[chainId];
+  if (explorer === undefined) throw new Error(`no block explorer is recorded for chain ${chainId}; add it to EXPLORER in src/links.ts`);
+  return `${explorer.replace(/address\/$/, "tx/")}${hash}`;
+}
