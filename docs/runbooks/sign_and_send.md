@@ -23,7 +23,8 @@ should refuse a call whose `chainId` is not the chain it is connected to.
    blocked — `maxDeposit()` is not trusted, the simulated call is).
 2. **Prepare** (`earn_prepare_deposit` / `earn_prepare_withdraw`) — pure computation, no key
    involved. Returns `{ requires_signature: true, status: "unsigned", calls }`, each call
-   `{to, data, value, gasAdvice}`. This is the entire handoff surface: nothing else crosses from
+   `{ chainId, to, data, value, gasAdvice, precondition? }` plus display fields (`function`, `args`,
+   `description`, `step`, `of`). This is the entire handoff surface: nothing else crosses from
    Treasury's process into the signer's. ⚠️ Consuming the LIBRARY directly rather than the CLI
    — as this runbook's own script does — gets the bare `UnsignedCall[]` with no envelope;
    the envelope is a property of the command boundary, not of `buildDeposit`/`buildWithdraw`.

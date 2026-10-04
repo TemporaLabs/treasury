@@ -12,7 +12,7 @@ with "returned no data", which looks like a broken vault, not like a misconfigur
 
 | variable | purpose | unset |
 |---|---|---|
-| `TREASURY_RPC_BASE` | the Base RPC every tool reads through for a vault on Base | falls back to `BASE_RPC_URL`, then to Base's public endpoint `https://mainnet.base.org`, which rate-limits after a handful of calls |
+| `TREASURY_RPC_BASE` | the Base RPC every tool reads through for a vault on Base | falls back to `BASE_RPC_URL`, then to Base's public endpoint `https://mainnet.base.org`, which rate-limits after a handful of calls. `connect wallet` also checks a smart-contract wallet's sign-in through it, whatever chain the vault is on |
 | `TREASURY_LOGS_RPC_BASE` | the RPC `earn_balance` scans `Deposit`/`Withdraw` events through on Base — a provider with a wide `eth_getLogs` window | uses `TREASURY_RPC_BASE` |
 | `BASE_RPC_URL` | a conventional alias, used when `TREASURY_RPC_BASE` is unset — through the plugin too | — |
 | `TREASURY_RPC_ARBITRUM` | the Arbitrum One RPC every tool reads through for a vault on Arbitrum One | falls back to `ARBITRUM_RPC_URL`, then to Arbitrum's public endpoint `https://arb1.arbitrum.io/rpc`, which also rate-limits |
@@ -86,7 +86,10 @@ on Arbitrum One, set `TREASURY_LOGS_RPC_ARBITRUM`.
 
 ## What Treasury never does with the network
 
-No telemetry. No analytics. No call to any host but the RPC endpoints above — there is no yield
-API, no vendor endpoint, and no code path that could add one without a code change. The
-boundary test enforces that no code under the package reaches any other module, environment variable
-or process.
+No telemetry or analytics from Treasury itself. The CLI calls no host but the RPC endpoints above —
+there is no yield API, no vendor endpoint, and no code path that could add one without a code change.
+The one exception is the `treasury connect` page in your browser, which loads Privy's sign-in
+(auth.privy.io and Privy's RPC) and Cloudflare's bot check, and Privy's script sends its own
+analytics; see [security-model.md](security-model.md#the-wallet-connection-treasury-connect). The
+boundary test enforces that no code under the package reaches any other module or environment
+variable, or starts any process but the browser opener.

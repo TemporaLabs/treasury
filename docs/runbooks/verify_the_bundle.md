@@ -3,7 +3,9 @@
 Treasury ships as a Claude Code plugin installed **from git**: the marketplace copies this
 repository's `plugin/` folder, and the CLI that runs is its `dist/treasury.mjs` — a byte
 copy of this repository's `dist/treasury.mjs`, made in the same commit and checked by CI (1.5 MB,
-dependencies inlined, no `npm install` on your side).
+dependencies inlined, no `npm install` on your side). The plugin also carries `dist/connect-page.js`,
+the browser page `treasury connect` serves. CI holds it to a fresh build of `connect-page/` and refuses
+WalletConnect code in it, but does not attest it; this runbook verifies the CLI bundle.
 Nothing about "it came from GitHub" tells you that file was built by this repository's CI from the
 commit it claims. This runbook is how a stranger checks that, with no membership in the org and no
 trust in anyone's word. It is the last mile of "the code is open": open source you cannot tie to the
@@ -51,8 +53,9 @@ On a private mirror of this tree the same steps are gated to skip, and the asser
 skip only because the repository is private — a skip can never pass as a success on the public
 repository. Whatever repository you are reading this in, the weaker chain is always checkable: the
 commit's `dist/`, and the plugin's copy in `plugin/dist/`, equal a rebuild of the commit's source
-(CI's stale-dist step, which you can reproduce with `npm ci && npm run build` followed by
-`git status --porcelain -- dist plugin/dist`, which must print nothing).
+(CI's stale-dist steps, which you can reproduce with `cd connect-page && npm ci && npm run build &&
+cd ..`, then `npm ci && npm run build`, then `git status --porcelain -- dist plugin/dist`, which must
+print nothing).
 
 ## Verifying, as a stranger (public repository)
 
@@ -100,7 +103,7 @@ with `id-token: write`, from the release tag, and npm records that fact against 
 `TemporaLabs/treasury` (CI fails if it names anything else, because that is the only repository
 provenance can be issued from), `files` limits the tarball to `dist/`, `registry/` and the licence files (the skill is
 not in it — it ships in `plugin/`, by git tag), `publishConfig.provenance` is on, and `prepack`
-builds so `main`/`types` exist in the tarball — only `dist/*.mjs` is committed, so without that build
+builds so `main`/`types` exist in the tarball — only the two bundles (`dist/treasury.mjs`, `dist/connect-page.js`) are committed, so without that build
 the tarball would carry the bundle and nothing the manifest's own `main`/`types` point at.
 
 To check a published version against the bundle it should carry: `npm pack @temporalabs/treasury@<version>`

@@ -256,7 +256,7 @@ confirm it in the wallet. Nothing here signs. See [`security-model.md`](security
 | command | flags | does |
 |---|---|---|
 | `connect status` | — | the connected account and how it signed in (`external` / `embedded`), or `disconnected`; reads a local file only |
-| `connect wallet` | — | opens the sign-in page: one Connect button, then Privy's window. The wallet signs a free sign-in message; waits up to 9 minutes and returns the connected account |
+| `connect wallet` | — | opens the sign-in page: one Connect button, then Privy's window. The wallet signs a free sign-in message; waits up to 9 minutes and returns `{ status: "connected", account, walletType, connectedAtIso, opened }`. If the sign-in does not finish, it exits 1 with `not connected: <reason>` |
 | `connect deposit` | `--amount_usdc`, `--receiver`, optional `--vault`, `--chain` | builds approve + deposit for the connected account, checks them against the registry, and hands each to the wallet in turn |
 | `connect withdraw` | `--receiver`, then `--amount_usdc` or `--all --shares_exact`, optional `--vault`, `--chain` | the same for a withdrawal |
 | `connect disconnect` | — | forgets the connected account; moves nothing |
@@ -265,8 +265,13 @@ confirm it in the wallet. Nothing here signs. See [`security-model.md`](security
 own message, never from the agent. To pay a different address, use `earn prepare_deposit` /
 `earn prepare_withdraw` with the operator's own signer.
 
-`connect deposit` and `connect withdraw` return one entry per transaction, each with `hash` and
-`verified`, read from the receipt:
+`connect deposit` and `connect withdraw` return
+`{ status, chain, chainId, account, opened, reason?, calls_total, txs, next_step }`; `opened` says
+whether a browser was opened or only the URL printed. `txs` has one entry per transaction,
+`{ step, description, hash, verified, detail?, alsoMoved? }`, with `step` the call's position in the
+flow. An entry with `step: 0` is a transaction the page reported but could not tie to a step of this
+flow; it is always `unverified`, so look its hash up before retrying anything. `verified` is read from
+the receipt:
 
 | `verified` | meaning |
 |---|---|

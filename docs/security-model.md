@@ -48,7 +48,9 @@ go vacuous.
 runs the bundle and asserts the exact command list, the exact flag set of every command, and
 the absence of `sign`, `send` and `transfer`; and, on the public repository, mints a provenance
 attestation for the bundle and verifies it before the run can go green
-([`runbooks/verify_the_bundle.md`](runbooks/verify_the_bundle.md)).
+([`runbooks/verify_the_bundle.md`](runbooks/verify_the_bundle.md)). The attestation covers
+`dist/treasury.mjs`; the connect page `dist/connect-page.js` is held to a fresh rebuild and checked for
+WalletConnect code, but not attested.
 
 ## Keys
 
@@ -76,8 +78,9 @@ The parts of a vault's interface that lie are not trusted:
 
 ## What this model does not cover
 
-The vault contracts and the protocols they hold, the RPC provider's honesty, and the agent runtime
-that hosts the plugin. Treasury believes the RPC; it cannot verify the chain. And Treasury cannot
+The vault contracts and the protocols they hold, the RPC provider's honesty, the agent runtime
+that hosts the plugin, and, for `treasury connect`, Privy's service and the keys it manages for an
+embedded wallet, and the browser and wallet extension the operator confirms in. Treasury believes the RPC; it cannot verify the chain. And Treasury cannot
 stop a model from *reporting* that something was deposited — nothing at a command boundary can. What it
 can do is make an unsigned build impossible to mistake for a completed one, by shape.
 

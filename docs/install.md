@@ -1,7 +1,7 @@
 # Install
 
-Treasury is a command-line program plus an agent skill: the agent runs `treasury earn <command>` with
-its shell and reads the JSON it prints. Nothing stays running between commands. Two ways to get it in
+Treasury is a command-line program plus an agent skill: the agent runs `treasury earn <command>` (or
+`treasury connect <command>`) with its shell and reads the JSON it prints. Nothing stays running between commands. Two ways to get it in
 front of an agent.
 
 ## Claude Code — the plugin
@@ -18,9 +18,10 @@ release branch instead (`TemporaLabs/treasury@release/v0.1.1`); dropping the suf
 this repository's default branch.
 
 The plugin is the [`plugin/`](../plugin/) folder of this repository: its manifests, the `earn` skill,
-and a copy of this repository's own `dist/treasury.mjs` and `registry/vaults.json`, made by
+and a copy of this repository's own `dist/treasury.mjs`, `dist/connect-page.js` (the page
+`treasury connect` serves) and `registry/vaults.json`, made by
 `npm run build` in the same commit. The plugin gives Claude Code the `earn` skill, which runs its copy
-of the bundled CLI with a bare `node` — `node "${CLAUDE_PLUGIN_ROOT}/dist/treasury.mjs" earn …` — once
+of the bundled CLI with a bare `node` — `node "${CLAUDE_PLUGIN_ROOT}/dist/treasury.mjs" earn …` (or `connect …`) — once
 per command. `plugin/` carries a version-only `package.json` and no lockfile, so a marketplace install
 copies files and runs no dependency install. **Node 22 or later is required and must be on `PATH`** —
 without it every command fails with the shell's own `node: command not found`.
@@ -61,7 +62,7 @@ after a handful of calls. A `… over rate limit` error from any command means "
 chain", not "the vault is down". The CLI reads the shell's environment, so export these before you
 start Claude Code. See [`configuration.md`](configuration.md).
 
-The skill pre-approves its own command (`node …/dist/treasury.mjs earn …`) for the turn it is used in.
+The skill pre-approves its own command (`node …/dist/treasury.mjs …`, for both `earn` and `connect`) for the turn it is used in.
 If Claude Code still asks, allow that command for the project; it is the same program every time.
 
 **Updating:** `claude plugin update` will not refresh a plugin whose version has not changed. To pick
@@ -93,8 +94,8 @@ plain Markdown and can be given to any agent as instructions; it tells the agent
 commands and what to refuse.
 
 Releases up to 0.1.1 shipped an MCP server (`dist/mcp-server.mjs`, the `treasury-mcp` bin) instead of
-this CLI; see the [changelog](../CHANGELOG.md). A host that still runs that server must pin 0.1.1
-exactly (`npm install --save-exact @temporalabs/treasury@0.1.1`): a `^0.1.1` range resolves to a later
+this CLI; see the [changelog](../CHANGELOG.md). A host that still runs that server must stay on
+0.1.1 exactly (install the package with `--save-exact` at version `0.1.1`): a `^0.1.1` range resolves to a later
 release, which has no `dist/mcp-server.mjs`. Upgrading the plugin likewise removes the eight `earn_*`
 MCP tools; the `earn` skill reaches the same operations through the CLI.
 
@@ -105,8 +106,9 @@ Connect button, then Privy's window with email, Google, Apple, X and any browser
 there. Signing in costs nothing. After that, `treasury connect deposit` and `treasury connect withdraw`
 open a confirm page for each transaction. See [`tools.md`](tools.md#the-connect-commands--treasury-connect-command).
 
-- It needs a browser on the machine running the agent. Over SSH, or with `TREASURY_CONNECT_NO_OPEN`
-  set, the command prints the URL instead of opening it.
+- It needs a browser on the machine running the agent. Over SSH, on Linux with no display, or with
+  `TREASURY_CONNECT_NO_OPEN` set, the command prints the URL instead of opening it; it prints the URL
+  on stderr either way.
 - Port 53682 must be free while a page is open; one sign-in or confirmation runs at a time.
 - Phone wallets are not offered in this release: the page lists wallets installed in the browser, and
   an email or social login gives a wallet with no extension at all.

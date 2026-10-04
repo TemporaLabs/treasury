@@ -1,9 +1,9 @@
 /**
- * Agent Treasury — the command line. `treasury earn <command> [--flag value …]`; every command prints
+ * Agent Treasury — the command line. `treasury <earn|connect> <command> [--flag value …]`; every command prints
  * one JSON document on stdout (`--version` prints the bare version).
  *
  * Headless on purpose: an agent with a shell runs this with `node` and reads the JSON, and nothing
- * stays running between calls. The commands themselves live in `earn/commands.ts`; this file only
+ * stays running between calls. The commands themselves live in `earn/commands.ts` and `connect/commands.ts`; this file only
  * turns argv into their arguments, validates them against each command's own schema, and prints.
  *
  *   treasury earn --help                 every command, its flags and its description, as JSON

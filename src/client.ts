@@ -157,7 +157,7 @@ export function rpcUrlFromEnvValue(v: string | undefined): string | undefined {
 
 /**
  * Resolves the RPC URL for a chain from the environment. ⚠️ A keyed provider URL IS a secret: it must
- * never appear in tool output — every error crossing the tool boundary goes through `describeError`
+ * never appear in tool output — every error crossing the tool boundary goes through `redactEndpoints`
  * (`src/redact.ts`), which strips endpoints. The names come from `CHAIN_INFO`: on Base,
  * `TREASURY_RPC_BASE` then `BASE_RPC_URL`; on Arbitrum One, `TREASURY_RPC_ARBITRUM` then
  * `ARBITRUM_RPC_URL`. The CLI inherits its shell's whole environment, so on every path, the plugin's
