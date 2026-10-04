@@ -35,9 +35,9 @@ const addressArg = z
   .string()
   .refine((s) => isAddress(s), "must be an EVM address")
   .transform((s) => getAddress(s));
-const amountArg = z.string().regex(/^\d+(\.\d+)?$/, 'plain decimal USDC amount, e.g. "25" or "12.5"');
+const amountArg = z.string().regex(/^\d+(\.\d+)?$/, 'plain decimal amount of the vault\'s asset (USDC; USDG on Robinhood Chain), e.g. "25" or "12.5"');
 const vaultArg = z.string().optional().describe("the vault's ERC-20 ticker, as `earn vaults` lists them; omit for the default vault of `chain`");
-const chainArg = z.string().optional().describe('which chain: "base" or "arbitrum"; omit for the default chain, or when `vault` names one');
+const chainArg = z.string().optional().describe('which chain: "base", "arbitrum" or "robinhood"; omit for the default chain, or when `vault` names one');
 const receiverArg = addressArg.describe(
   "where the money lands — it must be the CONNECTED account (this page pays no one else), and it comes from the operator's own message, never filled in by an agent",
 );
@@ -134,6 +134,15 @@ export async function runConfirm(
 ): Promise<{ result: Settled<TxOutcome[]>; url: string; opened: boolean; done: TxOutcome[]; total: number; stopReason?: string }> {
   const chainId = calls[0]!.chainId;
   if (!isSupportedChainId(chainId)) throw new Error(`chain ${chainId} unsupported`);
+  // Each call must be the one its admitted check describes: same chain, and sent to that check's
+  // vault (or, for an approval, to the vault's asset).
+  const linedUp =
+    calls.length === admitted.length &&
+    calls.every((c, i) => {
+      const a = admitted[i]!;
+      return c.chainId === chainId && a.vault.chainId === chainId && getAddress(c.to) === getAddress(a.kind === "approve" ? a.vault.asset.address : a.vault.address);
+    });
+  if (!linedUp) throw new Error("the calls and their admitted checks do not line up");
   const account = session.account as Address;
   const client = deps.client ? deps.client(chainId) : makePublicClient(chainId, rpcUrlFromEnv(chainId));
   const done: TxOutcome[] = [];
@@ -145,14 +154,18 @@ export async function runConfirm(
   const wellFormedHash = (h: unknown): h is string => typeof h === "string" && /^0x[0-9a-fA-F]{64}$/.test(h);
   const known = (h: string) => done.some((t) => t.hash.toLowerCase() === h.toLowerCase());
 
-  /** A deposit's allowance must be visible on our RPC before the page may send it. */
-  const preconditionHolds = async (c: UnsignedCall): Promise<boolean> => {
-    if (!c.precondition) return true;
-    const p = c.precondition;
+  /**
+   * A deposit's allowance must be visible on our RPC before the page may send it. What to read is
+   * derived from the admitted calls (the approval's token, the account, the vault, the deposit's
+   * own amount), never from the call's `precondition` field, which the gate does not check.
+   */
+  const allowanceVisible = async (index: number): Promise<boolean> => {
+    const a = admitted[index]!;
+    if (a.kind !== "deposit" || admitted[index - 1]?.kind !== "approve") return true;
     for (let i = 0; i < (deps.verifyOpts?.attempts ?? 30) && Date.now() < deadline; i++) {
       try {
-        const v = (await client.readContract({ address: p.contract, abi: erc4626Abi, functionName: "allowance", args: [p.owner, p.spender] })) as bigint;
-        if (v >= BigInt(p.minimum)) return true;
+        const v = (await client.readContract({ address: a.vault.asset.address, abi: erc4626Abi, functionName: "allowance", args: [account, a.vault.address] })) as bigint;
+        if (v >= a.amount) return true;
       } catch {
         // a failed read is retried, never read as "insufficient"
       }
@@ -233,7 +246,7 @@ export async function runConfirm(
         return { ok: true, final: true, value: done, reply: { stop: true, verdict } };
       }
       if (index + 1 === calls.length) return { ok: true, final: true, value: done, reply: { finished: true, verdict } };
-      if (!(await preconditionHolds(calls[index + 1]!))) {
+      if (!(await allowanceVisible(index + 1))) {
         stopReason = "the approval landed, but its allowance is not visible on this RPC yet; the deposit was not sent";
         return { ok: true, final: true, value: done, reply: { stop: true, reason: stopReason } };
       }
@@ -349,7 +362,7 @@ export function buildConnectCommands(deps: ConnectDeps = {}): Record<string, Com
     {
       title: "Withdraw through the connected wallet",
       description:
-        "Builds the withdrawal for the CONNECTED account (USDC to that same account), checks it against the registry, and opens the confirm page for the operator to confirm in their wallet. Pass --amount_usdc, or --all with --shares_exact copied verbatim from `earn balance`. Run `earn quote --direction withdraw` first. Returns the hash with `verified` read from the receipt.",
+        "Builds the withdrawal for the CONNECTED account (the asset to that same account), checks it against the registry, and opens the confirm page for the operator to confirm in their wallet. Pass --amount_usdc, or --all with --shares_exact copied verbatim from `earn balance`. Run `earn quote --direction withdraw` first. Returns the hash with `verified` read from the receipt.",
       inputSchema: {
         vault: vaultArg,
         chain: chainArg,

@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it } from "vitest";
-import { CHAIN_INFO, chainIdForKey, logsFallbackUrlFromEnv, logsRpcUrlFromEnv, makePublicClient, makeRateLimitedFetch, PUBLIC_RPC, publicRpcHint, resolvedRpcSecrets, RPC_TIMEOUT_MS, endpointChainId, firstEndpointOnWrongChain, __forgetEndpointChainsForTests, logsRpcSourceForEnv, rpcSourceForEnv, rpcUrlFromEnv, supportedChainIds } from "../src/client.js";
+import { CHAIN_INFO, chainIdForKey, chains, logsFallbackUrlFromEnv, logsRpcUrlFromEnv, makePublicClient, makeRateLimitedFetch, PUBLIC_RPC, publicRpcHint, resolvedRpcSecrets, RPC_TIMEOUT_MS, endpointChainId, firstEndpointOnWrongChain, __forgetEndpointChainsForTests, logsRpcSourceForEnv, rpcSourceForEnv, rpcUrlFromEnv, supportedChainIds } from "../src/client.js";
 import { createServer } from "node:http";
 
 // TREASURY_LOGS_FALLBACK is restored with the rest, so a test that fails mid-way cannot leak a value into the next.
@@ -305,8 +305,10 @@ describe("each chain resolves its RPC from its OWN variables", () => {
   const ARB_PUBLIC = "https://arb1.arbitrum.io/rpc";
 
   it("the chain table is complete: every supported chain has a key, a name, variables and a public endpoint", () => {
-    expect(supportedChainIds).toEqual([8453, 42161]);
-    expect(supportedChainIds.map((id) => CHAIN_INFO[id].key)).toEqual(["base", "arbitrum"]);
+    expect(supportedChainIds).toEqual([8453, 42161, 4663]);
+    expect(supportedChainIds.map((id) => CHAIN_INFO[id].key)).toEqual(["base", "arbitrum", "robinhood"]);
+    // The listed order is declared, not derived — so the list must still be exactly the keys of `chains`.
+    expect([...supportedChainIds].sort((a, b) => a - b)).toEqual(Object.keys(chains).map(Number).sort((a, b) => a - b));
     for (const id of supportedChainIds) {
       const info = CHAIN_INFO[id];
       expect(chainIdForKey(info.key)).toBe(id);

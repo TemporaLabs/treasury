@@ -27,6 +27,7 @@ import type { VaultEntry } from "./registry-schema.js";
 const EXPLORER: Record<VaultEntry["chainId"], string> = {
   8453: "https://basescan.org/address/",
   42161: "https://arbiscan.io/address/",
+  4663: "https://robinhoodchain.blockscout.com/address/",
 };
 
 /**

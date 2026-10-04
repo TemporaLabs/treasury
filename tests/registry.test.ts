@@ -26,9 +26,9 @@ describe("the shipped registry", () => {
     expect(reg.vaults.length).toBeGreaterThan(0);
   });
 
-  it("offers THREE Tempora vaults on Base and ONE on Arbitrum One; with nothing named, the default is Cash Plus USDC (Test 2B) on Base — open to any account", () => {
+  it("offers THREE Tempora vaults on Base, ONE on Arbitrum One and ONE on Robinhood Chain; with nothing named, the default is Cash Plus USDC (Test 2B) on Base — open to any account", () => {
     const d = defaultVault();
-    expect(listVaults().map((v) => `${v.symbol}@${v.chainId}`)).toEqual(["tlCashPlusUSDC2@8453", "tlCashPlusUSDC2A@8453", "tlCashPlusUSDC2B@8453", "tlCashPlusUSDC2C@42161"]);
+    expect(listVaults().map((v) => `${v.symbol}@${v.chainId}`)).toEqual(["tlCashPlusUSDC2@8453", "tlCashPlusUSDC2A@8453", "tlCashPlusUSDC2B@8453", "tlCashPlusUSDC2C@42161", "tlCashPlusUSDG2D@4663"]);
     expect(d.symbol).toBe("tlCashPlusUSDC2B");
     expect(d.name).toBe("Tempora Labs Cash Plus USDC (Test 2B)");
     expect(d.backend).toBe("tempora");
@@ -37,7 +37,7 @@ describe("the shipped registry", () => {
     expect(d.chassis).toBe("morpho-v2");
     expect(resolveVault()).toBe(d);
     // One default per chain, and no more: the Base one above, and Test 2C on Arbitrum One.
-    expect(listVaults().filter((v) => v.isDefault).map((v) => `${v.symbol}@${v.chainId}`)).toEqual(["tlCashPlusUSDC2B@8453", "tlCashPlusUSDC2C@42161"]);
+    expect(listVaults().filter((v) => v.isDefault).map((v) => `${v.symbol}@${v.chainId}`)).toEqual(["tlCashPlusUSDC2B@8453", "tlCashPlusUSDC2C@42161", "tlCashPlusUSDG2D@4663"]);
     for (const v of listVaults()) expect(v.backend).toBe("tempora");
   });
 
@@ -77,6 +77,23 @@ describe("the shipped registry", () => {
     expect(resolveVault(undefined, "arbitrum")).toBe(c);
   });
 
+  it("the Robinhood Chain default is Cash Plus USDG (Test 2D): a Morpho Vault V2 over USDG, not USDC, measured open", () => {
+    const d = defaultVault(4663);
+    expect(d.symbol).toBe("tlCashPlusUSDG2D");
+    expect(d.name).toBe("Tempora Labs Cash Plus USDG (Test 2D)");
+    expect(d.chainId).toBe(4663);
+    expect(d.address).toBe("0x758f00731943aA88e8C7fB709e0B727903B4F833");
+    expect(d.chassis).toBe("morpho-v2");
+    expect(d.shareDecimals).toBe(18); // measured via decimals()
+    // The first asset in the registry that is not USDC. Amounts are parsed in the row's own decimals,
+    // so the row must carry USDG's, measured via decimals() on the token.
+    expect(d.asset).toEqual({ symbol: "USDG", decimals: 6, address: "0x5fc5360D0400a0Fd4f2af552ADD042D716F1d168" });
+    expect(d.depositOpen).toMatchObject({ open: true, method: "simulated-deposit-from-stranger", measuredAtBlock: 79_974_900 });
+    expect(d.depositOpen.detail).toMatch(/0xe65b7a77/); // TransferFromReverted — reached the token pull
+    expect(d.deployedAtBlock).toBe(79_381_803);
+    expect(resolveVault(undefined, "robinhood")).toBe(d);
+  });
+
   it("carries MEASURED share decimals — 18 on the Morpho V2 default, 8 on the Fusion sibling, both against 6-decimal USDC", () => {
     const two = getVault("tlCashPlusUSDC2");
     const twoA = getVault("tlCashPlusUSDC2A");
@@ -90,11 +107,11 @@ describe("the shipped registry", () => {
     }
   });
 
-  it("🔴 the depositable set is the two chain defaults and Test 2B — each open to any account: open to any account, measured by a simulated deposit", () => {
+  it("🔴 the depositable set is the three chain defaults and Test 2 — each open to any account: open to any account, measured by a simulated deposit", () => {
     // The Morpho V2 vault takes a deposit from anyone (a stranger's simulated deposit reached the token
     // pull). The Fusion sibling is whitelist-gated and stays out of the set — listed so an admitted
     // account's position can be read and exited, refused for everyone else before anything is built.
-    expect(depositableVaults().map((v) => v.symbol)).toEqual(["tlCashPlusUSDC2", "tlCashPlusUSDC2B", "tlCashPlusUSDC2C"]);
+    expect(depositableVaults().map((v) => v.symbol)).toEqual(["tlCashPlusUSDC2", "tlCashPlusUSDC2B", "tlCashPlusUSDC2C", "tlCashPlusUSDG2D"]);
     expect(defaultVault().depositOpen.open).toBe(true);
     expect(getVault("tlCashPlusUSDC2A").depositOpen).toMatchObject({ open: false, reason: "WHITELIST_GATED" });
   });
@@ -118,7 +135,7 @@ describe("the shipped registry", () => {
     // Every offered chain has a config entry, and it is the row the registry marks. A chain with a
     // vault and no config entry would make `chain: "<that chain>"` throw at the first call.
     const offered = offeredChains();
-    expect(offered.map((c) => c.key)).toEqual(["base", "arbitrum"]); // the default chain first
+    expect(offered.map((c) => c.key)).toEqual(["base", "arbitrum", "robinhood"]); // the default chain first, then the order chains were added
     expect(Object.keys(EARN.defaultVaultByChain).sort()).toEqual(offered.map((c) => c.key).sort());
     for (const c of offered) {
       const named = EARN.defaultVaultByChain[c.key];
@@ -142,8 +159,9 @@ describe("the shipped registry", () => {
     // on a chain the caller did not mean; the error names both readings so the caller can choose.
     expect(() => resolveVault("tlCashPlusUSDC2", "arbitrum")).toThrow(/"tlCashPlusUSDC2" is on base, not arbitrum.*tlCashPlusUSDC2C/s);
     expect(() => resolveVault("tlCashPlusUSDC2C", "base")).toThrow(/"tlCashPlusUSDC2C" is on arbitrum, not base.*tlCashPlusUSDC2B/s);
+    expect(() => resolveVault("tlCashPlusUSDG2D", "arbitrum")).toThrow(/"tlCashPlusUSDG2D" is on robinhood, not arbitrum.*tlCashPlusUSDC2C/s);
     // an unknown chain names the ones that exist, and is never read as "the default chain"
-    expect(() => resolveVault(undefined, "solana")).toThrow(/unknown chain "solana"; chains with a vault: base, arbitrum/);
+    expect(() => resolveVault(undefined, "solana")).toThrow(/unknown chain "solana"; chains with a vault: base, arbitrum, robinhood/);
     expect(() => resolveVault("tlCashPlusUSDC2", "Base")).toThrow(/unknown chain "Base"/); // exact keys, no case-folding guess
     expect(() => resolveVault(undefined, " arbitrum")).toThrow(/unknown chain " arbitrum"/);
     // exact keys: a prefix or a longer name is not the chain
@@ -167,7 +185,7 @@ describe("the shipped registry", () => {
       const address = "0x040fCA12673778FEED5DA7b2ccFbbAb0cc0134Cf";
       expect(linksFor({ chainId: id, address, chassis: "fusion" }).explorer).toMatch(new RegExp(`^https://[a-z.]+/address/${address}$`));
     }
-    expect(supportedChainIds).toEqual([8453, 42161]);
+    expect(supportedChainIds).toEqual([8453, 42161, 4663]);
     for (const id of [1, 10, 137, 0]) expect(vaultEntrySchema.safeParse(row(id)).success, `schema accepts unsupported chain ${id}`).toBe(false);
     // A chain the explorer map does not know THROWS — it used to interpolate `undefined` into a URL.
     expect(() => linksFor({ chainId: 1 as never, address: "0x040fCA12673778FEED5DA7b2ccFbbAb0cc0134Cf", chassis: "fusion" })).toThrow(/no block explorer is recorded for chain 1/);
@@ -250,7 +268,7 @@ describe("the registry schema refuses the mistakes a hand-edit would make", () =
     const arb = r.vaults.filter((v) => v.chainId === 42161);
     expect(arb.length, "premise: the fixture registry carries a vault on a second chain").toBeGreaterThan(0);
     for (const v of arb) v.isDefault = false;
-    expect(r.vaults.filter((v) => v.isDefault)).toHaveLength(1); // Base still has its default
+    expect(r.vaults.filter((v) => v.isDefault)).toHaveLength(2); // Base and Robinhood Chain still have theirs
     expect(() => registrySchema.parse(r)).toThrow(/exactly one vault per chain must be isDefault; chain 42161 has 0/);
   });
 

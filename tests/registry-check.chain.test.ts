@@ -145,6 +145,8 @@ const run = async (rpc: string, arbitrumServes = 42161): Promise<{ status: numbe
         BASE_RPC_URL: `${rpc}/chain/8453`,
         TREASURY_RPC_ARBITRUM: `${rpc}/chain/${arbitrumServes}`,
         ARBITRUM_RPC_URL: `${rpc}/chain/${arbitrumServes}`,
+        TREASURY_RPC_ROBINHOOD: `${rpc}/chain/4663`,
+        ROBINHOOD_RPC_URL: `${rpc}/chain/4663`,
         FUND_REPO: "/nonexistent",
         FUND_RPC_BASE: "not-a-url",
       },
