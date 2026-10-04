@@ -80,7 +80,8 @@ Later, ask: **“What is my position worth, and how much can I withdraw now?”*
 
 ## Vaults
 
-By default, Earn deposits into **Cash Plus USDC (Test 2B)** on Base. There are other options, and a demo.
+A command that names no vault or chain uses **Cash Plus USDC (Test 2B)** on Base; the agent still asks
+which chain first when you have not said. There are other options, and a demo.
 
 | | vault | chain | choose it by |
 |---|---|---|---|
