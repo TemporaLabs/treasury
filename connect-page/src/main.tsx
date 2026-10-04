@@ -383,8 +383,11 @@ async function main() {
       config={{
         appearance: { theme: "light", accentColor: "#1E3553", landingHeader: "Connect wallet", walletChainType: "ethereum-only", walletList: ["detected_ethereum_wallets", "metamask", "coinbase_wallet"] },
         // One window. Its first screen lists the wallets already installed in this browser (MetaMask,
-        // Rabby, any EIP-6963 wallet), then email and Google; Apple, X and Coinbase Wallet sit one
-        // click further. No WalletConnect.
+        // Rabby, any EIP-6963 wallet), then email and Google, up to four entries in all: each installed
+        // wallet takes one, so with three or more Google moves to "More options", and with four or
+        // more email does too. Apple, X and Coinbase Wallet are always there. No WalletConnect.
+        // `loginMethodsAndOrder` is marked deprecated in Privy 3.47 (pinned exactly); `loginMethods`
+        // does not set an order, so check this screen again when upgrading Privy.
         loginMethodsAndOrder: { primary: ["detected_ethereum_wallets", "email", "google"], overflow: ["apple", "twitter", "coinbase_wallet"] },
         externalWallets: { walletConnect: { enabled: false } },
         embeddedWallets: { ethereum: { createOnLogin: "users-without-wallets" }, showWalletUIs: true },

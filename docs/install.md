@@ -104,8 +104,10 @@ MCP tools; the `earn` skill reaches the same operations through the CLI.
 
 `treasury connect wallet` opens a one-time URL on `http://localhost:53682` in the browser on the same machine: one
 Connect button, then Privy's window. Its first screen lists the browser wallets installed there
-(MetaMask, Rabby, or any wallet that announces itself to the page), then email and Google; Apple, X
-and Coinbase Wallet are under "More options". Signing in costs nothing. After that, `treasury connect deposit` and `treasury connect withdraw`
+(MetaMask, Rabby, or any wallet that announces itself to the page), then email and Google, four
+entries in all: with three or more wallets installed, Google moves under "More options", and with
+four or more, email does too. Apple, X and Coinbase Wallet are under "More options". Signing in costs
+nothing. After that, `treasury connect deposit` and `treasury connect withdraw`
 open a confirm page for each transaction. See [`tools.md`](tools.md#the-connect-commands--treasury-connect-command).
 
 - It needs a browser on the machine running the agent. Over SSH, on Linux with no display, or with
