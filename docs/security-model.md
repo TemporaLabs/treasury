@@ -86,7 +86,7 @@ can do is make an unsigned build impossible to mistake for a completed one, by s
 `treasury connect` hands calls to the operator's own wallet; it does not sign. What protects that path:
 
 - **A page on the operator's own machine, for one flow.** Each sign-in or confirmation starts a server
-  on the machine's two loopback addresses (`127.0.0.1` and `::1`) that answers only requests carrying its random secret, its own `Host`, and (for
+  on the machine's loopback addresses (`127.0.0.1`, and `::1` where IPv6 is on) that answers only requests carrying its random secret, its own `Host`, and (for
   every POST) its own `Origin`, takes one result at a time, and closes itself when the flow ends or
   after nine minutes. Nothing is hosted by Tempora.
 - **The account is proven, not claimed.** Both sign-in paths — a browser wallet, or a Privy embedded

@@ -217,13 +217,14 @@ than reporting a limit the chain never stated.
 ## Handing calls to the signer
 
 **First choice: the operator's own wallet, through `connect`.** It needs a browser on this machine.
+`connect wallet`, `connect deposit` and `connect withdraw` each wait up to 9 minutes for the operator,
+so give each of those shell calls a timeout of at least 9 minutes.
 1. `connect status`. If disconnected, `connect wallet` opens a page; the operator clicks Connect and uses
    a browser wallet, or an email, Google, Apple or X login (a Privy wallet). Wait for it to return.
 2. Run the earn quote as usual, then `connect deposit --amount_usdc <n> --receiver <addr>` (or
    `connect withdraw …`), with the same `--vault`/`--chain`. The page shows each call; the operator
-   confirms it there and in the wallet. The command returns when they finish (up to 9 minutes, so
-   give the shell call a timeout of at least that).
-3. Read `status` first. `completed`: every call landed. `stopped`: it ended early; read `reason`.
+   confirms it there and in the wallet. The command returns when they finish.
+3. Read `status` first. `completed`: every call landed. `stopped`: it ended early; read `reason` and the last transaction's `detail`.
    `not_reported`: no transaction came back, which is not proof none was sent, so check `earn balance`
    before any retry. Report every `hash` and its `verified`. `extra_transfer` means the wallet also moved money besides
    the call (`alsoMoved`, often its own gas fee in USDC): say so. Anything else that is not `matched`:

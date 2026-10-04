@@ -220,7 +220,8 @@ export async function serveOnce<T>(flow: Flow<T>): Promise<Handle<T>> {
     throw e;
   }
   const timer = setTimeout(
-    () => finish({ ok: false, reason: flow.timeoutReason?.() ?? `nothing happened in the browser within ${Math.round(flow.ttlMs / 60_000)} minutes` }),
+    // A cancel still waiting on a check is the operator's reason; it wins over the clock.
+    () => finish(deferred ?? { ok: false, reason: flow.timeoutReason?.() ?? `nothing happened in the browser within ${Math.round(flow.ttlMs / 60_000)} minutes` }),
     flow.ttlMs,
   );
   timer.unref();

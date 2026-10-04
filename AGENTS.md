@@ -49,6 +49,10 @@ each row on its own chain and reports a chain it could not reach as not checked.
 - **`dist/treasury.mjs` and the `plugin/` copies are committed.** After any change under `src/`, or
   to `registry/vaults.json`, `LICENSE` or `NOTICE`, run `npm run build` and commit the result; CI
   rebuilds and fails on a difference.
+- **`dist/connect-page.js` and `THIRD_PARTY_NOTICES.connect-page.md` are committed too**, built
+  separately: after any change under `connect-page/`, run `npm ci && npm run build` in `connect-page/`,
+  then `npm run build` at the root to refresh the `plugin/` copy, and commit all of it. CI rebuilds
+  the page and fails on a difference.
 - **Every commit carries a `Signed-off-by` trailer** matching its author (`git commit -s`). See
   [`DCO.md`](DCO.md).
 - **Every relative link in `docs/` must resolve.**
@@ -70,8 +74,8 @@ each row on its own chain and reports a chain it could not reach as not checked.
 
 ## The Claude Code plugin (`plugin/`)
 
-- **Never edit the copies in `plugin/` by hand.** `plugin/dist/treasury.mjs`,
-  `plugin/registry/vaults.json`, `plugin/LICENSE`, `plugin/NOTICE`, `plugin/THIRD_PARTY_NOTICES.md` and
+- **Never edit the copies in `plugin/` by hand.** `plugin/dist/treasury.mjs`, `plugin/dist/connect-page.js`,
+  `plugin/registry/vaults.json`, `plugin/LICENSE`, `plugin/NOTICE`, `plugin/THIRD_PARTY_NOTICES.md`, `plugin/THIRD_PARTY_NOTICES.connect-page.md` and
   `plugin/package.json` are written by `npm run build`; `npm run plugin:check` fails on a stale one.
 - **`plugin/` must never hold a lockfile.** A plugin install runs a dependency install when it finds
   one beside `package.json`.

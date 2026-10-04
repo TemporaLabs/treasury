@@ -51,6 +51,12 @@ third party. Review every transaction your signer is asked to sign.
   receiver sends USDC to the wrong place, irreversibly.
 - **Your RPC is part of the trust chain.** Treasury believes what the RPC returns. Use a provider you
   trust, and prefer one whose `eth_getLogs` window lets `earn_balance` read the whole history.
+- **An email or social login gives a Privy embedded wallet.** `treasury connect` offers it beside
+  browser wallets. Its keys are managed by Privy for that Privy app, not by you or by Treasury, and a
+  different `PRIVY_APP_ID` gives a different wallet for the same login. Anyone who controls that email
+  or social account can sign in and approve transactions. Export and recovery go through Privy, not
+  this page. The wallet starts empty and needs USDC and the chain's gas token. Use a browser wallet for
+  amounts you would not trust to an email account.
 - **Your signer is the whole security model.** Treasury is designed so that a compromised or
   misbehaving agent can at most *propose* a transaction. What actually executes is whatever your
   signer approves. Configure it to show destination, amount and calldata, and to refuse anything it

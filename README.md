@@ -99,7 +99,8 @@ See [vault details](docs/vaults.md) for addresses, access rules, fees, and dated
 ## Security
 
 - **No keys or custody:** your wallet holds the position; only your signer can move funds.
-- **Direct RPC access:** no Tempora service in the request path and no telemetry. Keyed RPC URLs are redacted.
+- **Direct RPC access:** the `earn` commands talk only to your RPC, with no Tempora service in the request path and no telemetry. Keyed RPC URLs are redacted.
+- **Sign-in through Privy:** `treasury connect` signs you in through [Privy](https://privy.io), using Tempora's Privy app unless you set `PRIVY_APP_ID`. Privy, and Tempora as that app's owner, see your login and wallet address, and Privy's script on the page sends its own analytics.
 - **Verifiable builds:** CI checks the committed bundle; [verify its provenance](docs/runbooks/verify_the_bundle.md).
 - **Private vulnerability reporting:** follow [SECURITY.md](SECURITY.md), not a public issue.
 

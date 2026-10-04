@@ -119,6 +119,10 @@ and shown as skipped.
   `LICENSE` or `NOTICE`, run `npm run build` and commit the result; the same build refreshes the
   plugin's copies in `plugin/`, and `npm run plugin:check` confirms them. CI fails on a stale bundle
   or copy. The build uses `bash` for that last step, so on Windows run it from Git Bash or WSL.
+- **Rebuild the connect page when its source changes.** `dist/connect-page.js` and
+  `THIRD_PARTY_NOTICES.connect-page.md` are committed and built from `connect-page/` with its own
+  dependencies: run `npm ci && npm run build` there, then `npm run build` at the root to copy the page
+  into `plugin/`. CI rebuilds the page and fails on a difference.
 - **Say which test tier ran.** Unit tests say nothing about the chain. State in the pull request
   whether you ran unit, live read-only or fork tests.
 - **Tests never need a real key.** A test that moves funds runs on a fork and impersonates the

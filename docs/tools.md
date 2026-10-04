@@ -282,8 +282,13 @@ after it. The result's `status` says how the whole flow ended:
 | `status` | meaning |
 |---|---|
 | `completed` | every call of the flow landed (`txs` has `calls_total` entries, each `matched` or `extra_transfer`) |
-| `stopped` | the flow ended before every call landed; `reason` and the last entry's `verified` and `detail` say why. An approval whose allowance does not show on the RPC within about a minute stops here, with the deposit not sent |
+| `stopped` | the flow ended before every call landed; `reason` says why, and the last entry's `verified` and `detail` give the transaction's own verdict. An approval whose allowance does not show on the RPC within about a minute stops here, with the deposit not sent |
 | `not_reported` | the page reported no transaction (cancelled, or nine minutes passed). This is not proof that none was sent: if the wallet showed a confirmation, check `earn balance` before any retry |
+
+Each command returns within nine minutes, however slow the RPC is; a transaction still being
+checked then is listed as `unverified`. A cancel waits up to 30 seconds for a check already in
+progress, so it can report that transaction's verdict. The confirm page will not start a step with
+less than a minute left, and a transaction hash is accepted only once per flow.
 
 ---
 

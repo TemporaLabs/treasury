@@ -381,7 +381,7 @@ describe("confirm: one call at a time, each checked on its receipt before the ne
     const started = Date.now();
     const run = runConfirm(calls, admit(asGate(calls), ACCOUNT), readSession()!, { open: (u) => ((url = u), true), client: hungReceipt, ttlMs: 400 });
     await new Promise((r) => setTimeout(r, 50));
-    void page(url).post("/result", { index: 0, hash: h1 });
+    void page(url).post("/result", { index: 0, hash: h1 }).catch(() => undefined);
     const out = JSON.parse(outcome(vault.chainId, ACCOUNT, await run)) as { status: string; reason: string; txs: { hash: string; verified: string }[] };
     expect(Date.now() - started).toBeLessThan(1_500);
     expect(out.status).toBe("stopped");
@@ -397,7 +397,7 @@ describe("confirm: one call at a time, each checked on its receipt before the ne
     const run = runConfirm(calls, admit(asGate(calls), ACCOUNT), readSession()!, { open: (u) => ((url = u), true), client: hungReceipt, cancelGraceMs: 150 });
     await new Promise((r) => setTimeout(r, 50));
     const p = page(url);
-    void p.post("/result", { index: 0, hash: h1 });
+    void p.post("/result", { index: 0, hash: h1 }).catch(() => undefined);
     await new Promise((r) => setTimeout(r, 50));
     const cancelledAt = Date.now();
     await p.post("/result", { rejected: true, reason: "cancelled" });
@@ -455,6 +455,111 @@ describe("confirm: one call at a time, each checked on its receipt before the ne
     expect((await (await p.post("/result", { index: 1, hash: h1.toUpperCase().replace("0X", "0x") })).json()) as { reason: string }).toMatchObject({ reason: /already reported/ });
     await p.post("/result", { rejected: true });
     await run;
+  });
+});
+
+describe("confirm: what the page reports with a rejection, and the deadline", () => {
+  const matchedApprove = () => ({
+    getTransactionReceipt: async () => ({ status: "success", logs: [approvalLog(ACCOUNT, vault.address, 600_000n)] }) as never,
+    readContract: async () => 600_000n as never,
+  });
+
+  it("a hash posted with a rejection is filed under the step the page names, never twice", async () => {
+    writeSession({ account: ACCOUNT, walletType: "external", connectedAtIso: "" });
+    const calls = buildDeposit(vault, { assetsHuman: "0.6", receiver: ACCOUNT, account: ACCOUNT });
+    const h1 = `0x${"01".repeat(32)}`;
+    const h2 = `0x${"02".repeat(32)}`;
+    let url = "";
+    const run = runConfirm(calls, admit(asGate(calls), ACCOUNT), readSession()!, { open: (u) => ((url = u), true), client: matchedApprove, verifyOpts: { attempts: 1, delayMs: 1 } });
+    await new Promise((r) => setTimeout(r, 50));
+    const p = page(url);
+    expect((await (await p.post("/result", { index: 0, hash: h1 })).json()) as { next: number }).toMatchObject({ next: 1 });
+    // A second tab's approve, and a re-post of the one already recorded.
+    await p.post("/result", { rejected: true, reason: "second tab", index: 0, hash: h2.toUpperCase().replace("0X", "0x") });
+    const out = JSON.parse(outcome(vault.chainId, ACCOUNT, await run)) as { status: string; txs: { hash: string; step: number; verified: string }[] };
+    expect(out.status).toBe("stopped");
+    expect(out.txs.map((t) => [t.step, t.verified])).toEqual([
+      [calls[0]!.step, "matched"],
+      [calls[0]!.step, "unverified"],
+    ]);
+  });
+
+  it("a hash already on record is not recorded again from a rejection", async () => {
+    writeSession({ account: ACCOUNT, walletType: "external", connectedAtIso: "" });
+    const calls = buildWithdraw(vault, { receiver: ACCOUNT, owner: ACCOUNT, assetsHuman: "1" });
+    const h1 = `0x${"01".repeat(32)}`;
+    let url = "";
+    const run = runConfirm(calls, admit(asGate(calls), ACCOUNT), readSession()!, { open: (u) => ((url = u), true), client: () => ({ getTransactionReceipt: () => new Promise<never>(() => {}), readContract: async () => 0n as never }), cancelGraceMs: 50 });
+    await new Promise((r) => setTimeout(r, 50));
+    const p = page(url);
+    void p.post("/result", { index: 0, hash: h1 }).catch(() => undefined);
+    await new Promise((r) => setTimeout(r, 30));
+    await p.post("/result", { rejected: true, reason: "lost reply", index: 0, hash: h1 });
+    const out = JSON.parse(outcome(vault.chainId, ACCOUNT, await run)) as { txs: { hash: string }[] };
+    expect(out.txs.map((t) => t.hash)).toEqual([h1]);
+  });
+
+  it("a hash posted with a rejection that names no step is still kept", async () => {
+    writeSession({ account: ACCOUNT, walletType: "external", connectedAtIso: "" });
+    const calls = buildWithdraw(vault, { receiver: ACCOUNT, owner: ACCOUNT, assetsHuman: "1" });
+    const h1 = `0x${"01".repeat(32)}`;
+    let url = "";
+    const run2 = runConfirm(calls, admit(asGate(calls), ACCOUNT), readSession()!, { open: (u) => ((url = u), true), client: matchedApprove });
+    await new Promise((r) => setTimeout(r, 50));
+    await page(url).post("/result", { rejected: true, reason: "no step", index: 7, hash: h1 });
+    const out2 = JSON.parse(outcome(vault.chainId, ACCOUNT, await run2)) as { txs: { step: number; hash: string }[] };
+    expect(out2.txs.map((t) => [t.step, t.hash])).toEqual([[0, h1]]);
+  });
+
+  it.each(["receipt", "allowance"] as const)("%s reads stop once the time limit has ended the flow", async (phase) => {
+    writeSession({ account: ACCOUNT, walletType: "external", connectedAtIso: "" });
+    const calls = buildDeposit(vault, { assetsHuman: "0.6", receiver: ACCOUNT, account: ACCOUNT });
+    {
+      let reads = 0;
+      const client = () => ({
+        getTransactionReceipt: async () => {
+          if (phase === "receipt") return (reads++, Promise.reject(new Error("not yet"))) as never;
+          return { status: "success", logs: [approvalLog(ACCOUNT, vault.address, 600_000n)] } as never;
+        },
+        readContract: async () => (reads++, 0n) as never,
+      });
+      let url = "";
+      const run = runConfirm(calls, admit(asGate(calls), ACCOUNT), readSession()!, { open: (u) => ((url = u), true), client, ttlMs: 300, verifyOpts: { attempts: 1_000_000, delayMs: 5 } });
+      await new Promise((r) => setTimeout(r, 50));
+      void page(url).post("/result", { index: 0, hash: `0x${"01".repeat(32)}` }).catch(() => undefined);
+      await run;
+      await new Promise((r) => setTimeout(r, 50));
+      const after = reads;
+      await new Promise((r) => setTimeout(r, 150));
+      expect([phase, reads]).toEqual([phase, after]);
+      expect(reads).toBeGreaterThan(0);
+    }
+  });
+
+  it("a cancel still waiting on a check is the reason given, even when the time limit then ends the flow", async () => {
+    writeSession({ account: ACCOUNT, walletType: "external", connectedAtIso: "" });
+    const calls = buildDeposit(vault, { assetsHuman: "0.6", receiver: ACCOUNT, account: ACCOUNT });
+    let url = "";
+    const run = runConfirm(calls, admit(asGate(calls), ACCOUNT), readSession()!, { open: (u) => ((url = u), true), client: () => ({ getTransactionReceipt: () => new Promise<never>(() => {}), readContract: async () => 0n as never }), ttlMs: 300 });
+    await new Promise((r) => setTimeout(r, 50));
+    const p = page(url);
+    void p.post("/result", { index: 0, hash: `0x${"01".repeat(32)}` }).catch(() => undefined);
+    await new Promise((r) => setTimeout(r, 30));
+    await p.post("/result", { rejected: true, reason: "cancelled by the operator" });
+    const out = JSON.parse(outcome(vault.chainId, ACCOUNT, await run)) as { reason: string };
+    expect(out.reason).toBe("cancelled by the operator");
+  });
+
+  it("a stop on a step that did not land carries a reason", async () => {
+    writeSession({ account: ACCOUNT, walletType: "external", connectedAtIso: "" });
+    const calls = buildDeposit(vault, { assetsHuman: "0.6", receiver: ACCOUNT, account: ACCOUNT });
+    let url = "";
+    const run = runConfirm(calls, admit(asGate(calls), ACCOUNT), readSession()!, { open: (u) => ((url = u), true), client: () => ({ getTransactionReceipt: async () => ({ status: "reverted", logs: [] }) as never, readContract: async () => 0n as never }), verifyOpts: { attempts: 1, delayMs: 1 } });
+    await new Promise((r) => setTimeout(r, 50));
+    await page(url).post("/result", { index: 0, hash: `0x${"01".repeat(32)}` });
+    const out = JSON.parse(outcome(vault.chainId, ACCOUNT, await run)) as { status: string; reason: string };
+    expect(out.status).toBe("stopped");
+    expect(out.reason).toMatch(/step 1 .* is reverted/);
   });
 });
 

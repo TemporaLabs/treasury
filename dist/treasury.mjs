@@ -39951,7 +39951,8 @@ async function serveOnce(flow) {
     throw e;
   }
   const timer = setTimeout(
-    () => finish({ ok: false, reason: flow.timeoutReason?.() ?? `nothing happened in the browser within ${Math.round(flow.ttlMs / 6e4)} minutes` }),
+    // A cancel still waiting on a check is the operator's reason; it wins over the clock.
+    () => finish(deferred ?? { ok: false, reason: flow.timeoutReason?.() ?? `nothing happened in the browser within ${Math.round(flow.ttlMs / 6e4)} minutes` }),
     flow.ttlMs
   );
   timer.unref();
@@ -40228,12 +40229,20 @@ async function runConfirm(calls, admitted, session, deps = {}) {
     ...deps.cancelGraceMs !== void 0 ? { cancelGraceMs: deps.cancelGraceMs } : {},
     timeoutReason: () => done.length ? `the ${Math.round(ttlMs / 6e4)}-minute limit ran out after ${done.length} of ${calls.length} transactions were reported` : `nothing happened in the browser within ${Math.round(ttlMs / 6e4)} minutes`,
     // The page reports a hash it could not hand over (its POST failed after the wallet sent):
-    // put it on record so the command reports it, unchecked, instead of losing it.
+    // put it on record, against the step the page names, so the command reports it unchecked
+    // instead of losing it. A hash that names no step is still recorded, as such.
     onReject: (body) => {
       const hash4 = body["hash"];
-      const call2 = calls[done.length];
-      if (!call2 || !wellFormedHash(hash4) || known(hash4)) return;
-      done.push({ step: call2.step, description: call2.description, hash: hash4, verified: "unverified", detail: "the page reported this transaction but could not hand it over for checking; look it up before retrying anything" });
+      if (!wellFormedHash(hash4) || known(hash4)) return;
+      const i = body["index"];
+      const call2 = typeof i === "number" && Number.isInteger(i) && i >= 0 && i < calls.length ? calls[i] : void 0;
+      done.push({
+        step: call2?.step ?? 0,
+        description: call2?.description ?? "a transaction the page reported for no known step",
+        hash: hash4,
+        verified: "unverified",
+        detail: "the page reported this transaction but could not hand it over for checking; look it up before retrying anything"
+      });
     },
     html: (s) => shell(s, "Confirm \u2014 Open Agent Treasury"),
     csp: PAGE_CSP,
@@ -40275,6 +40284,7 @@ async function runConfirm(calls, admitted, session, deps = {}) {
       }
       Object.assign(entry, verdict);
       if (verdict.verified !== "matched" && verdict.verified !== "extra_transfer") {
+        stopReason = `step ${call2.step} (${call2.description}) is ${verdict.verified}: ${verdict.detail ?? "it did not land as confirmed"}`;
         return { ok: true, final: true, value: done, reply: { stop: true, verdict } };
       }
       if (index2 + 1 === calls.length) return { ok: true, final: true, value: done, reply: { finished: true, verdict } };

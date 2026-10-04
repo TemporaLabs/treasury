@@ -38,7 +38,7 @@ async function post(path: string, body: Record<string, unknown>): Promise<Record
   const r = await fetch(path, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ s: secret, ...body }) });
   return r.json();
 }
-const reject = (reason: string, hash?: string) => post("/result", { rejected: true, reason, ...(hash ? { hash } : {}) }).catch(() => undefined);
+const reject = (reason: string, sent?: { hash: string; index: number }) => post("/result", { rejected: true, reason, ...sent }).catch(() => undefined);
 const errText = (e: unknown) => (e instanceof Error ? e.message : typeof e === "object" && e && "message" in e ? String((e as { message: unknown }).message) : String(e));
 
 type Phase = { text: string; tone?: "ok" | "bad"; busy?: boolean; done?: boolean };
@@ -273,7 +273,7 @@ function Confirm({ info }: { info: Extract<Info, { mode: "confirm" }> }) {
       // Once the wallet has returned a hash the transaction is out, whatever failed afterwards.
       if (hash) {
         setPhase({ text: `Sent, but not confirmed here: ${hash}. Look it up before trying again. (${text})`, tone: "bad", done: true });
-        return void (await reject(text, hash));
+        return void (await reject(text, { hash, index: next }));
       }
       setPhase({ text: `Not sent: ${text}`, tone: "bad", done: true });
       await reject(text);
@@ -323,10 +323,15 @@ function Confirm({ info }: { info: Extract<Info, { mode: "confirm" }> }) {
       </section>
       {!phase.done &&
         (!ready ? (
-          <p className="oat-status">Loading.</p>
+          <>
+            <p className="oat-status">Loading.</p>
+            <button className="oat-text" onClick={() => void cancel()}>
+              Cancel
+            </button>
+          </>
         ) : !authenticated || !wallet ? (
           <>
-            <button className="oat-btn" onClick={() => void (authenticated ? logout().then(() => login()) : login())}>
+            <button className="oat-btn" onClick={() => void (authenticated ? logout().then(() => login(), (e: unknown) => setPhase({ text: `Could not sign out: ${errText(e)}`, tone: "bad" })) : login())}>
               <ButtonIcon />
               {authenticated ? "Sign out and sign in again" : "Sign in with Privy"}
             </button>

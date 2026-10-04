@@ -170,12 +170,20 @@ export async function runConfirm(
         ? `the ${Math.round(ttlMs / 60_000)}-minute limit ran out after ${done.length} of ${calls.length} transactions were reported`
         : `nothing happened in the browser within ${Math.round(ttlMs / 60_000)} minutes`,
     // The page reports a hash it could not hand over (its POST failed after the wallet sent):
-    // put it on record so the command reports it, unchecked, instead of losing it.
+    // put it on record, against the step the page names, so the command reports it unchecked
+    // instead of losing it. A hash that names no step is still recorded, as such.
     onReject: (body) => {
       const hash = body["hash"];
-      const call = calls[done.length];
-      if (!call || !wellFormedHash(hash) || known(hash)) return;
-      done.push({ step: call.step, description: call.description, hash, verified: "unverified", detail: "the page reported this transaction but could not hand it over for checking; look it up before retrying anything" });
+      if (!wellFormedHash(hash) || known(hash)) return;
+      const i = body["index"];
+      const call = typeof i === "number" && Number.isInteger(i) && i >= 0 && i < calls.length ? calls[i] : undefined;
+      done.push({
+        step: call?.step ?? 0,
+        description: call?.description ?? "a transaction the page reported for no known step",
+        hash,
+        verified: "unverified",
+        detail: "the page reported this transaction but could not hand it over for checking; look it up before retrying anything",
+      });
     },
     html: (s) => shell(s, "Confirm — Open Agent Treasury"),
     csp: PAGE_CSP,
@@ -221,6 +229,7 @@ export async function runConfirm(
       Object.assign(entry, verdict);
       if (verdict.verified !== "matched" && verdict.verified !== "extra_transfer") {
         // Stop at the first step that did not land as confirmed: the next one depends on it.
+        stopReason = `step ${call.step} (${call.description}) is ${verdict.verified}: ${verdict.detail ?? "it did not land as confirmed"}`;
         return { ok: true, final: true, value: done, reply: { stop: true, verdict } };
       }
       if (index + 1 === calls.length) return { ok: true, final: true, value: done, reply: { finished: true, verdict } };
