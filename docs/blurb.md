@@ -93,9 +93,9 @@ The agent returns unsigned calls for your signer. Preparing a deposit moves no m
 
 ## What is next
 
-The v0.1.2 cycle is open. In development: a wallet connection so an agent can hand its prepared
-transactions to the operator's own wallet for approval, with no copy-paste; and deposits on more
-chains, starting with Arbitrum. More yield configurations across the risk/return spectrum are
+The v0.1.2 cycle is open. It adds `treasury connect`, which hands each transaction to the
+operator's own wallet — a browser wallet, or an email or social login — for approval in the browser,
+with no copy-paste; and deposits on more chains, starting with Arbitrum. More yield configurations across the risk/return spectrum are
 coming.
 
 ## Links

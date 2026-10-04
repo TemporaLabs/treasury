@@ -14,7 +14,9 @@ Open Agent Treasury (OAT) helps agents manage on-chain capital. Its first skill,
 agents inspect Tempora-curated vaults on Base and Arbitrum One, track USDC positions, and prepare deposits and
 withdrawals. It ships as an agent plugin, a command-line program, and a TypeScript/JavaScript library.
 
-**OAT prepares transactions. Your signer executes them.** It never holds private keys or signs.
+**OAT prepares transactions. Your wallet executes them.** It never holds private keys or signs: with
+`treasury connect` your agent opens a page where you connect your own wallet — a browser wallet, or
+an email or social login — and confirm each transaction; or it hands you unsigned calls for any signer.
 A transaction goes out only from your own wallet, after you approve it there. You decide how much capital an agent may put to work.
 
 > **Experimental — pre-1.0. Real funds, real risk.** Returns are variable, capital is at risk,
@@ -97,7 +99,8 @@ See [vault details](docs/vaults.md) for addresses, access rules, fees, and dated
 ## Security
 
 - **No keys or custody:** your wallet holds the position; only your signer can move funds.
-- **Direct RPC access:** no Tempora service in the request path and no telemetry. Keyed RPC URLs are redacted.
+- **Direct RPC access:** the `earn` commands talk only to your RPC, with no Tempora service in the request path and no telemetry. Keyed RPC URLs are redacted.
+- **Sign-in through Privy:** `treasury connect` signs you in through [Privy](https://privy.io), using Tempora's Privy app unless you set `PRIVY_APP_ID`. Privy, and Tempora as that app's owner, see your login and wallet address, and Privy's script on the page sends its own analytics.
 - **Verifiable builds:** CI checks the committed bundle; [verify its provenance](docs/runbooks/verify_the_bundle.md).
 - **Private vulnerability reporting:** follow [SECURITY.md](SECURITY.md), not a public issue.
 

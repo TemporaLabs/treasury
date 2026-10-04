@@ -26,6 +26,25 @@ Pre-1.0, minor versions may change tool names, schemas and behaviour.
   flag given twice (either spelling), a switch given a value (`--all` takes none), a vault on another
   chain. A verdict such as `WHITELIST_GATED` is still a result and exits 0.
 
+### Added — `treasury connect`: the operator's own wallet, in the browser
+- **`treasury connect wallet | deposit | withdraw | status | disconnect`.** `connect wallet` opens a page
+  on the operator's machine with one Connect button and Privy's window: a browser wallet (MetaMask,
+  Rabby, Coinbase Wallet), or an email, Google, Apple or X login with a Privy embedded wallet. The
+  wallet signs a free sign-in message: checked offline for an ordinary wallet, and through its contract
+  on Base for a smart-contract wallet. `connect deposit` / `connect withdraw` build
+  the calls for the connected account, refuse anything outside the registry or paying anyone else,
+  and hand each call to the wallet in turn on a confirm page; the operator confirms on the page and
+  in the wallet. Each transaction comes back with `verified` read from the receipt — `matched`,
+  `extra_transfer` (the wallet also moved money besides the call), `mismatch`, `reverted` or
+  `unverified` — and the flow stops at the first one that did not land as confirmed. The result's
+  `status` is `completed` only when every call landed; otherwise `stopped` with a `reason`, or
+  `not_reported` when no transaction came back. Each command returns within nine minutes. Nothing
+  signs.
+- `dist/connect-page.js`, the page, built from `connect-page/` with its own dependencies so none of
+  them enters this package's. No WalletConnect or Reown code is included. The page's notices are in
+  `THIRD_PARTY_NOTICES.connect-page.md`.
+- `PRIVY_APP_ID`, `TREASURY_CONNECT_PORT`, `TREASURY_CONNECT_HOME`, `TREASURY_CONNECT_NO_OPEN`, all optional.
+
 ### Removed
 - The MCP server: `dist/mcp-server.mjs`, the `treasury-mcp` bin, `plugin/.mcp.json`, and the
   `@modelcontextprotocol/sdk` dependency (about 90 fewer installed packages; the bundle is 1.5 MB,

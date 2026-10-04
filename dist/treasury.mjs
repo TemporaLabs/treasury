@@ -1443,12 +1443,12 @@ var init_data = __esm({
 });
 
 // node_modules/viem/_esm/utils/data/pad.js
-function pad(hexOrBytes, { dir, size: size5 = 32 } = {}) {
+function pad(hexOrBytes, { dir: dir2, size: size5 = 32 } = {}) {
   if (typeof hexOrBytes === "string")
-    return padHex(hexOrBytes, { dir, size: size5 });
-  return padBytes(hexOrBytes, { dir, size: size5 });
+    return padHex(hexOrBytes, { dir: dir2, size: size5 });
+  return padBytes(hexOrBytes, { dir: dir2, size: size5 });
 }
-function padHex(hex_, { dir, size: size5 = 32 } = {}) {
+function padHex(hex_, { dir: dir2, size: size5 = 32 } = {}) {
   if (size5 === null)
     return hex_;
   const hex3 = hex_.replace("0x", "");
@@ -1458,9 +1458,9 @@ function padHex(hex_, { dir, size: size5 = 32 } = {}) {
       targetSize: size5,
       type: "hex"
     });
-  return `0x${hex3[dir === "right" ? "padEnd" : "padStart"](size5 * 2, "0")}`;
+  return `0x${hex3[dir2 === "right" ? "padEnd" : "padStart"](size5 * 2, "0")}`;
 }
-function padBytes(bytes, { dir, size: size5 = 32 } = {}) {
+function padBytes(bytes, { dir: dir2, size: size5 = 32 } = {}) {
   if (size5 === null)
     return bytes;
   if (bytes.length > size5)
@@ -1471,7 +1471,7 @@ function padBytes(bytes, { dir, size: size5 = 32 } = {}) {
     });
   const paddedBytes = new Uint8Array(size5);
   for (let i = 0; i < size5; i++) {
-    const padEnd = dir === "right";
+    const padEnd = dir2 === "right";
     paddedBytes[padEnd ? i : size5 - i - 1] = bytes[padEnd ? i : bytes.length - i - 1];
   }
   return paddedBytes;
@@ -1515,18 +1515,18 @@ var init_encoding = __esm({
 });
 
 // node_modules/viem/_esm/utils/data/trim.js
-function trim(hexOrBytes, { dir = "left" } = {}) {
+function trim(hexOrBytes, { dir: dir2 = "left" } = {}) {
   let data = typeof hexOrBytes === "string" ? hexOrBytes.replace("0x", "") : hexOrBytes;
   let sliceLength = 0;
   for (let i = 0; i < data.length - 1; i++) {
-    if (data[dir === "left" ? i : data.length - i - 1].toString() === "0")
+    if (data[dir2 === "left" ? i : data.length - i - 1].toString() === "0")
       sliceLength++;
     else
       break;
   }
-  data = dir === "left" ? data.slice(sliceLength) : data.slice(0, data.length - sliceLength);
+  data = dir2 === "left" ? data.slice(sliceLength) : data.slice(0, data.length - sliceLength);
   if (typeof hexOrBytes === "string") {
-    if (data.length === 1 && dir === "right")
+    if (data.length === 1 && dir2 === "right")
       data = `${data}0`;
     return `0x${data.length % 2 === 1 ? `0${data}` : data}`;
   }
@@ -6383,7 +6383,7 @@ function weierstrass(curveDef) {
   function prepSig(msgHash, privateKey, opts = defaultSigOpts) {
     if (["recovered", "canonical"].some((k) => k in opts))
       throw new Error("sign() legacy options not supported");
-    const { hash: hash4, randomBytes: randomBytes2 } = CURVE;
+    const { hash: hash4, randomBytes: randomBytes3 } = CURVE;
     let { lowS, prehash, extraEntropy: ent } = opts;
     if (lowS == null)
       lowS = true;
@@ -6395,7 +6395,7 @@ function weierstrass(curveDef) {
     const d = normPrivateKeyToScalar(privateKey);
     const seedArgs = [int2octets(d), int2octets(h1int)];
     if (ent != null && ent !== false) {
-      const e = ent === true ? randomBytes2(Fp.BYTES) : ent;
+      const e = ent === true ? randomBytes3(Fp.BYTES) : ent;
       seedArgs.push(ensureBytes("extraEntropy", e));
     }
     const seed = concatBytes3(...seedArgs);
@@ -7932,7 +7932,7 @@ function charCodeToBase162(char) {
   return void 0;
 }
 function pad2(bytes, options = {}) {
-  const { dir, size: size5 = 32 } = options;
+  const { dir: dir2, size: size5 = 32 } = options;
   if (size5 === 0)
     return bytes;
   if (bytes.length > size5)
@@ -7943,22 +7943,22 @@ function pad2(bytes, options = {}) {
     });
   const paddedBytes = new Uint8Array(size5);
   for (let i = 0; i < size5; i++) {
-    const padEnd = dir === "right";
+    const padEnd = dir2 === "right";
     paddedBytes[padEnd ? i : size5 - i - 1] = bytes[padEnd ? i : bytes.length - i - 1];
   }
   return paddedBytes;
 }
 function trim2(value, options = {}) {
-  const { dir = "left" } = options;
+  const { dir: dir2 = "left" } = options;
   let data = value;
   let sliceLength = 0;
   for (let i = 0; i < data.length - 1; i++) {
-    if (data[dir === "left" ? i : data.length - i - 1].toString() === "0")
+    if (data[dir2 === "left" ? i : data.length - i - 1].toString() === "0")
       sliceLength++;
     else
       break;
   }
-  data = dir === "left" ? data.slice(sliceLength) : data.slice(0, data.length - sliceLength);
+  data = dir2 === "left" ? data.slice(sliceLength) : data.slice(0, data.length - sliceLength);
   return data;
 }
 var charCodeMap2;
@@ -8003,7 +8003,7 @@ function assertEndOffset3(value, start, end) {
   }
 }
 function pad3(hex_, options = {}) {
-  const { dir, size: size5 = 32 } = options;
+  const { dir: dir2, size: size5 = 32 } = options;
   if (size5 === 0)
     return hex_;
   const hex3 = hex_.replace("0x", "");
@@ -8013,22 +8013,22 @@ function pad3(hex_, options = {}) {
       targetSize: size5,
       type: "Hex"
     });
-  return `0x${hex3[dir === "right" ? "padEnd" : "padStart"](size5 * 2, "0")}`;
+  return `0x${hex3[dir2 === "right" ? "padEnd" : "padStart"](size5 * 2, "0")}`;
 }
 function trim3(value, options = {}) {
-  const { dir = "left" } = options;
+  const { dir: dir2 = "left" } = options;
   let data = value.replace("0x", "");
   let sliceLength = 0;
   for (let i = 0; i < data.length - 1; i++) {
-    if (data[dir === "left" ? i : data.length - i - 1].toString() === "0")
+    if (data[dir2 === "left" ? i : data.length - i - 1].toString() === "0")
       sliceLength++;
     else
       break;
   }
-  data = dir === "left" ? data.slice(sliceLength) : data.slice(0, data.length - sliceLength);
+  data = dir2 === "left" ? data.slice(sliceLength) : data.slice(0, data.length - sliceLength);
   if (data === "0")
     return "0x";
-  if (dir === "right" && data.length % 2 === 1)
+  if (dir2 === "right" && data.length % 2 === 1)
     return `0x${data}0`;
   return `0x${data}`;
 }
@@ -9873,8 +9873,8 @@ var init_call = __esm({
 });
 
 // src/cli.ts
-import { realpathSync as realpathSync3 } from "fs";
-import { fileURLToPath as fileURLToPath3 } from "url";
+import { realpathSync as realpathSync4 } from "fs";
+import { fileURLToPath as fileURLToPath4 } from "url";
 import { parseArgs } from "util";
 
 // node_modules/zod/v4/classic/external.js
@@ -35487,6 +35487,18 @@ var InvalidWrappedSignatureError = class extends BaseError3 {
   }
 };
 
+// node_modules/viem/_esm/utils/signature/recoverMessageAddress.js
+async function recoverMessageAddress({ message, signature }) {
+  return recoverAddress({ hash: hashMessage(message), signature });
+}
+
+// node_modules/viem/_esm/utils/signature/verifyMessage.js
+init_getAddress();
+init_isAddressEqual();
+async function verifyMessage({ address: address2, message, signature }) {
+  return isAddressEqual(getAddress(address2), await recoverMessageAddress({ message, signature }));
+}
+
 // node_modules/viem/_esm/utils/unit/formatUnits.js
 init_Value();
 function formatUnits(value, decimals) {
@@ -36832,7 +36844,7 @@ var VerificationError = class extends Error {
 };
 
 // node_modules/viem/_esm/actions/public/verifyMessage.js
-async function verifyMessage(client, { address: address2, message, factory, factoryData, signature, ...callRequest }) {
+async function verifyMessage2(client, { address: address2, message, factory, factoryData, signature, ...callRequest }) {
   const hash4 = hashMessage(message);
   return getAction(client, verifyHash, "verifyHash")({
     address: address2,
@@ -37885,7 +37897,7 @@ function publicActions(client) {
     simulateCalls: (args) => simulateCalls(client, args),
     simulateContract: (args) => simulateContract(client, args),
     verifyHash: (args) => verifyHash(client, args),
-    verifyMessage: (args) => verifyMessage(client, args),
+    verifyMessage: (args) => verifyMessage2(client, args),
     verifySiweMessage: (args) => verifySiweMessage(client, args),
     verifyTypedData: (args) => verifyTypedData(client, args),
     uninstallFilter: (args) => uninstallFilter(client, args),
@@ -38035,6 +38047,7 @@ function http(url2, config2 = {}) {
 init_base();
 init_contract();
 init_node();
+init_decodeFunctionData();
 init_encodeFunctionData();
 init_getAbiItem();
 init_getAddress();
@@ -38871,7 +38884,7 @@ async function preflightDeposit(args) {
     return refuse(`registry shareDecimals ${vault.shareDecimals} != on-chain decimals() ${onchainDecimals}`);
   }
   findings.push(`identity OK at block ${block}: asset()=${onchainAsset}, decimals()=${onchainDecimals}`);
-  const assets = parseAmount(args.assetsHuman ?? "1", vault.asset.decimals, `deposit amount (${vault.asset.symbol})`);
+  const assets2 = parseAmount(args.assetsHuman ?? "1", vault.asset.decimals, `deposit amount (${vault.asset.symbol})`);
   let assetBal, shareBal, allowance, oneShareInAssets, totalAssets, maxDep;
   try {
     [assetBal, shareBal, allowance, oneShareInAssets, totalAssets, maxDep] = await Promise.all([
@@ -38898,9 +38911,9 @@ async function preflightDeposit(args) {
     maxDepositRaw: maxDep.toString(),
     note: "maxDeposit() is ADVISORY ONLY: measured returning uint256.max on a whitelist-gated Fusion vault and 0 on an open Morpho V2 vault. The simulation below is the verdict."
   };
-  if (assetBal < assets) findings.push(`depositor holds ${balances.asset}, less than the ${formatAmount(assets, vault.asset.decimals)} requested \u2014 a live deposit would fail on balance even if access is open`);
+  if (assetBal < assets2) findings.push(`depositor holds ${balances.asset}, less than the ${formatAmount(assets2, vault.asset.decimals)} requested \u2014 a live deposit would fail on balance even if access is open`);
   try {
-    const previewShares = await client.readContract({ address: vault.address, abi: erc4626Abi, functionName: "previewDeposit", args: [assets] });
+    const previewShares = await client.readContract({ address: vault.address, abi: erc4626Abi, functionName: "previewDeposit", args: [assets2] });
     quotes.previewShares = `${formatAmount(previewShares, vault.shareDecimals)} ${vault.symbol}`;
   } catch {
     findings.push("previewDeposit() reverted; no shares quote");
@@ -38910,7 +38923,7 @@ async function preflightDeposit(args) {
       address: vault.address,
       abi: erc4626Abi,
       functionName: "deposit",
-      args: [assets, depositor],
+      args: [assets2, depositor],
       account: depositor
     });
     findings.push("simulated deposit() SUCCEEDED from this address with the current allowance");
@@ -39027,11 +39040,11 @@ async function measureExit(a) {
       note: `the account holds ${formatAmount(shares, vault.shareDecimals)} ${vault.symbol}, which converts to nothing at this share price. No withdrawal was simulated.`
     };
   }
-  const attempt = async (assets) => {
-    if (assets === 0n) return "refused";
+  const attempt = async (assets2) => {
+    if (assets2 === 0n) return "refused";
     if (a.now() >= a.deadline) return "unresolved";
     try {
-      await client.simulateContract({ address: vault.address, abi: erc4626Abi, functionName: "withdraw", args: [assets, principal, principal], account: principal });
+      await client.simulateContract({ address: vault.address, abi: erc4626Abi, functionName: "withdraw", args: [assets2, principal, principal], account: principal });
       return "paid";
     } catch (e) {
       return isRevert(e) ? "refused" : "unresolved";
@@ -39175,16 +39188,16 @@ async function getPosition(args) {
 // src/quote.ts
 async function quoteDeposit(args) {
   const { vault, depositor, client } = args;
-  const assets = parseAmount(args.assetsHuman, vault.asset.decimals, `deposit amount (${vault.asset.symbol})`);
+  const assets2 = parseAmount(args.assetsHuman, vault.asset.decimals, `deposit amount (${vault.asset.symbol})`);
   const pre = await preflightDeposit({ vault, depositor, assetsHuman: args.assetsHuman, client });
   const [previewShares, oneShareInAssets] = await Promise.all([
-    client.readContract({ address: vault.address, abi: erc4626Abi, functionName: "previewDeposit", args: [assets] }).catch(() => void 0),
+    client.readContract({ address: vault.address, abi: erc4626Abi, functionName: "previewDeposit", args: [assets2] }).catch(() => void 0),
     client.readContract({ address: vault.address, abi: erc4626Abi, functionName: "convertToAssets", args: [10n ** BigInt(vault.shareDecimals)] })
   ]);
   const q = {
     vault: vault.symbol,
     depositor,
-    amountUsdc: `${formatAmount(assets, vault.asset.decimals)} ${vault.asset.symbol}`,
+    amountUsdc: `${formatAmount(assets2, vault.asset.decimals)} ${vault.asset.symbol}`,
     expectedShares: previewShares === void 0 ? "unavailable (previewDeposit reverted)" : `${formatAmount(previewShares, vault.shareDecimals)} ${vault.symbol}`,
     sharePriceInAssets: `${formatAmount(oneShareInAssets, vault.asset.decimals)} ${vault.asset.symbol} per share`,
     preflight: pre,
@@ -39197,17 +39210,17 @@ async function quoteDeposit(args) {
 }
 async function quoteWithdraw(args) {
   const { vault, owner, client } = args;
-  const assets = parseAmount(args.assetsHuman, vault.asset.decimals, `withdraw amount (${vault.asset.symbol})`);
+  const assets2 = parseAmount(args.assetsHuman, vault.asset.decimals, `withdraw amount (${vault.asset.symbol})`);
   const [held, toBurn, maxW, liquid] = await Promise.all([
     client.readContract({ address: vault.address, abi: erc4626Abi, functionName: "balanceOf", args: [owner] }),
-    client.readContract({ address: vault.address, abi: erc4626Abi, functionName: "previewWithdraw", args: [assets] }).catch(() => void 0),
+    client.readContract({ address: vault.address, abi: erc4626Abi, functionName: "previewWithdraw", args: [assets2] }).catch(() => void 0),
     client.readContract({ address: vault.address, abi: erc4626Abi, functionName: "maxWithdraw", args: [owner] }).catch(() => void 0),
     client.readContract({ address: vault.asset.address, abi: erc4626Abi, functionName: "balanceOf", args: [vault.address] })
   ]);
   let simulated = "UNRESOLVED";
   let note = "";
   try {
-    await client.simulateContract({ address: vault.address, abi: erc4626Abi, functionName: "withdraw", args: [assets, owner, owner], account: owner });
+    await client.simulateContract({ address: vault.address, abi: erc4626Abi, functionName: "withdraw", args: [assets2, owner, owner], account: owner });
     simulated = "OK";
     note = "simulated withdraw() from the owner succeeds at this block";
   } catch (e) {
@@ -39217,8 +39230,8 @@ async function quoteWithdraw(args) {
       const reason = obs.reason ?? "";
       if (toBurn !== void 0 && held < toBurn) {
         note = `withdraw() reverted: the owner holds ${formatAmount(held, vault.shareDecimals)} ${vault.symbol} against ${formatAmount(toBurn, vault.shareDecimals)} needed \u2014 insufficient shares. (${reason || obs.selector})`;
-      } else if (/transfer amount exceeds balance|ERC20InsufficientBalance/i.test(reason) || liquid < assets) {
-        note = `withdraw() reverted: the vault holds ${formatAmount(liquid, vault.asset.decimals)} ${vault.asset.symbol} liquid against ${formatAmount(assets, vault.asset.decimals)} requested \u2014 this chassis pays withdrawals from its own balance in the same block; the rest is deployed and needs the fund to unwind first. Withdraw at most the liquid amount now, or wait. maxWithdraw() (${maxW === void 0 ? "reverted" : formatAmount(maxW, vault.asset.decimals)}) does not know this.`;
+      } else if (/transfer amount exceeds balance|ERC20InsufficientBalance/i.test(reason) || liquid < assets2) {
+        note = `withdraw() reverted: the vault holds ${formatAmount(liquid, vault.asset.decimals)} ${vault.asset.symbol} liquid against ${formatAmount(assets2, vault.asset.decimals)} requested \u2014 this chassis pays withdrawals from its own balance in the same block; the rest is deployed and needs the fund to unwind first. Withdraw at most the liquid amount now, or wait. maxWithdraw() (${maxW === void 0 ? "reverted" : formatAmount(maxW, vault.asset.decimals)}) does not know this.`;
       } else {
         note = `withdraw() reverted "${reason || obs.selector}" \u2014 not a balance or liquidity shortfall; treat as a vault-side refusal.`;
       }
@@ -39229,7 +39242,7 @@ async function quoteWithdraw(args) {
   return {
     vault: vault.symbol,
     owner,
-    amountUsdc: `${formatAmount(assets, vault.asset.decimals)} ${vault.asset.symbol}`,
+    amountUsdc: `${formatAmount(assets2, vault.asset.decimals)} ${vault.asset.symbol}`,
     sharesToBurn: toBurn === void 0 ? "unavailable (previewWithdraw reverted)" : `${formatAmount(toBurn, vault.shareDecimals)} ${vault.symbol}`,
     sharesHeld: `${formatAmount(held, vault.shareDecimals)} ${vault.symbol}`,
     simulated,
@@ -39269,13 +39282,13 @@ function assert4626(vault) {
 }
 function buildDeposit(vault, args) {
   assert4626(vault);
-  const assets = parseAmount(args.assetsHuman, vault.asset.decimals, `deposit amount (${vault.asset.symbol})`);
-  const pretty = `${formatAmount(assets, vault.asset.decimals)} ${vault.asset.symbol}`;
+  const assets2 = parseAmount(args.assetsHuman, vault.asset.decimals, `deposit amount (${vault.asset.symbol})`);
+  const pretty = `${formatAmount(assets2, vault.asset.decimals)} ${vault.asset.symbol}`;
   return [
     {
       chainId: vault.chainId,
       to: vault.asset.address,
-      ...encodeCall(erc4626Abi, "approve", [vault.address, assets]),
+      ...encodeCall(erc4626Abi, "approve", [vault.address, assets2]),
       value: "0x0",
       description: `Approve ${vault.symbol} vault (${vault.address}) to pull ${pretty}`,
       step: 1,
@@ -39285,7 +39298,7 @@ function buildDeposit(vault, args) {
     {
       chainId: vault.chainId,
       to: vault.address,
-      ...encodeCall(erc4626Abi, "deposit", [assets, args.receiver]),
+      ...encodeCall(erc4626Abi, "deposit", [assets2, args.receiver]),
       value: "0x0",
       description: `Deposit ${pretty} into ${vault.name}; shares minted to ${args.receiver}`,
       step: 2,
@@ -39296,7 +39309,7 @@ function buildDeposit(vault, args) {
         contract: vault.asset.address,
         owner: args.account,
         spender: vault.address,
-        minimum: assets.toString(),
+        minimum: assets2.toString(),
         why: "Do not estimate or send this until allowance(owner, spender) >= minimum reads back on the RPC you will send through. The receipt for step 1 can come from a node ahead of the one that simulates step 2 (measured twice on real funds)."
       }
     }
@@ -39319,14 +39332,14 @@ function buildWithdraw(vault, args) {
       }
     ];
   }
-  const assets = parseAmount(args.assetsHuman, vault.asset.decimals, `withdraw amount (${vault.asset.symbol})`);
+  const assets2 = parseAmount(args.assetsHuman, vault.asset.decimals, `withdraw amount (${vault.asset.symbol})`);
   return [
     {
       chainId: vault.chainId,
       to: vault.address,
-      ...encodeCall(erc4626Abi, "withdraw", [assets, args.receiver, args.owner]),
+      ...encodeCall(erc4626Abi, "withdraw", [assets2, args.receiver, args.owner]),
       value: "0x0",
-      description: `Withdraw ${formatAmount(assets, vault.asset.decimals)} ${vault.asset.symbol} from ${vault.name}, paid to ${args.receiver}; the vault burns the shares that costs at inclusion`,
+      description: `Withdraw ${formatAmount(assets2, vault.asset.decimals)} ${vault.asset.symbol} from ${vault.name}, paid to ${args.receiver}; the vault burns the shares that costs at inclusion`,
       step: 1,
       of: 1,
       gasAdvice: GAS_ADVICE
@@ -39707,8 +39720,704 @@ function buildCommands() {
   return commands;
 }
 
+// src/connect/config.ts
+var DEFAULT_PRIVY_APP_ID = "cmubfegl2028d0ci3n0f2u6z5";
+var DEFAULT_CONNECT_PORT = 53682;
+var privyAppId = () => {
+  const v = (process.env["PRIVY_APP_ID"] ?? "").trim();
+  return v.length > 0 && !v.includes("${") ? v : DEFAULT_PRIVY_APP_ID;
+};
+var connectPort = () => {
+  const raw = (process.env["TREASURY_CONNECT_PORT"] ?? "").trim();
+  const n = Number(raw);
+  return raw.length > 0 && Number.isInteger(n) && n > 0 && n < 65536 ? n : DEFAULT_CONNECT_PORT;
+};
+var connectHome = () => {
+  const v = (process.env["TREASURY_CONNECT_HOME"] ?? "").trim();
+  return v.length > 0 && !v.includes("${") ? v : void 0;
+};
+var noOpen = () => (process.env["TREASURY_CONNECT_NO_OPEN"] ?? "").trim().length > 0;
+
+// src/connect/gate.ts
+var UNLIMITED = 2n ** 128n;
+var same = (a, b) => getAddress(a) === getAddress(b);
+function admit(calls, account) {
+  if (calls.length === 0) throw new Error("refused: there is nothing to confirm");
+  const vaults = listVaults();
+  const out = [];
+  calls.forEach((c, i) => {
+    const at = `call ${i + 1} of ${calls.length}`;
+    if (!isSupportedChainId(c.chainId)) throw new Error(`refused (${at}): chain ${c.chainId} is not supported`);
+    if (BigInt(c.value) !== 0n) throw new Error(`refused (${at}): it attaches native value, which no vault call needs`);
+    let decoded;
+    try {
+      decoded = decodeFunctionData({ abi: erc4626Abi, data: c.data });
+    } catch {
+      throw new Error(`refused (${at}): its calldata is not an approve, deposit, withdraw or redeem`);
+    }
+    const name = decoded.functionName;
+    const args = decoded.args ?? [];
+    if (name === "approve") {
+      const vault2 = vaults.find((v) => v.chainId === c.chainId && same(v.asset.address, c.to));
+      if (!vault2) throw new Error(`refused (${at}): approve on ${c.to}, which is not the asset of a listed vault on chain ${c.chainId}`);
+      const [spender, value] = args;
+      const target = vaults.find((v) => v.chainId === c.chainId && same(v.address, spender) && same(v.asset.address, c.to));
+      if (!target) throw new Error(`refused (${at}): the approval goes to ${spender}, not to a listed vault for this asset`);
+      if (value === 0n) throw new Error(`refused (${at}): an approval of 0`);
+      if (value >= UNLIMITED) throw new Error(`refused (${at}): an unlimited approval`);
+      out.push({ kind: "approve", vault: target, amount: value });
+      return;
+    }
+    const vault = vaults.find((v) => v.chainId === c.chainId && same(v.address, c.to));
+    if (!vault) throw new Error(`refused (${at}): ${c.to} is not a listed vault on chain ${c.chainId}`);
+    if (name === "deposit") {
+      const [assets2, receiver] = args;
+      if (assets2 === 0n) throw new Error(`refused (${at}): a deposit of 0`);
+      if (!same(receiver, account)) throw new Error(`refused (${at}): the shares would go to ${receiver}, not the connected account ${account}`);
+      out.push({ kind: "deposit", vault, amount: assets2 });
+      return;
+    }
+    if (name === "withdraw" || name === "redeem") {
+      const [amount, receiver, owner] = args;
+      if (amount === 0n) throw new Error(`refused (${at}): a ${name} of 0`);
+      if (!same(receiver, account)) throw new Error(`refused (${at}): the USDC would go to ${receiver}, not the connected account ${account}`);
+      if (!same(owner, account)) throw new Error(`refused (${at}): it burns the shares of ${owner}, not the connected account ${account}`);
+      out.push({ kind: name, vault, amount });
+      return;
+    }
+    throw new Error(`refused (${at}): ${name} is not something this page hands to a wallet`);
+  });
+  out.forEach((a, i) => {
+    if (a.kind !== "approve") return;
+    const next = out[i + 1];
+    if (!next || next.kind !== "deposit" || next.vault.address !== a.vault.address || next.amount !== a.amount) {
+      throw new Error(`refused (call ${i + 1}): an approval must be followed by a deposit of exactly that amount into the same vault`);
+    }
+  });
+  return out;
+}
+
+// src/connect/http.ts
+import http2 from "http";
+import { randomBytes as randomBytes2, timingSafeEqual } from "crypto";
+var MAX_BODY_BYTES = 16 * 1024;
+var CANCEL_GRACE_MS = 3e4;
+var same2 = (a, b) => {
+  const x = Buffer.from(a);
+  const y = Buffer.from(b);
+  return x.length === y.length && timingSafeEqual(x, y);
+};
+async function serveOnce(flow) {
+  const secret = randomBytes2(24).toString("hex");
+  const origin = `http://localhost:${flow.port}`;
+  let settled = false;
+  let busy = false;
+  let deferred;
+  const expiresAt = Date.now() + flow.ttlMs;
+  let resolveDone;
+  const done = new Promise((r) => resolveDone = r);
+  let issued;
+  const json2 = (res, code, body) => {
+    res.writeHead(code, { "content-type": "application/json", "cache-control": "no-store", "x-content-type-options": "nosniff" });
+    res.end(JSON.stringify(body));
+  };
+  const readBody = (req) => new Promise((resolve, reject) => {
+    let size5 = 0;
+    const chunks = [];
+    req.on("data", (c) => {
+      size5 += c.length;
+      if (size5 > MAX_BODY_BYTES) {
+        reject(new Error("body too large"));
+        req.destroy();
+        return;
+      }
+      chunks.push(c);
+    });
+    req.on("end", () => {
+      try {
+        const v = JSON.parse(Buffer.concat(chunks).toString("utf8"));
+        if (v === null || typeof v !== "object" || Array.isArray(v)) throw new Error("not an object");
+        resolve(v);
+      } catch {
+        reject(new Error("body is not a JSON object"));
+      }
+    });
+    req.on("error", reject);
+  });
+  const onRequest = (req, res) => {
+    void (async () => {
+      try {
+        if (String(req.headers.host ?? "") !== new URL(origin).host) return json2(res, 403, { ok: false, reason: "bad host" });
+        const url2 = new URL(req.url ?? "/", origin);
+        if (req.method === "GET") {
+          if (!same2(url2.searchParams.get("s") ?? "", secret)) return json2(res, 404, { ok: false, reason: "not found" });
+          if (url2.pathname === "/info") {
+            if (settled) return json2(res, 410, { ok: false, reason: "already finished" });
+            return json2(res, 200, { ...flow.info(), msLeft: Math.max(0, expiresAt - Date.now()) });
+          }
+          if (url2.pathname === `/${flow.mode}`) {
+            res.writeHead(200, {
+              "content-type": "text/html; charset=utf-8",
+              "cache-control": "no-store",
+              "referrer-policy": "no-referrer",
+              "content-security-policy": flow.csp,
+              "x-content-type-options": "nosniff"
+            });
+            return res.end(flow.html(secret));
+          }
+          const asset = flow.assets[url2.pathname];
+          if (asset) {
+            res.writeHead(200, { "content-type": asset.type, "cache-control": "no-store", "x-content-type-options": "nosniff" });
+            return res.end(asset.body);
+          }
+          return json2(res, 404, { ok: false, reason: "not found" });
+        }
+        if (req.method === "POST" && (url2.pathname === "/challenge" || url2.pathname === "/result")) {
+          if (req.headers.origin !== origin) return json2(res, 403, { ok: false, reason: "bad origin" });
+          if (!String(req.headers["content-type"] ?? "").startsWith("application/json")) return json2(res, 415, { ok: false, reason: "expected JSON" });
+          if (settled) return json2(res, 409, { ok: false, reason: "already finished" });
+          const body = await readBody(req);
+          if (typeof body["s"] !== "string" || !same2(body["s"], secret)) return json2(res, 404, { ok: false, reason: "not found" });
+          if (url2.pathname === "/challenge") {
+            if (!flow.challenge) return json2(res, 404, { ok: false, reason: "not found" });
+            const a = body["address"];
+            if (typeof a !== "string" || !isAddress(a)) return json2(res, 400, { ok: false, reason: "not an address" });
+            const address2 = getAddress(a);
+            const message = flow.challenge(address2, origin, secret);
+            issued = { address: address2, message };
+            return json2(res, 200, { ok: true, message });
+          }
+          if (body["rejected"] === true) {
+            const reason = typeof body["reason"] === "string" ? body["reason"].slice(0, 300) : "declined in the browser";
+            flow.onReject?.(body);
+            finishWhenIdle({ ok: false, reason });
+            return json2(res, 200, { ok: true });
+          }
+          if (busy) return json2(res, 409, { ok: false, reason: "already in progress" });
+          busy = true;
+          try {
+            const r = await flow.accept(body, { nonce: secret, origin, ...issued ? { message: issued.message, challengedAddress: issued.address } : {} });
+            if (!r.ok) {
+              if (r.fatal) finish({ ok: false, reason: r.reason });
+              return json2(res, 400, { ok: false, reason: r.reason });
+            }
+            if (r.final) finish({ ok: true, value: r.value });
+            return json2(res, 200, { ok: true, ...r.reply });
+          } finally {
+            busy = false;
+            if (deferred) finish(deferred);
+          }
+        }
+        return json2(res, 405, { ok: false, reason: "method not allowed" });
+      } catch (e) {
+        return json2(res, 400, { ok: false, reason: e instanceof Error ? e.message : "bad request" });
+      }
+    })();
+  };
+  const servers = [http2.createServer(onRequest), http2.createServer(onRequest)];
+  const closeAll = () => {
+    for (const s of servers) {
+      s.close();
+      s.closeAllConnections();
+    }
+  };
+  const finish = (r) => {
+    if (settled) return;
+    settled = true;
+    resolveDone(r);
+    setTimeout(closeAll, 1500).unref();
+  };
+  const finishWhenIdle = (r) => {
+    if (!busy) return finish(r);
+    if (deferred) return;
+    deferred = r;
+    setTimeout(() => finish(r), flow.cancelGraceMs ?? CANCEL_GRACE_MS).unref();
+  };
+  const listen = (server, host, optional2) => new Promise((resolve, reject) => {
+    server.once("error", (e) => {
+      if (e.code === "EADDRINUSE") {
+        return reject(new Error(`port ${flow.port} is in use on ${host} \u2014 another sign-in or confirmation page is probably still open; finish or close it, then retry`));
+      }
+      if (optional2 && (e.code === "EADDRNOTAVAIL" || e.code === "EAFNOSUPPORT")) return resolve();
+      reject(e);
+    });
+    server.listen({ port: flow.port, host, ipv6Only: host === "::1" }, () => resolve());
+  });
+  try {
+    await listen(servers[0], "127.0.0.1", false);
+    await listen(servers[1], "::1", true);
+  } catch (e) {
+    closeAll();
+    throw e;
+  }
+  const timer = setTimeout(
+    // A cancel still waiting on a check is the operator's reason; it wins over the clock.
+    () => finish(deferred ?? { ok: false, reason: flow.timeoutReason?.() ?? `nothing happened in the browser within ${Math.round(flow.ttlMs / 6e4)} minutes` }),
+    flow.ttlMs
+  );
+  timer.unref();
+  void done.then(() => clearTimeout(timer));
+  return { url: `${origin}/${flow.mode}?s=${secret}`, done, close: () => finish({ ok: false, reason: "cancelled" }) };
+}
+
+// src/connect/open.ts
+import { spawn } from "child_process";
+function canOpenBrowser() {
+  if (noOpen()) return false;
+  if (process.env["SSH_CONNECTION"] || process.env["SSH_TTY"]) return false;
+  if (process.platform === "linux" && !process.env["DISPLAY"] && !process.env["WAYLAND_DISPLAY"]) return false;
+  return true;
+}
+function openBrowser(url2) {
+  if (!canOpenBrowser()) return false;
+  try {
+    const child = process.platform === "darwin" ? spawn("open", [url2], { stdio: "ignore", detached: true }) : process.platform === "win32" ? spawn("cmd", ["/c", "start", "", url2], { stdio: "ignore", detached: true }) : spawn("xdg-open", [url2], { stdio: "ignore", detached: true });
+    child.on("error", () => {
+    });
+    child.unref();
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+// src/connect/page.ts
+import { readFileSync as readFileSync3, realpathSync as realpathSync3 } from "fs";
+import { fileURLToPath as fileURLToPath3, pathToFileURL as pathToFileURL3 } from "url";
+var PAGE_CSP = [
+  "default-src 'self'",
+  "script-src 'self' https://challenges.cloudflare.com",
+  "style-src 'self' 'unsafe-inline'",
+  "img-src 'self' data: blob: https:",
+  "font-src 'self' data:",
+  "object-src 'none'",
+  "base-uri 'self'",
+  "form-action 'none'",
+  "frame-ancestors 'none'",
+  "child-src https://auth.privy.io",
+  "frame-src https://auth.privy.io https://challenges.cloudflare.com",
+  "connect-src 'self' https://auth.privy.io https://*.rpc.privy.systems",
+  "worker-src 'self'",
+  "manifest-src 'self'"
+].join("; ");
+var here = pathToFileURL3(realpathSync3(fileURLToPath3(import.meta.url)));
+function readPageBundle() {
+  for (const rel of ["./connect-page.js", "../../dist/connect-page.js"]) {
+    try {
+      return readFileSync3(new URL(rel, here));
+    } catch {
+    }
+  }
+  throw new Error("the connect page is not built (dist/connect-page.js is missing) \u2014 run `npm ci && npm run build` in connect-page/");
+}
+function shell(secret, title) {
+  return `<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>${title}</title>
+<style>
+  :root { --ink:#22303F; --navy:#1E3553; --navy-700:#2A456A; --steel:#465569; --slate:#5F6B7B; --paper:#FFFFFF; --ground:#F3F6F9;
+    --hair:rgba(34,48,63,.12); --blue:#76A6D5; --lavender:#B9A7D6; --grey:#B2B2B2; --ok:#2E8B57; --bad:#B4362A; --warn:#8A5A00; }
+  html,body { margin:0; min-height:100%; color:var(--ink); font:15px/1.55 Inter,ui-sans-serif,system-ui,-apple-system,"Segoe UI",Roboto,sans-serif; -webkit-font-smoothing:antialiased; }
+  body { background:
+    radial-gradient(ellipse 48% 60% at 72% 60%, rgba(255,255,255,.9), rgba(255,255,255,0) 72%),
+    radial-gradient(ellipse 60% 75% at 0% 0%, rgba(118,166,213,.16), rgba(118,166,213,0) 70%),
+    radial-gradient(ellipse 55% 65% at 100% 100%, rgba(185,167,214,.17), rgba(185,167,214,0) 70%),
+    linear-gradient(90deg, #e9f1f9 0%, #eff1f6 50%, #efecf6 100%); min-height:100vh; }
+  :focus-visible { outline:2px solid #266cad; outline-offset:2px; }
+</style>
+</head>
+<body>
+<div id="root"></div>
+<script src="/app.js?s=${secret}"></script>
+</body>
+</html>
+`;
+}
+
+// src/connect/session.ts
+import { chmodSync, mkdirSync, readFileSync as readFileSync4, rmSync, writeFileSync } from "fs";
+import { homedir } from "os";
+import { join } from "path";
+var dir = () => connectHome() ?? join(homedir(), ".config", "treasury");
+var sessionPath = () => join(dir(), "connect-session.json");
+function readSession() {
+  let raw;
+  try {
+    raw = readFileSync4(sessionPath(), "utf8");
+  } catch {
+    return void 0;
+  }
+  try {
+    const v = JSON.parse(raw);
+    if (typeof v.account !== "string" || !isAddress(v.account)) return void 0;
+    if (v.walletType !== "external" && v.walletType !== "embedded") return void 0;
+    return { account: getAddress(v.account), walletType: v.walletType, connectedAtIso: String(v.connectedAtIso ?? "") };
+  } catch {
+    return void 0;
+  }
+}
+function writeSession(s) {
+  mkdirSync(dir(), { recursive: true, mode: 448 });
+  writeFileSync(sessionPath(), `${JSON.stringify(s, null, 2)}
+`, { mode: 384 });
+  chmodSync(sessionPath(), 384);
+}
+function clearSession() {
+  const had = readSession() !== void 0;
+  rmSync(sessionPath(), { force: true });
+  return had;
+}
+
+// src/connect/verify.ts
+var approvalEvent = parseAbiItem("event Approval(address indexed owner, address indexed spender, uint256 value)");
+var transferEvent = parseAbiItem("event Transfer(address indexed from, address indexed to, uint256 value)");
+var depositEvent2 = parseAbiItem("event Deposit(address indexed sender, address indexed owner, uint256 assets, uint256 shares)");
+var withdrawEvent2 = parseAbiItem("event Withdraw(address indexed sender, address indexed receiver, address indexed owner, uint256 assets, uint256 shares)");
+var same3 = (a, b) => getAddress(a) === getAddress(b);
+async function verifyLanded(client, hash4, call2, account, opts = {}) {
+  const attempts = opts.attempts ?? 30;
+  const delayMs = opts.delayMs ?? 2e3;
+  let receipt;
+  for (let i = 0; i < attempts && !receipt && (opts.deadline === void 0 || Date.now() < opts.deadline); i++) {
+    try {
+      receipt = await client.getTransactionReceipt({ hash: hash4 });
+    } catch {
+      await new Promise((r) => setTimeout(r, delayMs));
+    }
+  }
+  if (!receipt) return { verified: "unverified", detail: `no receipt for ${hash4} in time; look it up on the explorer before retrying anything` };
+  if (receipt.status !== "success") return { verified: "reverted", detail: `${hash4} reverted on chain; nothing it was meant to do happened` };
+  const vault = call2.vault.address;
+  const asset = call2.vault.asset.address;
+  const logs = receipt.logs;
+  const fromAsset = logs.filter((l) => same3(l.address, asset));
+  const fromVault = logs.filter((l) => same3(l.address, vault));
+  let found = false;
+  if (call2.kind === "approve") {
+    found = parseEventLogs({ abi: [approvalEvent], logs: fromAsset }).some(
+      (e) => same3(e.args.owner, account) && same3(e.args.spender, vault) && e.args.value === call2.amount
+    );
+  } else if (call2.kind === "deposit") {
+    found = parseEventLogs({ abi: [depositEvent2], logs: fromVault }).some((e) => same3(e.args.owner, account) && e.args.assets === call2.amount);
+  } else {
+    found = parseEventLogs({ abi: [withdrawEvent2], logs: fromVault }).some(
+      (e) => same3(e.args.owner, account) && same3(e.args.receiver, account) && (call2.kind === "withdraw" ? e.args.assets === call2.amount : e.args.shares === call2.amount)
+    );
+  }
+  const expectedPull = call2.kind === "deposit" ? call2.amount : 0n;
+  let pullSeen = false;
+  const alsoMoved = [];
+  for (const t of parseEventLogs({ abi: [transferEvent], logs: fromAsset })) {
+    if (!same3(t.args.from, account)) continue;
+    if (!pullSeen && expectedPull > 0n && same3(t.args.to, vault) && t.args.value === expectedPull) {
+      pullSeen = true;
+      continue;
+    }
+    alsoMoved.push({ to: getAddress(t.args.to), amountRaw: t.args.value.toString() });
+  }
+  const what = `${call2.kind} ${call2.amount} raw units on ${call2.vault.symbol}`;
+  if (!found) {
+    return {
+      verified: "mismatch",
+      detail: `${hash4} succeeded, but carries no ${call2.kind === "approve" ? "Approval" : call2.kind === "deposit" ? "Deposit" : "Withdraw"} event for ${account} matching ${what}. Stop: what landed is not what was confirmed.`,
+      ...alsoMoved.length ? { alsoMoved } : {}
+    };
+  }
+  if (alsoMoved.length) {
+    return {
+      verified: "extra_transfer",
+      detail: `${what} landed as confirmed, and in the same transaction the account also sent ${call2.vault.asset.symbol} elsewhere (alsoMoved). That was not part of the call \u2014 often a wallet's own fee for paying gas in tokens. Tell the operator.`,
+      alsoMoved
+    };
+  }
+  return { verified: "matched" };
+}
+
+// src/connect/commands.ts
+var addressArg2 = external_exports.string().refine((s) => isAddress(s), "must be an EVM address").transform((s) => getAddress(s));
+var amountArg2 = external_exports.string().regex(/^\d+(\.\d+)?$/, 'plain decimal USDC amount, e.g. "25" or "12.5"');
+var vaultArg2 = external_exports.string().optional().describe("the vault's ERC-20 ticker, as `earn vaults` lists them; omit for the default vault of `chain`");
+var chainArg2 = external_exports.string().optional().describe('which chain: "base" or "arbitrum"; omit for the default chain, or when `vault` names one');
+var receiverArg = addressArg2.describe(
+  "where the money lands \u2014 it must be the CONNECTED account (this page pays no one else), and it comes from the operator's own message, never filled in by an agent"
+);
+var CONNECT_TTL_MS = 9 * 6e4;
+var CONFIRM_TTL_MS = 9 * 6e4;
+function signInMessage(a) {
+  return [
+    `${new URL(a.origin).host} wants you to sign in with your Ethereum account:`,
+    a.address,
+    "",
+    "Connect this wallet to Open Agent Treasury. This signature costs no gas and authorizes no transaction.",
+    "",
+    `URI: ${a.origin}`,
+    "Version: 1",
+    "Chain ID: 8453",
+    `Nonce: ${a.nonce}`,
+    `Issued At: ${a.issuedAt}`
+  ].join("\n");
+}
+var assets = () => ({ "/app.js": { type: "text/javascript; charset=utf-8", body: readPageBundle() } });
+function announce(url2) {
+  const opened = openBrowser(url2);
+  process.stderr.write(`${opened ? "Opened" : "Open this page in a browser on this machine"}: ${url2}
+`);
+  return opened;
+}
+async function runConnect(deps = {}) {
+  const verify = deps.verifySignature ?? (async (a) => {
+    if (await verifyMessage(a).catch(() => false)) return true;
+    return makePublicClient(8453, rpcUrlFromEnv(8453)).verifyMessage(a).catch(() => false);
+  });
+  const handle = await serveOnce({
+    mode: "connect",
+    ttlMs: deps.ttlMs ?? CONNECT_TTL_MS,
+    html: (s) => shell(s, "Connect to Open Agent Treasury"),
+    csp: PAGE_CSP,
+    assets: assets(),
+    port: connectPort(),
+    info: () => ({ mode: "connect", appId: privyAppId() }),
+    challenge: (address2, origin, nonce) => signInMessage({ address: address2, origin, nonce, issuedAt: (/* @__PURE__ */ new Date()).toISOString() }),
+    accept: async (body, ctx) => {
+      const a = body["address"];
+      if (typeof a !== "string" || !isAddress(a)) return { ok: false, reason: "not an address" };
+      const address2 = getAddress(a);
+      if (!ctx.message || ctx.challengedAddress !== address2) return { ok: false, reason: "no sign-in message was issued for this address" };
+      const sig = body["signature"];
+      if (typeof sig !== "string" || !/^0x[0-9a-fA-F]+$/.test(sig)) return { ok: false, reason: "malformed signature" };
+      const walletType = body["walletType"] === "embedded" ? "embedded" : "external";
+      if (!await verify({ address: address2, message: ctx.message, signature: sig })) return { ok: false, reason: "the signature does not match the address" };
+      return { ok: true, final: true, value: { account: address2, walletType, connectedAtIso: (/* @__PURE__ */ new Date()).toISOString() } };
+    }
+  });
+  const opened = (deps.open ?? announce)(handle.url);
+  const result = await handle.done;
+  if (result.ok) writeSession(result.value);
+  return { result, url: handle.url, opened };
+}
+async function runConfirm(calls, admitted, session, deps = {}) {
+  const chainId = calls[0].chainId;
+  if (!isSupportedChainId(chainId)) throw new Error(`chain ${chainId} unsupported`);
+  const account = session.account;
+  const client = deps.client ? deps.client(chainId) : makePublicClient(chainId, rpcUrlFromEnv(chainId));
+  const done = [];
+  let stopReason;
+  const ttlMs = deps.ttlMs ?? CONFIRM_TTL_MS;
+  const deadline = Date.now() + ttlMs;
+  const verifyOpts = { ...deps.verifyOpts, deadline };
+  const wellFormedHash = (h) => typeof h === "string" && /^0x[0-9a-fA-F]{64}$/.test(h);
+  const known = (h) => done.some((t) => t.hash.toLowerCase() === h.toLowerCase());
+  const preconditionHolds = async (c) => {
+    if (!c.precondition) return true;
+    const p = c.precondition;
+    for (let i = 0; i < (deps.verifyOpts?.attempts ?? 30) && Date.now() < deadline; i++) {
+      try {
+        const v = await client.readContract({ address: p.contract, abi: erc4626Abi, functionName: "allowance", args: [p.owner, p.spender] });
+        if (v >= BigInt(p.minimum)) return true;
+      } catch {
+      }
+      await new Promise((r) => setTimeout(r, deps.verifyOpts?.delayMs ?? 2e3));
+    }
+    return false;
+  };
+  const handle = await serveOnce({
+    mode: "confirm",
+    ttlMs,
+    ...deps.cancelGraceMs !== void 0 ? { cancelGraceMs: deps.cancelGraceMs } : {},
+    timeoutReason: () => done.length ? `the ${Math.round(ttlMs / 6e4)}-minute limit ran out after ${done.length} of ${calls.length} transactions were reported` : `nothing happened in the browser within ${Math.round(ttlMs / 6e4)} minutes`,
+    // The page reports a hash it could not hand over (its POST failed after the wallet sent):
+    // put it on record, against the step the page names, so the command reports it unchecked
+    // instead of losing it. A hash that names no step is still recorded, as such.
+    onReject: (body) => {
+      const hash4 = body["hash"];
+      if (!wellFormedHash(hash4) || known(hash4)) return;
+      const i = body["index"];
+      const call2 = typeof i === "number" && Number.isInteger(i) && i >= 0 && i < calls.length ? calls[i] : void 0;
+      done.push({
+        step: call2?.step ?? 0,
+        description: call2?.description ?? "a transaction the page reported for no known step",
+        hash: hash4,
+        verified: "unverified",
+        detail: "the page reported this transaction but could not hand it over for checking; look it up before retrying anything"
+      });
+    },
+    html: (s) => shell(s, "Confirm \u2014 Open Agent Treasury"),
+    csp: PAGE_CSP,
+    assets: assets(),
+    port: connectPort(),
+    info: () => ({
+      mode: "confirm",
+      appId: privyAppId(),
+      account,
+      walletType: session.walletType,
+      chainId,
+      chainName: CHAIN_INFO[chainId].name,
+      next: done.length,
+      calls: calls.map((c, i) => ({
+        step: c.step,
+        of: c.of,
+        kind: admitted[i].kind,
+        description: c.description,
+        to: c.to,
+        data: c.data,
+        value: c.value,
+        vault: { symbol: admitted[i].vault.symbol, name: admitted[i].vault.name, address: admitted[i].vault.address, asset: admitted[i].vault.asset.symbol, links: linksFor(admitted[i].vault) }
+      }))
+    }),
+    accept: async (body) => {
+      const index2 = body["index"];
+      const hash4 = body["hash"];
+      if (index2 !== done.length) return { ok: false, reason: `expected step ${done.length + 1}` };
+      if (!wellFormedHash(hash4)) return { ok: false, reason: "malformed transaction hash" };
+      const call2 = calls[index2];
+      if (known(hash4)) return { ok: false, reason: "this transaction hash was already reported for an earlier step" };
+      const entry = { step: call2.step, description: call2.description, hash: hash4, verified: "unverified", detail: "the flow ended while this transaction was still being checked" };
+      done.push(entry);
+      let verdict;
+      try {
+        verdict = await verifyLanded(client, hash4, admitted[index2], account, verifyOpts);
+      } catch (e) {
+        verdict = { verified: "unverified", detail: `could not check ${hash4}: ${redactEndpoints(e instanceof Error ? e.message : String(e))}; look it up before retrying anything` };
+      }
+      Object.assign(entry, verdict);
+      if (verdict.verified !== "matched" && verdict.verified !== "extra_transfer") {
+        stopReason = `step ${call2.step} (${call2.description}) is ${verdict.verified}: ${verdict.detail ?? "it did not land as confirmed"}`;
+        return { ok: true, final: true, value: done, reply: { stop: true, verdict } };
+      }
+      if (index2 + 1 === calls.length) return { ok: true, final: true, value: done, reply: { finished: true, verdict } };
+      if (!await preconditionHolds(calls[index2 + 1])) {
+        stopReason = "the approval landed, but its allowance is not visible on this RPC yet; the deposit was not sent";
+        return { ok: true, final: true, value: done, reply: { stop: true, reason: stopReason } };
+      }
+      return { ok: true, final: false, reply: { next: index2 + 1, verdict } };
+    }
+  });
+  const opened = (deps.open ?? announce)(handle.url);
+  const result = await handle.done;
+  return { result, url: handle.url, opened, done, total: calls.length, ...stopReason ? { stopReason } : {} };
+}
+var notConnected = () => new Error("no wallet is connected \u2014 run `treasury connect wallet` first, and let the operator sign in");
+function outcome(chainId, account, r) {
+  const txs = r.result.ok ? r.result.value : r.done;
+  const all = txs.length === r.total && txs.every((t) => t.verified === "matched" || t.verified === "extra_transfer");
+  const status = r.result.ok ? all ? "completed" : "stopped" : txs.length ? "stopped" : "not_reported";
+  const reason = r.result.ok ? r.stopReason : r.result.reason;
+  return JSON.stringify(
+    {
+      status,
+      chain: CHAIN_INFO[chainId].key,
+      chainId,
+      account,
+      opened: r.opened,
+      ...reason ? { reason } : {},
+      calls_total: r.total,
+      txs,
+      next_step: status === "completed" ? "Every call landed as confirmed. Report each hash to the operator; any `extra_transfer` is money the wallet moved besides the call \u2014 say so." : status === "stopped" ? "Stopped before every call landed. Do not retry blindly: read `reason` and the last transaction's `verified` and `detail`, check the account with `earn balance`, and tell the operator." : "No transaction was reported to this command. That is not proof that none was sent: if the wallet showed a confirmation, check the account with `earn balance` before any retry. Tell the operator why (reason)."
+    },
+    null,
+    2
+  );
+}
+function buildConnectCommands(deps = {}) {
+  const commands = {};
+  const register = (name, meta3, handler) => {
+    commands[name] = {
+      ...meta3,
+      inputSchema: external_exports.object(meta3.inputSchema),
+      handler: (async (args) => {
+        try {
+          return await handler(args);
+        } catch (e) {
+          throw new Error(redactEndpoints(e instanceof Error ? e.message : String(e)));
+        }
+      })
+    };
+  };
+  register(
+    "connect_status",
+    { title: "Which wallet is connected", description: "The connected account and how it signed in (`external` browser wallet, or `embedded` Privy wallet from an email or social login), or `disconnected`. Reads a local file only.", inputSchema: {} },
+    async () => {
+      const s = readSession();
+      return JSON.stringify(s ? { status: "connected", ...s } : { status: "disconnected", next_step: "run `treasury connect wallet` to let the operator sign in" }, null, 2);
+    }
+  );
+  register(
+    "connect_wallet",
+    {
+      title: "Connect a wallet",
+      description: "Opens the sign-in page in the operator's browser: one Connect button, then Privy's window with email, Google, Apple, X and browser wallets (MetaMask, Rabby, Coinbase Wallet). The operator signs a free sign-in message; nothing is spent. Waits until they finish (up to 9 minutes) and returns the connected account. Replaces any earlier connection.",
+      inputSchema: {}
+    },
+    async () => {
+      const r = await runConnect(deps);
+      if (!r.result.ok) return Promise.reject(new Error(`not connected: ${r.result.reason}`));
+      return JSON.stringify({ status: "connected", ...r.result.value, opened: r.opened }, null, 2);
+    }
+  );
+  register(
+    "connect_disconnect",
+    { title: "Forget the connected wallet", description: "Deletes the local connection record. It moves nothing and revokes nothing in the wallet itself.", inputSchema: {} },
+    async () => JSON.stringify({ status: "disconnected", hadConnection: clearSession() }, null, 2)
+  );
+  const confirmInWallet = async (calls, session) => {
+    const admitted = admit(calls, session.account);
+    const r = await runConfirm(calls, admitted, session, deps);
+    return outcome(calls[0].chainId, session.account, r);
+  };
+  register(
+    "connect_deposit",
+    {
+      title: "Deposit through the connected wallet",
+      description: "Builds the approve + deposit for the CONNECTED account, checks every call against the registry, and opens the confirm page: the operator reads each call and confirms it in their wallet, one at a time. Returns each transaction hash with `verified` read from the receipt (`matched`, `extra_transfer`, `mismatch`, `reverted`, `unverified`). Run `earn quote --direction deposit` first, and show the vault's warning and `earn terms` on a first deposit.",
+      inputSchema: { vault: vaultArg2, chain: chainArg2, amount_usdc: amountArg2, receiver: receiverArg }
+    },
+    async ({ vault: symbol2, chain, amount_usdc, receiver }) => {
+      const session = readSession();
+      if (!session) throw notConnected();
+      if (receiver !== session.account) throw new Error(`refused: --receiver ${receiver} is not the connected account ${session.account}; this page pays only the connected account (use \`earn prepare_deposit\` with the operator's own signer for anything else)`);
+      const vault = resolveVault(symbol2, chain);
+      return confirmInWallet(buildDeposit(vault, { assetsHuman: amount_usdc, receiver, account: session.account }), session);
+    }
+  );
+  register(
+    "connect_withdraw",
+    {
+      title: "Withdraw through the connected wallet",
+      description: "Builds the withdrawal for the CONNECTED account (USDC to that same account), checks it against the registry, and opens the confirm page for the operator to confirm in their wallet. Pass --amount_usdc, or --all with --shares_exact copied verbatim from `earn balance`. Run `earn quote --direction withdraw` first. Returns the hash with `verified` read from the receipt.",
+      inputSchema: {
+        vault: vaultArg2,
+        chain: chainArg2,
+        receiver: receiverArg,
+        amount_usdc: amountArg2.optional(),
+        all: external_exports.boolean().optional(),
+        shares_exact: external_exports.string().regex(/^\d+(\.\d+)?$/).optional()
+      }
+    },
+    async ({ vault: symbol2, chain, receiver, amount_usdc, all, shares_exact }) => {
+      const session = readSession();
+      if (!session) throw notConnected();
+      if (receiver !== session.account) throw new Error(`refused: --receiver ${receiver} is not the connected account ${session.account}; this page pays only the connected account`);
+      const vault = resolveVault(symbol2, chain);
+      const owner = session.account;
+      let calls;
+      if (all) {
+        if (!shares_exact) throw new Error("--all requires --shares_exact (copy it verbatim from `earn balance`)");
+        calls = buildWithdraw(vault, { receiver, owner, all: true, sharesExact: shares_exact });
+      } else {
+        if (!amount_usdc) throw new Error("provide --amount_usdc, or --all with --shares_exact");
+        calls = buildWithdraw(vault, { receiver, owner, assetsHuman: amount_usdc });
+      }
+      return confirmInWallet(calls, session);
+    }
+  );
+  return commands;
+}
+
 // src/cli.ts
-var SKILLS = { earn: buildCommands };
+var SKILLS = { earn: buildCommands, connect: () => buildConnectCommands() };
 function kindOf(schema) {
   let s = schema;
   for (; ; ) {
@@ -39831,7 +40540,7 @@ function isEntryPoint() {
   const invoked = process.argv[1];
   if (!invoked) return false;
   try {
-    return realpathSync3(invoked) === realpathSync3(fileURLToPath3(import.meta.url));
+    return realpathSync4(invoked) === realpathSync4(fileURLToPath4(import.meta.url));
   } catch {
     return false;
   }

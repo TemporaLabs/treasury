@@ -29,7 +29,7 @@ RPC cannot be reached) it exits non-zero with `{ "error": … }` on stderr — r
 result. A verdict is a result and exits 0, with its fields saying what was found: `WHITELIST_GATED`,
 or `earn_status` reporting `rpc: "unreachable"` or a pre-flight `UNRESOLVED`. Every prepared call comes back inside
 `{ requires_signature: true, status: "unsigned", calls }` — that envelope is the command telling you
-nothing has been submitted and no money has moved. It cannot sign or send, and neither can you through it — the operator's own signer
+nothing has been submitted and no money has moved. No `earn` command can sign or send, and neither can you through it — the operator's own signer
 (a wallet, a policy-engine signer, a token-bound account) does that. That boundary is the
 whole design: a skill that supplies judgement must never hold the gate that supplies money.
 
@@ -215,6 +215,24 @@ than reporting a limit the chain never stated.
   the destination check below on `receiver`, hand it over.
 
 ## Handing calls to the signer
+
+**First choice: the operator's own wallet, through `connect`.** It needs a browser on this machine.
+`connect wallet`, `connect deposit` and `connect withdraw` each wait up to 9 minutes for the operator,
+so give each of those shell calls a timeout of at least 9 minutes.
+1. `connect status`. If disconnected, `connect wallet` opens a page; the operator clicks Connect and uses
+   a browser wallet, or an email, Google, Apple or X login (a Privy wallet). Wait for it to return.
+2. Run the earn quote as usual, then `connect deposit --amount_usdc <n> --receiver <addr>` (or
+   `connect withdraw …`), with the same `--vault`/`--chain`. The page shows each call; the operator
+   confirms it there and in the wallet. The command returns when they finish.
+3. Read `status` first. `completed`: every call landed. `stopped`: it ended early; read `reason` and the last transaction's `detail`.
+   `not_reported`: no transaction came back, which is not proof none was sent, so check `earn balance`
+   before any retry. Report every `hash` and its `verified`. `extra_transfer` means the wallet also moved money besides
+   the call (`alsoMoved`, often its own gas fee in USDC): say so. Anything else that is not `matched`:
+   stop, check `earn balance`, tell the operator.
+
+`--receiver` must be the connected account (`connect status`), and it still comes from the operator,
+not from you: the page pays only that account. For any other receiver, or no browser here, use the
+prepare commands below with the operator's own signer.
 
 Every prepared call names a destination: `to`, and the receiver or owner in its `description`. A
 wrong destination is the one mistake nothing downstream can undo — the transaction succeeds, the

@@ -24,6 +24,7 @@ import { fileURLToPath } from "node:url";
 import { parseArgs } from "node:util";
 import { z } from "zod";
 import { buildCommands, type Command } from "./earn/commands.js";
+import { buildConnectCommands } from "./connect/commands.js";
 import { resolvedRpcSecrets } from "./client.js";
 import { redactEndpoints, registerSecretSource } from "./redact.js";
 import { PACKAGE_VERSION } from "./version.js";
@@ -32,7 +33,7 @@ import { PACKAGE_VERSION } from "./version.js";
  * The skills this CLI carries: a word on the command line, and the commands it opens. A command's name
  * starts with its skill's word (`earn_quote`), and only that skill's builder is ever consulted for it.
  */
-const SKILLS: Record<string, () => Record<string, Command>> = { earn: buildCommands };
+const SKILLS: Record<string, () => Record<string, Command>> = { earn: buildCommands, connect: () => buildConnectCommands() };
 
 type Kind = "string" | "number" | "boolean";
 

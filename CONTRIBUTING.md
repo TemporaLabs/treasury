@@ -59,11 +59,12 @@ Two rules decide most reviews. A change that breaks either is a design change, n
 
 1. **Nothing in this repository holds, reads, derives or is handed a private key. Nothing signs. A
    call reaches the chain only from the operator's own wallet, after the operator approves it
-   there.** Treasury prepares unsigned calls. A wallet connection may hand a prepared call to the
-   operator's connected wallet for approval; it never builds or alters a call, and it refuses any
-   destination outside `registry/vaults.json` (a listed vault, or its asset for the approval). A
-   private-key variable, a local signer, a tool that signs, or a relay that accepts an arbitrary
-   destination will not merge.
+   there.** Treasury prepares unsigned calls. The wallet connection (`treasury connect`) may hand a
+   call to the operator's connected wallet for approval; it builds calls only through the same
+   builders, and it refuses any destination outside `registry/vaults.json` (a listed vault, or its
+   asset for the approval) and any receiver other than the connected account. A private-key
+   variable, a local signer, a tool that signs, or a relay that accepts an arbitrary destination
+   will not merge.
 2. **The client knows only the chain.** It has a vault address and an RPC endpoint. Code may not
    depend on any fund's internal source, deploy records, operators or private services. A vault's row
    in `registry/vaults.json` is a set of measurements that
@@ -118,6 +119,10 @@ and shown as skipped.
   `LICENSE` or `NOTICE`, run `npm run build` and commit the result; the same build refreshes the
   plugin's copies in `plugin/`, and `npm run plugin:check` confirms them. CI fails on a stale bundle
   or copy. The build uses `bash` for that last step, so on Windows run it from Git Bash or WSL.
+- **Rebuild the connect page when its source changes.** `dist/connect-page.js` and
+  `THIRD_PARTY_NOTICES.connect-page.md` are committed and built from `connect-page/` with its own
+  dependencies: run `npm ci && npm run build` there, then `npm run build` at the root to copy the page
+  into `plugin/`. CI rebuilds the page and fails on a difference.
 - **Say which test tier ran.** Unit tests say nothing about the chain. State in the pull request
   whether you ran unit, live read-only or fork tests.
 - **Tests never need a real key.** A test that moves funds runs on a fork and impersonates the

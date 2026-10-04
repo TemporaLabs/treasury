@@ -84,8 +84,9 @@ Claude Code plugin carries; [`runbooks/verify_the_bundle.md`](runbooks/verify_th
 to check it from the tarball. A checkout of the repository at the tag, or the plugin cache after a
 Claude Code install, holds the same file if you would rather not install from npm.
 
-The CLI carries exactly the eight commands in [`tools.md`](tools.md), each printing one JSON document;
-a refusal exits 1 with `{ "error": … }` on stderr. No command signs or sends: your runtime's own signer
+The CLI carries exactly the eight `earn` commands and five `connect` commands in [`tools.md`](tools.md),
+each printing one JSON document; a refusal exits 1 with `{ "error": … }` on stderr. No command signs:
+the `connect` commands hand calls to your own wallet for approval, and your runtime's own signer
 takes the calls `earn prepare_deposit` and `earn prepare_withdraw` return. The `earn` skill ships with
 the plugin, at [`plugin/skills/earn/SKILL.md`](../plugin/skills/earn/SKILL.md) in this repository. It is
 plain Markdown and can be given to any agent as instructions; it tells the agent how to use these
@@ -96,6 +97,19 @@ this CLI; see the [changelog](../CHANGELOG.md). A host that still runs that serv
 exactly (`npm install --save-exact @temporalabs/treasury@0.1.1`): a `^0.1.1` range resolves to a later
 release, which has no `dist/mcp-server.mjs`. Upgrading the plugin likewise removes the eight `earn_*`
 MCP tools; the `earn` skill reaches the same operations through the CLI.
+
+## Connecting a wallet (`treasury connect`)
+
+`treasury connect wallet` opens a one-time URL on `http://localhost:53682` in the browser on the same machine: one
+Connect button, then Privy's window with email, Google, Apple, X and any browser wallet installed
+there. Signing in costs nothing. After that, `treasury connect deposit` and `treasury connect withdraw`
+open a confirm page for each transaction. See [`tools.md`](tools.md#the-connect-commands--treasury-connect-command).
+
+- It needs a browser on the machine running the agent. Over SSH, or with `TREASURY_CONNECT_NO_OPEN`
+  set, the command prints the URL instead of opening it.
+- Port 53682 must be free while a page is open; one sign-in or confirmation runs at a time.
+- Phone wallets are not offered in this release: the page lists wallets installed in the browser, and
+  an email or social login gives a wallet with no extension at all.
 
 ## As a library
 

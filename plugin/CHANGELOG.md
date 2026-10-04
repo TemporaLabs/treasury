@@ -15,6 +15,10 @@ Carries `@temporalabs/treasury` v0.1.2.
   is the session restart a server needed before its tools appeared: `/reload-plugins` loads the skill.
 
 ### Added
+- **The `earn` skill hands calls to the operator's own wallet first**, through `treasury connect`: a
+  sign-in page with one Connect button (browser wallet, or an email, Google, Apple or X login), then
+  a confirm page for each call. The prepare-and-sign path stays for any other receiver or when there
+  is no browser on the machine.
 - **The `earn` skill works on more than one chain.** Its description now names Base and Arbitrum,
   and it has a section on choosing the chain: the agent asks the operator which chain before
   preparing a deposit when they have not said, and reads every listed vault before answering a

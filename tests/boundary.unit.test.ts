@@ -102,6 +102,16 @@ const ENTRY_POINTS = ["src/index.ts", "src/cli.ts"];
 const ENV_READS_ALLOWED = [
   "ARBITRUM_RPC_URL",
   "BASE_RPC_URL",
+  // `treasury connect` (src/connect/): its own optional settings, and the four a browser launcher
+  // needs to tell whether there is a browser to open at all.
+  "DISPLAY",
+  "PRIVY_APP_ID",
+  "SSH_CONNECTION",
+  "SSH_TTY",
+  "TREASURY_CONNECT_HOME",
+  "TREASURY_CONNECT_NO_OPEN",
+  "TREASURY_CONNECT_PORT",
+  "WAYLAND_DISPLAY",
   "TREASURY_FORK",
   "TREASURY_LOGS_FALLBACK",
   "TREASURY_LOGS_RPC_ARBITRUM",
@@ -130,6 +140,10 @@ const MAY_COMPUTE_ENV_KEY = ["src/client.ts", "tests/client.unit.test.ts"];
 const BUILTINS_ALLOWED = ["fs", "path", "url", "http", "util"];
 const BUILTINS_ALLOWED_PER_FILE: Record<string, string[]> = {
   "scripts/roundtrip.ts": ["child_process"], //            spawns the CLI under test, once per step
+  "src/connect/http.ts": ["crypto"], //                    the one-shot page server's random secret and constant-time compare
+  "src/connect/open.ts": ["child_process"], //             opens the operator's browser at the local page
+  "src/connect/session.ts": ["os"], //                     the session file lives under the home directory
+  "tests/connect.unit.test.ts": ["os", "net"], //           a temporary session directory; a free local port per test
   "tests/fork.test.ts": ["child_process"], //              spawns anvil; anvil holds the keys, this repo never does
   "tests/registry-check.chain.test.ts": ["child_process"], // runs scripts/registry-check.ts against a mock chain
   "tests/entrypoint.unit.test.ts": ["child_process", "os"], // runs the committed bundle by symlink and by import; tmpdir for the symlink
@@ -138,6 +152,7 @@ const BUILTINS_ALLOWED_PER_FILE: Record<string, string[]> = {
 
 const MAY_SPAWN: Record<string, string[]> = {
   "scripts/roundtrip.ts": ["node", "npx"],
+  "src/connect/open.ts": ["open", "cmd", "xdg-open"], //    the platform's own "open this URL" command, nothing else
   "tests/fork.test.ts": ["anvil"],
   "tests/registry-check.chain.test.ts": ["npx"],
   "tests/entrypoint.unit.test.ts": ["node"],
@@ -208,9 +223,11 @@ const resolveTs = (from: string, spec: string): string | null => {
 };
 
 /** Walk the runtime import graph from the entry points. */
-function reachable(): { files: Set<string>; external: Set<string>; escapes: string[] } {
+function reachable(): { files: Set<string>; external: Set<string>; importers: Map<string, Set<string>>; escapes: string[] } {
   const files = new Set<string>();
   const external = new Set<string>();
+  // Which files import each external specifier, so a per-file builtin allowance applies to that file only.
+  const importers = new Map<string, Set<string>>();
   const escapes: string[] = [];
   const queue = ENTRY_POINTS.map((p) => resolve(pkgRoot, p));
   while (queue.length) {
@@ -220,14 +237,18 @@ function reachable(): { files: Set<string>; external: Set<string>; escapes: stri
     const { specs, opaque } = moduleReaches(file);
     for (const o of opaque) escapes.push(`${rel(file)}: unanalysable module reach — ${o}`);
     for (const spec of specs) {
-      if (!spec.startsWith(".")) { external.add(spec); continue; }
+      if (!spec.startsWith(".")) {
+        external.add(spec);
+        importers.set(spec, (importers.get(spec) ?? new Set()).add(rel(file)));
+        continue;
+      }
       const target = resolveTs(file, spec);
       if (!target) escapes.push(`${rel(file)} → ${spec} (does not resolve to a file in this package)`);
       else if (!target.startsWith(srcRoot + sep)) escapes.push(`${rel(file)} → ${spec} resolves OUTSIDE src/`);
       else queue.push(target);
     }
   }
-  return { files, external, escapes };
+  return { files, external, importers, escapes };
 }
 
 /** Every `.ts` this repo ships or runs. */
@@ -278,7 +299,7 @@ function envLikeLiterals(file: string): string[] {
 }
 
 describe("A. the runtime module graph cannot leave this package", () => {
-  const { files, external, escapes } = reachable();
+  const { files, external, importers, escapes } = reachable();
 
   it("reaches a real graph (positive control — without this every assertion below is vacuous)", () => {
     expect(files.size).toBeGreaterThan(8);
@@ -294,9 +315,12 @@ describe("A. the runtime module graph cannot leave this package", () => {
     // By EXCLUSION, so nothing is exempt: a specifier is a declared dependency, or it is on the
     // builtin allowlist, or it is a failure. There is no "is this a builtin in general?" question
     // any more — that question is what created the denial half.
+    // A builtin outside the global list passes only when EVERY file importing it holds a per-file
+    // allowance for it — the same allowance the audited-surface check (E) enforces.
+    const perFileOk = (s: string) => [...(importers.get(s) ?? [])].every((f) => (BUILTINS_ALLOWED_PER_FILE[f] ?? []).includes(bare(s)));
     const undeclared = [...external].filter((s) => {
       const name = s.startsWith("@") ? s.split("/").slice(0, 2).join("/") : s.split("/")[0]!;
-      return !declared.has(name) && !BUILTINS_ALLOWED.includes(bare(s));
+      return !declared.has(name) && !BUILTINS_ALLOWED.includes(bare(s)) && !perFileOk(s);
     });
     expect(undeclared).toEqual([]);
   });
@@ -322,11 +346,19 @@ describe("B. the environment surface, statically and at runtime", () => {
     expect([...names].sort()).toEqual([
       "ARBITRUM_RPC_URL",
       "BASE_RPC_URL",
+      "DISPLAY",
+      "PRIVY_APP_ID",
+      "SSH_CONNECTION",
+      "SSH_TTY",
+      "TREASURY_CONNECT_HOME",
+      "TREASURY_CONNECT_NO_OPEN",
+      "TREASURY_CONNECT_PORT",
       "TREASURY_LOGS_FALLBACK",
       "TREASURY_LOGS_RPC_ARBITRUM",
       "TREASURY_LOGS_RPC_BASE",
       "TREASURY_RPC_ARBITRUM",
       "TREASURY_RPC_BASE",
+      "WAYLAND_DISPLAY",
     ]);
   });
 
