@@ -134,7 +134,15 @@ export async function runConfirm(
 ): Promise<{ result: Settled<TxOutcome[]>; url: string; opened: boolean; done: TxOutcome[]; total: number; stopReason?: string }> {
   const chainId = calls[0]!.chainId;
   if (!isSupportedChainId(chainId)) throw new Error(`chain ${chainId} unsupported`);
-  if (calls.some((c) => c.chainId !== chainId) || admitted.length !== calls.length) throw new Error("the calls and their admitted checks do not line up");
+  // Each call must be the one its admitted check describes: same chain, and sent to that check's
+  // vault (or, for an approval, to the vault's asset).
+  const linedUp =
+    calls.length === admitted.length &&
+    calls.every((c, i) => {
+      const a = admitted[i]!;
+      return c.chainId === chainId && a.vault.chainId === chainId && getAddress(c.to) === getAddress(a.kind === "approve" ? a.vault.asset.address : a.vault.address);
+    });
+  if (!linedUp) throw new Error("the calls and their admitted checks do not line up");
   const account = session.account as Address;
   const client = deps.client ? deps.client(chainId) : makePublicClient(chainId, rpcUrlFromEnv(chainId));
   const done: TxOutcome[] = [];

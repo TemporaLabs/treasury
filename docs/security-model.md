@@ -118,10 +118,14 @@ can do is make an unsigned build impossible to mistake for a completed one, by s
   (some are under a licence that is not open source) and its build fails if one returns; the page's CSP also blocks
   WalletConnect's servers. The Privy app ID in the page is a public identifier; no Privy secret
   exists anywhere in this package.
-- **The page's source and policy are pinned by tests** (`tests/connect-page-source.unit.test.ts`). The
-  page may ask a wallet only for `personal_sign` (sign-in), `eth_estimateGas`, `eth_sendTransaction`
-  and a chain switch; it may not sign typed data, send raw transactions, touch key material, write
-  HTML from strings, store anything in the browser, or fetch anything but its own local server. The
+- **Tests pin the page's source and policy** (`tests/connect-page-source.unit.test.ts`). They read
+  every file under `connect-page/src` as text: the page may ask a wallet only for `personal_sign`
+  (sign-in), `eth_estimateGas`, `eth_sendTransaction` and a chain switch; it may not sign typed data,
+  send raw transactions, touch key material, write HTML from strings, store anything in the browser,
+  or reach the network except by a direct `fetch` of its own local server. The
   Content-Security-Policy is pinned host by host, and `tests/connect.unit.test.ts` checks that the
-  server sends exactly that policy with the page.
-  Widening either fails the suite, so it cannot happen without a reviewer seeing it.
+  server sends exactly that policy with the page. These are tripwires for the ordinary, literal
+  forms, so adding a wallet method or a destination the usual way fails the suite and gets a
+  reviewer's eyes; they are not a proof. A text scan cannot follow every computed name, the bundled
+  Privy library is not scanned, and the policy admits images from any HTTPS host, so it limits
+  scripts, frames and connections but is not an exfiltration boundary.

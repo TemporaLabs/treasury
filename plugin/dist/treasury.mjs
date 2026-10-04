@@ -39768,7 +39768,7 @@ function admit(calls, account) {
     const name = decoded.functionName;
     const args = decoded.args ?? [];
     const canonical = encodeFunctionData({ abi: erc4626Abi, functionName: name, args });
-    if (canonical.toLowerCase() !== c.data.toLowerCase()) throw new Error(`refused (${at}): its calldata is not the canonical encoding of ${name} (extra bytes, or stray bits in an address)`);
+    if (canonical !== c.data) throw new Error(`refused (${at}): its calldata is not the canonical encoding of ${name} (extra bytes, or stray bits in an address)`);
     if (name === "approve") {
       const vault2 = vaults.find((v) => v.chainId === c.chainId && same(v.asset.address, c.to));
       if (!vault2) throw new Error(`refused (${at}): approve on ${c.to}, which is not the asset of a listed vault on chain ${c.chainId}`);
@@ -40215,7 +40215,11 @@ async function runConnect(deps = {}) {
 async function runConfirm(calls, admitted, session, deps = {}) {
   const chainId = calls[0].chainId;
   if (!isSupportedChainId(chainId)) throw new Error(`chain ${chainId} unsupported`);
-  if (calls.some((c) => c.chainId !== chainId) || admitted.length !== calls.length) throw new Error("the calls and their admitted checks do not line up");
+  const linedUp = calls.length === admitted.length && calls.every((c, i) => {
+    const a = admitted[i];
+    return c.chainId === chainId && a.vault.chainId === chainId && getAddress(c.to) === getAddress(a.kind === "approve" ? a.vault.asset.address : a.vault.address);
+  });
+  if (!linedUp) throw new Error("the calls and their admitted checks do not line up");
   const account = session.account;
   const client = deps.client ? deps.client(chainId) : makePublicClient(chainId, rpcUrlFromEnv(chainId));
   const done = [];

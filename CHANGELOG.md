@@ -32,9 +32,10 @@ Pre-1.0, minor versions may change tool names, schemas and behaviour.
   Rabby, Coinbase Wallet), or an email, Google, Apple or X login with a Privy embedded wallet. The
   wallet signs a free sign-in message: checked offline for an ordinary wallet, and through its contract
   on Base for a smart-contract wallet. `connect deposit` / `connect withdraw` build
-  the calls for the connected account, refuse anything outside the registry or paying anyone else
-  (and any batch other than approve + deposit, withdraw or redeem on one vault and one chain, or
-  calldata that is not its canonical encoding), and hand each call to the wallet in turn on a confirm page; the operator confirms on the page and
+  the calls for the connected account, refuse anything outside the registry or paying anyone
+  else (and any batch other than approve + deposit, withdraw or redeem on one vault and one chain,
+  or calldata that is not its canonical encoding), and hand each call to the wallet in turn on a
+  confirm page; the operator confirms on the page and
   in the wallet. Each transaction comes back with `verified` read from the receipt — `matched`,
   `extra_transfer` (the wallet also moved money besides the call), `mismatch`, `reverted` or
   `unverified` — and the flow stops at the first one that did not land as confirmed. The result's

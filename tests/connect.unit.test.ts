@@ -349,6 +349,21 @@ describe("confirm: one call at a time, each checked on its receipt before the ne
     expect([out.txs.length, out.calls_total]).toEqual([1, 2]);
   });
 
+  it("refuses calls that are not the ones their admitted checks describe, before any page opens", async () => {
+    writeSession({ account: ACCOUNT, walletType: "external", connectedAtIso: "" });
+    const session = readSession()!;
+    const deps = { open: () => true, client: hungReceipt };
+    const dep = buildDeposit(vault, { assetsHuman: "0.6", receiver: ACCOUNT, account: ACCOUNT });
+    const wd = buildWithdraw(vault, { receiver: ACCOUNT, owner: ACCOUNT, assetsHuman: "1" });
+    const other = listVaults().find((v) => v.chainId === vault.chainId && v.address !== vault.address)!;
+    const wdOther = buildWithdraw(other, { receiver: ACCOUNT, owner: ACCOUNT, assetsHuman: "1" });
+    // fewer checks than calls; a call moved to another chain; a call sent to another vault than its check names
+    await expect(runConfirm(dep, admit(asGate(wd), ACCOUNT), session, deps)).rejects.toThrow(/do not line up/);
+    await expect(runConfirm(dep, admit(asGate(dep), ACCOUNT).slice(0, 1), session, deps)).rejects.toThrow(/do not line up/);
+    await expect(runConfirm([dep[0]!, { ...dep[1]!, chainId: 42161 }], admit(asGate(dep), ACCOUNT), session, deps)).rejects.toThrow(/do not line up/);
+    await expect(runConfirm(wdOther, admit(asGate(wd), ACCOUNT), session, deps)).rejects.toThrow(/do not line up/);
+  });
+
   it("the allowance read before a deposit comes from the admitted calls, not the call's own precondition field", async () => {
     writeSession({ account: ACCOUNT, walletType: "external", connectedAtIso: "" });
     const built = buildDeposit(vault, { assetsHuman: "0.6", receiver: ACCOUNT, account: ACCOUNT });
