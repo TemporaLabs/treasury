@@ -1,6 +1,6 @@
 ---
 name: earn
-description: Put approved idle USDC to work in supported Tempora-curated vaults on Base or Arbitrum. Inspect vault terms, quote deposits and withdrawals, check position value and currently withdrawable amounts, and prepare unsigned transactions for the operator's own signer. Use for earning yield on idle USDC or managing these vault positions, including withdrawal requests. Not for generating business revenue, paid tasks, swaps, trading, or operating a vault allocator.
+description: Put approved idle USDC to work in supported Tempora-curated vaults on Base or Arbitrum. Inspect vault terms, quote deposits and withdrawals, check position value and currently withdrawable amounts, prepare unsigned transactions for the operator's own signer, and connect the operator's own wallet (a browser wallet, or an email or social login) to confirm them in a browser page. Use for earning yield on idle USDC or managing these vault positions, including withdrawal requests. Not for generating business revenue, paid tasks, swaps, trading, or operating a vault allocator.
 allowed-tools: Bash(node "${CLAUDE_PLUGIN_ROOT}/dist/treasury.mjs" *)
 ---
 
@@ -11,10 +11,12 @@ shares, the shares' USDC value moves with what the vault earns or loses, you red
 cash. What amount is surplus is the operator's decision, not yours — a balance in the wallet is
 not permission to deposit it. The
 bundled `treasury` CLI gives you eight `earn` commands that read the vault and **prepare unsigned
-calls**. Run each one with the shell, exactly like this (nothing stays running between commands):
+calls**, and five `connect` commands that put those calls in front of the operator's own wallet in a
+browser page. Run each one with the shell, exactly like this (nothing stays running between commands):
 
 ```bash
 node "${CLAUDE_PLUGIN_ROOT}/dist/treasury.mjs" earn <command> --flag value …
+node "${CLAUDE_PLUGIN_ROOT}/dist/treasury.mjs" connect <command> --flag value …
 ```
 
 Run exactly that, one plain command per shell call — no `cd`, no variables, no `&&` or `;` chains. That
@@ -30,7 +32,8 @@ result. A verdict is a result and exits 0, with its fields saying what was found
 or `earn_status` reporting `rpc: "unreachable"` or a pre-flight `UNRESOLVED`. Every prepared call comes back inside
 `{ requires_signature: true, status: "unsigned", calls }` — that envelope is the command telling you
 nothing has been submitted and no money has moved. No `earn` command can sign or send, and neither can you through it — the operator's own signer
-(a wallet, a policy-engine signer, a token-bound account) does that. That boundary is the
+(a wallet, a policy-engine signer, a token-bound account) does that. `connect` does not sign either: it
+opens a page where the operator confirms each call in their own wallet. That boundary is the
 whole design: a skill that supplies judgement must never hold the gate that supplies money.
 
 ## Setup
@@ -151,7 +154,9 @@ bridge. **Which chain is the operator's decision. Ask; do not pick.**
      one.
    - `REFUSED_BY_CLIENT` / `UNRESOLVED` → stop; the first is a registry/chain mismatch, the
      second a transport failure. Neither is a verdict about the vault.
-5. **`earn_prepare_deposit`, then hand BOTH calls in `calls` to the signer in order, and ask before each.** The
+5. **Through `connect`, skip this step:** `connect deposit` builds the same two calls, checks them, and the
+   page shows each one with its chain, amount and receiver (see **Handing calls to the signer** below).
+   **Otherwise, `earn_prepare_deposit`, then hand BOTH calls in `calls` to the signer in order, and ask before each.** The
    envelope names `chain` and `chainId`: tell the operator which chain these calls are for before
    anything else, because a call sent on the wrong chain can be mined there and do nothing. The
    amount is in USDC (6 decimals); the tool refuses more precision than that. Show the operator
@@ -199,8 +204,8 @@ than reporting a limit the chain never stated.
   reconciles can still have missed the deposit that produced the shares. The note says which
   provider window capped the scan. Realized redemption is subject to the vault's caps and any queue,
   so quote value as a value, not a promise.
-- **Withdraw in USDC.** `earn_quote` with `direction: "withdraw"`, then `earn_prepare_withdraw` with
-  `amount_usdc` and the `account` whose shares burn; the vault burns
+- **Withdraw in USDC.** `earn_quote` with `direction: "withdraw"`, then `connect withdraw` (same flags,
+  receiver = the connected account) or `earn_prepare_withdraw` with `amount_usdc` and the `account` whose shares burn; the vault burns
   whatever shares that costs at inclusion. To empty the account, pass `--all` and
   `--shares_exact` copied **verbatim** from `earn_balance.sharesExact` — never a number you rounded
   or computed: an 18-decimal balance exceeds 2⁵³, floats round it (sometimes up), and redeeming
@@ -216,9 +221,15 @@ than reporting a limit the chain never stated.
 
 ## Handing calls to the signer
 
-**First choice: the operator's own wallet, through `connect`.** It needs a browser on this machine.
+**First choice: the operator's own wallet, through `connect`.** It needs a browser on this machine: the
+page is served on `localhost` only, so a phone or another computer cannot open it.
 `connect wallet`, `connect deposit` and `connect withdraw` each wait up to 9 minutes for the operator,
-so give each of those shell calls a timeout of at least 9 minutes.
+so give each of those shell calls a timeout of at least 9 minutes. The form is the same as `earn`:
+
+```bash
+node "${CLAUDE_PLUGIN_ROOT}/dist/treasury.mjs" connect deposit --vault <symbol> --amount_usdc 25 --receiver 0x…
+```
+
 1. `connect status`. If disconnected, `connect wallet` opens a page; the operator clicks Connect and uses
    a browser wallet, or an email, Google, Apple or X login (a Privy wallet). Wait for it to return.
 2. Run the earn quote as usual, then `connect deposit --amount_usdc <n> --receiver <addr>` (or
@@ -231,8 +242,13 @@ so give each of those shell calls a timeout of at least 9 minutes.
    stop, check `earn balance`, tell the operator.
 
 `--receiver` must be the connected account (`connect status`), and it still comes from the operator,
-not from you: the page pays only that account. For any other receiver, or no browser here, use the
-prepare commands below with the operator's own signer.
+not from you: the page pays only that account. For any other receiver, use the prepare commands below
+with the operator's own signer.
+
+**No browser here** (an SSH session, a container, a machine with no display): skip `connect` and use the
+prepare commands. A result with `opened: false` means no browser opened; the command printed the page's
+address on stderr instead. Give that address to the operator only if they are at this machine; otherwise
+use the prepare commands too.
 
 Every prepared call names a destination: `to`, and the receiver or owner in its `description`. A
 wrong destination is the one mistake nothing downstream can undo — the transaction succeeds, the
@@ -274,7 +290,7 @@ The reasons this is shaped the way it is, so you can apply it when the situation
 - **Hedging is the stop signal.** If you find yourself writing "almost certainly the one you
   meant", you have detected your own uncertainty — ask, do not proceed.
 
-**The default hand-off is the operator's own terminal.** Most operators hold their key in a
+**Without `connect`, the hand-off is the operator's own terminal.** Many operators hold their key in a
 wallet or a shell they control, and the fastest safe path is for them to send the envelope's
 calls themselves, raw — no re-encoding by you, no key near you. Give them, for each call in order,
 the `to` and `data` exactly as the envelope carries them:
@@ -345,14 +361,16 @@ After each send, take the transaction hash they paste back and continue with `ea
 Sending from a script, for a key held on a host the operator runs, is the same thing: the ordering,
 gas buffer and nonce rules above are identical.
 
-**If the operator asks you to sign or send anyway,** the answer is that the calls are built and
+**If the operator asks you to sign or send anyway,** the answer is `connect`, where they confirm each
+call in their own wallet, when there is a browser here; otherwise that the calls are built and
 waiting for their signer, what each one does, and the block above. Not "I can't"; "here is how
 you do it, and here is why the key stays with you."
 
 ## What this skill will not do
 
 - **Hold a key, sign, or send.** If the operator asks you to "just do it", answer with the
-  hand-off above: the calls are built, what each one does, and the terminal commands to send them.
+  hand-off above: `connect` when there is a browser here; otherwise the calls are built, what each one
+  does, and the terminal commands to send them.
   The two that bite: send the `approve` and the `deposit` as separate transactions in that order,
   checking the deposit's own `precondition` in between rather than assuming the approve has
   propagated; and never reuse a nonce across the pair. `docs/runbooks/sign_and_send.md` in the

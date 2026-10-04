@@ -30,7 +30,7 @@
         "Morpho Vault V2. maxDeposit() and maxWithdraw() return 0 to every caller by protocol design; the pre-flight simulates the real call and earn_balance simulates the exit. Neither reads those views.",
         "Withdrawals are served from idle USDC, then through the vault's liquidity adapter; a withdrawal larger than that reverts until positions are unwound. earn_balance reports exitableNow by simulating the withdrawal.",
         "No fee is set: performanceFee() = 0 and managementFee() = 0 at block 51372415. The curator can introduce one, and the vault's fee timelocks are 0 (timelock(setPerformanceFee) = timelock(setManagementFee) = 0 at block 51404161), so a change needs no notice. Read both fees before depositing.",
-        "The DEMO vault. Open to any account and in depositable, but not the default: name it with `vault: \"tlCashPlusUSDC2\"`. Its structure is the one Test 2B restores as a sibling."
+        "The DEMO vault. Open to any account and in depositable, but not the default: name it with `--vault tlCashPlusUSDC2`. Its structure is the one Test 2B restores as a sibling."
       ]
     },
     {
@@ -60,7 +60,7 @@
       "notes": [
         "8-decimal shares against a 6-decimal asset — a share amount is never an asset amount here.",
         "getInstantWithdrawalFuses() returns three fuses (measured at block 51361109), so a withdrawal is served from the vault's liquid balance and then, in fuse order, by unwinding its positions in the same transaction. A withdrawal larger than what those positions can release in-block still reverts; earn_balance reports exitableNow, which simulates the withdrawal rather than reading maxWithdraw.",
-        "Deposits need role 800 on the AccessManager. An account without it gets WHITELIST_GATED from earn_status and earn_quote, and this client refuses to build a deposit for it. Withdrawals are public.",
+        "Deposits need role 800 on the AccessManager. An account without it gets WHITELIST_GATED from earn_status and earn_quote. Neither earn prepare_deposit nor connect deposit checks the role: a deposit built for such an account reverts on-chain (AccessManagedUnauthorized), so run earn_status for the account first. Withdrawals are public.",
         "Whitelist-gated (role 800 on its AccessManager): not in depositable. Listed so that an admitted account's position can be read and exited; a non-member gets WHITELIST_GATED from earn_status before anything is built."
       ]
     },
