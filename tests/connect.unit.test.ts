@@ -321,6 +321,33 @@ describe("confirm: one call at a time, each checked on its receipt before the ne
     ]);
   });
 
+  it("a transaction that landed is not reported as still being checked", async () => {
+    writeSession({ account: ACCOUNT, walletType: "external", connectedAtIso: "" });
+    const calls = buildDeposit(vault, { assetsHuman: "0.6", receiver: ACCOUNT, account: ACCOUNT });
+    const h1 = `0x${"01".repeat(32)}` as Hex;
+    const h2 = `0x${"02".repeat(32)}` as Hex;
+    // Step 1 matched (no detail of its own); step 2 extra_transfer (a detail of its own).
+    const client = () => ({
+      getTransactionReceipt: async ({ hash }: { hash: Hex }) =>
+        (hash === h1
+          ? { status: "success", logs: [approvalLog(ACCOUNT, vault.address, 600_000n)] }
+          : { status: "success", logs: [transferLog(ACCOUNT, vault.address, 600_000n), depositLog(ACCOUNT, 600_000n), transferLog(ACCOUNT, OTHER, 62_637n)] }) as never,
+      readContract: async () => 600_000n as never,
+    });
+    let url = "";
+    const run = runConfirm(calls, readSession()!, { open: (u) => ((url = u), true), client, verifyOpts: { attempts: 1, delayMs: 1 } });
+    await new Promise((r) => setTimeout(r, 50));
+    const p = page(url);
+    await p.post("/result", { index: 0, hash: h1 });
+    await p.post("/result", { index: 1, hash: h2 });
+    const out = JSON.parse(outcome(vault.chainId, ACCOUNT, await run)) as { status: string; txs: { verified: string; detail?: string }[] };
+    expect(out.status).toBe("completed");
+    expect(out.txs.map((t) => t.verified)).toEqual(["matched", "extra_transfer"]);
+    expect(out.txs[0]!.detail).toBeUndefined();
+    expect(out.txs[1]!.detail).toMatch(/also sent/);
+    for (const t of out.txs) expect(t.detail ?? "").not.toMatch(/still being checked/);
+  });
+
   it("stops at the first step that did not land as confirmed, and sends nothing after it", async () => {
     writeSession({ account: ACCOUNT, walletType: "external", connectedAtIso: "" });
     const calls = buildDeposit(vault, { assetsHuman: "0.6", receiver: ACCOUNT, account: ACCOUNT });
@@ -503,10 +530,12 @@ describe("confirm: one call at a time, each checked on its receipt before the ne
     const run = runConfirm(calls, readSession()!, { open: (u) => ((url = u), true), client: hungReceipt, ttlMs: 400 });
     await new Promise((r) => setTimeout(r, 50));
     void page(url).post("/result", { index: 0, hash: h1 }).catch(() => undefined);
-    const out = JSON.parse(outcome(vault.chainId, ACCOUNT, await run)) as { status: string; reason: string; txs: { hash: string; verified: string }[] };
+    const out = JSON.parse(outcome(vault.chainId, ACCOUNT, await run)) as { status: string; reason: string; txs: { hash: string; verified: string; detail?: string }[] };
     expect(Date.now() - started).toBeLessThan(1_500);
     expect(out.status).toBe("stopped");
     expect(out.txs.map((t) => [t.hash, t.verified])).toEqual([[h1, "unverified"]]);
+    // The check never finished, so the placeholder is the true account of this hash.
+    expect(out.txs[0]!.detail).toMatch(/still being checked/);
     expect(out.reason).toMatch(/limit ran out after 1 of 2 transactions/);
   });
 

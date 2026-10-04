@@ -252,6 +252,9 @@ export async function runConfirm(
         // A receipt that cannot be read is a stop, never a step skipped.
         verdict = { verified: "unverified", detail: `could not check ${hash}: ${redactEndpoints(e instanceof Error ? e.message : String(e))}; look it up before retrying anything` };
       }
+      // The verdict replaces the placeholder: a `matched` verdict carries no `detail`, and merging
+      // would leave "still being checked" on a transaction that landed.
+      delete entry.detail;
       Object.assign(entry, verdict);
       if (verdict.verified !== "matched" && verdict.verified !== "extra_transfer") {
         // Stop at the first step that did not land as confirmed: the next one depends on it.
