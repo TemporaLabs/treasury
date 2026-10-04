@@ -16,6 +16,13 @@ All notable changes to the Agent Treasury Connect plugin are recorded here. The 
   "Continue with a wallet" click.
 - The Privy page's CSP allows `*.privy.io` for images, frames and requests.
 - Existing `via: "privy"` sessions keep working; their old delegation token is dropped.
+- **One wallet on the confirm page.** Sign-in records the wallet's name and the confirm page offers
+  only that wallet ("Confirm in MetaMask") instead of every installed wallet; it falls back to the
+  full list if the name is not found. Sessions saved before this have no name until you reconnect.
+- **Confirm uses the same fixed origin as sign-in** (`localhost:53682`, for every wallet type), so the
+  wallet extension keeps its approval and does not ask "Connect this website" again.
+- The one-shot server stops listening as soon as a flow settles and retries a busy pinned port
+  briefly, so an approve followed at once by a deposit no longer fails with `EADDRINUSE`.
 
 ## [0.7.0] - Unreleased
 
