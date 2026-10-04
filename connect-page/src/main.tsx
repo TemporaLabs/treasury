@@ -382,9 +382,10 @@ async function main() {
       appId={info.appId}
       config={{
         appearance: { theme: "light", accentColor: "#1E3553", landingHeader: "Connect wallet", walletChainType: "ethereum-only", walletList: ["detected_ethereum_wallets", "metamask", "coinbase_wallet"] },
-        // One window: Google, email, X, Apple, and "Continue with a wallet", which lists only the
-        // wallets already installed in this browser (no WalletConnect).
-        loginMethods: ["google", "email", "twitter", "apple", "wallet"],
+        // One window. Its first screen lists the wallets already installed in this browser (MetaMask,
+        // Rabby, any EIP-6963 wallet), then email and Google; Apple, X and Coinbase Wallet sit one
+        // click further. No WalletConnect.
+        loginMethodsAndOrder: { primary: ["detected_ethereum_wallets", "email", "google"], overflow: ["apple", "twitter", "coinbase_wallet"] },
         externalWallets: { walletConnect: { enabled: false } },
         embeddedWallets: { ethereum: { createOnLogin: "users-without-wallets" }, showWalletUIs: true },
         supportedChains: [base, arbitrum],
