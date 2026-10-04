@@ -123,6 +123,12 @@ jobs:
       - name: the plugin folder carries exactly this commit's files
         if: steps.pk.outputs.present == 'yes'
         run: bash scripts/sync-plugin.sh --check
+      # Offline proof that the check above can fail, and for the right reason: each case damages one
+      # thing in a throwaway tree (a stale copy, a symlink, a lockfile, a declared server...) and wants
+      # that failure named. Gated like the check it covers: both exist only where the package does.
+      - name: the plugin-folder check can still go red (31 offline cases)
+        if: steps.pk.outputs.present == 'yes'
+        run: bash .github/scripts/sync-plugin.test.sh
       - name: the declared version follows the version branch (release/v0.1.0 ⇒ 0.1.0)
         # The convention was set by hand; this holds it. A PR into vX.Y.Z, or a push to it,
         # fails if package.json declares anything else.
@@ -288,6 +294,12 @@ jobs:
       - name: every declaration of this repository's own version agrees
         if: steps.pk.outputs.present == 'yes'
         run: bash scripts/check-versions.sh
+      # Offline proof that the check above can fail: a drifted declaration, a field that is gone from
+      # two documents at once (they must not "agree" on nothing), a missing file, a version that is
+      # not a string. Same gate as the check it covers.
+      - name: the version-agreement check can still go red (20 offline cases)
+        if: steps.pk.outputs.present == 'yes'
+        run: bash .github/scripts/check-versions.test.sh
       - name: the licence and NOTICE say what they must
         if: steps.pk.outputs.present == 'yes'
         run: |

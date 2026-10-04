@@ -146,6 +146,8 @@ Pre-1.0, minor versions may change tool names, schemas and behaviour.
   the tag, and polls the registry for up to ten minutes, warning rather than failing on a timeout
   (#28, #55, #57).
 - `prepack` also refuses rebuilt third-party notices that differ from the committed file (#57).
+- Offline tests show that `scripts/sync-plugin.sh --check` and `scripts/check-versions.sh` can fail, and
+  fail for the reason they name (fixes #60).
 - Dependabot no longer proposes TypeScript or `@types/node` majors (#25); GitHub Actions and
   development dependencies bumped (#20, #55).
 
