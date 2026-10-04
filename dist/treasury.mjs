@@ -39749,8 +39749,10 @@ var noOpen = () => (process.env["TREASURY_CONNECT_NO_OPEN"] ?? "").trim().length
 // src/connect/gate.ts
 var UNLIMITED = 2n ** 128n;
 var same = (a, b) => getAddress(a) === getAddress(b);
+var SHAPES = /* @__PURE__ */ new Set(["approve,deposit", "withdraw", "redeem"]);
 function admit(calls, account) {
   if (calls.length === 0) throw new Error("refused: there is nothing to confirm");
+  if (calls.some((c) => c.chainId !== calls[0].chainId)) throw new Error("refused: the calls are on more than one chain");
   const vaults = listVaults();
   const out = [];
   calls.forEach((c, i) => {
@@ -39765,6 +39767,8 @@ function admit(calls, account) {
     }
     const name = decoded.functionName;
     const args = decoded.args ?? [];
+    const canonical = encodeFunctionData({ abi: erc4626Abi, functionName: name, args });
+    if (canonical.toLowerCase() !== c.data.toLowerCase()) throw new Error(`refused (${at}): its calldata is not the canonical encoding of ${name} (extra bytes, or stray bits in an address)`);
     if (name === "approve") {
       const vault2 = vaults.find((v) => v.chainId === c.chainId && same(v.asset.address, c.to));
       if (!vault2) throw new Error(`refused (${at}): approve on ${c.to}, which is not the asset of a listed vault on chain ${c.chainId}`);
@@ -39802,6 +39806,8 @@ function admit(calls, account) {
       throw new Error(`refused (call ${i + 1}): an approval must be followed by a deposit of exactly that amount into the same vault`);
     }
   });
+  const shape = out.map((a) => a.kind).join(",");
+  if (!SHAPES.has(shape)) throw new Error(`refused: ${shape} is not a batch this page confirms (only approve+deposit, withdraw, or redeem)`);
   return out;
 }
 
@@ -40209,6 +40215,7 @@ async function runConnect(deps = {}) {
 async function runConfirm(calls, admitted, session, deps = {}) {
   const chainId = calls[0].chainId;
   if (!isSupportedChainId(chainId)) throw new Error(`chain ${chainId} unsupported`);
+  if (calls.some((c) => c.chainId !== chainId) || admitted.length !== calls.length) throw new Error("the calls and their admitted checks do not line up");
   const account = session.account;
   const client = deps.client ? deps.client(chainId) : makePublicClient(chainId, rpcUrlFromEnv(chainId));
   const done = [];
@@ -40218,13 +40225,13 @@ async function runConfirm(calls, admitted, session, deps = {}) {
   const verifyOpts = { ...deps.verifyOpts, deadline };
   const wellFormedHash = (h) => typeof h === "string" && /^0x[0-9a-fA-F]{64}$/.test(h);
   const known = (h) => done.some((t) => t.hash.toLowerCase() === h.toLowerCase());
-  const preconditionHolds = async (c) => {
-    if (!c.precondition) return true;
-    const p = c.precondition;
+  const allowanceVisible = async (index2) => {
+    const a = admitted[index2];
+    if (a.kind !== "deposit" || admitted[index2 - 1]?.kind !== "approve") return true;
     for (let i = 0; i < (deps.verifyOpts?.attempts ?? 30) && Date.now() < deadline; i++) {
       try {
-        const v = await client.readContract({ address: p.contract, abi: erc4626Abi, functionName: "allowance", args: [p.owner, p.spender] });
-        if (v >= BigInt(p.minimum)) return true;
+        const v = await client.readContract({ address: a.vault.asset.address, abi: erc4626Abi, functionName: "allowance", args: [account, a.vault.address] });
+        if (v >= a.amount) return true;
       } catch {
       }
       await new Promise((r) => setTimeout(r, deps.verifyOpts?.delayMs ?? 2e3));
@@ -40296,7 +40303,7 @@ async function runConfirm(calls, admitted, session, deps = {}) {
         return { ok: true, final: true, value: done, reply: { stop: true, verdict } };
       }
       if (index2 + 1 === calls.length) return { ok: true, final: true, value: done, reply: { finished: true, verdict } };
-      if (!await preconditionHolds(calls[index2 + 1])) {
+      if (!await allowanceVisible(index2 + 1)) {
         stopReason = "the approval landed, but its allowance is not visible on this RPC yet; the deposit was not sent";
         return { ok: true, final: true, value: done, reply: { stop: true, reason: stopReason } };
       }

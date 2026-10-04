@@ -101,7 +101,11 @@ can do is make an unsigned build impossible to mistake for a completed one, by s
   prepare commands, then re-checked from the calldata alone: an `approve` only on a listed vault's
   asset, only to that vault, for exactly the deposit that follows, never unlimited; a `deposit`,
   `withdraw` or `redeem` only on a listed vault, paying and burning only for the connected account;
-  no attached value. Anything else is refused before the operator is asked anything.
+  no attached value. A batch is one operation on one vault and one chain — `approve` + `deposit`,
+  `withdraw`, or `redeem` — and each call's calldata must be exactly the canonical encoding of what it
+  decodes to (no trailing bytes, no stray bits in an address). The allowance the deposit waits for is
+  read from those checked calls, not from the call's own `precondition` field. Anything else is
+  refused before the operator is asked anything.
 - **The operator confirms every call twice:** on the page, which shows the builder's description of the call
   (amount, vault, receiver), the vault, its address and explorer link; and in the wallet's own prompt
   (the extension, or Privy's dialog, which the page always asks Privy to show).
@@ -114,3 +118,10 @@ can do is make an unsigned build impossible to mistake for a completed one, by s
   (some are under a licence that is not open source) and its build fails if one returns; the page's CSP also blocks
   WalletConnect's servers. The Privy app ID in the page is a public identifier; no Privy secret
   exists anywhere in this package.
+- **The page's source and policy are pinned by tests** (`tests/connect-page-source.unit.test.ts`). The
+  page may ask a wallet only for `personal_sign` (sign-in), `eth_estimateGas`, `eth_sendTransaction`
+  and a chain switch; it may not sign typed data, send raw transactions, touch key material, write
+  HTML from strings, store anything in the browser, or fetch anything but its own local server. The
+  Content-Security-Policy is pinned host by host, and `tests/connect.unit.test.ts` checks that the
+  server sends exactly that policy with the page.
+  Widening either fails the suite, so it cannot happen without a reviewer seeing it.
