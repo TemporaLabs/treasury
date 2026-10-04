@@ -286,8 +286,9 @@ the calls, then return
 `acknowledgement` is one fixed text, written by the CLI and not by the agent: the action and amount,
 the chain, the vault's name, symbol and explorer link, the receiver, how many wallet prompts to
 expect (a deposit asks twice, approve then deposit; a withdrawal once), the vault's warning, and the
-disclosures (all of [`earn terms`](#earn_terms--read) before a deposit, its client notes before a
-withdrawal). It ends by asking for a yes or a no. The agent posts it to the operator word for word.
+disclosures in plain words: a short form of [`earn terms`](#earn_terms--read) before a deposit, and
+before a withdrawal only the two points that hold for every action. It says the full terms can be
+asked for; `earn terms` returns them. It ends by asking for a yes or a no. The agent posts it to the operator word for word.
 
 On the operator's yes, the same command run again with `--ack <ack>` opens the page. The code is
 refused, and nothing opens, when:

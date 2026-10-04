@@ -21,7 +21,28 @@ export const DISCLOSURES = {
     "Each default vault, and the demo vault, is a Tempora-curated destination. Tempora can set fees on it as curator (a management fee and a performance fee, both readable on-chain; check them before depositing). This client offers it because it is Tempora's, not because it is the best-yielding vault available.",
   ],
   clientNotes: [
-    "This client prepares unsigned calls only. It cannot sign, send, or move funds; the operator's own signer does that, and the operator is responsible for what it signs.",
+    "This client never signs, sends, or moves funds. Every transaction is signed by the operator's own wallet (through `connect`) or the operator's own signer, and the operator is responsible for what it signs.",
     "Geography: the operator is responsible for the depositor's eligibility in its own jurisdiction. This client has no geographic signal and makes no representation about eligibility.",
   ],
+  /**
+   * The same points in plain words, for the acknowledgement an operator reads before every signing
+   * page (`connect/ack.ts`). A person has to read this each time, so it is short; `items` and
+   * `clientNotes` above stay the full text, which `earn_terms` returns. Keep the two in step: a
+   * point added above needs its plain sentence here.
+   */
+  plain: {
+    deposit: [
+      "This is not a bank deposit, and there is no deposit insurance.",
+      "The value of your shares is not guaranteed. It can go down.",
+      "Your money goes into third-party protocols that Tempora does not control. They can fail.",
+      "Any yield you see is past performance, not a promise.",
+      "You can withdraw, but in stressed markets part of your money may not come out right away.",
+      "Tempora runs this vault and can charge fees on it. It is offered because it is Tempora's, not because it pays the most. Its holdings and fees are public on-chain.",
+    ],
+    always: [
+      "This software never signs or moves your money. You approve every transaction in your own wallet, and you are responsible for what you approve.",
+      "You are responsible for being allowed to use this where you live.",
+    ],
+    fullTerms: "Ask your agent for the full terms at any time.",
+  },
 } as const;

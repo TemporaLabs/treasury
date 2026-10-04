@@ -79,6 +79,10 @@ Pre-1.0, minor versions may change tool names, schemas and behaviour.
   minutes, and only for exactly the calls acknowledged; a completed sign-in or a disconnect voids it. The
   `earn` skill posts the acknowledgement word for word before every page open, so an operator's earlier
   yes never carries over to the next deposit or withdrawal.
+- The acknowledgement states the disclosures in plain words, short enough to read every time (about
+  1,500 characters for a deposit). The full text stays in `earn terms`.
+- The disclosure on who signs now names both paths: the operator's own wallet through `connect`, or
+  the operator's own signer. It said only "the operator's own signer".
 
 ### Removed
 - The MCP server: `dist/mcp-server.mjs`, the `treasury-mcp` bin, `plugin/.mcp.json`, and the

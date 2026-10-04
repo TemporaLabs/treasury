@@ -838,8 +838,9 @@ describe("the acknowledgement before any signing page opens", () => {
         linksFor(vault).explorer,
         `Shares go to: ${ACCOUNT}`,
         operatorWarning(vault.warning),
-        ...DISCLOSURES.items,
-        ...DISCLOSURES.clientNotes,
+        ...DISCLOSURES.plain.deposit,
+        ...DISCLOSURES.plain.always,
+        DISCLOSURES.plain.fullTerms,
         "Reply yes or no.",
       ]) {
         expect(text).toContain(part);
@@ -862,6 +863,27 @@ describe("the acknowledgement before any signing page opens", () => {
       expect(wd).toContain("Your wallet will ask you once, to make the withdrawal.");
     });
 
+    it("says who signs: the operator's own wallet through connect, or their own signer, never this client", async () => {
+      // Through `connect` the operator's wallet signs, so a note naming only "the operator's own signer" described the prepare path alone.
+      const note = DISCLOSURES.clientNotes[0];
+      expect(note).toBe("This client never signs, sends, or moves funds. Every transaction is signed by the operator's own wallet (through `connect`) or the operator's own signer, and the operator is responsible for what it signs.");
+      // The acknowledgement says the same in plain words, on a deposit and on a withdrawal.
+      for (const name of ["connect_deposit", "connect_withdraw"] as const) {
+        expect(String((await connect(name, { amount_usdc: "1" }))["acknowledgement"])).toContain("This software never signs or moves your money. You approve every transaction in your own wallet");
+      }
+    });
+
+    it("carries the disclosures in plain words, short enough to read every time; the full text stays in earn terms", async () => {
+      const text = String((await connect("connect_deposit", { amount_usdc: "1" }))["acknowledgement"]);
+      // The full, formal items are what `earn terms` returns; none of them is pasted here.
+      for (const full of [...DISCLOSURES.items, ...DISCLOSURES.clientNotes]) expect(text).not.toContain(full);
+      expect(text.length).toBeLessThan(1_600);
+      // Every full item still has its plain sentence: the points an operator must not lose.
+      for (const point of [/not a bank deposit/, /no deposit insurance/, /can go down/, /third-party protocols/, /past performance, not a promise/, /may not come out right away/, /can charge fees/, /not because it pays the most/, /never signs or moves your money/, /where you live/]) {
+        expect(text).toMatch(point);
+      }
+    });
+
     it("is generated, not composed: the same calls always produce the same text, under a fresh code", async () => {
       const a = await connect("connect_deposit", { amount_usdc: "1" });
       clock = new Date(clock.getTime() + 60_000);
@@ -870,12 +892,12 @@ describe("the acknowledgement before any signing page opens", () => {
       expect(b["ack"]).not.toBe(a["ack"]);
     });
 
-    it("a withdrawal says what it pays and to whom, with the client notes but not the pre-deposit disclosures", async () => {
+    it("a withdrawal says what it pays and to whom, with the points that hold for every action but not the pre-deposit ones", async () => {
       const text = String((await connect("connect_withdraw", { amount_usdc: "1" }))["acknowledgement"]);
       expect(text).toContain("Withdraw: 1 USDC");
       expect(text).toContain(`USDC goes to: ${ACCOUNT}`);
-      for (const note of DISCLOSURES.clientNotes) expect(text).toContain(note);
-      expect(text).not.toContain(DISCLOSURES.items[1]);
+      for (const note of DISCLOSURES.plain.always) expect(text).toContain(note);
+      for (const dep of DISCLOSURES.plain.deposit) expect(text).not.toContain(dep);
       expect(opened).toEqual([]);
     });
 
