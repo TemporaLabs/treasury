@@ -12,6 +12,8 @@ import { randomBytes, timingSafeEqual } from "node:crypto";
 import { getAddress, isAddress } from "viem";
 
 const MAX_BODY_BYTES = 16 * 1024;
+/** How long a cancel waits for a result already being checked, so it can carry that verdict. */
+const CANCEL_GRACE_MS = 30_000;
 
 export type Accepted<T> =
   | { ok: true; final: true; value: T; reply?: Record<string, unknown> }
@@ -30,6 +32,12 @@ export interface Flow<T> {
   info: () => Record<string, unknown>;
   challenge?: (address: string, origin: string, nonce: string) => string;
   accept: (body: Record<string, unknown>, ctx: { nonce: string; origin: string; message?: string; challengedAddress?: string }) => Promise<Accepted<T>>;
+  /** Called with the page's body when it reports a rejection, before the flow ends. */
+  onReject?: (body: Record<string, unknown>) => void;
+  /** Why the flow ended when the time limit ran out; the default says nothing happened. */
+  timeoutReason?: () => string;
+  /** Overrides the cancel grace period (tests). */
+  cancelGraceMs?: number;
   port: number;
 }
 
@@ -53,6 +61,7 @@ export async function serveOnce<T>(flow: Flow<T>): Promise<Handle<T>> {
   let busy = false;
   /** A cancel or timeout that arrived while a result was being checked; applied once the check ends. */
   let deferred: Settled<T> | undefined;
+  const expiresAt = Date.now() + flow.ttlMs;
   let resolveDone!: (r: Settled<T>) => void;
   const done = new Promise<Settled<T>>((r) => (resolveDone = r));
   let issued: { address: string; message: string } | undefined;
@@ -95,7 +104,10 @@ export async function serveOnce<T>(flow: Flow<T>): Promise<Handle<T>> {
 
         if (req.method === "GET") {
           if (!same(url.searchParams.get("s") ?? "", secret)) return json(res, 404, { ok: false, reason: "not found" });
-          if (url.pathname === "/info") return settled ? json(res, 410, { ok: false, reason: "already finished" }) : json(res, 200, flow.info());
+          if (url.pathname === "/info") {
+            if (settled) return json(res, 410, { ok: false, reason: "already finished" });
+            return json(res, 200, { ...flow.info(), msLeft: Math.max(0, expiresAt - Date.now()) });
+          }
           if (url.pathname === `/${flow.mode}`) {
             res.writeHead(200, {
               "content-type": "text/html; charset=utf-8",
@@ -133,6 +145,7 @@ export async function serveOnce<T>(flow: Flow<T>): Promise<Handle<T>> {
 
           if (body["rejected"] === true) {
             const reason = typeof body["reason"] === "string" ? body["reason"].slice(0, 300) : "declined in the browser";
+            flow.onReject?.(body);
             finishWhenIdle({ ok: false, reason });
             return json(res, 200, { ok: true });
           }
@@ -175,10 +188,16 @@ export async function serveOnce<T>(flow: Flow<T>): Promise<Handle<T>> {
     // A short grace period lets the page receive its last answer before the socket closes.
     setTimeout(closeAll, 1500).unref();
   };
-  /** A result still being checked decides the flow; a cancel or timeout never cuts it short. */
+  /**
+   * A cancel that arrives while a result is being checked waits for that check, so the command can
+   * report its verdict — but never longer than the grace period. The time limit does not wait: the
+   * transaction is already on record (`unverified`), and the command must return inside it.
+   */
   const finishWhenIdle = (r: Settled<T>) => {
-    if (busy) deferred ??= r;
-    else finish(r);
+    if (!busy) return finish(r);
+    if (deferred) return;
+    deferred = r;
+    setTimeout(() => finish(r), flow.cancelGraceMs ?? CANCEL_GRACE_MS).unref();
   };
 
   const listen = (server: http.Server, host: string, optional: boolean) =>
@@ -200,7 +219,10 @@ export async function serveOnce<T>(flow: Flow<T>): Promise<Handle<T>> {
     closeAll();
     throw e;
   }
-  const timer = setTimeout(() => finishWhenIdle({ ok: false, reason: `nothing happened in the browser within ${Math.round(flow.ttlMs / 60_000)} minutes` }), flow.ttlMs);
+  const timer = setTimeout(
+    () => finish({ ok: false, reason: flow.timeoutReason?.() ?? `nothing happened in the browser within ${Math.round(flow.ttlMs / 60_000)} minutes` }),
+    flow.ttlMs,
+  );
   timer.unref();
   void done.then(() => clearTimeout(timer));
   return { url: `${origin}/${flow.mode}?s=${secret}`, done, close: () => finish({ ok: false, reason: "cancelled" }) };

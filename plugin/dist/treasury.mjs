@@ -39801,6 +39801,7 @@ function admit(calls, account) {
 import http2 from "http";
 import { randomBytes as randomBytes2, timingSafeEqual } from "crypto";
 var MAX_BODY_BYTES = 16 * 1024;
+var CANCEL_GRACE_MS = 3e4;
 var same2 = (a, b) => {
   const x = Buffer.from(a);
   const y = Buffer.from(b);
@@ -39812,6 +39813,7 @@ async function serveOnce(flow) {
   let settled = false;
   let busy = false;
   let deferred;
+  const expiresAt = Date.now() + flow.ttlMs;
   let resolveDone;
   const done = new Promise((r) => resolveDone = r);
   let issued;
@@ -39849,7 +39851,10 @@ async function serveOnce(flow) {
         const url2 = new URL(req.url ?? "/", origin);
         if (req.method === "GET") {
           if (!same2(url2.searchParams.get("s") ?? "", secret)) return json2(res, 404, { ok: false, reason: "not found" });
-          if (url2.pathname === "/info") return settled ? json2(res, 410, { ok: false, reason: "already finished" }) : json2(res, 200, flow.info());
+          if (url2.pathname === "/info") {
+            if (settled) return json2(res, 410, { ok: false, reason: "already finished" });
+            return json2(res, 200, { ...flow.info(), msLeft: Math.max(0, expiresAt - Date.now()) });
+          }
           if (url2.pathname === `/${flow.mode}`) {
             res.writeHead(200, {
               "content-type": "text/html; charset=utf-8",
@@ -39884,6 +39889,7 @@ async function serveOnce(flow) {
           }
           if (body["rejected"] === true) {
             const reason = typeof body["reason"] === "string" ? body["reason"].slice(0, 300) : "declined in the browser";
+            flow.onReject?.(body);
             finishWhenIdle({ ok: false, reason });
             return json2(res, 200, { ok: true });
           }
@@ -39922,8 +39928,10 @@ async function serveOnce(flow) {
     setTimeout(closeAll, 1500).unref();
   };
   const finishWhenIdle = (r) => {
-    if (busy) deferred ??= r;
-    else finish(r);
+    if (!busy) return finish(r);
+    if (deferred) return;
+    deferred = r;
+    setTimeout(() => finish(r), flow.cancelGraceMs ?? CANCEL_GRACE_MS).unref();
   };
   const listen = (server, host, optional2) => new Promise((resolve, reject) => {
     server.once("error", (e) => {
@@ -39942,7 +39950,10 @@ async function serveOnce(flow) {
     closeAll();
     throw e;
   }
-  const timer = setTimeout(() => finishWhenIdle({ ok: false, reason: `nothing happened in the browser within ${Math.round(flow.ttlMs / 6e4)} minutes` }), flow.ttlMs);
+  const timer = setTimeout(
+    () => finish({ ok: false, reason: flow.timeoutReason?.() ?? `nothing happened in the browser within ${Math.round(flow.ttlMs / 6e4)} minutes` }),
+    flow.ttlMs
+  );
   timer.unref();
   void done.then(() => clearTimeout(timer));
   return { url: `${origin}/${flow.mode}?s=${secret}`, done, close: () => finish({ ok: false, reason: "cancelled" }) };
@@ -40069,14 +40080,14 @@ async function verifyLanded(client, hash4, call2, account, opts = {}) {
   const attempts = opts.attempts ?? 30;
   const delayMs = opts.delayMs ?? 2e3;
   let receipt;
-  for (let i = 0; i < attempts && !receipt; i++) {
+  for (let i = 0; i < attempts && !receipt && (opts.deadline === void 0 || Date.now() < opts.deadline); i++) {
     try {
       receipt = await client.getTransactionReceipt({ hash: hash4 });
     } catch {
       await new Promise((r) => setTimeout(r, delayMs));
     }
   }
-  if (!receipt) return { verified: "unverified", detail: `no receipt for ${hash4} after ${attempts} tries; look it up on the explorer before retrying anything` };
+  if (!receipt) return { verified: "unverified", detail: `no receipt for ${hash4} in time; look it up on the explorer before retrying anything` };
   if (receipt.status !== "success") return { verified: "reverted", detail: `${hash4} reverted on chain; nothing it was meant to do happened` };
   const vault = call2.vault.address;
   const asset = call2.vault.asset.address;
@@ -40162,7 +40173,7 @@ async function runConnect(deps = {}) {
   });
   const handle = await serveOnce({
     mode: "connect",
-    ttlMs: CONNECT_TTL_MS,
+    ttlMs: deps.ttlMs ?? CONNECT_TTL_MS,
     html: (s) => shell(s, "Connect to Open Agent Treasury"),
     csp: PAGE_CSP,
     assets: assets(),
@@ -40193,10 +40204,15 @@ async function runConfirm(calls, admitted, session, deps = {}) {
   const client = deps.client ? deps.client(chainId) : makePublicClient(chainId, rpcUrlFromEnv(chainId));
   const done = [];
   let stopReason;
+  const ttlMs = deps.ttlMs ?? CONFIRM_TTL_MS;
+  const deadline = Date.now() + ttlMs;
+  const verifyOpts = { ...deps.verifyOpts, deadline };
+  const wellFormedHash = (h) => typeof h === "string" && /^0x[0-9a-fA-F]{64}$/.test(h);
+  const known = (h) => done.some((t) => t.hash.toLowerCase() === h.toLowerCase());
   const preconditionHolds = async (c) => {
     if (!c.precondition) return true;
     const p = c.precondition;
-    for (let i = 0; i < 30; i++) {
+    for (let i = 0; i < (deps.verifyOpts?.attempts ?? 30) && Date.now() < deadline; i++) {
       try {
         const v = await client.readContract({ address: p.contract, abi: erc4626Abi, functionName: "allowance", args: [p.owner, p.spender] });
         if (v >= BigInt(p.minimum)) return true;
@@ -40208,7 +40224,17 @@ async function runConfirm(calls, admitted, session, deps = {}) {
   };
   const handle = await serveOnce({
     mode: "confirm",
-    ttlMs: CONFIRM_TTL_MS,
+    ttlMs,
+    ...deps.cancelGraceMs !== void 0 ? { cancelGraceMs: deps.cancelGraceMs } : {},
+    timeoutReason: () => done.length ? `the ${Math.round(ttlMs / 6e4)}-minute limit ran out after ${done.length} of ${calls.length} transactions were reported` : `nothing happened in the browser within ${Math.round(ttlMs / 6e4)} minutes`,
+    // The page reports a hash it could not hand over (its POST failed after the wallet sent):
+    // put it on record so the command reports it, unchecked, instead of losing it.
+    onReject: (body) => {
+      const hash4 = body["hash"];
+      const call2 = calls[done.length];
+      if (!call2 || !wellFormedHash(hash4) || known(hash4)) return;
+      done.push({ step: call2.step, description: call2.description, hash: hash4, verified: "unverified", detail: "the page reported this transaction but could not hand it over for checking; look it up before retrying anything" });
+    },
     html: (s) => shell(s, "Confirm \u2014 Open Agent Treasury"),
     csp: PAGE_CSP,
     assets: assets(),
@@ -40236,12 +40262,17 @@ async function runConfirm(calls, admitted, session, deps = {}) {
       const index2 = body["index"];
       const hash4 = body["hash"];
       if (index2 !== done.length) return { ok: false, reason: `expected step ${done.length + 1}` };
-      if (typeof hash4 !== "string" || !/^0x[0-9a-fA-F]{64}$/.test(hash4)) return { ok: false, reason: "malformed transaction hash" };
+      if (!wellFormedHash(hash4)) return { ok: false, reason: "malformed transaction hash" };
       const call2 = calls[index2];
-      if (done.some((t) => t.hash.toLowerCase() === hash4.toLowerCase())) return { ok: false, reason: "this transaction hash was already reported for an earlier step" };
+      if (known(hash4)) return { ok: false, reason: "this transaction hash was already reported for an earlier step" };
       const entry = { step: call2.step, description: call2.description, hash: hash4, verified: "unverified", detail: "the flow ended while this transaction was still being checked" };
       done.push(entry);
-      const verdict = await verifyLanded(client, hash4, admitted[index2], account, deps.verifyOpts);
+      let verdict;
+      try {
+        verdict = await verifyLanded(client, hash4, admitted[index2], account, verifyOpts);
+      } catch (e) {
+        verdict = { verified: "unverified", detail: `could not check ${hash4}: ${redactEndpoints(e instanceof Error ? e.message : String(e))}; look it up before retrying anything` };
+      }
       Object.assign(entry, verdict);
       if (verdict.verified !== "matched" && verdict.verified !== "extra_transfer") {
         return { ok: true, final: true, value: done, reply: { stop: true, verdict } };

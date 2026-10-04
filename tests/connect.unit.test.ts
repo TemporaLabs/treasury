@@ -128,6 +128,13 @@ describe("verification reads the receipt, not the transaction envelope", () => {
     expect((await verifyLanded(receiptClient("missing"), HASH, depositCall, ACCOUNT, { attempts: 2, delayMs: 1 })).verified).toBe("unverified");
   });
 
+  it("stops waiting for a receipt once the flow's deadline has passed", async () => {
+    let reads = 0;
+    const client = { getTransactionReceipt: async () => (reads++, Promise.reject(new Error("not yet"))) as never };
+    const v = await verifyLanded(client, HASH, { kind: "deposit", vault, amount: 1n }, ACCOUNT, { attempts: 30, delayMs: 1, deadline: Date.now() - 1 });
+    expect([v.verified, reads]).toEqual(["unverified", 0]);
+  });
+
   it("an approval is matched by its own Approval event, to the vault, for the amount", async () => {
     const call = { kind: "approve" as const, vault, amount: 600_000n };
     expect((await verifyLanded(receiptClient({ status: "success", logs: [approvalLog(ACCOUNT, vault.address, 600_000n)] }), HASH, call, ACCOUNT)).verified).toBe("matched");
@@ -341,22 +348,123 @@ describe("confirm: one call at a time, each checked on its receipt before the ne
     expect((await fetch(url.replace("/confirm?", "/info?"))).status).toBe(410);
   });
 
-  it("holds both loopback addresses, so no other process can answer for `localhost`", async () => {
+  it("refuses to start when another process already holds `::1` on its port, and releases 127.0.0.1", async () => {
     writeSession({ account: ACCOUNT, walletType: "external", connectedAtIso: "" });
     const calls = buildWithdraw(vault, { receiver: ACCOUNT, owner: ACCOUNT, assetsHuman: "1" });
-    let url = "";
-    const run = runConfirm(calls, admit(asGate(calls), ACCOUNT), readSession()!, { open: (u) => ((url = u), true), client: () => ({ getTransactionReceipt: async () => ({}) as never, readContract: async () => 0n as never }) });
-    await new Promise((r) => setTimeout(r, 50));
-    const port = Number(new URL(url).port);
-    const code = await new Promise<string>((resolve) => {
-      const s = createServer();
-      s.once("error", (e: NodeJS.ErrnoException) => resolve(e.code ?? "error"));
-      s.listen({ port, host: "::1", ipv6Only: true }, () => s.close(() => resolve("bound")));
+    const port = Number(process.env["TREASURY_CONNECT_PORT"]);
+    const squatter = createServer();
+    const held = await new Promise<boolean>((resolve) => {
+      squatter.once("error", () => resolve(false));
+      squatter.listen({ port, host: "::1", ipv6Only: true }, () => resolve(true));
     });
-    // A machine with IPv6 switched off has no `::1` to take; anywhere else the address is ours.
-    expect(["EADDRINUSE", "EADDRNOTAVAIL", "EAFNOSUPPORT"]).toContain(code);
-    await page(url).post("/result", { rejected: true });
+    // A machine with IPv6 switched off has no `::1` for anyone to hold; there is nothing to test.
+    if (!held) return;
+    try {
+      await expect(runConfirm(calls, admit(asGate(calls), ACCOUNT), readSession()!, { open: () => true })).rejects.toThrow(/in use on ::1/);
+      const v4 = createServer();
+      await new Promise<void>((resolve, reject) => {
+        v4.once("error", reject);
+        v4.listen(port, "127.0.0.1", () => v4.close(() => resolve()));
+      });
+    } finally {
+      await new Promise((r) => squatter.close(r));
+    }
+  });
+
+  const hungReceipt = () => ({ getTransactionReceipt: () => new Promise<never>(() => {}), readContract: async () => 0n as never });
+
+  it("the time limit ends the flow at once, even while a check hangs, and still reports the hash", async () => {
+    writeSession({ account: ACCOUNT, walletType: "external", connectedAtIso: "" });
+    const calls = buildDeposit(vault, { assetsHuman: "0.6", receiver: ACCOUNT, account: ACCOUNT });
+    const h1 = `0x${"01".repeat(32)}`;
+    let url = "";
+    const started = Date.now();
+    const run = runConfirm(calls, admit(asGate(calls), ACCOUNT), readSession()!, { open: (u) => ((url = u), true), client: hungReceipt, ttlMs: 400 });
+    await new Promise((r) => setTimeout(r, 50));
+    void page(url).post("/result", { index: 0, hash: h1 });
+    const out = JSON.parse(outcome(vault.chainId, ACCOUNT, await run)) as { status: string; reason: string; txs: { hash: string; verified: string }[] };
+    expect(Date.now() - started).toBeLessThan(1_500);
+    expect(out.status).toBe("stopped");
+    expect(out.txs.map((t) => [t.hash, t.verified])).toEqual([[h1, "unverified"]]);
+    expect(out.reason).toMatch(/limit ran out after 1 of 2 transactions/);
+  });
+
+  it("a cancel waits for a check in flight only up to its grace period", async () => {
+    writeSession({ account: ACCOUNT, walletType: "external", connectedAtIso: "" });
+    const calls = buildDeposit(vault, { assetsHuman: "0.6", receiver: ACCOUNT, account: ACCOUNT });
+    const h1 = `0x${"01".repeat(32)}`;
+    let url = "";
+    const run = runConfirm(calls, admit(asGate(calls), ACCOUNT), readSession()!, { open: (u) => ((url = u), true), client: hungReceipt, cancelGraceMs: 150 });
+    await new Promise((r) => setTimeout(r, 50));
+    const p = page(url);
+    void p.post("/result", { index: 0, hash: h1 });
+    await new Promise((r) => setTimeout(r, 50));
+    const cancelledAt = Date.now();
+    await p.post("/result", { rejected: true, reason: "cancelled" });
+    const out = JSON.parse(outcome(vault.chainId, ACCOUNT, await run)) as { status: string; txs: { hash: string; verified: string }[] };
+    expect(Date.now() - cancelledAt).toBeLessThan(1_000);
+    expect(out.status).toBe("stopped");
+    expect(out.txs.map((t) => [t.hash, t.verified])).toEqual([[h1, "unverified"]]);
+  });
+
+  it("a hash the page could not hand over is put on record from its rejection", async () => {
+    writeSession({ account: ACCOUNT, walletType: "external", connectedAtIso: "" });
+    const calls = buildDeposit(vault, { assetsHuman: "0.6", receiver: ACCOUNT, account: ACCOUNT });
+    const h1 = `0x${"01".repeat(32)}`;
+    let url = "";
+    const run = runConfirm(calls, admit(asGate(calls), ACCOUNT), readSession()!, { open: (u) => ((url = u), true), client: hungReceipt });
+    await new Promise((r) => setTimeout(r, 50));
+    await page(url).post("/result", { rejected: true, reason: "the result POST failed", hash: h1 });
+    const out = JSON.parse(outcome(vault.chainId, ACCOUNT, await run)) as { status: string; txs: { hash: string; verified: string }[] };
+    expect(out.status).toBe("stopped");
+    expect(out.txs.map((t) => [t.hash, t.verified])).toEqual([[h1, "unverified"]]);
+  });
+
+  it("a receipt that cannot be read stops the flow; it never lets the next step through", async () => {
+    writeSession({ account: ACCOUNT, walletType: "external", connectedAtIso: "" });
+    const calls = buildDeposit(vault, { assetsHuman: "0.6", receiver: ACCOUNT, account: ACCOUNT });
+    const client = () => ({
+      getTransactionReceipt: async () => ({ status: "success", logs: [{ address: "not-an-address", topics: [], data: "0x" }] }) as never,
+      readContract: async () => 600_000n as never,
+    });
+    let url = "";
+    const run = runConfirm(calls, admit(asGate(calls), ACCOUNT), readSession()!, { open: (u) => ((url = u), true), client, verifyOpts: { attempts: 1, delayMs: 1 } });
+    await new Promise((r) => setTimeout(r, 50));
+    const reply = (await (await page(url).post("/result", { index: 0, hash: `0x${"01".repeat(32)}` })).json()) as { stop: boolean; verdict: { verified: string } };
+    expect(reply).toMatchObject({ stop: true, verdict: { verified: "unverified" } });
+    const out = JSON.parse(outcome(vault.chainId, ACCOUNT, await run)) as { status: string };
+    expect(out.status).toBe("stopped");
+  });
+
+  it("a hash already reported is refused for a later step, and /info says how long is left", async () => {
+    writeSession({ account: ACCOUNT, walletType: "external", connectedAtIso: "" });
+    const calls = buildDeposit(vault, { assetsHuman: "0.6", receiver: ACCOUNT, account: ACCOUNT });
+    const h1 = `0x${"01".repeat(32)}`;
+    const client = () => ({
+      getTransactionReceipt: async () => ({ status: "success", logs: [approvalLog(ACCOUNT, vault.address, 600_000n)] }) as never,
+      readContract: async () => 600_000n as never,
+    });
+    let url = "";
+    const run = runConfirm(calls, admit(asGate(calls), ACCOUNT), readSession()!, { open: (u) => ((url = u), true), client, verifyOpts: { attempts: 1, delayMs: 1 } });
+    await new Promise((r) => setTimeout(r, 50));
+    const p = page(url);
+    const left = (await p.info())["msLeft"] as number;
+    expect(left).toBeGreaterThan(8 * 60_000);
+    expect(left).toBeLessThanOrEqual(9 * 60_000);
+    expect((await (await p.post("/result", { index: 0, hash: h1 })).json()) as { next: number }).toMatchObject({ next: 1 });
+    expect((await (await p.post("/result", { index: 1, hash: h1.toUpperCase().replace("0X", "0x") })).json()) as { reason: string }).toMatchObject({ reason: /already reported/ });
+    await p.post("/result", { rejected: true });
     await run;
+  });
+});
+
+describe("the session file", () => {
+  it.skipIf(process.platform === "win32")("is owner-only even when it already existed with wider permissions", async () => {
+    const { chmodSync, writeFileSync } = await import("node:fs");
+    writeFileSync(join(home, "connect-session.json"), "{}", { mode: 0o644 });
+    chmodSync(join(home, "connect-session.json"), 0o644);
+    writeSession({ account: ACCOUNT, walletType: "external", connectedAtIso: "" });
+    expect(statSync(join(home, "connect-session.json")).mode & 0o777).toBe(0o600);
   });
 });
 

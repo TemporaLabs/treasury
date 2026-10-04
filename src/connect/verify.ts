@@ -40,19 +40,20 @@ export async function verifyLanded(
   hash: Hex,
   call: Admitted,
   account: Address,
-  opts: { attempts?: number; delayMs?: number } = {},
+  opts: { attempts?: number; delayMs?: number; deadline?: number } = {},
 ): Promise<Verdict> {
   const attempts = opts.attempts ?? 30;
   const delayMs = opts.delayMs ?? 2_000;
   let receipt: Awaited<ReturnType<ReadClient["getTransactionReceipt"]>> | undefined;
-  for (let i = 0; i < attempts && !receipt; i++) {
+  // `deadline` (epoch ms) stops the wait when the flow's own time limit is up.
+  for (let i = 0; i < attempts && !receipt && (opts.deadline === undefined || Date.now() < opts.deadline); i++) {
     try {
       receipt = await client.getTransactionReceipt({ hash });
     } catch {
       await new Promise((r) => setTimeout(r, delayMs));
     }
   }
-  if (!receipt) return { verified: "unverified", detail: `no receipt for ${hash} after ${attempts} tries; look it up on the explorer before retrying anything` };
+  if (!receipt) return { verified: "unverified", detail: `no receipt for ${hash} in time; look it up on the explorer before retrying anything` };
   if (receipt.status !== "success") return { verified: "reverted", detail: `${hash} reverted on chain; nothing it was meant to do happened` };
 
   const vault = call.vault.address;

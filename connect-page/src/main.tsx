@@ -38,7 +38,7 @@ async function post(path: string, body: Record<string, unknown>): Promise<Record
   const r = await fetch(path, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ s: secret, ...body }) });
   return r.json();
 }
-const reject = (reason: string) => post("/result", { rejected: true, reason }).catch(() => undefined);
+const reject = (reason: string, hash?: string) => post("/result", { rejected: true, reason, ...(hash ? { hash } : {}) }).catch(() => undefined);
 const errText = (e: unknown) => (e instanceof Error ? e.message : typeof e === "object" && e && "message" in e ? String((e as { message: unknown }).message) : String(e));
 
 type Phase = { text: string; tone?: "ok" | "bad"; busy?: boolean; done?: boolean };
@@ -251,8 +251,11 @@ function Confirm({ info }: { info: Extract<Info, { mode: "confirm" }> }) {
       const tx = { from: wallet.address, to: call.to, data: call.data, value: call.value };
       // Gas: the estimate × 1.5. A Morpho Vault V2 call can run out of gas on an unbuffered estimate.
       const est = BigInt((await provider.request({ method: "eth_estimateGas", params: [tx] })) as string);
-      // The page may have sat open past the flow's time limit; ask before the wallet is asked.
-      if (!(await fetch(`/info?s=${secret}`).then((r) => r.ok, () => false))) throw new Error("this page has expired; run the command again");
+      // The page may have sat open past the flow's time limit; ask before the wallet is asked, and
+      // leave a minute for the wallet's own prompt.
+      const live = (await fetch(`/info?s=${secret}`).then((r) => (r.ok ? r.json() : undefined), () => undefined)) as { msLeft?: number } | undefined;
+      if (!live) throw new Error("this page has expired; run the command again");
+      if ((live.msLeft ?? 0) < 60_000) throw new Error("less than a minute is left on this page; run the command again");
       hash = (await provider.request({ method: "eth_sendTransaction", params: [{ ...tx, gas: `0x${((est * 3n) / 2n).toString(16)}` }] })) as string;
       setPhase({ text: "Sent. Waiting for it to land.", busy: true });
       const r = await post("/result", { index: next, hash });
@@ -268,7 +271,10 @@ function Confirm({ info }: { info: Extract<Info, { mode: "confirm" }> }) {
     } catch (e) {
       const text = errText(e);
       // Once the wallet has returned a hash the transaction is out, whatever failed afterwards.
-      if (hash) return setPhase({ text: `Sent, but not confirmed here: ${hash}. Look it up before trying again. (${text})`, tone: "bad", done: true });
+      if (hash) {
+        setPhase({ text: `Sent, but not confirmed here: ${hash}. Look it up before trying again. (${text})`, tone: "bad", done: true });
+        return void (await reject(text, hash));
+      }
       setPhase({ text: `Not sent: ${text}`, tone: "bad", done: true });
       await reject(text);
     }
@@ -357,7 +363,15 @@ async function main() {
   style.textContent = CSS;
   document.head.appendChild(style);
   const root = createRoot(document.getElementById("root")!);
-  const info = (await (await fetch(`/info?s=${encodeURIComponent(secret)}`)).json()) as Info;
+  const res = await fetch(`/info?s=${encodeURIComponent(secret)}`).catch(() => undefined);
+  if (!res?.ok) {
+    return root.render(
+      <Page mark={<WalletMark />} title="This page has expired" lede="Run the command again from your agent to get a new one.">
+        {null}
+      </Page>,
+    );
+  }
+  const info = (await res.json()) as Info;
   root.render(
     <PrivyProvider
       appId={info.appId}

@@ -76,6 +76,9 @@ export interface ConnectDeps {
   /** The confirm flow's chain reads (receipts, allowance), injectable for tests. */
   client?: (chainId: number) => Pick<ReturnType<typeof makePublicClient>, "getTransactionReceipt" | "readContract">;
   verifyOpts?: { attempts?: number; delayMs?: number };
+  /** Overrides the flow's time limit and the cancel grace period (tests). */
+  ttlMs?: number;
+  cancelGraceMs?: number;
 }
 
 export async function runConnect(deps: ConnectDeps = {}): Promise<{ result: Settled<Session>; url: string; opened: boolean }> {
@@ -92,7 +95,7 @@ export async function runConnect(deps: ConnectDeps = {}): Promise<{ result: Sett
     });
   const handle = await serveOnce<Session>({
     mode: "connect",
-    ttlMs: CONNECT_TTL_MS,
+    ttlMs: deps.ttlMs ?? CONNECT_TTL_MS,
     html: (s) => shell(s, "Connect to Open Agent Treasury"),
     csp: PAGE_CSP,
     assets: assets(),
@@ -135,12 +138,18 @@ export async function runConfirm(
   const client = deps.client ? deps.client(chainId) : makePublicClient(chainId, rpcUrlFromEnv(chainId));
   const done: TxOutcome[] = [];
   let stopReason: string | undefined;
+  const ttlMs = deps.ttlMs ?? CONFIRM_TTL_MS;
+  // Every chain read stops waiting when the flow's time limit is up, so the command returns inside it.
+  const deadline = Date.now() + ttlMs;
+  const verifyOpts = { ...deps.verifyOpts, deadline };
+  const wellFormedHash = (h: unknown): h is string => typeof h === "string" && /^0x[0-9a-fA-F]{64}$/.test(h);
+  const known = (h: string) => done.some((t) => t.hash.toLowerCase() === h.toLowerCase());
 
   /** A deposit's allowance must be visible on our RPC before the page may send it. */
   const preconditionHolds = async (c: UnsignedCall): Promise<boolean> => {
     if (!c.precondition) return true;
     const p = c.precondition;
-    for (let i = 0; i < 30; i++) {
+    for (let i = 0; i < (deps.verifyOpts?.attempts ?? 30) && Date.now() < deadline; i++) {
       try {
         const v = (await client.readContract({ address: p.contract, abi: erc4626Abi, functionName: "allowance", args: [p.owner, p.spender] })) as bigint;
         if (v >= BigInt(p.minimum)) return true;
@@ -154,7 +163,20 @@ export async function runConfirm(
 
   const handle = await serveOnce<TxOutcome[]>({
     mode: "confirm",
-    ttlMs: CONFIRM_TTL_MS,
+    ttlMs,
+    ...(deps.cancelGraceMs !== undefined ? { cancelGraceMs: deps.cancelGraceMs } : {}),
+    timeoutReason: () =>
+      done.length
+        ? `the ${Math.round(ttlMs / 60_000)}-minute limit ran out after ${done.length} of ${calls.length} transactions were reported`
+        : `nothing happened in the browser within ${Math.round(ttlMs / 60_000)} minutes`,
+    // The page reports a hash it could not hand over (its POST failed after the wallet sent):
+    // put it on record so the command reports it, unchecked, instead of losing it.
+    onReject: (body) => {
+      const hash = body["hash"];
+      const call = calls[done.length];
+      if (!call || !wellFormedHash(hash) || known(hash)) return;
+      done.push({ step: call.step, description: call.description, hash, verified: "unverified", detail: "the page reported this transaction but could not hand it over for checking; look it up before retrying anything" });
+    },
     html: (s) => shell(s, "Confirm — Open Agent Treasury"),
     csp: PAGE_CSP,
     assets: assets(),
@@ -182,14 +204,20 @@ export async function runConfirm(
       const index = body["index"];
       const hash = body["hash"];
       if (index !== done.length) return { ok: false, reason: `expected step ${done.length + 1}` };
-      if (typeof hash !== "string" || !/^0x[0-9a-fA-F]{64}$/.test(hash)) return { ok: false, reason: "malformed transaction hash" };
+      if (!wellFormedHash(hash)) return { ok: false, reason: "malformed transaction hash" };
       const call = calls[index]!;
-      if (done.some((t) => t.hash.toLowerCase() === hash.toLowerCase())) return { ok: false, reason: "this transaction hash was already reported for an earlier step" };
+      if (known(hash)) return { ok: false, reason: "this transaction hash was already reported for an earlier step" };
       // The hash is on record before the receipt is read: whatever ends the flow from here on, the
       // command reports this transaction and never says nothing was sent.
       const entry: TxOutcome = { step: call.step, description: call.description, hash, verified: "unverified", detail: "the flow ended while this transaction was still being checked" };
       done.push(entry);
-      const verdict = await verifyLanded(client, hash as Hex, admitted[index]!, account, deps.verifyOpts);
+      let verdict: Verdict;
+      try {
+        verdict = await verifyLanded(client, hash as Hex, admitted[index]!, account, verifyOpts);
+      } catch (e) {
+        // A receipt that cannot be read is a stop, never a step skipped.
+        verdict = { verified: "unverified", detail: `could not check ${hash}: ${redactEndpoints(e instanceof Error ? e.message : String(e))}; look it up before retrying anything` };
+      }
       Object.assign(entry, verdict);
       if (verdict.verified !== "matched" && verdict.verified !== "extra_transfer") {
         // Stop at the first step that did not land as confirmed: the next one depends on it.
