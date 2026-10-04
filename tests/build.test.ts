@@ -2,7 +2,7 @@ import { describe, it, expect } from "vitest";
 import { decodeFunctionData, toFunctionSelector } from "viem";
 import { erc4626Abi } from "../src/abi/erc4626.js";
 import { buildDeposit, buildWithdraw } from "../src/build.js";
-import { buildServer } from "../src/mcp/server.js";
+import { buildCommands } from "../src/earn/commands.js";
 import { parseAmount } from "../src/units.js";
 import { EARN } from "../src/config/earn.js";
 import { FIXTURE, fixtureVault } from "./fixtures/registry.js";
@@ -169,10 +169,10 @@ describe("the decoded call agrees with the calldata it is shipped beside (#11)",
  */
 describe("the prepare tools tell an agent the decoded form exists (#11)", () => {
   type Registered = Record<string, { description?: string }>;
-  const registered = (buildServer() as unknown as { _registeredTools: Registered })._registeredTools;
+  const registered = (buildCommands() as unknown as Registered);
   const described = (name: string) => (registered[name] ?? {}).description ?? "";
 
-  // The population is DERIVED from what the server registers, not written down here: a third
+  // The population is DERIVED from what the commands register, not written down here: a third
   // money-committing tool is subject to this requirement the moment it exists, rather than only
   // tripping the census and being waved through once the count is bumped (#17). A derived loop
   // over nothing would generate no tests and pass vacuously, so the population is asserted first,

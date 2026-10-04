@@ -1,12 +1,18 @@
-# The tools
+# The commands
 
-Eight tools, all prefixed `earn_`. Two kinds: **READ** tools query the chain and return facts;
-**PREPARE** tools return unsigned calls for your signer. Nothing signs, sends or transfers, and CI
-asserts the tool list exactly — a ninth tool, or a `sign`, fails the build.
+Eight `earn` commands, each named here by its tool name, `earn_`-prefixed: `earn_quote` runs as
+`treasury earn quote`, and its arguments are its flags (`--direction deposit --account 0x…
+--amount_usdc 25`). Each prints one JSON document; a refusal exits 1 with `{ "error": … }` on stderr.
+`treasury earn --help` lists every command and flag. Two kinds: **READ** commands query the chain and
+return facts; **PREPARE** commands return unsigned calls for your signer. Nothing signs, sends or
+transfers, and CI asserts the command list exactly — a ninth command, or a `sign`, fails the build.
+The five `connect` commands [further down](#the-connect-commands--treasury-connect-command) are a third
+kind: they hand calls to the operator's own wallet for approval. Their list is pinned by CI the same way.
 
 Every tool that takes a vault takes it as `vault`, the vault's ERC-20 ticker (e.g. `tlCashPlusUSDC2`), and uses the default when it is
 omitted. Every tool that takes an address takes it as `account` — whose shares these are.
-`earn_prepare_withdraw` also takes `receiver`, which is a different thing (where the USDC lands).
+Both prepare commands also take `receiver`, which is a different thing: where the shares land on a
+deposit, where the USDC lands on a withdrawal.
 
 ## `chain` — which chain a call is for
 
@@ -85,7 +91,8 @@ an acknowledgement before building a first deposit.
 With **no `account`**, a health check: chain, chain id, latest block, registry version, and *which
 environment variable* supplied the RPC — never the URL. Returns a verdict when the RPC is
 unreachable; it does not throw. Each chain has its own RPC, so pass `chain` to check the one you are
-about to use. `rpc` is one of:
+about to use. Its `server: "treasury"` field keeps the name it had when this ran as a server, so the
+result stays the same JSON; it names the program, not a running process. `rpc` is one of:
 
 | `rpc` | meaning |
 |---|---|
@@ -235,6 +242,58 @@ out now, and the agent must be told before signing.
 Finalizes a queued withdrawal on chassis that settle asynchronously. No vault offered today queues —
 they settle in the withdraw transaction — so this reports that nothing is claimable. It exists so a
 consumer can code against the full contract before an asynchronous chassis is added.
+
+---
+
+## The connect commands — `treasury connect <command>`
+
+These hand calls to the operator's own wallet instead of returning them: a browser wallet (MetaMask,
+Rabby, Coinbase Wallet), or a Privy embedded wallet opened with an email, Google, Apple or X login.
+A page opens on the operator's machine, at a one-time URL on `http://localhost:53682` that the command
+also prints on stderr; they read each call there and
+confirm it in the wallet. Nothing here signs. See [`security-model.md`](security-model.md#the-wallet-connection-treasury-connect).
+
+| command | flags | does |
+|---|---|---|
+| `connect status` | — | the connected account and how it signed in (`external` / `embedded`), or `disconnected`; reads a local file only |
+| `connect wallet` | — | opens the sign-in page: one Connect button, then Privy's window. The wallet signs a free sign-in message; waits up to 9 minutes and returns `{ status: "connected", account, walletType, connectedAtIso, opened }`. If the sign-in does not finish, it exits 1 with `not connected: <reason>` |
+| `connect deposit` | `--amount_usdc`, `--receiver`, optional `--vault`, `--chain` | builds approve + deposit for the connected account, checks them against the registry, and hands each to the wallet in turn |
+| `connect withdraw` | `--receiver`, then `--amount_usdc` or `--all --shares_exact`, optional `--vault`, `--chain` | the same for a withdrawal |
+| `connect disconnect` | — | forgets the connected account; moves nothing |
+
+`--receiver` must be the connected account: this page pays no one else. It comes from the operator's
+own message, never from the agent. To pay a different address, use `earn prepare_deposit` /
+`earn prepare_withdraw` with the operator's own signer.
+
+`connect deposit` and `connect withdraw` return
+`{ status, chain, chainId, account, opened, reason?, calls_total, txs, next_step }`; `opened` says
+whether a browser was opened or only the URL printed. `txs` has one entry per transaction,
+`{ step, description, hash, verified, detail?, alsoMoved? }`, with `step` the call's position in the
+flow. An entry with `step: 0` is a transaction the page reported but could not tie to a step of this
+flow; it is always `unverified`, so look its hash up before retrying anything. `verified` is read from
+the receipt:
+
+| `verified` | meaning |
+|---|---|
+| `matched` | the vault's (or token's) own event for the connected account and the exact amount is there, and no other transfer of the vault's asset left the account |
+| `extra_transfer` | as `matched`, but the account ALSO sent the asset elsewhere in the same transaction (`alsoMoved`) — often a wallet's fee for paying gas in tokens. Tell the operator |
+| `mismatch` | the transaction succeeded without the expected event. Stop |
+| `reverted` | it failed on chain; nothing it was meant to do happened |
+| `unverified` | no receipt in time; look the hash up before retrying anything |
+
+The flow stops at the first transaction that is not `matched` or `extra_transfer`, and sends nothing
+after it. The result's `status` says how the whole flow ended:
+
+| `status` | meaning |
+|---|---|
+| `completed` | every call of the flow landed (`txs` has `calls_total` entries, each `matched` or `extra_transfer`) |
+| `stopped` | the flow ended before every call landed; `reason` says why, and the last entry's `verified` and `detail` give the transaction's own verdict. An approval whose allowance does not show on the RPC within about a minute stops here, with the deposit not sent |
+| `not_reported` | the page reported no transaction (cancelled, or nine minutes passed). This is not proof that none was sent: if the wallet showed a confirmation, check `earn balance` before any retry |
+
+Each command returns within nine minutes, however slow the RPC is; a transaction still being
+checked then is listed as `unverified`. A cancel waits up to 30 seconds for a check already in
+progress, so it can report that transaction's verdict. The confirm page will not start a step with
+less than a minute left, and a transaction hash is accepted only once per flow.
 
 ---
 

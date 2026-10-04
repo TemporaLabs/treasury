@@ -8,12 +8,23 @@ The product's own changes are in the repository's [`CHANGELOG.md`](../CHANGELOG.
 
 Carries `@temporalabs/treasury` v0.1.2.
 
+### Changed
+- **Headless: the plugin declares no MCP server.** The `earn` skill runs the bundled CLI,
+  `node "${CLAUDE_PLUGIN_ROOT}/dist/treasury.mjs" earn <command>`, through the shell, one command at a
+  time, and pre-approves that command for the turn it is used in. `plugin/.mcp.json` is gone, and so
+  is the session restart a server needed before its tools appeared: `/reload-plugins` loads the skill.
+
 ### Added
+- **The `earn` skill hands calls to the operator's own wallet first**, through `treasury connect`: a
+  sign-in page with one Connect button (browser wallet, or an email, Google, Apple or X login), then
+  a confirm page that shows each call in turn. The prepare-and-sign path stays for any other receiver or when there
+  is no browser on the machine.
+- `dist/connect-page.js`, the connect page, and its notices in `THIRD_PARTY_NOTICES.connect-page.md`.
 - **The `earn` skill works on more than one chain.** Its description now names Base and Arbitrum,
   and it has a section on choosing the chain: the agent asks the operator which chain before
   preparing a deposit when they have not said, and reads every listed vault before answering a
   balance or withdrawal question that names none.
-- The plugin forwards `TREASURY_RPC_ARBITRUM` and `TREASURY_LOGS_RPC_ARBITRUM` to the server, beside
+- `TREASURY_RPC_ARBITRUM` and `TREASURY_LOGS_RPC_ARBITRUM` reach the CLI from the environment, beside
   the two Base variables.
 - A trigger case for a deposit on Arbitrum.
 

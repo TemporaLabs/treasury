@@ -21,7 +21,7 @@ t() { # name want_exit want_stdout build...
   fi
 }
 
-full()      { mkdir -p src dist registry; touch package.json dist/mcp-server.mjs registry/vaults.json; }
+full()      { mkdir -p src dist registry; touch package.json dist/treasury.mjs registry/vaults.json; }
 # The plugin is not a part of the package, so a package tree without it is still a package. Under an
 # earlier PARTS that included the skill, this case errored as a half-moved package.
 withskill() { full; mkdir -p skills/earn; touch skills/earn/SKILL.md; }
@@ -33,19 +33,19 @@ docsonly()  { mkdir -p docs; touch docs/README.md; }
 # The shipped layout: the package at the root and the plugin's copies of the bundle and registry in
 # plugin/. The root answers first, so the copies are never mistaken for a moved package...
 withplugin(){ full; mkdir -p plugin/dist plugin/registry plugin/skills/earn
-              touch plugin/dist/mcp-server.mjs plugin/registry/vaults.json plugin/skills/earn/SKILL.md; }
+              touch plugin/dist/treasury.mjs plugin/registry/vaults.json plugin/skills/earn/SKILL.md; }
 # ...but plugin/ copies with NO package at the root are a broken tree, and must not read as "no package".
-pluginonly(){ mkdir -p docs plugin/dist plugin/registry; touch docs/README.md plugin/dist/mcp-server.mjs plugin/registry/vaults.json; }
+pluginonly(){ mkdir -p docs plugin/dist plugin/registry; touch docs/README.md plugin/dist/treasury.mjs plugin/registry/vaults.json; }
 partial()   { mkdir -p src; }
 moved()     { mkdir -p packages/treasury/src packages/treasury/skills/earn packages/treasury/dist packages/treasury/registry
               touch packages/treasury/package.json packages/treasury/skills/earn/SKILL.md \
-                    packages/treasury/dist/mcp-server.mjs packages/treasury/registry/vaults.json; }
+                    packages/treasury/dist/treasury.mjs packages/treasury/registry/vaults.json; }
 # The real pre-collapse layout, not a stub of it: it carried the skill, the bundle and the registry
 # under skill/treasury/ too. A fixture that omits those is not that layout, and testing against it
 # measures the fixture.
 nested()    { mkdir -p skill/treasury/src skill/treasury/skills/earn skill/treasury/dist skill/treasury/registry
               touch skill/treasury/package.json skill/treasury/skills/earn/SKILL.md \
-                    skill/treasury/dist/mcp-server.mjs skill/treasury/registry/vaults.json; }
+                    skill/treasury/dist/treasury.mjs skill/treasury/registry/vaults.json; }
 nodemods()  { mkdir -p docs node_modules/leftover; touch docs/README.md node_modules/leftover/package.json; }
 ghaction()  { mkdir -p docs .github/actions/notify; touch docs/README.md .github/actions/notify/package.json; }
 docssite()  { mkdir -p docs/site; touch docs/README.md docs/site/package.json; }

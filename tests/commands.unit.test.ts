@@ -1,5 +1,5 @@
 /**
- * Unit — the MCP tool surface itself. A tool rename and the `account` normalisation
+ * Unit — the command surface itself. A tool rename and the `account` normalisation
  * touch only this boundary, and the boundary is exactly the layer no existing test covered: the
  * library tests call `buildWithdraw`/`getPosition` directly and never go through a handler.
  *
@@ -11,7 +11,7 @@ import { createServer } from "node:http";
 import { describe, it, expect, beforeEach, afterEach, beforeAll, afterAll } from "vitest";
 import { decodeFunctionData } from "viem";
 import { erc4626Abi } from "../src/abi/erc4626.js";
-import { buildServer } from "../src/mcp/server.js";
+import { buildCommands } from "../src/earn/commands.js";
 import { EARN } from "../src/config/earn.js";
 import { readFileSync } from "node:fs";
 import { FIXTURE, useFixtureRegistry, useShippedRegistry } from "./fixtures/registry.js";
@@ -26,11 +26,11 @@ afterAll(() => useShippedRegistry());
 // local port, and the OS reuses ports: forget between tests so one mock never answers for the next.
 afterEach(() => __forgetEndpointChainsForTests());
 
-type Handler = (a: unknown, extra: unknown) => Promise<{ content: { type: string; text: string }[] }>;
+type Handler = (a: unknown, extra: unknown) => Promise<string>;
 type Registered = Record<string, { handler: Handler; inputSchema?: { shape?: Record<string, unknown> } }>;
 
-const tools = () => (buildServer() as unknown as { _registeredTools: Registered })._registeredTools;
-const payload = (r: { content: { text: string }[] }) => JSON.parse(r.content[0]!.text);
+const tools = () => (buildCommands() as unknown as Registered);
+const payload = (r: string) => JSON.parse(r);
 
 const ACCOUNT = EARN.fixtures.stranger;
 const RECEIVER = "0x1111111111111111111111111111111111111111" as const;
@@ -272,7 +272,7 @@ describe("the test-vault warning travels with money-committing responses, and on
    * through the chokepoint and is disclosed for free, or hand-rolls the field and fails here.
    */
   it("only the chokepoint and the vault listing write a warning field", () => {
-    const src = readFileSync(new URL("../src/mcp/server.ts", import.meta.url), "utf8").replace(/\/\*[\s\S]*?\*\/|\/\/.*$/gm, "");
+    const src = readFileSync(new URL("../src/earn/commands.ts", import.meta.url), "utf8").replace(/\/\*[\s\S]*?\*\/|\/\/.*$/gm, "");
     const writers = src.split("\n").filter((l) => /\bwarning:/.test(l)).map((l) => l.trim());
     expect(writers).toEqual([
       "const commitsMoney = (vault: VaultEntry) => ({ warning: vault.warning });",
@@ -408,7 +408,7 @@ describe("earn_status", () => {
     // The literal this replaces: server.ts once carried a hard-coded version that lagged package.json
     // by two releases. Proving the MECHANISM, not a value: the sources carry no semver literal at all —
     // a `not.toBe("0.1.0")` tripwire became unsatisfiable the day 0.1.0 was the declared version.
-    const src = ["../src/version.ts", "../src/mcp/server.ts"].map((f) => readFileSync(new URL(f, import.meta.url), "utf8").replace(/\/\*[\s\S]*?\*\/|\/\/.*$/gm, ""));
+    const src = ["../src/version.ts", "../src/earn/commands.ts", "../src/cli.ts"].map((f) => readFileSync(new URL(f, import.meta.url), "utf8").replace(/\/\*[\s\S]*?\*\/|\/\/.*$/gm, ""));
     for (const s of src) expect(s).not.toMatch(/"\d+\.\d+\.\d+"/);
   });
 
@@ -651,7 +651,7 @@ describe("every tool that reads the chain names an endpoint that answers for the
     // Providers put the chain in the path or the host. The redactor registers long URL segments as
     // secrets; "arbitrum" is 8 characters, and the refusal read `is on base, not <redacted>`.
     process.env["TREASURY_RPC_ARBITRUM"] = "http://127.0.0.1:9/arbitrum/KEYabcdef123456";
-    const t = tools(); // buildServer registers the secrets
+    const t = tools(); // buildCommands registers the secrets
     const err = await t["earn_prepare_deposit"]!
       .handler({ vault: "tlCashPlusUSDC2", chain: "arbitrum", account: RECEIVER, receiver: RECEIVER, amount_usdc: "1" }, {})
       .then(() => "no error", (e: Error) => e.message);
@@ -678,9 +678,9 @@ describe("earn_quote", () => {
 
 export { ACCOUNT };
 
-describe("earn_balance wires the fallback — the server line, not just the position layer", () => {
+describe("earn_balance wires the fallback — the command line, not just the position layer", () => {
   // Two LOCAL mock RPCs that answer the position's reads and refuse eth_getLogs with different errors.
-  // Mutating server.ts's `fallbackClient` to undefined leaves position-scan's tests green; this one fails.
+  // Mutating commands.ts's `fallbackClient` to undefined leaves position-scan's tests green; this one fails.
   const chainReply = (method: string): unknown =>
     method === "eth_blockNumber" ? "0x30f0000" : method === "eth_chainId" ? "0x2105" : "0x" + "0".repeat(64);
   const startRpc = async (logsError: string) => {

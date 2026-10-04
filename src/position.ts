@@ -112,7 +112,7 @@ export interface PositionArgs {
    * A second read client for the event scan, used only when `client` cannot cover the range: its
    * eth_getLogs error is one no window can be sized from (measured 2026-09-14: publicnode refuses any
    * range older than ~2,000 blocks with "Archive requests require a personal token"), or its window
-   * would need more than `maxLogRequests` requests (Alchemy free tier: 10 blocks). The server passes
+   * would need more than `maxLogRequests` requests (Alchemy free tier: 10 blocks). The CLI passes
    * the chain's public endpoint: Base's, whose 2,000-block window serves history, or Arbitrum One's,
    * which served an 800,000-block range in one request (measured 2026-10-02). Omitted ⇒ no fallback.
    */

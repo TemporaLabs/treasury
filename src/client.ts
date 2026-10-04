@@ -20,7 +20,7 @@ export function isSupportedChainId(id: number): id is SupportedChainId {
  * on a chain it does not know.
  *
  * `rpcEnv` is tried in order. The second name of each pair is the conventional one an operator may
- * already have set; the plugin's `.mcp.json` passes only the `TREASURY_*` names through.
+ * already have set. The CLI reads the whole environment it was started in, so both names reach it.
  */
 export interface ChainInfo {
   key: string;
@@ -136,10 +136,12 @@ export function makePublicClient(chainId: SupportedChainId, rpcUrl: string): Rea
 /**
  * An env value counts as an RPC URL only if it parses as one with an http(s) scheme. Anything else —
  * empty, whitespace, a non-URL, and in particular an UNEXPANDED placeholder like `${TREASURY_RPC_BASE}` —
- * is treated as unset. Measured 2026-09-12: Claude Code forwards the plugin's `.mcp.json` value
- * `${TREASURY_RPC_BASE}` verbatim when the host variable is unset, and with the old `if (v)` test every
- * RPC-touching tool died on "Failed to parse URL from ${TREASURY_RPC_BASE}". `.mcp.json` now also uses
- * `${VAR:-}`, but this guard is what makes the server independent of any host's expansion rules.
+ * is treated as unset. Measured 2026-09-12, when the plugin still declared an MCP server: Claude Code
+ * forwarded the server declaration's value `${TREASURY_RPC_BASE}` verbatim when the host variable was
+ * unset, and with the old `if (v)` test every RPC-touching tool died on "Failed to parse URL from
+ * ${TREASURY_RPC_BASE}". The plugin now runs the CLI through the shell and declares nothing, but any
+ * host or wrapper can still pass a placeholder through, and this guard is what makes the client
+ * independent of anyone's expansion rules.
  */
 export function rpcUrlFromEnvValue(v: string | undefined): string | undefined {
   if (!v) return undefined;
@@ -155,11 +157,11 @@ export function rpcUrlFromEnvValue(v: string | undefined): string | undefined {
 
 /**
  * Resolves the RPC URL for a chain from the environment. ⚠️ A keyed provider URL IS a secret: it must
- * never appear in tool output — every error crossing the tool boundary goes through `describeError`
+ * never appear in tool output — every error crossing the tool boundary goes through `redactEndpoints`
  * (`src/redact.ts`), which strips endpoints. The names come from `CHAIN_INFO`: on Base,
  * `TREASURY_RPC_BASE` then `BASE_RPC_URL`; on Arbitrum One, `TREASURY_RPC_ARBITRUM` then
- * `ARBITRUM_RPC_URL`. The plugin's `.mcp.json` passes only the `TREASURY_*` names through, so under
- * the packaged path the second name of each pair is unreachable.
+ * `ARBITRUM_RPC_URL`. The CLI inherits its shell's whole environment, so on every path, the plugin's
+ * included, the second name of each pair is used when the first is unset.
  * The chain's logs variable (`TREASURY_LOGS_RPC_BASE`, `TREASURY_LOGS_RPC_ARBITRUM`), if set, is
  * preferred for log scans (providers cap eth_getLogs ranges very differently: Alchemy free 10 blocks,
  * Base public 2,000, Infura 10,000 on Arbitrum) — see `position.ts`.
@@ -194,7 +196,7 @@ export function logsFallbackUrlFromEnv(chainId: SupportedChainId, logsUrl: strin
   const raw = (process.env["TREASURY_LOGS_FALLBACK"] ?? "").trim();
   // Unset, empty, or an unexpanded `${VAR}` placeholder: the default fallback.
   // ⚠️ The placeholder is THE ONE DELIBERATE EXCEPTION to fail-closed below.
-  // An MCP host forwards `${TREASURY_LOGS_FALLBACK}` verbatim when the host variable is unset, so a
+  // A host can forward `${TREASURY_LOGS_FALLBACK}` verbatim when the variable is unset, so a
   // placeholder means the operator never set it — and unset must behave exactly as absent, or every
   // plugin install without the variable silently loses its fallback. The function cannot tell "the
   // host did not expand it" from "someone typed it"; the second reading is treated as implausible on

@@ -9,15 +9,15 @@ the row is wrong, never the chain.
 ## Offered today
 
 Four vaults on two chains. **A call that names no vault and no chain uses the default: Test 2B on Base.**
-Naming `chain: "arbitrum"` uses Test 2C. Test 2 is the demo vault: chosen by naming it. A vault's ticker
+Naming `--chain arbitrum` uses Test 2C. Test 2 is the demo vault: chosen by naming it. A vault's ticker
 names exactly one vault on exactly one chain.
 
 | vault | ticker | chain | role | how to choose it | where to look |
 |---|---|---|---|---|---|
-| Cash Plus USDC (Test 2B) | `tlCashPlusUSDC2B` | Base | **the default** | name nothing, or `chain: "base"` | [BaseScan](https://basescan.org/address/0x91BcEbA5feCB9E92d80F1845B55cC56621E9352F). Morpho's app has no page for it |
-| Cash Plus USDC (Test 2) | `tlCashPlusUSDC2` | Base | **the demo** | `vault: "tlCashPlusUSDC2"` | [Morpho app](https://app.morpho.org/base/vault/0x040fCA12673778FEED5DA7b2ccFbbAb0cc0134Cf/tempora-labs-cash-plus-usdc-test-2#overview), [BaseScan](https://basescan.org/address/0x040fCA12673778FEED5DA7b2ccFbbAb0cc0134Cf) |
-| Cash Plus USDC (Test 2C) | `tlCashPlusUSDC2C` | Arbitrum One | the default on Arbitrum One | `chain: "arbitrum"` | [Arbiscan](https://arbiscan.io/address/0x4057a63953142Ac2b3E5dB1954Fc14d578662587). Morpho's app has no page for it |
-| Cash Plus USDC (Test 2A) | `tlCashPlusUSDC2A` | Base | whitelist-gated; listed so an admitted account can read and exit its position | `vault: "tlCashPlusUSDC2A"` | [BaseScan](https://basescan.org/address/0x1516D2c082b9cc9af852B1Ebc828f168F27299ef) |
+| Cash Plus USDC (Test 2B) | `tlCashPlusUSDC2B` | Base | **the default** | name nothing, or `--chain base` | [BaseScan](https://basescan.org/address/0x91BcEbA5feCB9E92d80F1845B55cC56621E9352F). Morpho's app has no page for it |
+| Cash Plus USDC (Test 2) | `tlCashPlusUSDC2` | Base | **the demo** | `--vault tlCashPlusUSDC2` | [Morpho app](https://app.morpho.org/base/vault/0x040fCA12673778FEED5DA7b2ccFbbAb0cc0134Cf/tempora-labs-cash-plus-usdc-test-2#overview), [BaseScan](https://basescan.org/address/0x040fCA12673778FEED5DA7b2ccFbbAb0cc0134Cf) |
+| Cash Plus USDC (Test 2C) | `tlCashPlusUSDC2C` | Arbitrum One | the default on Arbitrum One | `--chain arbitrum` | [Arbiscan](https://arbiscan.io/address/0x4057a63953142Ac2b3E5dB1954Fc14d578662587). Morpho's app has no page for it |
+| Cash Plus USDC (Test 2A) | `tlCashPlusUSDC2A` | Base | whitelist-gated; listed so an admitted account can read and exit its position | `--vault tlCashPlusUSDC2A` | [BaseScan](https://basescan.org/address/0x1516D2c082b9cc9af852B1Ebc828f168F27299ef) |
 
 **How the three open vaults differ.** Each holds three positions, in three other ERC-4626 vaults (Morpho, Spark and Fluid vaults), and the
 three differ in **all three positions**, not in one. Read from each vault's adapters on 2026-10-02 (the

@@ -4,7 +4,7 @@
  *   npx tsx scripts/third-party-notices.ts --write   # regenerate (run by `npm run build`)
  *   npx tsx scripts/third-party-notices.ts           # exit 1 if the committed file is stale
  *
- * `dist/mcp-server.mjs` inlines its dependencies, so it is a copy of "substantial portions" of each
+ * `dist/treasury.mjs` inlines its dependencies, so it is a copy of "substantial portions" of each
  * one and must carry their licence notices. package.json naming a dependency does not put its notice
  * into a standalone bundle. The package set is read from esbuild's own per-module path comments in
  * the bundle, not from package.json, so a dependency that is declared but tree-shaken away is not
@@ -18,7 +18,7 @@ import { dirname, resolve } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 
 const pkgDir = resolve(dirname(fileURLToPath(import.meta.url)), "..");
-const BUNDLE = resolve(pkgDir, "dist/mcp-server.mjs");
+const BUNDLE = resolve(pkgDir, "dist/treasury.mjs");
 const NOTICES = resolve(pkgDir, "THIRD_PARTY_NOTICES.md");
 
 export interface BundledPackage {
@@ -47,7 +47,7 @@ export function renderNotices(pkgs: BundledPackage[]): string {
   const sorted = [...pkgs].sort((a, b) => a.name.localeCompare(b.name));
   const head = `# Third-party notices
 
-\`dist/mcp-server.mjs\` is a single file that includes the third-party components below. Each
+\`dist/treasury.mjs\` is a single file that includes the third-party components below. Each
 component remains under its own licence, reproduced here in full for the exact version included.
 Tempora Labs' Apache License 2.0 (\`LICENSE\`) applies to Tempora's own code, not to these
 components.

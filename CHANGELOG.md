@@ -6,6 +6,52 @@ Pre-1.0, minor versions may change tool names, schemas and behaviour.
 
 ## [v0.1.2] - Unreleased
 
+### Changed — headless: a command line replaces the MCP server
+- **Treasury is now a command-line program, `treasury earn <command>`, and no longer an MCP server.**
+  The eight tools are the eight commands, with the same names and arguments: `earn_quote` runs as
+  `treasury earn quote --direction deposit --account 0x… --amount_usdc 25`, and `treasury earn --help`
+  lists every command and flag as JSON. Each run prints one JSON document — the same document the
+  tool returned — and a refusal exits 1 with `{ "error": … }` on stderr. Nothing stays running between
+  commands.
+- The bundle is `dist/treasury.mjs` and the npm bin is `treasury`. The plugin declares no server: its
+  skill runs `node "${CLAUDE_PLUGIN_ROOT}/dist/treasury.mjs" earn …` through the shell, so no server
+  has to connect at session start (`/reload-plugins` loads the skill). The CLI reads every variable in
+  `docs/configuration.md` from the environment it was started in, on every path; nothing filters
+  them on the way in.
+- **Upgrading the plugin removes the eight `earn_*` MCP tools.** An agent reaches the same eight
+  operations through the `earn` skill, which runs the CLI; anything that called a tool by its MCP
+  name must move to the command line. The skill pre-approves its own command for the turn it is used
+  in, so a first run after upgrading may still show a one-time permission prompt for that command.
+- Every command that cannot run as asked exits 1 with `{ "error": … }` on stderr: an unknown flag, a
+  flag given twice (either spelling), a switch given a value (`--all` takes none), a vault on another
+  chain. A verdict such as `WHITELIST_GATED` is still a result and exits 0.
+
+### Added — `treasury connect`: the operator's own wallet, in the browser
+- **`treasury connect wallet | deposit | withdraw | status | disconnect`.** `connect wallet` opens a page
+  on the operator's machine with one Connect button and Privy's window: a browser wallet (MetaMask,
+  Rabby, Coinbase Wallet), or an email, Google, Apple or X login with a Privy embedded wallet. The
+  wallet signs a free sign-in message: checked offline for an ordinary wallet, and through its contract
+  on Base for a smart-contract wallet. `connect deposit` / `connect withdraw` build
+  the calls for the connected account, refuse anything outside the registry or paying anyone else,
+  and hand each call to the wallet in turn on a confirm page; the operator confirms on the page and
+  in the wallet. Each transaction comes back with `verified` read from the receipt — `matched`,
+  `extra_transfer` (the wallet also moved money besides the call), `mismatch`, `reverted` or
+  `unverified` — and the flow stops at the first one that did not land as confirmed. The result's
+  `status` is `completed` only when every call landed; otherwise `stopped` with a `reason`, or
+  `not_reported` when no transaction came back. Each command returns within nine minutes. Nothing
+  signs.
+- `dist/connect-page.js`, the page, built from `connect-page/` with its own dependencies so none of
+  them enters this package's. No WalletConnect or Reown code is included. The page's notices are in
+  `THIRD_PARTY_NOTICES.connect-page.md`.
+- `PRIVY_APP_ID`, `TREASURY_CONNECT_PORT`, `TREASURY_CONNECT_HOME`, `TREASURY_CONNECT_NO_OPEN`, all optional.
+
+### Removed
+- The MCP server: `dist/mcp-server.mjs`, the `treasury-mcp` bin, `plugin/.mcp.json`, and the
+  `@modelcontextprotocol/sdk` dependency (about 90 fewer installed packages; the bundle is 1.5 MB,
+  was 2.1 MB). **An MCP host that runs the old bundle must pin v0.1.1 exactly**
+  (`npm install --save-exact @temporalabs/treasury@0.1.1`): a `^0.1.1` range resolves to this release,
+  which has no `dist/mcp-server.mjs`.
+
 ### Added
 - **Earn on more than one chain: Arbitrum One joins Base** (#62). Every tool that takes `vault` also
   takes `chain` (`"base"` or `"arbitrum"`). Base stays the default: a call that names neither a chain
@@ -18,7 +64,7 @@ Pre-1.0, minor versions may change tool names, schemas and behaviour.
   default vault — and `defaultChain`. The `earn` skill has the agent ask the operator which chain
   before preparing a deposit when they have not said, and never for a withdrawal or a balance.
 - `TREASURY_RPC_ARBITRUM` and `TREASURY_LOGS_RPC_ARBITRUM` (and the alias `ARBITRUM_RPC_URL`). A chain
-  reads only its own variables, and the plugin forwards the two `TREASURY_*` ones.
+  reads only its own variables.
 - **An endpoint for the wrong chain is named, not guessed at.** `earn_status` takes `chain`, and
   reports `rpc: "wrong_chain"` with `rpcChainId` when a configured endpoint answers for a different
   chain, `chainVerified: false` when it would not say, and `logsRpc` for a separate logs endpoint.

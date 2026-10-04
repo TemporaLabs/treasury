@@ -1,8 +1,10 @@
 # Configuration
 
-Treasury reads the seven environment variables below and nothing else that an operator can set. A
-test pins the exact set — the seven here plus `TREASURY_FORK`, a switch only the fork test tier reads,
-never the shipped code — so a variable read anywhere else in the package fails the build.
+Treasury reads the environment variables below and nothing else that an operator can set: seven for
+the chain, and four optional ones for `treasury connect`. A test pins the exact set — these, plus
+`TREASURY_FORK` (a switch only the fork test tier reads, never the shipped code) and the four a
+browser launcher checks to see whether there is a browser to open (`DISPLAY`, `WAYLAND_DISPLAY`,
+`SSH_CONNECTION`, `SSH_TTY`) — so a variable read anywhere else in the package fails the build.
 
 **Each chain has its own variables, and a chain reads only its own.** An Arbitrum call never falls
 back to a Base endpoint: a vault's address has no contract on the other chain, so reads there fail
@@ -10,20 +12,24 @@ with "returned no data", which looks like a broken vault, not like a misconfigur
 
 | variable | purpose | unset |
 |---|---|---|
-| `TREASURY_RPC_BASE` | the Base RPC every tool reads through for a vault on Base | falls back to `BASE_RPC_URL`, then to Base's public endpoint `https://mainnet.base.org`, which rate-limits after a handful of calls |
+| `TREASURY_RPC_BASE` | the Base RPC every tool reads through for a vault on Base | falls back to `BASE_RPC_URL`, then to Base's public endpoint `https://mainnet.base.org`, which rate-limits after a handful of calls. `connect wallet` also checks a smart-contract wallet's sign-in through it, whatever chain the vault is on |
 | `TREASURY_LOGS_RPC_BASE` | the RPC `earn_balance` scans `Deposit`/`Withdraw` events through on Base — a provider with a wide `eth_getLogs` window | uses `TREASURY_RPC_BASE` |
-| `BASE_RPC_URL` | a conventional alias, honoured when Treasury runs outside the plugin | — |
+| `BASE_RPC_URL` | a conventional alias, used when `TREASURY_RPC_BASE` is unset — through the plugin too | — |
 | `TREASURY_RPC_ARBITRUM` | the Arbitrum One RPC every tool reads through for a vault on Arbitrum One | falls back to `ARBITRUM_RPC_URL`, then to Arbitrum's public endpoint `https://arb1.arbitrum.io/rpc`, which also rate-limits |
 | `TREASURY_LOGS_RPC_ARBITRUM` | the RPC `earn_balance` scans events through on Arbitrum One | uses `TREASURY_RPC_ARBITRUM` |
-| `ARBITRUM_RPC_URL` | a conventional alias, honoured when Treasury runs outside the plugin | — |
+| `ARBITRUM_RPC_URL` | a conventional alias, used when `TREASURY_RPC_ARBITRUM` is unset — through the plugin too | — |
 | `TREASURY_LOGS_FALLBACK` | where a scan goes when the configured RPC cannot cover the range: an `http(s)` URL for a Base endpoint, or anything that is not a URL (`off`, `disabled`, …) to forbid a fallback on every chain | the chain's own public endpoint |
+| `PRIVY_APP_ID` | the Privy app the `treasury connect` sign-in page uses. A Privy app ID is public — it ships in the page — so a fork can point at its own app | Tempora's own app |
+| `TREASURY_CONNECT_PORT` | the local port the connect page is served on. Privy accepts sign-in only from origins its dashboard lists exactly, so change it only together with that list | `53682` |
+| `TREASURY_CONNECT_HOME` | the directory holding the connect session file (an address, how it signed in, when; no credential) | `~/.config/treasury` |
+| `TREASURY_CONNECT_NO_OPEN` | set to anything to stop `treasury connect` opening a browser itself; it prints the page's URL instead | the browser opens |
 
 **Check a chain's RPC with `earn_status` and `chain`.** It reports which variable supplied the
 endpoint, and `rpc: "wrong_chain"` when that endpoint answers for a different chain — the likeliest
 mistake once there are two variables. A separate logs endpoint is reported beside it as `logsRpc`.
 The tools that read the chain make the same check on every call: a pre-flight, a quote or a balance
 through an endpoint for the wrong chain is refused, and the refusal names the variable that holds
-it. An endpoint is asked which chain it is once per process, with a three-second limit; one that
+it. An endpoint is asked which chain it is once per command run, with a three-second limit; one that
 does not say is reported as `chainVerified: false`, not as a match.
 
 **A keyed RPC URL is a secret.** Treasury treats it as one: no tool output, no error, no health check
@@ -38,13 +44,10 @@ as a `429`.
 
 ## Through the plugin
 
-The plugin (the [`plugin/`](../plugin/) folder of this repository; its server declaration is
-[`plugin/.mcp.json`](../plugin/.mcp.json)) forwards exactly `TREASURY_RPC_BASE`, `TREASURY_LOGS_RPC_BASE`, `TREASURY_RPC_ARBITRUM` and `TREASURY_LOGS_RPC_ARBITRUM` from the host environment — that is
-the contract its manifest honours. The server it spawns also inherits its parent's environment, so
-`TREASURY_LOGS_FALLBACK` reaches it on the plugin path too. When a forwarded variable is unset, the
-`${VAR:-}` default in `.mcp.json` passes an empty string. Treasury treats an empty value, or an
-unexpanded `${…}` placeholder from a host that does not apply the default, as unset and falls back,
-so an unset variable is never mistaken for an endpoint.
+The plugin (the [`plugin/`](../plugin/) folder of this repository) declares no server: its skill runs
+the CLI through Claude Code's shell, so every variable above reaches it from the environment Claude
+Code was started in. Export them before you start it. Treasury treats an empty value, or an unexpanded
+`${…}` placeholder, as unset and falls back, so an unset variable is never mistaken for an endpoint.
 
 ## `eth_getLogs` windows — why each chain has two RPC variables
 
@@ -83,7 +86,10 @@ on Arbitrum One, set `TREASURY_LOGS_RPC_ARBITRUM`.
 
 ## What Treasury never does with the network
 
-No telemetry. No analytics. No call to any host but the RPC endpoints above — there is no yield
-API, no vendor endpoint, and no code path that could add one without a code change. The
-boundary test enforces that no code under the package reaches any other module, environment variable
-or process.
+No telemetry or analytics from Treasury itself. The CLI calls no host but the RPC endpoints above —
+there is no yield API, no vendor endpoint, and no code path that could add one without a code change.
+The one exception is the `treasury connect` page in your browser, which loads Privy's sign-in
+(auth.privy.io and Privy's RPC) and Cloudflare's bot check, and Privy's script sends its own
+analytics; see [security-model.md](security-model.md#the-wallet-connection-treasury-connect). The
+boundary test enforces that no code under the package reaches any other module or environment
+variable, or starts any process but the browser opener.

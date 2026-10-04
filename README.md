@@ -12,9 +12,11 @@
 
 Open Agent Treasury (OAT) helps agents manage on-chain capital. Its first skill, **Earn**, lets
 agents inspect Tempora-curated vaults on Base and Arbitrum One, track USDC positions, and prepare deposits and
-withdrawals. It ships as an agent plugin, an MCP server, and a TypeScript/JavaScript library.
+withdrawals. It ships as an agent plugin, a command-line program, and a TypeScript/JavaScript library.
 
-**OAT prepares transactions. Your signer executes them.** It never holds private keys or signs.
+**OAT prepares transactions. Your wallet executes them.** It never holds private keys or signs: with
+`treasury connect` your agent opens a page where you connect your own wallet — a browser wallet, or
+an email or social login — and confirm each transaction; or it hands you unsigned calls for any signer.
 A transaction goes out only from your own wallet, after you approve it there. You decide how much capital an agent may put to work.
 
 > **Experimental — pre-1.0. Real funds, real risk.** Returns are variable, capital is at risk,
@@ -31,7 +33,7 @@ A transaction goes out only from your own wallet, after you approve it there. Yo
 Earn currently supports **USDC in, USDC out** through Tempora's ERC-4626 vaults on Base and
 Arbitrum One. Base is the default chain, and Test 2B its default vault; the agent asks which chain when
 you have not said, and the USDC has to be on that chain already. See [Vaults](#vaults).
-See the [eight `earn_*` tools](docs/tools.md) for inputs, outputs, and limits.
+See the [command reference](docs/tools.md), the eight `earn` commands and the five `connect` commands, for inputs, outputs, and limits.
 
 ## Quick start
 
@@ -46,36 +48,24 @@ claude plugin marketplace add TemporaLabs/treasury@v0.1.1
 claude plugin install treasury@treasury
 ```
 
-Restart your Claude Code session after installing so the MCP tools connect. Keep the `TemporaLabs/treasury@v0.1.1` ref
+Run `/reload-plugins` (or start a new Claude Code session) after installing so the Earn skill loads. Keep the `TemporaLabs/treasury@v0.1.1` ref
 explicit so the install stays on a release rather than tracking the default branch. Upgrading an
 earlier install? Run `claude plugin marketplace remove treasury` first, then the two `claude plugin` lines above
 ([details](docs/install.md#upgrading-an-earlier-install)).
 
 The plugin is the [`plugin/`](plugin/) folder of this repository: its manifests, the Earn skill, and a
-copy of this repository's own server bundle, made in the same commit.
+copy of this repository's own CLI bundle and the page `treasury connect` serves, made in the same commit. The skill runs it with `node`, one
+command at a time; nothing stays running.
 
-### Other MCP hosts
+### Any agent with a shell
 
 ```bash
-npm install @temporalabs/treasury@0.1.1
+npm install --save-exact @temporalabs/treasury@0.1.1
+npx --no-install treasury earn --help     # every command and flag, as JSON
 ```
 
-Add the server to your host's MCP configuration, replacing the path and RPC URL:
-
-```json
-{
-  "mcpServers": {
-    "treasury": {
-      "command": "node",
-      "args": ["<absolute-project-path>/node_modules/@temporalabs/treasury/dist/mcp-server.mjs"],
-      "env": { "TREASURY_RPC_BASE": "https://..." }
-    }
-  }
-}
-```
-
-Running the bundle by path, as shown, works for every version; from v0.1.1 the `treasury-mcp` command also starts the server.
-For library usage, host setup, and troubleshooting, see [installation](docs/install.md).
+Each command prints one JSON document; a refusal exits 1 with `{ "error": … }` on stderr.
+For library usage, other hosts, and troubleshooting, see [installation](docs/install.md).
 
 ### Try it
 
@@ -85,7 +75,7 @@ Ask your agent:
 
 To try the demo vault or another chain, name it: *“…into the demo vault”*, or *“…on Arbitrum”*.
 
-OAT returns unsigned calls for your signer to review and execute. Preparing a deposit moves no money.
+With a browser on the machine, the agent opens a page where you confirm each call in your own wallet; otherwise OAT returns unsigned calls for your signer. Preparing a deposit moves no money.
 Later, ask: **“What is my position worth, and how much can I withdraw now?”**
 
 ## Vaults
@@ -94,10 +84,10 @@ By default, Earn deposits into **Cash Plus USDC (Test 2B)** on Base. There are o
 
 | | vault | chain | choose it by |
 |---|---|---|---|
-| **Default** | **Cash Plus USDC (Test 2B)** | Base | naming nothing, or `chain: "base"` |
-| **Demo** | **Cash Plus USDC (Test 2)** | Base | `vault: "tlCashPlusUSDC2"` |
-| Option | **Cash Plus USDC (Test 2C)** | Arbitrum One | `chain: "arbitrum"` |
-| Option | **Cash Plus USDC (Test 2A)** | Base | `vault: "tlCashPlusUSDC2A"` (whitelist only) |
+| **Default** | **Cash Plus USDC (Test 2B)** | Base | naming nothing, or `--chain base` |
+| **Demo** | **Cash Plus USDC (Test 2)** | Base | `--vault tlCashPlusUSDC2` |
+| Option | **Cash Plus USDC (Test 2C)** | Arbitrum One | `--chain arbitrum` |
+| Option | **Cash Plus USDC (Test 2A)** | Base | `--vault tlCashPlusUSDC2A` (whitelist only) |
 
 - **Test 2B, the default.** A Morpho Vault V2 on Base, open to any account. Its first position is a
   savings-rate token rather than a lending vault, and its other two positions differ from Test 2's too
@@ -125,14 +115,15 @@ See [vault details](docs/vaults.md) for addresses, access rules, fees, and dated
 
 ## Security
 
-- **No keys or custody:** your wallet holds the position; only your signer can move funds.
-- **Direct RPC access:** no Tempora service in the request path and no telemetry. Keyed RPC URLs are redacted.
+- **No keys or custody:** your wallet holds the position; Treasury never holds a key. With an email or social login, that wallet's keys are managed by Privy; see [risks](docs/risks.md).
+- **Direct RPC access:** the `earn` commands talk only to the chain's RPC (yours, or the chain's public endpoint when none is set or a history scan needs it; see [configuration](docs/configuration.md)), with no Tempora service in the request path and no telemetry. Keyed RPC URLs are redacted.
+- **Sign-in through Privy:** `treasury connect` signs you in through [Privy](https://privy.io), using Tempora's Privy app unless you set `PRIVY_APP_ID`. Privy, and Tempora as that app's owner, see your login and wallet address, and Privy's script on the page sends its own analytics. The page also loads Cloudflare's bot check (challenges.cloudflare.com) for Privy's sign-in.
 - **Verifiable builds:** CI checks the committed bundle; [verify its provenance](docs/runbooks/verify_the_bundle.md).
 - **Private vulnerability reporting:** follow [SECURITY.md](SECURITY.md), not a public issue.
 
 ## Documentation
 
-- [Tool reference](docs/tools.md) · [Configuration](docs/configuration.md)
+- [Command reference](docs/tools.md) · [Configuration](docs/configuration.md)
 - [Risks](docs/risks.md) · [Security model](docs/security-model.md)
 - [Signing and sending](docs/runbooks/sign_and_send.md) · [All docs](docs/README.md) · [Changelog](CHANGELOG.md)
 
