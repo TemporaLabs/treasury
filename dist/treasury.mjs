@@ -40455,6 +40455,7 @@ async function runConfirm(calls, session, deps = {}) {
       } catch (e) {
         verdict = { verified: "unverified", detail: `could not check ${hash4}: ${redactEndpoints(e instanceof Error ? e.message : String(e))}; look it up before retrying anything` };
       }
+      delete entry.detail;
       Object.assign(entry, verdict);
       if (verdict.verified !== "matched" && verdict.verified !== "extra_transfer") {
         stopReason = `step ${call2.step} (${call2.description}) is ${verdict.verified}: ${verdict.detail ?? "it did not land as confirmed"}`;
