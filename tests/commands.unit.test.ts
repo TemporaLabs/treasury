@@ -468,7 +468,7 @@ describe("earn_status health is per chain, and names an endpoint that answers fo
   });
   const health = async (args: Record<string, unknown>) => payload(await tools()["earn_status"]!.handler(args, {}));
 
-  it("chain: arbitrum reports Arbitrum's chain id and ITS variable — never Base's, even when only Base's is set", async () => {
+  it("chain: arbitrum reports Arbitrum's chain id and ITS variable — never Base's, with both set", async () => {
     process.env["TREASURY_RPC_BASE"] = "http://127.0.0.1:9/v2/BASEKEY_abc12345";
     process.env["TREASURY_RPC_ARBITRUM"] = "http://127.0.0.1:9/v2/ARBKEY_abc12345"; // refused: no network
     const arb = await health({ chain: "arbitrum" });

@@ -89,6 +89,12 @@ Pre-1.0, minor versions may change tool names, schemas and behaviour.
 - A registry with no vault on the default chain is refused when it is loaded, with the cause named.
 
 ### Fixed
+- `earn quote --direction withdraw` no longer explains every Morpho V2 revert as a liquidity
+  shortfall. That note applies only to Fusion, which pays withdrawals from its own balance; on
+  Morpho V2 the quote now shows the chain's own revert reason and says a smaller amount may pass
+  (#78). The Fusion note now carries the revert reason too. `earn balance` likewise keeps its
+  "the rest needs an unwind" note for Fusion; on Morpho V2 a paid idle-balance withdrawal is reported
+  as what can come out now, with more possibly withdrawable.
 - A chain's own name in an RPC URL (`…/arbitrum/<key>`) is no longer treated as a secret, so an
   error that names the chain is not masked.
 - `scripts/registry-check.ts` reports a failed `eth_getCode` as not checked, through the same

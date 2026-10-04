@@ -2,7 +2,8 @@ import { afterEach, describe, expect, it } from "vitest";
 import { CHAIN_INFO, chainIdForKey, logsFallbackUrlFromEnv, logsRpcUrlFromEnv, makePublicClient, makeRateLimitedFetch, PUBLIC_RPC, publicRpcHint, resolvedRpcSecrets, RPC_TIMEOUT_MS, endpointChainId, firstEndpointOnWrongChain, __forgetEndpointChainsForTests, logsRpcSourceForEnv, rpcSourceForEnv, rpcUrlFromEnv, supportedChainIds } from "../src/client.js";
 import { createServer } from "node:http";
 
-const KEYS = ["TREASURY_RPC_BASE", "TREASURY_LOGS_RPC_BASE", "BASE_RPC_URL", "TREASURY_RPC_ARBITRUM", "TREASURY_LOGS_RPC_ARBITRUM", "ARBITRUM_RPC_URL"] as const;
+// TREASURY_LOGS_FALLBACK is restored with the rest, so a test that fails mid-way cannot leak a value into the next.
+const KEYS = ["TREASURY_RPC_BASE", "TREASURY_LOGS_RPC_BASE", "BASE_RPC_URL", "TREASURY_RPC_ARBITRUM", "TREASURY_LOGS_RPC_ARBITRUM", "ARBITRUM_RPC_URL", "TREASURY_LOGS_FALLBACK"] as const;
 const saved: Record<string, string | undefined> = {};
 for (const k of KEYS) saved[k] = process.env[k];
 afterEach(() => {

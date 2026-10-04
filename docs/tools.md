@@ -138,7 +138,8 @@ vault on another.
 API. What a position has actually earned comes from `earn_balance`, from the vault's own events. `canProceed` is false unless the verdict allows it.
 
 **`withdraw`:** shares that would burn (`previewWithdraw`), shares held, a **simulated `withdraw()`**
-verdict (`OK` or `REVERTED` with the reason in liquidity terms), the vault's `instantLiquidity`, and
+verdict (`OK`, or `REVERTED` with the chain's revert reason; on a Fusion vault, which pays only from its
+own balance, also in liquidity terms), the vault's `instantLiquidity`, and
 `maxWithdraw` as an advisory only.
 
 ## `earn_balance` — READ
