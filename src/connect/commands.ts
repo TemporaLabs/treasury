@@ -17,14 +17,14 @@
 import { getAddress, isAddress, verifyMessage, type Address, type Hex } from "viem";
 import { z } from "zod";
 import { buildDeposit, buildWithdraw, type UnsignedCall } from "../build.js";
-import { CHAIN_INFO, makePublicClient, rpcUrlFromEnv, isSupportedChainId } from "../client.js";
+import { CHAIN_INFO, chains, makePublicClient, rpcUrlFromEnv, isSupportedChainId } from "../client.js";
 import { erc4626Abi } from "../abi/erc4626.js";
 import type { Command } from "../earn/commands.js";
-import { linksFor } from "../links.js";
+import { explorerTxUrl, linksFor } from "../links.js";
 import { redactEndpoints } from "../redact.js";
 import { resolveVault } from "../registry.js";
 import { connectPort, privyAppId } from "./config.js";
-import { admit, type Admitted } from "./gate.js";
+import { admit } from "./gate.js";
 import { serveOnce, type Settled } from "./http.js";
 import { openBrowser } from "./open.js";
 import { PAGE_CSP, readPageBundle, shell } from "./page.js";
@@ -73,12 +73,14 @@ function announce(url: string): boolean {
 export interface ConnectDeps {
   verifySignature?: (a: { address: Address; message: string; signature: Hex }) => Promise<boolean>;
   open?: (url: string) => boolean;
-  /** The confirm flow's chain reads (receipts, allowance), injectable for tests. */
-  client?: (chainId: number) => Pick<ReturnType<typeof makePublicClient>, "getTransactionReceipt" | "readContract">;
+  /** The confirm flow's chain reads (receipts, allowance, balances), injectable for tests. */
+  client?: (chainId: number) => Pick<ReturnType<typeof makePublicClient>, "getTransactionReceipt" | "readContract"> & Partial<Pick<ReturnType<typeof makePublicClient>, "getBalance">>;
   verifyOpts?: { attempts?: number; delayMs?: number };
   /** Overrides the flow's time limit and the cancel grace period (tests). */
   ttlMs?: number;
   cancelGraceMs?: number;
+  /** How long the balance read may hold the page back before it opens without balances (tests). */
+  balanceTimeoutMs?: number;
 }
 
 export async function runConnect(deps: ConnectDeps = {}): Promise<{ result: Settled<Session>; url: string; opened: boolean }> {
@@ -128,21 +130,14 @@ interface TxOutcome extends Verdict {
 
 export async function runConfirm(
   calls: UnsignedCall[],
-  admitted: Admitted[],
   session: Session,
   deps: ConnectDeps = {},
 ): Promise<{ result: Settled<TxOutcome[]>; url: string; opened: boolean; done: TxOutcome[]; total: number; stopReason?: string }> {
+  // The gate runs here, on exactly the calls this flow will hand the wallet, so no caller can pass
+  // a check for one batch and the calls of another. It throws before any page opens.
+  const admitted = admit(calls, session.account as Address);
   const chainId = calls[0]!.chainId;
   if (!isSupportedChainId(chainId)) throw new Error(`chain ${chainId} unsupported`);
-  // Each call must be the one its admitted check describes: same chain, and sent to that check's
-  // vault (or, for an approval, to the vault's asset).
-  const linedUp =
-    calls.length === admitted.length &&
-    calls.every((c, i) => {
-      const a = admitted[i]!;
-      return c.chainId === chainId && a.vault.chainId === chainId && getAddress(c.to) === getAddress(a.kind === "approve" ? a.vault.asset.address : a.vault.address);
-    });
-  if (!linedUp) throw new Error("the calls and their admitted checks do not line up");
   const account = session.account as Address;
   const client = deps.client ? deps.client(chainId) : makePublicClient(chainId, rpcUrlFromEnv(chainId));
   const done: TxOutcome[] = [];
@@ -173,6 +168,19 @@ export async function runConfirm(
     }
     return false;
   };
+
+  // What the wallet holds, for the page to warn before a send that cannot pay (a new Privy wallet
+  // starts empty). Read once, briefly; a read that fails or is slow leaves it out, never blocks.
+  const asset = admitted[0]!.vault.asset;
+  const readBalances = async () => {
+    const [held, native] = await Promise.all([
+      client.readContract({ address: asset.address, abi: erc4626Abi, functionName: "balanceOf", args: [account] }) as Promise<bigint>,
+      client.getBalance ? client.getBalance({ address: account }) : Promise.resolve(undefined),
+    ]);
+    return { asset: held.toString(), ...(native !== undefined ? { native: native.toString() } : {}) };
+  };
+  const balances = await Promise.race([readBalances().catch(() => undefined), new Promise<undefined>((r) => setTimeout(() => r(undefined), deps.balanceTimeoutMs ?? 5_000))]);
+  const deposit = admitted.find((a) => a.kind === "deposit");
 
   const handle = await serveOnce<TxOutcome[]>({
     mode: "confirm",
@@ -210,6 +218,11 @@ export async function runConfirm(
       chainId,
       chainName: CHAIN_INFO[chainId].name,
       next: done.length,
+      txBase: explorerTxUrl(chainId, ""),
+      asset: { symbol: asset.symbol, decimals: asset.decimals },
+      nativeSymbol: chains[chainId].nativeCurrency.symbol,
+      ...(balances ? { balances } : {}),
+      ...(deposit ? { needs: deposit.amount.toString() } : {}),
       calls: calls.map((c, i) => ({
         step: c.step,
         of: c.of,
@@ -335,8 +348,7 @@ export function buildConnectCommands(deps: ConnectDeps = {}): Record<string, Com
   );
 
   const confirmInWallet = async (calls: UnsignedCall[], session: Session) => {
-    const admitted = admit(calls, session.account as Address);
-    const r = await runConfirm(calls, admitted, session, deps);
+    const r = await runConfirm(calls, session, deps);
     return outcome(calls[0]!.chainId, session.account, r);
   };
 

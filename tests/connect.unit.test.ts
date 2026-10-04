@@ -98,6 +98,10 @@ describe("the gate admits exactly the registry's own calls for the connected acc
       expect(() => admit([withdraw(data as Hex)], ACCOUNT)).toThrow(/not the canonical encoding/);
     }
     expect(() => admit([{ ...approve(), data: dirtySpender }, deposit()], ACCOUNT)).toThrow(/not the canonical encoding/);
+    // Decoding accepts arguments in upper case once the selector is lower case; the wallet would sign those bytes.
+    const upperArgs = (clean.slice(0, 10) + clean.slice(10).toUpperCase()) as Hex;
+    expect(upperArgs).not.toBe(clean);
+    expect(() => admit([withdraw(upperArgs)], ACCOUNT)).toThrow(/not the canonical encoding/);
   });
 
   it("refuses a withdrawal that pays or burns for anyone but the connected account", () => {
@@ -289,7 +293,6 @@ describe("confirm: one call at a time, each checked on its receipt before the ne
   it("approve then deposit: both matched, the allowance read gates step 2, the result lists both hashes", async () => {
     writeSession({ account: ACCOUNT, walletType: "external", connectedAtIso: "2026-10-03T00:00:00Z" });
     const calls = buildDeposit(vault, { assetsHuman: "0.6", receiver: ACCOUNT, account: ACCOUNT });
-    const admitted = admit(asGate(calls), ACCOUNT);
     const h1 = `0x${"01".repeat(32)}` as Hex;
     const h2 = `0x${"02".repeat(32)}` as Hex;
     let allowanceReads = 0;
@@ -301,7 +304,7 @@ describe("confirm: one call at a time, each checked on its receipt before the ne
       readContract: async () => (allowanceReads++, 600_000n) as never,
     });
     let url = "";
-    const run = runConfirm(calls, admitted, readSession()!, { open: (u) => ((url = u), true), client, verifyOpts: { attempts: 1, delayMs: 1 } });
+    const run = runConfirm(calls, readSession()!, { open: (u) => ((url = u), true), client, verifyOpts: { attempts: 1, delayMs: 1 } });
     await new Promise((r) => setTimeout(r, 50));
     const p = page(url);
     const info = await p.info();
@@ -323,7 +326,7 @@ describe("confirm: one call at a time, each checked on its receipt before the ne
     const calls = buildDeposit(vault, { assetsHuman: "0.6", receiver: ACCOUNT, account: ACCOUNT });
     const client = () => ({ getTransactionReceipt: async () => ({ status: "reverted", logs: [] }) as never, readContract: async () => 0n as never });
     let url = "";
-    const run = runConfirm(calls, admit(asGate(calls), ACCOUNT), readSession()!, { open: (u) => ((url = u), true), client, verifyOpts: { attempts: 1, delayMs: 1 } });
+    const run = runConfirm(calls, readSession()!, { open: (u) => ((url = u), true), client, verifyOpts: { attempts: 1, delayMs: 1 } });
     await new Promise((r) => setTimeout(r, 50));
     const p = page(url);
     expect((await (await p.post("/result", { index: 0, hash: `0x${"01".repeat(32)}` })).json()) as { stop: boolean }).toMatchObject({ stop: true });
@@ -340,7 +343,7 @@ describe("confirm: one call at a time, each checked on its receipt before the ne
       readContract: async () => 0n as never,
     });
     let url = "";
-    const run = runConfirm(calls, admit(asGate(calls), ACCOUNT), readSession()!, { open: (u) => ((url = u), true), client, verifyOpts: { attempts: 1, delayMs: 1 } });
+    const run = runConfirm(calls, readSession()!, { open: (u) => ((url = u), true), client, verifyOpts: { attempts: 1, delayMs: 1 } });
     await new Promise((r) => setTimeout(r, 50));
     expect((await (await page(url).post("/result", { index: 0, hash: `0x${"01".repeat(32)}` })).json()) as { stop: boolean }).toMatchObject({ stop: true });
     const out = JSON.parse(outcome(vault.chainId, ACCOUNT, await run)) as { status: string; reason: string; calls_total: number; txs: unknown[] };
@@ -349,19 +352,57 @@ describe("confirm: one call at a time, each checked on its receipt before the ne
     expect([out.txs.length, out.calls_total]).toEqual([1, 2]);
   });
 
-  it("refuses calls that are not the ones their admitted checks describe, before any page opens", async () => {
+  it("tells the page what the wallet holds, what the deposit needs, and where to look a transaction up", async () => {
+    writeSession({ account: ACCOUNT, walletType: "embedded", connectedAtIso: "" });
+    const calls = buildDeposit(vault, { assetsHuman: "0.6", receiver: ACCOUNT, account: ACCOUNT });
+    const client = () => ({
+      getTransactionReceipt: () => new Promise<never>(() => {}),
+      readContract: async (q: { functionName: string; args: readonly unknown[] }) => (q.functionName === "balanceOf" && q.args[0] === ACCOUNT ? 250_000n : 0n) as never,
+      getBalance: async ({ address }: { address: Address }) => (address === ACCOUNT ? 0n : 1n) as never,
+    });
+    let url = "";
+    const run = runConfirm(calls, readSession()!, { open: (u) => ((url = u), true), client });
+    await new Promise((r) => setTimeout(r, 50));
+    const p = page(url);
+    expect(await p.info()).toMatchObject({
+      balances: { asset: "250000", native: "0" },
+      needs: "600000",
+      asset: { symbol: "USDC", decimals: 6 },
+      nativeSymbol: "ETH",
+      txBase: "https://basescan.org/tx/",
+    });
+    await p.post("/result", { rejected: true });
+    await run;
+  });
+
+  it("a balance read that hangs leaves balances out instead of holding the page back", async () => {
+    writeSession({ account: ACCOUNT, walletType: "external", connectedAtIso: "" });
+    const calls = buildWithdraw(vault, { receiver: ACCOUNT, owner: ACCOUNT, assetsHuman: "1" });
+    const client = () => ({ getTransactionReceipt: () => new Promise<never>(() => {}), readContract: () => new Promise<never>(() => {}) });
+    let url = "";
+    const started = Date.now();
+    const run = runConfirm(calls, readSession()!, { open: (u) => ((url = u), true), client, balanceTimeoutMs: 100 });
+    while (!url && Date.now() - started < 2_000) await new Promise((r) => setTimeout(r, 10));
+    expect(Date.now() - started).toBeLessThan(1_000);
+    const info = await page(url).info();
+    expect(info["balances"]).toBeUndefined();
+    expect(info["needs"]).toBeUndefined();
+    await page(url).post("/result", { rejected: true });
+    await run;
+  });
+
+  it("runs the gate itself on the calls it will hand the wallet, before any page opens", async () => {
     writeSession({ account: ACCOUNT, walletType: "external", connectedAtIso: "" });
     const session = readSession()!;
-    const deps = { open: () => true, client: hungReceipt };
+    let opened = false;
+    const deps = { open: () => (opened = true), client: hungReceipt };
     const dep = buildDeposit(vault, { assetsHuman: "0.6", receiver: ACCOUNT, account: ACCOUNT });
-    const wd = buildWithdraw(vault, { receiver: ACCOUNT, owner: ACCOUNT, assetsHuman: "1" });
-    const other = listVaults().find((v) => v.chainId === vault.chainId && v.address !== vault.address)!;
-    const wdOther = buildWithdraw(other, { receiver: ACCOUNT, owner: ACCOUNT, assetsHuman: "1" });
-    // fewer checks than calls; a call moved to another chain; a call sent to another vault than its check names
-    await expect(runConfirm(dep, admit(asGate(wd), ACCOUNT), session, deps)).rejects.toThrow(/do not line up/);
-    await expect(runConfirm(dep, admit(asGate(dep), ACCOUNT).slice(0, 1), session, deps)).rejects.toThrow(/do not line up/);
-    await expect(runConfirm([dep[0]!, { ...dep[1]!, chainId: 42161 }], admit(asGate(dep), ACCOUNT), session, deps)).rejects.toThrow(/do not line up/);
-    await expect(runConfirm(wdOther, admit(asGate(wd), ACCOUNT), session, deps)).rejects.toThrow(/do not line up/);
+    const arb = listVaults().find((v) => v.chainId === 42161)!;
+    // shares to someone else; a batch across two chains; a batch shape no builder emits
+    await expect(runConfirm(buildDeposit(vault, { assetsHuman: "0.6", receiver: OTHER, account: ACCOUNT }), session, deps)).rejects.toThrow(/not the connected account/);
+    await expect(runConfirm([...buildWithdraw(vault, { receiver: ACCOUNT, owner: ACCOUNT, assetsHuman: "1" }), ...buildWithdraw(arb, { receiver: ACCOUNT, owner: ACCOUNT, assetsHuman: "1" })], session, deps)).rejects.toThrow(/more than one chain/);
+    await expect(runConfirm([dep[1]!], session, deps)).rejects.toThrow(/is not a batch this page confirms/);
+    expect(opened).toBe(false);
   });
 
   it("the allowance read before a deposit comes from the admitted calls, not the call's own precondition field", async () => {
@@ -372,10 +413,10 @@ describe("confirm: one call at a time, each checked on its receipt before the ne
     const reads: unknown[] = [];
     const client = () => ({
       getTransactionReceipt: async () => ({ status: "success", logs: [approvalLog(ACCOUNT, vault.address, 600_000n)] }) as never,
-      readContract: async (q: { address: Address; args: readonly unknown[] }) => (reads.push([q.address, ...q.args]), 599_999n) as never,
+      readContract: async (q: { address: Address; functionName: string; args: readonly unknown[] }) => (q.functionName === "allowance" && reads.push([q.address, ...q.args]), 599_999n) as never,
     });
     let url = "";
-    const run = runConfirm(calls, admit(asGate(calls), ACCOUNT), readSession()!, { open: (u) => ((url = u), true), client, verifyOpts: { attempts: 1, delayMs: 1 } });
+    const run = runConfirm(calls, readSession()!, { open: (u) => ((url = u), true), client, verifyOpts: { attempts: 1, delayMs: 1 } });
     await new Promise((r) => setTimeout(r, 50));
     expect((await (await page(url).post("/result", { index: 0, hash: `0x${"01".repeat(32)}` })).json()) as { stop: boolean }).toMatchObject({ stop: true });
     const out = JSON.parse(outcome(vault.chainId, ACCOUNT, await run)) as { status: string; reason: string };
@@ -395,7 +436,7 @@ describe("confirm: one call at a time, each checked on its receipt before the ne
       readContract: async () => 600_000n as never,
     });
     let url = "";
-    const run = runConfirm(calls, admit(asGate(calls), ACCOUNT), readSession()!, { open: (u) => ((url = u), true), client, verifyOpts: { attempts: 1, delayMs: 1 } });
+    const run = runConfirm(calls, readSession()!, { open: (u) => ((url = u), true), client, verifyOpts: { attempts: 1, delayMs: 1 } });
     await new Promise((r) => setTimeout(r, 50));
     const p = page(url);
     const inFlight = p.post("/result", { index: 0, hash: h1 });
@@ -417,7 +458,7 @@ describe("confirm: one call at a time, each checked on its receipt before the ne
     writeSession({ account: ACCOUNT, walletType: "external", connectedAtIso: "" });
     const calls = buildDeposit(vault, { assetsHuman: "0.6", receiver: ACCOUNT, account: ACCOUNT });
     let url = "";
-    const run = runConfirm(calls, admit(asGate(calls), ACCOUNT), readSession()!, { open: (u) => ((url = u), true), client: () => ({ getTransactionReceipt: async () => ({}) as never, readContract: async () => 0n as never }) });
+    const run = runConfirm(calls, readSession()!, { open: (u) => ((url = u), true), client: () => ({ getTransactionReceipt: async () => ({}) as never, readContract: async () => 0n as never }) });
     await new Promise((r) => setTimeout(r, 50));
     const p = page(url);
     await p.post("/result", { rejected: true, reason: "declined" });
@@ -440,7 +481,7 @@ describe("confirm: one call at a time, each checked on its receipt before the ne
     // A machine with IPv6 switched off has no `::1` for anyone to hold; there is nothing to test.
     if (!held) return;
     try {
-      await expect(runConfirm(calls, admit(asGate(calls), ACCOUNT), readSession()!, { open: () => true })).rejects.toThrow(/in use on ::1/);
+      await expect(runConfirm(calls, readSession()!, { open: () => true })).rejects.toThrow(/in use on ::1/);
       const v4 = createServer();
       await new Promise<void>((resolve, reject) => {
         v4.once("error", reject);
@@ -459,7 +500,7 @@ describe("confirm: one call at a time, each checked on its receipt before the ne
     const h1 = `0x${"01".repeat(32)}`;
     let url = "";
     const started = Date.now();
-    const run = runConfirm(calls, admit(asGate(calls), ACCOUNT), readSession()!, { open: (u) => ((url = u), true), client: hungReceipt, ttlMs: 400 });
+    const run = runConfirm(calls, readSession()!, { open: (u) => ((url = u), true), client: hungReceipt, ttlMs: 400 });
     await new Promise((r) => setTimeout(r, 50));
     void page(url).post("/result", { index: 0, hash: h1 }).catch(() => undefined);
     const out = JSON.parse(outcome(vault.chainId, ACCOUNT, await run)) as { status: string; reason: string; txs: { hash: string; verified: string }[] };
@@ -474,7 +515,7 @@ describe("confirm: one call at a time, each checked on its receipt before the ne
     const calls = buildDeposit(vault, { assetsHuman: "0.6", receiver: ACCOUNT, account: ACCOUNT });
     const h1 = `0x${"01".repeat(32)}`;
     let url = "";
-    const run = runConfirm(calls, admit(asGate(calls), ACCOUNT), readSession()!, { open: (u) => ((url = u), true), client: hungReceipt, cancelGraceMs: 150 });
+    const run = runConfirm(calls, readSession()!, { open: (u) => ((url = u), true), client: hungReceipt, cancelGraceMs: 150 });
     await new Promise((r) => setTimeout(r, 50));
     const p = page(url);
     void p.post("/result", { index: 0, hash: h1 }).catch(() => undefined);
@@ -492,7 +533,7 @@ describe("confirm: one call at a time, each checked on its receipt before the ne
     const calls = buildDeposit(vault, { assetsHuman: "0.6", receiver: ACCOUNT, account: ACCOUNT });
     const h1 = `0x${"01".repeat(32)}`;
     let url = "";
-    const run = runConfirm(calls, admit(asGate(calls), ACCOUNT), readSession()!, { open: (u) => ((url = u), true), client: hungReceipt });
+    const run = runConfirm(calls, readSession()!, { open: (u) => ((url = u), true), client: hungReceipt });
     await new Promise((r) => setTimeout(r, 50));
     await page(url).post("/result", { rejected: true, reason: "the result POST failed", hash: h1 });
     const out = JSON.parse(outcome(vault.chainId, ACCOUNT, await run)) as { status: string; txs: { hash: string; verified: string }[] };
@@ -508,7 +549,7 @@ describe("confirm: one call at a time, each checked on its receipt before the ne
       readContract: async () => 600_000n as never,
     });
     let url = "";
-    const run = runConfirm(calls, admit(asGate(calls), ACCOUNT), readSession()!, { open: (u) => ((url = u), true), client, verifyOpts: { attempts: 1, delayMs: 1 } });
+    const run = runConfirm(calls, readSession()!, { open: (u) => ((url = u), true), client, verifyOpts: { attempts: 1, delayMs: 1 } });
     await new Promise((r) => setTimeout(r, 50));
     const reply = (await (await page(url).post("/result", { index: 0, hash: `0x${"01".repeat(32)}` })).json()) as { stop: boolean; verdict: { verified: string } };
     expect(reply).toMatchObject({ stop: true, verdict: { verified: "unverified" } });
@@ -525,7 +566,7 @@ describe("confirm: one call at a time, each checked on its receipt before the ne
       readContract: async () => 600_000n as never,
     });
     let url = "";
-    const run = runConfirm(calls, admit(asGate(calls), ACCOUNT), readSession()!, { open: (u) => ((url = u), true), client, verifyOpts: { attempts: 1, delayMs: 1 } });
+    const run = runConfirm(calls, readSession()!, { open: (u) => ((url = u), true), client, verifyOpts: { attempts: 1, delayMs: 1 } });
     await new Promise((r) => setTimeout(r, 50));
     const p = page(url);
     const left = (await p.info())["msLeft"] as number;
@@ -550,7 +591,7 @@ describe("confirm: what the page reports with a rejection, and the deadline", ()
     const h1 = `0x${"01".repeat(32)}`;
     const h2 = `0x${"02".repeat(32)}`;
     let url = "";
-    const run = runConfirm(calls, admit(asGate(calls), ACCOUNT), readSession()!, { open: (u) => ((url = u), true), client: matchedApprove, verifyOpts: { attempts: 1, delayMs: 1 } });
+    const run = runConfirm(calls, readSession()!, { open: (u) => ((url = u), true), client: matchedApprove, verifyOpts: { attempts: 1, delayMs: 1 } });
     await new Promise((r) => setTimeout(r, 50));
     const p = page(url);
     expect((await (await p.post("/result", { index: 0, hash: h1 })).json()) as { next: number }).toMatchObject({ next: 1 });
@@ -569,7 +610,7 @@ describe("confirm: what the page reports with a rejection, and the deadline", ()
     const calls = buildWithdraw(vault, { receiver: ACCOUNT, owner: ACCOUNT, assetsHuman: "1" });
     const h1 = `0x${"01".repeat(32)}`;
     let url = "";
-    const run = runConfirm(calls, admit(asGate(calls), ACCOUNT), readSession()!, { open: (u) => ((url = u), true), client: () => ({ getTransactionReceipt: () => new Promise<never>(() => {}), readContract: async () => 0n as never }), cancelGraceMs: 50 });
+    const run = runConfirm(calls, readSession()!, { open: (u) => ((url = u), true), client: () => ({ getTransactionReceipt: () => new Promise<never>(() => {}), readContract: async () => 0n as never }), cancelGraceMs: 50 });
     await new Promise((r) => setTimeout(r, 50));
     const p = page(url);
     void p.post("/result", { index: 0, hash: h1 }).catch(() => undefined);
@@ -584,7 +625,7 @@ describe("confirm: what the page reports with a rejection, and the deadline", ()
     const calls = buildWithdraw(vault, { receiver: ACCOUNT, owner: ACCOUNT, assetsHuman: "1" });
     const h1 = `0x${"01".repeat(32)}`;
     let url = "";
-    const run2 = runConfirm(calls, admit(asGate(calls), ACCOUNT), readSession()!, { open: (u) => ((url = u), true), client: matchedApprove });
+    const run2 = runConfirm(calls, readSession()!, { open: (u) => ((url = u), true), client: matchedApprove });
     await new Promise((r) => setTimeout(r, 50));
     await page(url).post("/result", { rejected: true, reason: "no step", index: 7, hash: h1 });
     const out2 = JSON.parse(outcome(vault.chainId, ACCOUNT, await run2)) as { txs: { step: number; hash: string }[] };
@@ -604,7 +645,7 @@ describe("confirm: what the page reports with a rejection, and the deadline", ()
         readContract: async () => (reads++, 0n) as never,
       });
       let url = "";
-      const run = runConfirm(calls, admit(asGate(calls), ACCOUNT), readSession()!, { open: (u) => ((url = u), true), client, ttlMs: 300, verifyOpts: { attempts: 1_000_000, delayMs: 5 } });
+      const run = runConfirm(calls, readSession()!, { open: (u) => ((url = u), true), client, ttlMs: 300, verifyOpts: { attempts: 1_000_000, delayMs: 5 } });
       await new Promise((r) => setTimeout(r, 50));
       void page(url).post("/result", { index: 0, hash: `0x${"01".repeat(32)}` }).catch(() => undefined);
       await run;
@@ -620,7 +661,7 @@ describe("confirm: what the page reports with a rejection, and the deadline", ()
     writeSession({ account: ACCOUNT, walletType: "external", connectedAtIso: "" });
     const calls = buildDeposit(vault, { assetsHuman: "0.6", receiver: ACCOUNT, account: ACCOUNT });
     let url = "";
-    const run = runConfirm(calls, admit(asGate(calls), ACCOUNT), readSession()!, { open: (u) => ((url = u), true), client: () => ({ getTransactionReceipt: () => new Promise<never>(() => {}), readContract: async () => 0n as never }), ttlMs: 300 });
+    const run = runConfirm(calls, readSession()!, { open: (u) => ((url = u), true), client: () => ({ getTransactionReceipt: () => new Promise<never>(() => {}), readContract: async () => 0n as never }), ttlMs: 300 });
     await new Promise((r) => setTimeout(r, 50));
     const p = page(url);
     void p.post("/result", { index: 0, hash: `0x${"01".repeat(32)}` }).catch(() => undefined);
@@ -634,7 +675,7 @@ describe("confirm: what the page reports with a rejection, and the deadline", ()
     writeSession({ account: ACCOUNT, walletType: "external", connectedAtIso: "" });
     const calls = buildDeposit(vault, { assetsHuman: "0.6", receiver: ACCOUNT, account: ACCOUNT });
     let url = "";
-    const run = runConfirm(calls, admit(asGate(calls), ACCOUNT), readSession()!, { open: (u) => ((url = u), true), client: () => ({ getTransactionReceipt: async () => ({ status: "reverted", logs: [] }) as never, readContract: async () => 0n as never }), verifyOpts: { attempts: 1, delayMs: 1 } });
+    const run = runConfirm(calls, readSession()!, { open: (u) => ((url = u), true), client: () => ({ getTransactionReceipt: async () => ({ status: "reverted", logs: [] }) as never, readContract: async () => 0n as never }), verifyOpts: { attempts: 1, delayMs: 1 } });
     await new Promise((r) => setTimeout(r, 50));
     await page(url).post("/result", { index: 0, hash: `0x${"01".repeat(32)}` });
     const out = JSON.parse(outcome(vault.chainId, ACCOUNT, await run)) as { status: string; reason: string };

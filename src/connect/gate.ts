@@ -69,7 +69,7 @@ export function admit(calls: GateCall[], account: Address): Admitted[] {
     // Decoding forgives trailing bytes and keeps only the low 20 bytes of an address word; the
     // wallet would sign the bytes as sent. Admit only calldata that is its own canonical encoding.
     const canonical = encodeFunctionData({ abi: erc4626Abi, functionName: name, args } as Parameters<typeof encodeFunctionData>[0]);
-    if (canonical !== c.data) throw new Error(`refused (${at}): its calldata is not the canonical encoding of ${name} (extra bytes, or stray bits in an address)`);
+    if (canonical !== c.data) throw new Error(`refused (${at}): its calldata is not the canonical encoding of ${name} (trailing bytes, stray bits in an address, or hex not in lowercase)`);
 
     if (name === "approve") {
       const vault = vaults.find((v) => v.chainId === c.chainId && same(v.asset.address, c.to));
