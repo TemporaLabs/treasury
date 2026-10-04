@@ -229,8 +229,8 @@ jobs:
               "connect_status": set(),
               "connect_wallet": set(),
               "connect_disconnect": set(),
-              "connect_deposit": {"vault", "chain", "amount_usdc", "receiver"},
-              "connect_withdraw": {"vault", "chain", "receiver", "amount_usdc", "all", "shares_exact"},
+              "connect_deposit": {"vault", "chain", "amount_usdc", "receiver", "ack"},
+              "connect_withdraw": {"vault", "chain", "receiver", "amount_usdc", "all", "shares_exact", "ack"},
           }, cprops
           assert not any(k in n for n in cprops for k in ("sign","send","transfer")), "a signing command leaked in"
           out = subprocess.run(["node","dist/treasury.mjs","earn","--help"], capture_output=True, text=True, timeout=60)

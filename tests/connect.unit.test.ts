@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach } from "vitest";
-import { mkdtempSync, rmSync, statSync } from "node:fs";
+import { existsSync, mkdtempSync, rmSync, statSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { createServer } from "node:net";
@@ -8,9 +8,13 @@ import { erc4626Abi } from "../src/abi/erc4626.js";
 import { buildDeposit, buildWithdraw } from "../src/build.js";
 import { admit, type GateCall } from "../src/connect/gate.js";
 import { verifyLanded } from "../src/connect/verify.js";
-import { outcome, runConfirm, runConnect, signInMessage } from "../src/connect/commands.js";
-import { readSession, writeSession } from "../src/connect/session.js";
+import { buildConnectCommands, outcome, runConfirm, runConnect, signInMessage, type ConnectDeps } from "../src/connect/commands.js";
+import { pendingAckPath, readSession, writeSession } from "../src/connect/session.js";
 import { PAGE_CSP } from "../src/connect/page.js";
+import { ACK_TTL_MS } from "../src/connect/ack.js";
+import { run } from "../src/cli.js";
+import { DISCLOSURES } from "../src/disclosures.js";
+import { linksFor } from "../src/links.js";
 import { defaultVault, listVaults } from "../src/registry.js";
 
 /**
@@ -704,5 +708,161 @@ describe("the sign-in message", () => {
   });
   it("every listed vault resolves for the gate (the registry the gate reads is the one shipped)", () => {
     expect(listVaults().length).toBeGreaterThan(0);
+  });
+});
+
+/**
+ * `connect deposit` / `connect withdraw` open the signing page only after the operator's
+ * acknowledgement. The browser opener and the chain client are stubs, and a page that opens is left
+ * to time out, so what is observed is only whether it opened.
+ */
+describe("the acknowledgement before any signing page opens", () => {
+  let clock: Date;
+  let opened: string[];
+  beforeEach(() => {
+    clock = new Date("2026-10-04T12:00:00Z");
+    opened = [];
+    writeSession({ account: ACCOUNT, walletType: "external", connectedAtIso: "2026-10-04T11:59:00Z" });
+  });
+  const deps = (): ConnectDeps => ({
+    open: (u) => (opened.push(u), true),
+    client: () => ({ getTransactionReceipt: async () => ({}) as never, readContract: async () => 0n as never }),
+    ttlMs: 150,
+    balanceTimeoutMs: 20,
+    now: () => clock,
+  });
+  async function connect(name: "connect_deposit" | "connect_withdraw", args: Record<string, unknown>): Promise<Record<string, unknown>> {
+    const c = buildConnectCommands(deps())[name]!;
+    return JSON.parse(await c.handler(c.inputSchema.parse({ receiver: ACCOUNT, vault: vault.symbol, ...args }) as never)) as Record<string, unknown>;
+  }
+
+  describe("without --ack, nothing opens: the command returns the operator's acknowledgement", () => {
+    it("a deposit returns needs_acknowledgement, opens no page, and records the acknowledgement as pending", async () => {
+      const r = await connect("connect_deposit", { amount_usdc: "1" });
+      expect(r["status"]).toBe("needs_acknowledgement");
+      expect(r["opened"]).toBe(false);
+      expect(opened).toEqual([]);
+      expect(r["ack"]).toMatch(/^[0-9a-f]{8}$/);
+      expect(r["expiresAtIso"]).toBe(new Date(clock.getTime() + ACK_TTL_MS).toISOString());
+      expect(existsSync(pendingAckPath())).toBe(true);
+      expect(String(r["next_step"])).toContain(`--ack ${String(r["ack"])}`);
+    });
+
+    it("the text names the amount, chain, vault and its link, the receiver, the warning and every disclosure, and asks yes or no", async () => {
+      const text = String((await connect("connect_deposit", { amount_usdc: "1" }))["acknowledgement"]);
+      for (const part of [
+        "Deposit: 1 USDC",
+        `${vault.chainId}`,
+        vault.name,
+        vault.symbol,
+        linksFor(vault).explorer,
+        `Shares go to: ${ACCOUNT}`,
+        vault.warning,
+        ...DISCLOSURES.items,
+        ...DISCLOSURES.clientNotes,
+        "Reply yes or no.",
+      ]) {
+        expect(text).toContain(part);
+      }
+    });
+
+    it("is generated, not composed: the same calls always produce the same text, under a fresh code", async () => {
+      const a = await connect("connect_deposit", { amount_usdc: "1" });
+      clock = new Date(clock.getTime() + 60_000);
+      const b = await connect("connect_deposit", { amount_usdc: "1" });
+      expect(b["acknowledgement"]).toBe(a["acknowledgement"]);
+      expect(b["ack"]).not.toBe(a["ack"]);
+    });
+
+    it("a withdrawal says what it pays and to whom, with the client notes but not the pre-deposit disclosures", async () => {
+      const text = String((await connect("connect_withdraw", { amount_usdc: "1" }))["acknowledgement"]);
+      expect(text).toContain("Withdraw: 1 USDC");
+      expect(text).toContain(`USDC goes to: ${ACCOUNT}`);
+      for (const note of DISCLOSURES.clientNotes) expect(text).toContain(note);
+      expect(text).not.toContain(DISCLOSURES.items[1]);
+      expect(opened).toEqual([]);
+    });
+
+    it("an exit of every share is named in shares, as such", async () => {
+      const text = String((await connect("connect_withdraw", { all: true, shares_exact: "0.5" }))["acknowledgement"]);
+      expect(text).toContain(`Withdraw: 0.5 ${vault.symbol} (every share the account holds)`);
+    });
+  });
+
+  describe("with --ack, the page opens only for the calls the operator acknowledged, once", () => {
+    it("the pending code opens the page, and is spent before it opens", async () => {
+      const { ack } = await connect("connect_deposit", { amount_usdc: "1" });
+      const r = await connect("connect_deposit", { amount_usdc: "1", ack });
+      expect(opened).toHaveLength(1);
+      expect(r["status"]).toBe("not_reported");
+      expect(existsSync(pendingAckPath())).toBe(false);
+    });
+
+    it("a spent code cannot open a second page", async () => {
+      const { ack } = await connect("connect_deposit", { amount_usdc: "1" });
+      await connect("connect_deposit", { amount_usdc: "1", ack });
+      await expect(connect("connect_deposit", { amount_usdc: "1", ack })).rejects.toThrow(/no acknowledgement is pending/);
+      expect(opened).toHaveLength(1);
+    });
+
+    it("a code that is not the pending one is refused", async () => {
+      await connect("connect_deposit", { amount_usdc: "1" });
+      await expect(connect("connect_deposit", { amount_usdc: "1", ack: "00000000" })).rejects.toThrow(/not the pending acknowledgement's code/);
+      expect(opened).toEqual([]);
+    });
+
+    it("with nothing pending, any code is refused", async () => {
+      await expect(connect("connect_deposit", { amount_usdc: "1", ack: "0123abcd" })).rejects.toThrow(/no acknowledgement is pending/);
+      expect(opened).toEqual([]);
+    });
+
+    it("a newer acknowledgement replaces the older one, whose code then opens nothing", async () => {
+      const first = await connect("connect_deposit", { amount_usdc: "1" });
+      clock = new Date(clock.getTime() + 1_000);
+      await connect("connect_deposit", { amount_usdc: "1" });
+      await expect(connect("connect_deposit", { amount_usdc: "1", ack: first["ack"] })).rejects.toThrow(/not the pending acknowledgement's code/);
+      expect(opened).toEqual([]);
+    });
+
+    it("refused once expired", async () => {
+      const { ack } = await connect("connect_deposit", { amount_usdc: "1" });
+      clock = new Date(clock.getTime() + ACK_TTL_MS + 1);
+      await expect(connect("connect_deposit", { amount_usdc: "1", ack })).rejects.toThrow(/expired/);
+      expect(opened).toEqual([]);
+    });
+
+    it("refused for a different amount than the one acknowledged", async () => {
+      const { ack } = await connect("connect_deposit", { amount_usdc: "1" });
+      await expect(connect("connect_deposit", { amount_usdc: "2", ack })).rejects.toThrow(/not the ones the operator acknowledged/);
+      expect(opened).toEqual([]);
+    });
+
+    it("refused for a different vault than the one acknowledged", async () => {
+      const other = listVaults().find((v) => v.chainId === vault.chainId && v.address !== vault.address);
+      expect(other, "a second vault on the default chain").toBeDefined();
+      const { ack } = await connect("connect_deposit", { amount_usdc: "1" });
+      await expect(connect("connect_deposit", { amount_usdc: "1", vault: other!.symbol, ack })).rejects.toThrow(/not the ones the operator acknowledged/);
+      expect(opened).toEqual([]);
+    });
+
+    it("an acknowledged deposit does not open a withdrawal", async () => {
+      const { ack } = await connect("connect_deposit", { amount_usdc: "1" });
+      await expect(connect("connect_withdraw", { amount_usdc: "1", ack })).rejects.toThrow(/not the ones the operator acknowledged/);
+      expect(opened).toEqual([]);
+    });
+
+    it("a new wallet connection voids the acknowledgement given before it", async () => {
+      const { ack } = await connect("connect_deposit", { amount_usdc: "1" });
+      writeSession({ account: ACCOUNT, walletType: "external", connectedAtIso: "2026-10-04T12:01:00Z" });
+      await expect(connect("connect_deposit", { amount_usdc: "1", ack })).rejects.toThrow(/no acknowledgement is pending/);
+      expect(opened).toEqual([]);
+    });
+
+    it("the CLI refuses a malformed --ack before anything runs", async () => {
+      const r = await run(["connect", "deposit", "--amount_usdc", "1", "--receiver", ACCOUNT, "--ack", "yes"]);
+      expect(r.code).toBe(1);
+      expect(r.stderr).toMatch(/--ack/);
+      expect(opened).toEqual([]);
+    });
   });
 });

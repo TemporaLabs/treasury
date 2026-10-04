@@ -10,6 +10,7 @@ import { chmodSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:
 import { homedir } from "node:os";
 import { join } from "node:path";
 import { getAddress, isAddress } from "viem";
+import type { PendingAck } from "./ack.js";
 import { connectHome } from "./config.js";
 
 export interface Session {
@@ -40,15 +41,43 @@ export function readSession(): Session | undefined {
   }
 }
 
-export function writeSession(s: Session): void {
+function writeOwnerOnly(path: string, value: unknown): void {
   mkdirSync(dir(), { recursive: true, mode: 0o700 });
-  writeFileSync(sessionPath(), `${JSON.stringify(s, null, 2)}\n`, { mode: 0o600 });
+  writeFileSync(path, `${JSON.stringify(value, null, 2)}\n`, { mode: 0o600 });
   // `mode` applies only when the file is created; an existing file keeps its own.
-  chmodSync(sessionPath(), 0o600);
+  chmodSync(path, 0o600);
+}
+
+export function writeSession(s: Session): void {
+  writeOwnerOnly(sessionPath(), s);
+  // A new connection voids any acknowledgement given for the one before it.
+  clearPendingAck();
 }
 
 export function clearSession(): boolean {
   const had = readSession() !== undefined;
   rmSync(sessionPath(), { force: true });
+  clearPendingAck();
   return had;
+}
+
+/** The one acknowledgement waiting for `--ack` (`ack.ts`). Issuing another replaces it. */
+export const pendingAckPath = () => join(dir(), "connect-ack.json");
+
+export function writePendingAck(a: PendingAck): void {
+  writeOwnerOnly(pendingAckPath(), a);
+}
+
+export function readPendingAck(): PendingAck | undefined {
+  try {
+    const v = JSON.parse(readFileSync(pendingAckPath(), "utf8")) as Partial<PendingAck>;
+    if (typeof v.code !== "string" || typeof v.digest !== "string" || typeof v.issuedAtIso !== "string" || typeof v.expiresAtIso !== "string") return undefined;
+    return { code: v.code, digest: v.digest, issuedAtIso: v.issuedAtIso, expiresAtIso: v.expiresAtIso };
+  } catch {
+    return undefined;
+  }
+}
+
+export function clearPendingAck(): void {
+  rmSync(pendingAckPath(), { force: true });
 }

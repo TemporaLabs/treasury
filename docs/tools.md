@@ -261,15 +261,42 @@ confirm it in the wallet. Nothing here signs. See [`security-model.md`](security
 |---|---|---|
 | `connect status` | — | the connected account and how it signed in (`external` / `embedded`), or `disconnected`; reads a local file only |
 | `connect wallet` | — | opens the sign-in page: one Connect button, then Privy's window. The wallet signs a free sign-in message; waits up to 9 minutes and returns `{ status: "connected", account, walletType, connectedAtIso, opened }`. If the sign-in does not finish, it exits 1 with `not connected: <reason>` |
-| `connect deposit` | `--amount_usdc`, `--receiver`, optional `--vault`, `--chain` | builds approve + deposit for the connected account, checks them against the registry, and hands each to the wallet in turn |
-| `connect withdraw` | `--receiver`, then `--amount_usdc` or `--all --shares_exact`, optional `--vault`, `--chain` | the same for a withdrawal |
+| `connect deposit` | `--amount_usdc`, `--receiver`, optional `--vault`, `--chain`, `--ack` | builds approve + deposit for the connected account and checks them against the registry. Without `--ack`, opens nothing and returns the operator's acknowledgement; with its code, hands each call to the wallet in turn |
+| `connect withdraw` | `--receiver`, then `--amount_usdc` or `--all --shares_exact`, optional `--vault`, `--chain`, `--ack` | the same for a withdrawal |
 | `connect disconnect` | — | forgets the connected account; moves nothing |
 
 `--receiver` must be the connected account: this page pays no one else. It comes from the operator's
 own message, never from the agent. To pay a different address, use `earn prepare_deposit` /
 `earn prepare_withdraw` with the operator's own signer.
 
-`connect deposit` and `connect withdraw` return
+### The acknowledgement before the page opens
+
+`connect deposit` and `connect withdraw` open nothing on their first run. They build and gate-check
+the calls, then return
+
+`{ status: "needs_acknowledgement", opened: false, action, amount, chain, chainId, vault, account, receiver, acknowledgement, ack, expiresAtIso, next_step }`
+
+`acknowledgement` is one fixed text, written by the CLI and not by the agent: the action and amount,
+the chain, the vault's name, symbol and explorer link, the receiver, the vault's warning, and the
+disclosures (all of [`earn terms`](#earn_terms--read) before a deposit, its client notes before a
+withdrawal). It ends by asking for a yes or a no. The agent posts it to the operator word for word.
+
+On the operator's yes, the same command run again with `--ack <ack>` opens the page. The code is
+refused, and nothing opens, when:
+
+- it is not the pending acknowledgement's code (each first run replaces the one before);
+- it was already used: each acknowledgement opens one page;
+- it is more than 15 minutes old;
+- the calls differ from the ones acknowledged (another amount, vault, chain, receiver, direction or
+  connected account).
+
+A new `connect wallet` or a `connect disconnect` clears any pending acknowledgement. The pending one
+sits beside the session file (`connect-ack.json`, owner-readable only) and holds a digest of the calls,
+not the calls.
+
+### What the confirm flow returns
+
+With `--ack`, `connect deposit` and `connect withdraw` return
 `{ status, chain, chainId, account, opened, reason?, calls_total, txs, next_step }`; `opened` says
 whether a browser was opened or only the URL printed. `txs` has one entry per transaction,
 `{ step, description, hash, verified, detail?, alsoMoved? }`, with `step` the call's position in the

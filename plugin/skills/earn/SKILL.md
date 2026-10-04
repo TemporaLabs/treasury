@@ -156,8 +156,9 @@ bridge. **Which chain is the operator's decision. Ask; do not pick.**
      one.
    - `REFUSED_BY_CLIENT` / `UNRESOLVED` → stop; the first is a registry/chain mismatch, the
      second a transport failure. Neither is a verdict about the vault.
-5. **Through `connect`, skip this step:** `connect deposit` builds the same two calls, checks them, and the
-   page shows each one with its chain, amount and receiver (see **Handing calls to the signer** below).
+5. **Through `connect`, skip this step:** `connect deposit` builds the same two calls and checks them, and
+   opens the signing page only after the operator acknowledges them, every time (see **Handing calls to
+   the signer** below). Its acknowledgement carries the disclosures on every deposit, not only the first.
    **Otherwise, `earn_prepare_deposit`, then hand BOTH calls in `calls` to the signer in order, and ask before each.** The
    envelope names `chain` and `chainId`: tell the operator which chain these calls are for before
    anything else, because a call sent on the wrong chain can be mined there and do nothing. The
@@ -227,8 +228,8 @@ than reporting a limit the chain never stated.
 
 **First choice: the operator's own wallet, through `connect`.** It needs a browser on this machine: the
 page is served on `localhost` only, so a phone or another computer cannot open it.
-`connect wallet`, `connect deposit` and `connect withdraw` each wait up to 9 minutes for the operator,
-so give each of those shell calls a timeout of at least 9 minutes. The form is the same as `earn`:
+`connect wallet`, and `connect deposit` / `connect withdraw` run with `--ack`, each wait up to 9 minutes
+for the operator, so give each of those shell calls a timeout of at least 9 minutes. The form is the same as `earn`:
 
 ```bash
 node "${CLAUDE_PLUGIN_ROOT}/dist/treasury.mjs" connect deposit --vault <symbol> --amount_usdc 25 --receiver 0x…
@@ -237,9 +238,18 @@ node "${CLAUDE_PLUGIN_ROOT}/dist/treasury.mjs" connect deposit --vault <symbol> 
 1. `connect status`. If disconnected, `connect wallet` opens a page; the operator clicks Connect and uses
    a browser wallet, or an email, Google, Apple or X login (a Privy wallet). Wait for it to return.
 2. Run the earn quote as usual, then `connect deposit --amount_usdc <n> --receiver <addr>` (or
-   `connect withdraw …`), with the same `--vault`/`--chain`. The page shows each call; the operator
-   confirms it there and in the wallet. The command returns when they finish.
-3. Read `status` first. `completed`: every call landed. `stopped`: it ended early; read `reason` and the last transaction's `detail`.
+   `connect withdraw …`), with the same `--vault`/`--chain`. 🔴 **This first run opens nothing.** It
+   returns `status: "needs_acknowledgement"` with `acknowledgement` (one fixed text naming the amount,
+   chain, vault and its explorer link, the receiver, the vault's warning and the disclosures) and an
+   `ack` code. **Post `acknowledgement` to the operator word for word and wait for their answer.** Do
+   not summarise it, shorten it, or skip it because they acknowledged an earlier one or said "go"
+   before they saw it: every page open has its own.
+3. **Only on the operator's explicit yes to that text**, run the same command again with `--ack <code>`
+   added. The page opens; the operator confirms each call there and in the wallet; the command returns
+   when they finish. Any answer but yes: stop. A refused `--ack` (expired after 15 minutes, already used,
+   or the amount, vault, chain or receiver changed) means go back to step 2 for a new acknowledgement,
+   never retry the code.
+4. Read `status` first. `completed`: every call landed. `stopped`: it ended early; read `reason` and the last transaction's `detail`.
    `not_reported`: no transaction came back, which is not proof none was sent, so check `earn balance`
    before any retry. Report every `hash` and its `verified`. `extra_transfer` means the wallet also moved money besides
    the call (`alsoMoved`, often its own gas fee in USDC): say so. Anything else that is not `matched`:
@@ -272,18 +282,18 @@ this and wait:
 > shares/USDC to `<receiver>` ← from your message "<the words it came from>"
 > Paste it back or correct it.
 
-**When the signer shows the destination, its confirmation is the confirmation — do not add a
-paste-back on top.** A signer page that renders the vault name, the checksummed address, the
-receiver and the explorer links, whose validator pins `receiver` to the connected account and the
-vault to the registry, and whose wallet prompt shows `to`, has put the destination in front of the
-operator in a form they can read; their confirm there is the check. Two confirmations of one thing
-teach the operator to click through both. Paste-back is for a signer that cannot show them — a
-raw command, a script on a host. Never both.
+**Through `connect`, the acknowledgement is the check before the page opens — do not add a
+paste-back on top.** It names the receiver beside the amount, chain and vault, in text the CLI
+writes, and the operator answers it before anything can be signed. The page then renders the vault
+name, the checksummed address, the receiver and the explorer links, its validator pins `receiver` to
+the connected account and the vault to the registry, and the wallet prompt shows `to`. A paste-back
+on top asks the operator the same question a third time. Paste-back is for a signer that cannot show
+the destination: a raw command, a script on a host.
 
 The reasons this is shaped the way it is, so you can apply it when the situation is not this shape:
 
 - **"Go", "yes", "do it" approve the plan, never the address.** An operator saying go to the
-  deposit has not read the receiver. Get the paste-back, or the signer's own confirm.
+  deposit has not read the receiver. Get the paste-back, or, through `connect`, their yes to its acknowledgement.
 - **Read the conversation before you look anywhere else.** Operators paste address tables minutes
   before the action, often while answering a different question. "I don't have an address" is a
   claim about your reading, not about what was sent. Search first.

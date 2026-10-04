@@ -26,6 +26,18 @@ Pre-1.0, minor versions may change tool names, schemas and behaviour.
   flag given twice (either spelling), a switch given a value (`--all` takes none), a vault on another
   chain. A verdict such as `WHITELIST_GATED` is still a result and exits 0.
 
+### Added — the operator acknowledges before any signing page opens
+- **`connect deposit` and `connect withdraw` now run twice.** The first run builds and gate-checks the
+  calls, opens nothing, and returns `status: "needs_acknowledgement"` with `acknowledgement`: one fixed
+  text, written by the CLI rather than the agent, naming the amount, chain, vault and its explorer link,
+  the receiver, the vault's warning and the disclosures, ending in a yes-or-no question. On the
+  operator's yes, the same command with `--ack <code>` opens the page. The code works once, for 15
+  minutes, and only for exactly the calls acknowledged; a new connection or a disconnect voids it. The
+  `earn` skill posts the acknowledgement word for word before every page open, so an operator's earlier
+  yes never carries over to the next deposit or withdrawal.
+- **Changed for callers:** a script that ran `connect deposit` / `connect withdraw` once and expected the
+  page now gets `needs_acknowledgement` and must run again with `--ack`.
+
 ### Added — `treasury connect`: the operator's own wallet, in the browser
 - **`treasury connect wallet | deposit | withdraw | status | disconnect`.** `connect wallet` opens a page
   on the operator's machine with one Connect button and Privy's window: a browser wallet (MetaMask,

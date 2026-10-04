@@ -106,6 +106,12 @@ can do is make an unsigned build impossible to mistake for a completed one, by s
   decodes to (no trailing bytes, no stray bits in an address). The allowance the deposit waits for is
   read from those checked calls, not from the call's own `precondition` field. Anything else is
   refused before the operator is asked anything.
+- **The operator acknowledges before any page opens.** `connect deposit` and `connect withdraw` first
+  return a fixed text, written by the CLI, naming the amount, chain, vault and explorer link, receiver,
+  the vault's warning and the disclosures, and open nothing. The page opens only on a second run that
+  carries that acknowledgement's code: single-use, valid for 15 minutes, and bound to a digest of the
+  exact calls and connected account. An agent cannot carry an earlier yes over to a different amount,
+  vault or receiver, or reuse one yes for a second page.
 - **The operator confirms every call twice:** on the page, which shows the builder's description of the call
   (amount, vault, receiver), the vault, its address and explorer link; and in the wallet's own prompt
   (the extension, or Privy's dialog, which the page always asks Privy to show).
