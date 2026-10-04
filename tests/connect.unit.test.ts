@@ -10,6 +10,7 @@ import { admit, type GateCall } from "../src/connect/gate.js";
 import { verifyLanded } from "../src/connect/verify.js";
 import { outcome, runConfirm, runConnect, signInMessage } from "../src/connect/commands.js";
 import { readSession, writeSession } from "../src/connect/session.js";
+import { PAGE_CSP } from "../src/connect/page.js";
 import { defaultVault, listVaults } from "../src/registry.js";
 
 /**
@@ -64,6 +65,40 @@ describe("the gate admits exactly the registry's own calls for the connected acc
       expect(() => admit(calls, ACCOUNT)).toThrow(why);
     });
   }
+
+  const withdraw = (data?: Hex, v = vault): GateCall => ({
+    chainId: v.chainId,
+    to: v.address,
+    data: data ?? encodeFunctionData({ abi: erc4626Abi, functionName: "withdraw", args: [1_000_000n, ACCOUNT, ACCOUNT] }),
+    value: "0x0",
+  });
+  const arbVault = listVaults().find((v) => v.chainId === 42161)!;
+
+  it("refuses a batch on more than one chain, before anything else is read", () => {
+    expect(() => admit([withdraw(), withdraw(undefined, arbVault)], ACCOUNT)).toThrow(/more than one chain/);
+    expect(() => admit([...asGate(buildDeposit(vault, { assetsHuman: "1", receiver: ACCOUNT, account: ACCOUNT })), withdraw(undefined, arbVault)], ACCOUNT)).toThrow(/more than one chain/);
+  });
+
+  it("refuses any batch that is not approve+deposit, withdraw or redeem", () => {
+    const redeem: GateCall = { ...withdraw(), data: encodeFunctionData({ abi: erc4626Abi, functionName: "redeem", args: [1n, ACCOUNT, ACCOUNT] }) };
+    for (const calls of [[deposit()], [withdraw(), withdraw()], [withdraw(), redeem], [approve(), deposit(), deposit()], [approve(), deposit(), withdraw()]]) {
+      expect(() => admit(calls, ACCOUNT)).toThrow(/is not a batch this page confirms/);
+    }
+    expect(admit([redeem], ACCOUNT).map((a) => a.kind)).toEqual(["redeem"]);
+  });
+
+  it("refuses calldata that is not its own canonical encoding: trailing bytes, or stray bits in an address word", () => {
+    const clean = withdraw().data;
+    // withdraw(uint256 assets, address receiver, address owner): word 1 is the receiver.
+    const dirtyReceiver = (clean.slice(0, 10) + clean.slice(10, 74) + "ff" + clean.slice(76)) as Hex;
+    const ap = approve().data;
+    const dirtySpender = (ap.slice(0, 10) + "01" + ap.slice(12)) as Hex;
+    expect(admit([withdraw(clean)], ACCOUNT)).toHaveLength(1);
+    for (const data of [`${clean}00`, `${clean}${"00".repeat(32)}`, `${clean}${"ab".repeat(64)}`, dirtyReceiver]) {
+      expect(() => admit([withdraw(data as Hex)], ACCOUNT)).toThrow(/not the canonical encoding/);
+    }
+    expect(() => admit([{ ...approve(), data: dirtySpender }, deposit()], ACCOUNT)).toThrow(/not the canonical encoding/);
+  });
 
   it("refuses a withdrawal that pays or burns for anyone but the connected account", () => {
     const w = (receiver: Address, owner: Address): GateCall => ({
@@ -225,6 +260,17 @@ describe("sign-in: the wallet signs the process's own message, whose nonce is th
     await run;
   });
 
+  it("the page is served with exactly PAGE_CSP, the policy connect-page-source.unit.test.ts pins", async () => {
+    let url = "";
+    const run = runConnect({ open: (u) => ((url = u), true), verifySignature: async () => false });
+    await new Promise((r) => setTimeout(r, 50));
+    const res = await fetch(url);
+    expect(res.status).toBe(200);
+    expect(res.headers.get("content-security-policy")).toBe(PAGE_CSP);
+    await page(url).post("/result", { rejected: true });
+    await run;
+  });
+
   it("the server answers only its own secret, Host and Origin", async () => {
     let url = "";
     const run = runConnect({ open: (u) => ((url = u), true), verifySignature: async () => true });
@@ -301,6 +347,40 @@ describe("confirm: one call at a time, each checked on its receipt before the ne
     expect(out.status).toBe("stopped");
     expect(out.reason).toMatch(/deposit was not sent/);
     expect([out.txs.length, out.calls_total]).toEqual([1, 2]);
+  });
+
+  it("refuses calls that are not the ones their admitted checks describe, before any page opens", async () => {
+    writeSession({ account: ACCOUNT, walletType: "external", connectedAtIso: "" });
+    const session = readSession()!;
+    const deps = { open: () => true, client: hungReceipt };
+    const dep = buildDeposit(vault, { assetsHuman: "0.6", receiver: ACCOUNT, account: ACCOUNT });
+    const wd = buildWithdraw(vault, { receiver: ACCOUNT, owner: ACCOUNT, assetsHuman: "1" });
+    const other = listVaults().find((v) => v.chainId === vault.chainId && v.address !== vault.address)!;
+    const wdOther = buildWithdraw(other, { receiver: ACCOUNT, owner: ACCOUNT, assetsHuman: "1" });
+    // fewer checks than calls; a call moved to another chain; a call sent to another vault than its check names
+    await expect(runConfirm(dep, admit(asGate(wd), ACCOUNT), session, deps)).rejects.toThrow(/do not line up/);
+    await expect(runConfirm(dep, admit(asGate(dep), ACCOUNT).slice(0, 1), session, deps)).rejects.toThrow(/do not line up/);
+    await expect(runConfirm([dep[0]!, { ...dep[1]!, chainId: 42161 }], admit(asGate(dep), ACCOUNT), session, deps)).rejects.toThrow(/do not line up/);
+    await expect(runConfirm(wdOther, admit(asGate(wd), ACCOUNT), session, deps)).rejects.toThrow(/do not line up/);
+  });
+
+  it("the allowance read before a deposit comes from the admitted calls, not the call's own precondition field", async () => {
+    writeSession({ account: ACCOUNT, walletType: "external", connectedAtIso: "" });
+    const built = buildDeposit(vault, { assetsHuman: "0.6", receiver: ACCOUNT, account: ACCOUNT });
+    // A precondition that would always hold, naming another token, owner and spender.
+    const calls = built.map((c) => (c.precondition ? { ...c, precondition: { ...c.precondition, contract: OTHER, owner: OTHER, spender: OTHER, minimum: "0" } } : c));
+    const reads: unknown[] = [];
+    const client = () => ({
+      getTransactionReceipt: async () => ({ status: "success", logs: [approvalLog(ACCOUNT, vault.address, 600_000n)] }) as never,
+      readContract: async (q: { address: Address; args: readonly unknown[] }) => (reads.push([q.address, ...q.args]), 599_999n) as never,
+    });
+    let url = "";
+    const run = runConfirm(calls, admit(asGate(calls), ACCOUNT), readSession()!, { open: (u) => ((url = u), true), client, verifyOpts: { attempts: 1, delayMs: 1 } });
+    await new Promise((r) => setTimeout(r, 50));
+    expect((await (await page(url).post("/result", { index: 0, hash: `0x${"01".repeat(32)}` })).json()) as { stop: boolean }).toMatchObject({ stop: true });
+    const out = JSON.parse(outcome(vault.chainId, ACCOUNT, await run)) as { status: string; reason: string };
+    expect(out).toMatchObject({ status: "stopped", reason: expect.stringMatching(/deposit was not sent/) });
+    expect(reads).toEqual([[usdc, ACCOUNT, vault.address]]);
   });
 
   it("a cancel that arrives while a sent transaction is being checked never hides that transaction", async () => {

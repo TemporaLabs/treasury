@@ -11,12 +11,16 @@
  *     receiver = owner = the connected account.
  * Every call carries no value and names a supported chain that matches its vault.
  *
+ * And one batch is one operation on one vault, on one chain, in one of the shapes the builders
+ * emit: `[approve, deposit]`, `[withdraw]` or `[redeem]`. Calldata must be exactly the canonical
+ * encoding of what it decodes to: no trailing bytes, no stray bits in an address word.
+ *
  * This is the rule of AGENTS.md / CONTRIBUTING.md that the relay refuses any destination outside
  * the registry, made executable. Paying an address other than the
  * connected account is refused here on purpose: that is what the prepare commands are for, with the
  * operator's own signer.
  */
-import { decodeFunctionData, getAddress, type Address, type Hex } from "viem";
+import { decodeFunctionData, encodeFunctionData, getAddress, type Address, type Hex } from "viem";
 import { erc4626Abi } from "../abi/erc4626.js";
 import { isSupportedChainId } from "../client.js";
 import { listVaults } from "../registry.js";
@@ -41,8 +45,13 @@ const UNLIMITED = 2n ** 128n;
 
 const same = (a: string, b: string) => getAddress(a) === getAddress(b);
 
+/** The only batches the builders emit; anything else is refused whole. */
+const SHAPES = new Set(["approve,deposit", "withdraw", "redeem"]);
+
 export function admit(calls: GateCall[], account: Address): Admitted[] {
   if (calls.length === 0) throw new Error("refused: there is nothing to confirm");
+  // The page switches the wallet to one chain for the whole batch, so a batch never spans two.
+  if (calls.some((c) => c.chainId !== calls[0]!.chainId)) throw new Error("refused: the calls are on more than one chain");
   const vaults = listVaults();
   const out: Admitted[] = [];
   calls.forEach((c, i) => {
@@ -57,6 +66,10 @@ export function admit(calls: GateCall[], account: Address): Admitted[] {
     }
     const name = decoded.functionName;
     const args = (decoded.args ?? []) as readonly unknown[];
+    // Decoding forgives trailing bytes and keeps only the low 20 bytes of an address word; the
+    // wallet would sign the bytes as sent. Admit only calldata that is its own canonical encoding.
+    const canonical = encodeFunctionData({ abi: erc4626Abi, functionName: name, args } as Parameters<typeof encodeFunctionData>[0]);
+    if (canonical !== c.data) throw new Error(`refused (${at}): its calldata is not the canonical encoding of ${name} (extra bytes, or stray bits in an address)`);
 
     if (name === "approve") {
       const vault = vaults.find((v) => v.chainId === c.chainId && same(v.asset.address, c.to));
@@ -98,5 +111,9 @@ export function admit(calls: GateCall[], account: Address): Admitted[] {
       throw new Error(`refused (call ${i + 1}): an approval must be followed by a deposit of exactly that amount into the same vault`);
     }
   });
+
+  const shape = out.map((a) => a.kind).join(",");
+  // With the pairing above, these shapes also mean one vault per batch.
+  if (!SHAPES.has(shape)) throw new Error(`refused: ${shape} is not a batch this page confirms (only approve+deposit, withdraw, or redeem)`);
   return out;
 }
