@@ -123,7 +123,7 @@ open to any account and exercises every path. It is not what an agent uses unles
 | fees | a management fee and a performance fee, both readable on-chain from the vault (`getManagementFeeData`, `getPerformanceFeeData`) |
 | positions | ERC-4626 leaf vaults on Base — readable on-chain; Treasury does not model the fund's allocation |
 
-**"Test" is in every name on purpose.** These are test-series vaults: real contracts, real USDC, real
+**"Test" is in every name on purpose.** These are test-series vaults: real contracts, real USDC or USDG, real
 positions, operated by Tempora while the product is proven. Read [`risks.md`](risks.md).
 
 ## Getting access to a whitelist-gated vault

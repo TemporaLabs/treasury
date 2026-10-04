@@ -3,7 +3,10 @@
 Eight `earn` commands, each named here by its tool name, `earn_`-prefixed: `earn_quote` runs as
 `treasury earn quote`, and its arguments are its flags (`--direction deposit --account 0x…
 --amount_usdc 25`). Each prints one JSON document; a refusal exits 1 with `{ "error": … }` on stderr.
-`treasury earn --help` lists every command and flag. Two kinds: **READ** commands query the chain and
+`treasury earn --help` lists every command and flag, `treasury earn <command> --help` one command's
+(put `--help` right after the command), `treasury --help` the skills, and `treasury --version` the
+bare version. A flag's `_` may be typed as `-` (`--amount-usdc`), and so may a command's
+(`prepare-deposit`). Two kinds: **READ** commands query the chain and
 return facts; **PREPARE** commands return unsigned calls for your signer. Nothing signs, sends or
 transfers, and CI asserts the command list exactly — a ninth command, or a `sign`, fails the build.
 The five `connect` commands [further down](#the-connect-commands--treasury-connect-command) are a third
@@ -55,7 +58,7 @@ status (the block and method it was measured at). Each row carries the vault's p
 - `name` — the vault's `name()`;
 - `chain` and `chainId` — the chain the vault is on, e.g. `"arbitrum"` and `42161`;
 - `address` — the contract itself, on that chain;
-- `links` — `explorer` always (the chain's own: BaseScan, Arbiscan), and `app` where the chassis has a front end whose page for this vault exists. **These need no
+- `links` — `explorer` always (the chain's own: BaseScan, Arbiscan, or Robinhood Chain's Blockscout), and `app` where the chassis has a front end whose page for this vault exists. **These need no
   RPC endpoint.** They are how an operator verifies, without this client's help, that the address
   about to be used is the vault it claims to be;
 - `warning` — what to show before preparing a deposit into this vault. Show it; do not summarise it.
@@ -253,6 +256,10 @@ consumer can code against the full contract before an asynchronous chassis is ad
 
 These hand calls to the operator's own wallet instead of returning them: a browser wallet (MetaMask,
 Rabby, Coinbase Wallet), or a Privy embedded wallet opened with an email, Google, Apple or X login.
+Coinbase Wallet's own entry in the sign-in window (the Coinbase SDK, for its mobile app or a smart
+wallet) is untested in this release ([#88](https://github.com/TemporaLabs/treasury/issues/88)). That
+entry is separate from the Coinbase Wallet browser extension, which, like any wallet installed in the
+browser, is listed on the window's first screen.
 A page opens on the operator's machine, at a one-time URL on `http://localhost:53682` that the command
 also prints on stderr; they read each call there and
 confirm it in the wallet. Nothing here signs. See [`security-model.md`](security-model.md#the-wallet-connection-treasury-connect).
@@ -291,7 +298,8 @@ refused, and nothing opens, when:
 - the calls differ from the ones acknowledged (another amount, vault, chain, receiver, direction or
   connected account).
 
-A new `connect wallet` or a `connect disconnect` clears any pending acknowledgement. The pending one
+A `connect wallet` that completes a sign-in, or a `connect disconnect`, clears any pending
+acknowledgement; a sign-in that does not finish leaves it as it was. The pending one
 sits beside the session file (`connect-ack.json`, owner-readable only) and holds a digest of the calls,
 not the calls.
 
@@ -314,7 +322,10 @@ the receipt:
 | `unverified` | no receipt in time; look the hash up before retrying anything |
 
 The flow stops at the first transaction that is not `matched` or `extra_transfer`, and sends nothing
-after it. The result's `status` says how the whole flow ended:
+after it. A call declined in the wallet sent nothing, so the page stays open to confirm it again or
+cancel. Before the first call the page shows the wallet's balances, read once, and warns when a deposit
+needs more than the wallet holds or there is nothing for the network fee; the warnings never block the
+button. Each sent transaction is linked on the chain's explorer. The result's `status` says how the whole flow ended:
 
 | `status` | meaning |
 |---|---|

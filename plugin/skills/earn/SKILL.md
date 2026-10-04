@@ -64,10 +64,10 @@ scan moves to the fallback endpoint and `scan.source` says `"fallback"`; you do 
 retry anything. Set `TREASURY_LOGS_FALLBACK` to another endpoint to choose it, or to `off` — or any value that is not
 a URL — to forbid it, for an operator who may not query a third party they did not name. It fails
 closed: an unrecognised value turns the fallback off rather than quietly keeping the default. A URL
-there names a Base endpoint, so on Arbitrum a set variable means no fallback at all. On Base the fallback reaches
+there names a Base endpoint, so on Arbitrum One and Robinhood Chain a set variable means no fallback at all. On Base the fallback reaches
 `max_log_requests` (default 100) × 2,000 blocks, about 4.6 days; each scan also stops at a 30-second
 budget. For an older vault, a whole-history basis needs that chain's logs variable
-(`TREASURY_LOGS_RPC_BASE`, `TREASURY_LOGS_RPC_ARBITRUM`) set to a provider with a wide `eth_getLogs`
+(`TREASURY_LOGS_RPC_BASE`, `TREASURY_LOGS_RPC_ARBITRUM`, `TREASURY_LOGS_RPC_ROBINHOOD`) set to a provider with a wide `eth_getLogs`
 range; until then `scan` says exactly how much was covered.
 
 ## The tools
@@ -79,7 +79,7 @@ range; until then `scan` says exactly how much was covered.
 | `earn_status` | **with no `account`**: is the CLI healthy and the chain's RPC reachable (chain, latest block, which RPC variable resolved); pass `chain` to check the chain you are about to use. **With `account`**: the access verdict alone. `mode` tells you which you got |
 | `earn_quote` | with `direction: "deposit"` — expected shares, share price, and the verdict from a **simulated** deposit. No rate is quoted — the vault exposes none and this client calls no yield API. With `direction: "withdraw"` — shares that would burn, a simulated `withdraw` verdict, the vault's `instantLiquidity`, queue depth. `direction` is required and is echoed back on the result |
 | `earn_prepare_deposit` | get the unsigned `approve` + `deposit` calls, enveloped; `--receiver` (required) is where the shares land |
-| `earn_prepare_withdraw` | get the unsigned `withdraw` call in USDC terms — or `--all` with `--shares_exact` to empty the account |
+| `earn_prepare_withdraw` | get the unsigned `withdraw` call in terms of the vault's asset — or `--all` with `--shares_exact` to empty the account |
 | `earn_balance` | shares (exact), USDC value, entry basis and accrued yield from the vault's own events; `lookback_blocks` / `max_log_requests` set the scan window (see Setup) |
 | `earn_claim` | finalize a queued withdrawal; today no vault queues, and it says so |
 
@@ -96,20 +96,20 @@ names a vault carries `chain` and `chainId`.
 The address argument is **`account`** on every tool that takes one — whose shares these are.
 **Both prepare commands also require `--receiver`**, and it is a different thing: on
 `earn_prepare_deposit` it is where the new **shares** land, on `earn_prepare_withdraw` where the
-**USDC** lands. They are usually the same address as `account`, and the command will not assume it —
+**asset** (USDC, or USDG on Robinhood Chain) lands. They are usually the same address as `account`, and the command will not assume it —
 **neither may you.** The receiver comes from the operator's own message, through the destination check
 below, before you build either call; never fill it in from `account` on your own.
 
 ## Choosing the chain
 
-A deposit goes to ONE chain, and the USDC has to be on that chain already — this skill does not
+A deposit goes to ONE chain, and the vault's asset (USDC; USDG on Robinhood Chain) has to be on that chain already — this skill does not
 bridge. **Which chain is the operator's decision. Ask; do not pick.**
 
 - **Before preparing a deposit, if the operator has not said which chain, show them `earn_vaults` →
   `chains` and ask.** Each entry is a chain with its default vault; the first is the default chain.
   Put it as a choice they can answer in a word: "Base (default), Arbitrum or Robinhood Chain?"
 - **Do not ask again once it is settled.** If they named a chain, named a vault, or said where
-  their USDC is, that is the answer for the rest of the task.
+  their funds are, that is the answer for the rest of the task.
 - **Never ask for a withdrawal, a balance or a quote on an existing position.** A position is on
   the chain its vault is on. Name the vault and the tools use the right chain.
 - **If no vault was named and you do not already know which vault holds the position, find out
@@ -163,7 +163,8 @@ bridge. **Which chain is the operator's decision. Ask; do not pick.**
    **Otherwise, `earn_prepare_deposit`, then hand BOTH calls in `calls` to the signer in order, and ask before each.** The
    envelope names `chain` and `chainId`: tell the operator which chain these calls are for before
    anything else, because a call sent on the wrong chain can be mined there and do nothing. The
-   amount is in USDC (6 decimals); the tool refuses more precision than that. Show the operator
+   amount is in the vault's asset (USDC, or USDG on Robinhood Chain; 6 decimals for both); the tool
+   refuses more precision than that. Show the operator
    each call's `description` — that sentence exists to be read by a human before a signature —
    **and its `gasAdvice`**: Morpho V2 calls can run out of gas on an unbuffered estimate even
    when every simulation passes, because accrual work grows with the time between estimate and
@@ -208,7 +209,7 @@ than reporting a limit the chain never stated.
   reconciles can still have missed the deposit that produced the shares. The note says which
   provider window capped the scan. Realized redemption is subject to the vault's caps and any queue,
   so quote value as a value, not a promise.
-- **Withdraw in USDC.** `earn_quote` with `direction: "withdraw"`, then `connect withdraw` (same flags,
+- **Withdraw in the vault's asset** (USDC; USDG on Robinhood Chain). `earn_quote` with `direction: "withdraw"`, then `connect withdraw` (same flags,
   receiver = the connected account) or `earn_prepare_withdraw` with `amount_usdc` and the `account` whose shares burn; the vault burns
   whatever shares that costs at inclusion. To empty the account, pass `--all` and
   `--shares_exact` copied **verbatim** from `earn_balance.sharesExact` — never a number you rounded
@@ -261,9 +262,10 @@ not from you: the page pays only that account. For any other receiver, use the p
 with the operator's own signer.
 
 **No browser here** (an SSH session, a container, a machine with no display): skip `connect` and use the
-prepare commands. A result with `opened: false` means no browser opened; the command printed the page's
-address on stderr instead. Give that address to the operator only if they are at this machine; otherwise
-use the prepare commands too.
+prepare commands. The first, acknowledgement run of `connect deposit` / `connect withdraw` always says
+`opened: false`: it opens nothing by design. On `connect wallet`, or the run with `--ack`, `opened: false`
+means no browser opened: the command printed the page's address on stderr, but it returns only after
+the page has closed, so the address reaches you too late to pass on. Use the prepare commands instead.
 
 Every prepared call names a destination: `to`, and the receiver or owner in its `description`. A
 wrong destination is the one mistake nothing downstream can undo — the transaction succeeds, the
@@ -275,12 +277,12 @@ address came from.
 **The address that can lose money is the `receiver` — and it comes from the operator's own
 message, quoted back, and confirmed.** The call's `to` is the vault, taken from the registry and
 re-checked by the pre-flight; the operator cannot verify a contract address by eye and is not asked
-to. The receiver is where the shares or the USDC land, and only the operator knows which account
+to. The receiver is where the shares or the asset (USDC or USDG) land, and only the operator knows which account
 that should be. Before handing over any prepared call whose signer cannot show the receiver, post
 this and wait:
 
 > **Destination check — nothing goes to the signer until you reply.**
-> shares/USDC to `<receiver>` ← from your message "<the words it came from>"
+> shares/USDC/USDG to `<receiver>` ← from your message "<the words it came from>"
 > Paste it back or correct it.
 
 **Through `connect`, the acknowledgement is the check before the page opens — do not add a
@@ -341,8 +343,8 @@ and-exit cycle you will hand over all of these:
 
 | call | field | a real value | scale |
 |---|---|---|---|
-| `approve` / `deposit` | `value` / `assets` | `25000000` | USDC, 6 decimals |
-| `withdraw` | `assets` | `2500000` | USDC, 6 decimals |
+| `approve` / `deposit` | `value` / `assets` | `25000000` | the asset (USDC or USDG), 6 decimals |
+| `withdraw` | `assets` | `2500000` | the asset (USDC or USDG), 6 decimals |
 | `redeem` | `shares` | `1234567890123456789` | SHARES — see below |
 
 `redeem` is the one that bites, and 🔴 **the share scale is PER-VAULT, not a constant.** The example
@@ -360,9 +362,11 @@ destination check, done on something they can actually read.
 **Use the explorer of the call's chain** — BaseScan for chainId 8453, Arbiscan for 42161, Robinhood Chain's Blockscout for 4663. The same
 address on the other chain's explorer is a different contract, or nothing.
 
-One gotcha specific to the approve call: **USDC is deployed as a proxy on both chains** (`FiatTokenProxy`),
-so `approve` does not appear under the plain "Write Contract" tab — it only appears under **"Write
-as Proxy"**, which resolves against the implementation contract. The vault contract itself has no
+One gotcha specific to the approve call: **the asset is a proxy on every listed chain** — USDC as
+`FiatTokenProxy` on Base and Arbitrum One, USDG as an EIP-1967 proxy on Robinhood Chain — so `approve`
+does not appear under the plain "Write Contract" tab; it appears only under the explorer's proxy tab
+(**"Write as Proxy"** on BaseScan and Arbiscan, the proxy write tab on Blockscout), which resolves
+against the implementation contract. The vault contract itself has no
 such wrinkle; `deposit`/`redeem` show up on its plain "Write Contract" tab as expected.
 
 **You never run these `cast send` commands, and holding a shell is not a reason to.** A key reachable from
@@ -370,7 +374,7 @@ your shell is a key in this conversation. The operator runs the send in a shell 
 back the transaction hash.
 
 Between the `approve` and the `deposit`, have them read the `precondition` the deposit carries
-(`cast call <usdc> "allowance(address,address)(uint256)" <account> <vault>` must be at least the
+(`cast call <asset> "allowance(address,address)(uint256)" <account> <vault>` must be at least the
 minimum) — the approve's receipt can land on a node ahead of the one that will simulate the deposit.
 After each send, take the transaction hash they paste back and continue with `earn_balance`.
 Sending from a script, for a key held on a host the operator runs, is the same thing: the ordering,
@@ -394,8 +398,8 @@ you do it, and here is why the key stays with you."
   calling one-shot `earn_prepare_withdraw`; nothing here runs unattended.
 - **Deposit into a vault outside `depositable`**, override a `WHITELIST_GATED` or
   `REVERTED_OTHER` verdict, or build for an Enzyme vault. Refusing is the correct output.
-- Swap, trade, bridge, or touch the allocator side of a vault. Those are other tools' jobs. USDC on
-  one chain cannot be deposited into a vault on another: the operator moves it first, by their own means.
+- Swap, trade, bridge, or touch the allocator side of a vault. Those are other tools' jobs. Funds on
+  one chain cannot be deposited into a vault on another: the operator moves them first, by their own means.
 - **Pick the chain for the operator**, or deposit on a chain other than the one they chose because
   its vault looks better. Asking is the correct output.
 

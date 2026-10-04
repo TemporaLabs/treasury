@@ -12,7 +12,8 @@ Pre-1.0, minor versions may change tool names, schemas and behaviour.
   `treasury earn quote --direction deposit --account 0x… --amount_usdc 25`, and `treasury earn --help`
   lists every command and flag as JSON. Each run prints one JSON document — the same document the
   tool returned — and a refusal exits 1 with `{ "error": … }` on stderr. Nothing stays running between
-  commands.
+  commands. A flag's or command's `_` may be typed as `-` (`--amount-usdc`, `prepare-deposit`), and
+  `treasury --version` prints the bare version.
 - The bundle is `dist/treasury.mjs` and the npm bin is `treasury`. The plugin declares no server: its
   skill runs `node "${CLAUDE_PLUGIN_ROOT}/dist/treasury.mjs" earn …` through the shell, so no server
   has to connect at session start (`/reload-plugins` loads the skill). The CLI reads every variable in
@@ -26,18 +27,16 @@ Pre-1.0, minor versions may change tool names, schemas and behaviour.
   flag given twice (either spelling), a switch given a value (`--all` takes none), a vault on another
   chain. A verdict such as `WHITELIST_GATED` is still a result and exits 0.
 
-### Added — the operator acknowledges before any signing page opens
-- **`connect deposit` and `connect withdraw` now run twice.** The first run builds and gate-checks the
-  calls, opens nothing, and returns `status: "needs_acknowledgement"` with `acknowledgement`: one fixed
-  text, written by the CLI rather than the agent, naming the amount, chain, vault and its explorer link,
-  the receiver, that a deposit asks the wallet twice (approve, then deposit), the vault's warning and the
-  disclosures, ending in a yes-or-no question. On the
-  operator's yes, the same command with `--ack <code>` opens the page. The code works once, for 15
-  minutes, and only for exactly the calls acknowledged; a new connection or a disconnect voids it. The
-  `earn` skill posts the acknowledgement word for word before every page open, so an operator's earlier
-  yes never carries over to the next deposit or withdrawal.
-- **Changed for callers:** a script that ran `connect deposit` / `connect withdraw` once and expected the
-  page now gets `needs_acknowledgement` and must run again with `--ack`.
+### Changed for callers
+- **MCP hosts and plugin users:** the eight `earn_*` MCP tools are now commands (the section above),
+  and an MCP host that runs the old bundle must pin v0.1.1 exactly (Removed, below).
+- **The default vault on Base is now Test 2B, not Test 2.** A call, or the library's `defaultVault()`,
+  with no vault and no chain resolves to Test 2B. Name `--vault tlCashPlusUSDC2` to keep using Test 2,
+  and to read or withdraw a position held there: `earn balance` with no vault reads Test 2B and reports
+  nothing about a position in Test 2.
+- **The registry spans three chains.** `earn vaults` and `listVaults()` list vaults on Base, Arbitrum
+  One and Robinhood Chain. Send each prepared call on the chain its `chainId` names, and do not assume
+  the asset is USDC: Test 2D's is USDG, carried in `amount_usdc` and `usdcValue` under their old names.
 
 ### Added — `treasury connect`: the operator's own wallet, in the browser
 - **`treasury connect wallet | deposit | withdraw | status | disconnect`.** `connect wallet` opens a page
@@ -57,10 +56,29 @@ Pre-1.0, minor versions may change tool names, schemas and behaviour.
   `status` is `completed` only when every call landed; otherwise `stopped` with a `reason`, or
   `not_reported` when no transaction came back. Each command returns within nine minutes. Nothing
   signs.
+- The confirm page links each sent transaction on the chain's explorer, shows the wallet's balances
+  (read once) and warns when a deposit needs more than the wallet holds or there is nothing for the
+  network fee, without blocking the button. A call declined in the wallet sent nothing, so the page stays
+  open to confirm it again or cancel; a declined sign-in offers "Sign in again". An error after the
+  wallet was asked to send, with no hash, is reported as not known to have gone out, never as "not sent".
+- Coinbase Wallet's own entry in the sign-in window (the Coinbase SDK, for its mobile app or a smart
+  wallet) is untested in this release (#88). It is separate from the Coinbase Wallet browser
+  extension, which, like any installed wallet, is listed on the window's first screen.
 - `dist/connect-page.js`, the page, built from `connect-page/` with its own dependencies so none of
   them enters this package's. No WalletConnect or Reown code is included. The page's notices are in
   `THIRD_PARTY_NOTICES.connect-page.md`.
 - `PRIVY_APP_ID`, `TREASURY_CONNECT_PORT`, `TREASURY_CONNECT_HOME`, `TREASURY_CONNECT_NO_OPEN`, all optional.
+
+### Added — the operator acknowledges before any signing page opens
+- **`connect deposit` and `connect withdraw` run twice.** The first run builds and gate-checks the
+  calls, opens nothing, and returns `status: "needs_acknowledgement"` with `acknowledgement`: one fixed
+  text, written by the CLI rather than the agent, naming the amount, chain, vault and its explorer link,
+  the receiver, that a deposit asks the wallet twice (approve, then deposit), the vault's warning and the
+  disclosures, ending in a yes-or-no question. On the
+  operator's yes, the same command with `--ack <code>` opens the page. The code works once, for 15
+  minutes, and only for exactly the calls acknowledged; a completed sign-in or a disconnect voids it. The
+  `earn` skill posts the acknowledgement word for word before every page open, so an operator's earlier
+  yes never carries over to the next deposit or withdrawal.
 
 ### Removed
 - The MCP server: `dist/mcp-server.mjs`, the `treasury-mcp` bin, `plugin/.mcp.json`, and the
@@ -68,11 +86,12 @@ Pre-1.0, minor versions may change tool names, schemas and behaviour.
   was 2.1 MB). **An MCP host that runs the old bundle must pin v0.1.1 exactly**
   (`npm install --save-exact @temporalabs/treasury@0.1.1`): a `^0.1.1` range resolves to this release,
   which has no `dist/mcp-server.mjs`.
+- For contributors, `npm run mcp` is replaced by `npm run cli`, which runs the CLI from source.
 
 ### Added
 - **Earn on more than one chain: Arbitrum One joins Base** (#62). Every tool that takes `vault` also
-  takes `chain` (`"base"` or `"arbitrum"`). Base stays the default: a call that names neither a chain
-  nor a vault behaves as before. Naming a chain alone uses that chain's default vault; a `vault` and
+  takes `chain` (`"base"` or `"arbitrum"`). Base stays the default chain: a call that names neither a chain
+  nor a vault stays on Base (see Changed for callers for its default vault). Naming a chain alone uses that chain's default vault; a `vault` and
   a `chain` that disagree are refused. Results name the chain, and a prepared envelope carries
   `chain` and `chainId` ahead of its calls.
 - **Tempora Labs Cash Plus USDC (Test 2C)**, `tlCashPlusUSDC2C`, the default vault on Arbitrum One: a
@@ -105,8 +124,8 @@ Pre-1.0, minor versions may change tool names, schemas and behaviour.
   `app` link, and `src/links.ts` now offers one only for vaults Morpho is known to list.
 - The registry marks one default vault **per chain** (it was one in total), and
   `src/config/earn.ts` names them in `defaultVaultByChain`, with `defaultChain` beside it.
-- `TREASURY_LOGS_FALLBACK` set to a URL names a Base endpoint: on Arbitrum One a set variable means
-  no fallback. Unset, each chain falls back to its own public endpoint.
+- `TREASURY_LOGS_FALLBACK` set to a URL names a Base endpoint: on Arbitrum One and Robinhood Chain a
+  set variable means no fallback. Unset, each chain falls back to its own public endpoint.
 - `scripts/registry-check.ts` reads each row on its own chain, and reports a chain whose endpoint
   did not answer, or answered for another chain, as not checked.
 - A vault's explorer link is its chain's (Arbiscan on Arbitrum One). A chain with no explorer on
@@ -124,6 +143,14 @@ Pre-1.0, minor versions may change tool names, schemas and behaviour.
   error that names the chain is not masked.
 - `scripts/registry-check.ts` reports a failed `eth_getCode` as not checked, through the same
   redaction as every other read; it used to escape as an uncaught error.
+
+### CI
+- Offline tests show that `scripts/sync-plugin.sh --check` and `scripts/check-versions.sh` can fail, and
+  fail for the reason they name (#60).
+- The live Base whole-history test no longer times out at the 20-second default: it allows two
+  minutes, and accepts either a whole history or a scan that says it was cut short and gives no
+  lifetime figure (#70).
+- CI runs the bundled CLI and asserts the exact `earn` and `connect` command and flag sets.
 
 ## [v0.1.1] - 2026-09-29
 
@@ -159,8 +186,6 @@ Pre-1.0, minor versions may change tool names, schemas and behaviour.
   the tag, and polls the registry for up to ten minutes, warning rather than failing on a timeout
   (#28, #55, #57).
 - `prepack` also refuses rebuilt third-party notices that differ from the committed file (#57).
-- Offline tests show that `scripts/sync-plugin.sh --check` and `scripts/check-versions.sh` can fail, and
-  fail for the reason they name (fixes #60).
 - Dependabot no longer proposes TypeScript or `@types/node` majors (#25); GitHub Actions and
   development dependencies bumped (#20, #55).
 

@@ -106,7 +106,10 @@ MCP tools; the `earn` skill reaches the same operations through the CLI.
 Connect button, then Privy's window. Its first screen lists the browser wallets installed there
 (MetaMask, Rabby, or any wallet that announces itself to the page), then email and Google, four
 entries in all: with three or more wallets installed, Google moves under "More options", and with
-four or more, email does too. Apple, X and Coinbase Wallet are under "More options". Signing in costs
+four or more, email does too. Apple, X and Coinbase Wallet are under "More options"; that Coinbase
+Wallet entry (the Coinbase SDK, for its mobile app or a smart wallet) is untested in this release
+([#88](https://github.com/TemporaLabs/treasury/issues/88)). It is separate from the Coinbase Wallet
+browser extension, which, like any installed wallet, is listed on the first screen. Signing in costs
 nothing. After that, `treasury connect deposit` and `treasury connect withdraw` first return an
 acknowledgement for the operator to answer, and on their yes open a confirm page for each transaction. See [`tools.md`](tools.md#the-connect-commands--treasury-connect-command).
 

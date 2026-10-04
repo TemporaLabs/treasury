@@ -44,20 +44,20 @@ third party. Review every transaction your signer is asked to sign.
   transaction. The builders carry a gas buffer for exactly this; the `precondition` on a call says what
   must still be true when it is sent.
 - **A call is for one chain.** Every prepared call carries a `chainId`, and the envelope names the
-  chain. Send it on that chain only, with USDC that is already there: Treasury does not bridge. A
-  transaction sent on a different chain, to an address with no contract there, is mined and does
-  nothing — the deposit did not happen and the gas is spent. Check your signer's network first.
+  chain. Send it on that chain only, with the vault's asset (USDC; USDG on Robinhood Chain) already
+  there: Treasury does not bridge. A transaction sent on a different chain, to an address with no
+  contract there, is mined and does nothing — the deposit did not happen and the gas is spent. Check your signer's network first.
 - **Two addresses, two meanings.** `account` is whose shares; `receiver` is where the money lands.
   They are usually the same. The tool will not assume it, and neither should you — a transposed
-  receiver sends USDC to the wrong place, irreversibly.
+  receiver sends the funds to the wrong place, irreversibly.
 - **Your RPC is part of the trust chain.** Treasury believes what the RPC returns. Use a provider you
   trust, and prefer one whose `eth_getLogs` window lets `earn_balance` read the whole history.
 - **An email or social login gives a Privy embedded wallet.** `treasury connect` offers it beside
   browser wallets. Its keys are managed by Privy for that Privy app, not by you or by Treasury, and a
   different `PRIVY_APP_ID` gives a different wallet for the same login. Anyone who controls that email
   or social account can sign in and approve transactions. Export and recovery go through Privy, not
-  this page. The wallet starts empty and needs USDC and the chain's gas token. Use a browser wallet for
-  amounts you would not trust to an email account.
+  this page. The wallet starts empty and needs the vault's asset (USDC, or USDG on Robinhood Chain)
+  and the chain's gas token. Use a browser wallet for amounts you would not trust to an email account.
 - **Your signer is the whole security model.** Treasury is designed so that a compromised or
   misbehaving agent can at most *propose* a transaction. What actually executes is whatever your
   signer approves. Configure it to show destination, amount and calldata, and to refuse anything it
