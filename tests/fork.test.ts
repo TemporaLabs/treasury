@@ -252,6 +252,15 @@ async function sendBuffered(to: Address, data: `0x${string}`, from: Address = WH
     const qAll = await quoteWithdraw({ vault, owner: depositor, assetsHuman: remaining, client: pub as never });
     const [redeem] = buildWithdraw(vault, { receiver: depositor, owner: depositor, all: true, sharesExact: pos2.sharesExact });
 
+    if (qAll.simulated === "REVERTED" && vault.chassis !== "fusion") {
+      // A Morpho Vault V2 pays out of its markets, not from idle balance, so the quote must show the
+      // chain's own reason and not Fusion's liquidity note (#78) — and it must be right: sending
+      // anyway reverts.
+      expect(qAll.note).not.toMatch(/liquid against/);
+      expect(qAll.note).toMatch(/^withdraw\(\) reverted/);
+      await expect(pub.estimateGas({ account: depositor, to: redeem!.to, data: redeem!.data })).rejects.toThrow();
+      return;
+    }
     if (qAll.simulated === "REVERTED") {
       // The skill says the vault cannot pay this out now. Two things must be true: it said WHY in
       // liquidity terms (measured 2026-09-13 on the Fusion vault: 0.80 liquid, 9.21 deployed, no
