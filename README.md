@@ -46,11 +46,11 @@ See the [command reference](docs/tools.md), the eight `earn` commands and the fi
 export TREASURY_RPC_BASE=https://...      # replace with your Base RPC URL
 export TREASURY_RPC_ARBITRUM=https://...  # only if you will use a vault on Arbitrum One
 export TREASURY_RPC_ROBINHOOD=https://... # only if you will use a vault on Robinhood Chain
-claude plugin marketplace add TemporaLabs/treasury@v0.1.1
+claude plugin marketplace add TemporaLabs/treasury@v0.1.2
 claude plugin install treasury@treasury
 ```
 
-Run `/reload-plugins` (or start a new Claude Code session) after installing so the Earn skill loads. Keep the `TemporaLabs/treasury@v0.1.1` ref
+Run `/reload-plugins` (or start a new Claude Code session) after installing so the Earn skill loads. Keep the `TemporaLabs/treasury@v0.1.2` ref
 explicit so the install stays on a release rather than tracking the default branch. Upgrading an
 earlier install? Run `claude plugin marketplace remove treasury` first, then the two `claude plugin` lines above
 ([details](docs/install.md#upgrading-an-earlier-install)).
@@ -62,7 +62,7 @@ command at a time; nothing stays running.
 ### Any agent with a shell
 
 ```bash
-npm install --save-exact @temporalabs/treasury@0.1.1
+npm install --save-exact @temporalabs/treasury@0.1.2
 npx --no-install treasury earn --help     # every command and flag, as JSON
 ```
 
