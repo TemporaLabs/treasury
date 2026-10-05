@@ -39122,7 +39122,8 @@ async function measureExit(a) {
       measuredAs: "refused, size unknown",
       instantLiquidity: liquidText,
       maxWithdrawSays: maxText,
-      note: `the vault REFUSED a full-position withdrawal at this block. Its liquid balance is ${liquidText}, so no smaller withdrawal bounded by it was tried; a smaller amount may still pass \u2014 quote one with \`earn quote --direction withdraw\`. The refusal came from the vault, but it is not a shortfall this client could size.${advisory}`
+      // Whether a smaller amount can pass depends on the chassis, as in the liquid-bound note below.
+      note: `the vault REFUSED a full-position withdrawal at this block. Its liquid balance is ${liquidText}, so no smaller withdrawal bounded by it was tried. ${vault.chassis === "fusion" ? "This chassis pays withdrawals from the vault's own balance unless the fund has instant-withdrawal fuses, so a smaller amount is likely to be refused too until the fund unwinds" : "This chassis also pays out of its markets, so a smaller amount may still pass"} \u2014 quote one with \`earn quote --direction withdraw\`. The refusal came from the vault, but it is not a shortfall this client could size.${advisory}`
     };
   }
   const askedFor = boundedByLiquid ? liquid : value;

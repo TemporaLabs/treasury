@@ -167,7 +167,8 @@ Pre-1.0, minor versions may change tool names, schemas and behaviour.
   - The confirm flow reads the chain's block number when it starts, and a receipt mined before it is
     `mismatch` (it is not this flow's transaction) instead of `matched` (#102).
   - `earn balance` no longer reports a full exit on a vault with no liquid balance as refused twice:
-    only the full withdrawal was asked, and the note says no smaller one was tried (#103).
+    only the full withdrawal was asked, and the note says no smaller one was tried and whether the
+    vault's chassis can still pay one: a Morpho V2 vault may, a Fusion vault likely not until it unwinds (#103).
 - `scripts/registry-check.ts` reports a failed `eth_getCode` as not checked, through the same
   redaction as every other read; it used to escape as an uncaught error.
 
