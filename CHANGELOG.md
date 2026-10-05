@@ -180,6 +180,10 @@ Pre-1.0, minor versions may change tool names, schemas and behaviour.
   lifetime figure (#70).
 - CI runs the bundled CLI and asserts the exact `earn` and `connect` command and flag sets.
 
+### Dependencies
+- viem 2.57.2, inlined in the CLI bundle; esbuild 0.28.2, which builds the connect page (#119).
+- Development: vitest 5.0.3 and `@types/node` 22.20.5 (#117).
+
 ## [v0.1.1] - 2026-09-29
 
 ### Added
