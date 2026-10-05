@@ -269,7 +269,7 @@ function Connect() {
           </li>
           <li>
             <Tick />
-            Deposit into Tempora vaults, once you confirm
+            Deposit into Tempora Labs vaults, once you confirm
           </li>
           <li>
             <Tick />

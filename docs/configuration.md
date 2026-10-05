@@ -22,7 +22,7 @@ with "returned no data", which looks like a broken vault, not like a misconfigur
 | `TREASURY_LOGS_RPC_ROBINHOOD` | the RPC `earn_balance` scans events through on Robinhood Chain | uses `TREASURY_RPC_ROBINHOOD` |
 | `ROBINHOOD_RPC_URL` | a conventional alias, used when `TREASURY_RPC_ROBINHOOD` is unset — through the plugin too | — |
 | `TREASURY_LOGS_FALLBACK` | where a scan goes when the configured RPC cannot cover the range: an `http(s)` URL for a Base endpoint, or anything that is not a URL (`off`, `disabled`, …) to forbid a fallback on every chain | the chain's own public endpoint |
-| `PRIVY_APP_ID` | the Privy app the `treasury connect` sign-in page uses. A Privy app ID is public — it ships in the page — so a fork can point at its own app | Tempora's own app |
+| `PRIVY_APP_ID` | the Privy app the `treasury connect` sign-in page uses. A Privy app ID is public — it ships in the page — so a fork can point at its own app | Tempora Labs' own app |
 | `TREASURY_CONNECT_PORT` | the local port the connect page is served on. Privy accepts sign-in only from origins its dashboard lists exactly, so change it only together with that list | `53682` |
 | `TREASURY_CONNECT_HOME` | the directory holding the connect session file (an address, how it signed in, when; no credential) | `~/.config/treasury` |
 | `TREASURY_CONNECT_NO_OPEN` | set to anything to stop `treasury connect` opening a browser itself; it prints the page's URL instead | the browser opens |

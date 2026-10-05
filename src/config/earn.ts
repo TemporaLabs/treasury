@@ -35,7 +35,7 @@ export const EARN = {
   /**
    * The default vault on each chain, by chain key.
    *
-   * `base`: Tempora Labs Cash Plus USDC (Test 2B) — a Morpho Vault V2, the Tempora vault this client
+   * `base`: Tempora Labs Cash Plus USDC (Test 2B) — a Morpho Vault V2, the Tempora Labs vault this client
    * offers when nothing is named. Tempora Labs Cash Plus USDC (Test 2), also on Base, is the DEMO
    * vault: listed and open, selected by naming it. Deposits are OPEN to any account (measured by a simulated stranger
    * deposit; `earn_vaults` reports `defaultAccess: "open"`). The whitelist-gated sibling, Cash Plus

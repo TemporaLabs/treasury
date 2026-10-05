@@ -1,6 +1,6 @@
 # Vaults
 
-Treasury offers Tempora's own vaults, and only those. Every row in the registry
+Treasury offers Tempora Labs' own vaults, and only those. Every row in the registry
 (`registry/vaults.json`) is a claim about a contract at an address, and every claim
 carries the block it was measured at. `scripts/registry-check.ts` reconciles each row against the
 chain — `symbol()`, `decimals()`, `asset()`, and the first block with code — and a disagreement means
@@ -124,7 +124,7 @@ open to any account and exercises every path. It is not what an agent uses unles
 | positions | ERC-4626 leaf vaults on Base — readable on-chain; Treasury does not model the fund's allocation |
 
 **"Test" is in every name on purpose.** These are test-series vaults: real contracts, real USDC or USDG, real
-positions, operated by Tempora while the product is proven. Read [`risks.md`](risks.md).
+positions, operated by Tempora Labs while the product is proven. Read [`risks.md`](risks.md).
 
 ## Getting access to a whitelist-gated vault
 
@@ -140,8 +140,8 @@ anywhere in this repository; its own test tiers discover one from the chain when
 
 ## Why the default is what it is
 
-**Each chain's default is a Tempora-curated destination, and Tempora can set fees on it as curator.** Treasury offers it
-because it is Tempora's — not because it is the best-yielding vault available, and Treasury makes no
+**Each chain's default is a destination curated by Tempora Labs, and Tempora Labs can set fees on it as curator.** Treasury offers it
+because it is a Tempora Labs vault — not because it is the best-yielding vault available, and Treasury makes no
 such claim. A fork of this client may point its default anywhere; the official distribution points
 here, and says so.
 

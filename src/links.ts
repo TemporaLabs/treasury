@@ -44,7 +44,7 @@ const EXPLORER: Record<VaultEntry["chainId"], string> = {
 const MORPHO_APP_CHAIN: Record<number, string> = { 8453: "base" };
 /**
  * Vaults Morpho's app is KNOWN to list, by address. A chain slug alone is not enough: Morpho's app
- * and API list only some Vault V2 vaults, and the registry's Tempora vaults are not all among them
+ * and API list only some Vault V2 vaults, and the registry's Tempora Labs vaults are not all among them
  * (measured 2026-10-02: Test 2 resolves; Test 2B answers 404 and is absent from Morpho's API).
  * Add an address here once its page resolves — never before.
  */

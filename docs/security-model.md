@@ -93,7 +93,7 @@ open for nothing but the calls that text described.
 - **A page on the operator's own machine, for one flow.** Each sign-in or confirmation starts a server
   on the machine's loopback addresses (`127.0.0.1`, and `::1` where IPv6 is on) that answers only requests carrying its random secret, its own `Host`, and (for
   every POST) its own `Origin`, takes one result at a time, and closes itself when the flow ends or
-  after nine minutes. Nothing is hosted by Tempora.
+  after nine minutes. Nothing is hosted by Tempora Labs.
 - **The account is proven, not claimed.** Both sign-in paths — a browser wallet, or a Privy embedded
   wallet from an email or social login — sign a free sign-in message whose nonce is the flow's
   secret. An ordinary wallet's signature is checked offline; a smart-contract wallet's is checked by

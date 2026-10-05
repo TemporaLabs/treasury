@@ -3,7 +3,7 @@
 Treasury never signs and never holds a key. Something else has to: your own wallet, or, as in this
 runbook, a process that holds a key.
 This is that something else, written up from the first time it was actually done: a real 0.05 USDC
-deposit → withdraw round trip against a Tempora Morpho V2 vault on Base mainnet, 2026-09-11, using a
+deposit → withdraw round trip against a Tempora Labs Morpho V2 vault on Base mainnet, 2026-09-11, using a
 key the operator already held on their own host — not a fork, not a testnet,
 real signed transactions (`0xd34111…`, `0x3bad94…`, `0x7a64b7…`, all `status: success`).
 

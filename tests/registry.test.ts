@@ -2,7 +2,7 @@
  * Two questions, kept apart on purpose:
  *
  *   1. WHAT THE CLIENT SHIPS — the real `registry/vaults.json`, read as it ships. A change here is
- *      a product decision (which vaults Tempora offers), so these assertions are meant to be
+ *      a product decision (which vaults Tempora Labs offers), so these assertions are meant to be
  *      re-stated deliberately when that decision changes, never loosened to survive it.
  *   2. WHAT THE SCHEMA REFUSES — a hand-edit's mistakes, exercised against SYNTHETIC rows
  *      (`fixtures/registry.ts`). A schema rule about a chassis must not need a live vault of that
@@ -26,7 +26,7 @@ describe("the shipped registry", () => {
     expect(reg.vaults.length).toBeGreaterThan(0);
   });
 
-  it("offers THREE Tempora vaults on Base, ONE on Arbitrum One and ONE on Robinhood Chain; with nothing named, the default is Cash Plus USDC (Test 2B) on Base — open to any account", () => {
+  it("offers THREE Tempora Labs vaults on Base, ONE on Arbitrum One and ONE on Robinhood Chain; with nothing named, the default is Cash Plus USDC (Test 2B) on Base — open to any account", () => {
     const d = defaultVault();
     expect(listVaults().map((v) => `${v.symbol}@${v.chainId}`)).toEqual(["tlCashPlusUSDC2@8453", "tlCashPlusUSDC2A@8453", "tlCashPlusUSDC2B@8453", "tlCashPlusUSDC2C@42161", "tlCashPlusUSDG2D@4663"]);
     expect(d.symbol).toBe("tlCashPlusUSDC2B");

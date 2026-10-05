@@ -20,7 +20,7 @@ third party. Review every transaction your signer is asked to sign.
 - **The value can go down.** A share's value is a function of the vault's holdings and is not
   guaranteed. Yield figures are measurements of the past, labelled by their source, never a promise.
 - **Third-party protocol risk.** The vault holds positions in other protocols' contracts, each with
-  its own smart-contract, custody and mechanism risk that Tempora does not control. Some of
+  its own smart-contract, custody and mechanism risk that Tempora Labs does not control. Some of
   the underlying positions lend against stablecoins whose oracle assumes par, so the oracle cannot see a
   depeg. Each vault's loss model treats that differently, and Treasury does not model it. Which positions
   a vault holds is in [`vaults.md`](vaults.md); read the markets behind them on-chain before a first deposit.
@@ -33,7 +33,7 @@ third party. Review every transaction your signer is asked to sign.
   on-chain. None of the listed Morpho vaults sets one today, and their fee timelocks are 0, so the
   curator can introduce a fee without notice; read both fees before depositing. Each vault's row in
   [`vaults.md`](vaults.md) carries the block it was measured at.
-- **Every vault here, the defaults and the demo, is Tempora's.** It is offered because Tempora curates it, and can set fees on it, not
+- **Every vault here, the defaults and the demo, belongs to Tempora Labs.** It is offered because Tempora Labs curates it, and can set fees on it, not
   because it is the best-yielding vault available.
 
 ## The client
