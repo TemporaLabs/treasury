@@ -4,7 +4,7 @@ import { type VaultEntry } from "./registry-schema.js";
 import { describeError } from "./redact.js";
 import { parseAmount, formatAmount } from "./units.js";
 import type { ReadClient } from "./client.js";
-import { preflightDeposit, extractRevert, type PreflightResult } from "./preflight.js";
+import { preflightDeposit, extractRevert, isRevert, type PreflightResult } from "./preflight.js";
 
 /**
  * Pre-trade quotes. A quote is three things kept apart:
@@ -29,15 +29,24 @@ export async function quoteDeposit(args: { vault: VaultEntry; depositor: Address
   const { vault, depositor, client } = args;
   const assets = parseAmount(args.assetsHuman, vault.asset.decimals, `deposit amount (${vault.asset.symbol})`);
   const pre = await preflightDeposit({ vault, depositor, assetsHuman: args.assetsHuman, client });
+  let previewError: unknown;
   const [previewShares, oneShareInAssets] = await Promise.all([
-    client.readContract({ address: vault.address, abi: erc4626Abi, functionName: "previewDeposit", args: [assets] }).catch(() => undefined),
+    client.readContract({ address: vault.address, abi: erc4626Abi, functionName: "previewDeposit", args: [assets] }).catch((e: unknown) => {
+      previewError = e;
+      return undefined;
+    }),
     client.readContract({ address: vault.address, abi: erc4626Abi, functionName: "convertToAssets", args: [10n ** BigInt(vault.shareDecimals)] }),
   ]);
   const q: DepositQuote = {
     vault: vault.symbol,
     depositor,
     amountUsdc: `${formatAmount(assets, vault.asset.decimals)} ${vault.asset.symbol}`,
-    expectedShares: previewShares === undefined ? "unavailable (previewDeposit reverted)" : `${formatAmount(previewShares, vault.shareDecimals)} ${vault.symbol}`,
+    expectedShares:
+      previewShares !== undefined
+        ? `${formatAmount(previewShares, vault.shareDecimals)} ${vault.symbol}`
+        : isRevert(previewError)
+          ? "unavailable (previewDeposit reverted)"
+          : `unavailable (previewDeposit could not be read; the RPC failed, not the vault: ${describeError(previewError)})`,
     sharePriceInAssets: `${formatAmount(oneShareInAssets, vault.asset.decimals)} ${vault.asset.symbol} per share`,
     preflight: pre,
     canProceed: pre.canDeposit,
@@ -91,12 +100,20 @@ export async function quoteWithdraw(args: { vault: VaultEntry; owner: Address; a
       // "approve first" wording is wrong here (it was reused, and told an agent to approve USDC
       // when the vault simply had 0.80 USDC liquid — measured 2026-09-13 on a Fusion vault).
       const reason = obs.reason ?? "";
+      const said = reason || obs.selector || "no reason returned";
       if (toBurn !== undefined && held < toBurn) {
-        note = `withdraw() reverted: the owner holds ${formatAmount(held, vault.shareDecimals)} ${vault.symbol} against ${formatAmount(toBurn, vault.shareDecimals)} needed — insufficient shares. (${reason || obs.selector})`;
-      } else if (/transfer amount exceeds balance|ERC20InsufficientBalance/i.test(reason) || liquid < assets) {
-        note = `withdraw() reverted: the vault holds ${formatAmount(liquid, vault.asset.decimals)} ${vault.asset.symbol} liquid against ${formatAmount(assets, vault.asset.decimals)} requested — this chassis pays withdrawals from its own balance in the same block; the rest is deployed and needs the fund to unwind first. Withdraw at most the liquid amount now, or wait. maxWithdraw() (${maxW === undefined ? "reverted" : formatAmount(maxW, vault.asset.decimals)}) does not know this.`;
+        note = `withdraw() reverted: the owner holds ${formatAmount(held, vault.shareDecimals)} ${vault.symbol} against ${formatAmount(toBurn, vault.shareDecimals)} needed — insufficient shares. (${said})`;
+      } else if (vault.chassis === "fusion" && (/transfer amount exceeds balance|ERC20InsufficientBalance/i.test(reason) || liquid < assets)) {
+        // Only Fusion pays a withdrawal from the vault's own balance (and, where it has them, its
+        // instant-withdrawal fuses), so only there does idle balance below the amount explain a revert.
+        // A Morpho Vault V2 holds almost no idle asset and pays out of its markets: reading
+        // `liquid < assets` there reported every revert as this note and hid the real one (#78).
+        note = `withdraw() reverted ("${said}"): the vault holds ${formatAmount(liquid, vault.asset.decimals)} ${vault.asset.symbol} liquid against ${formatAmount(assets, vault.asset.decimals)} requested — this chassis pays withdrawals from its own balance in the same block; the rest is deployed and needs the fund to unwind first. Withdraw at most the liquid amount now, or wait. maxWithdraw() (${maxW === undefined ? "reverted" : formatAmount(maxW, vault.asset.decimals)}) does not know this.`;
+      } else if (vault.chassis === "morpho-v2") {
+        const shares = toBurn === undefined ? "previewWithdraw reverted, so the shares needed are unknown" : `the owner holds enough shares (${formatAmount(held, vault.shareDecimals)} against ${formatAmount(toBurn, vault.shareDecimals)} needed)`;
+        note = `withdraw() reverted "${said}" for ${formatAmount(assets, vault.asset.decimals)} ${vault.asset.symbol}; ${shares}. A Morpho Vault V2 pays a withdrawal from its idle ${vault.asset.symbol} and then through its liquidity adapter, so the revert can come from the vault or from a market it withdraws from; the reason above is the chain's own. A smaller amount may still pass: quote it before preparing anything.`;
       } else {
-        note = `withdraw() reverted "${reason || obs.selector}" — not a balance or liquidity shortfall; treat as a vault-side refusal.`;
+        note = `withdraw() reverted "${said}" — not a balance or liquidity shortfall; treat as a vault-side refusal.`;
       }
     } else {
       note = `simulation did not return a definite revert: ${describeError(e, 160)}`;

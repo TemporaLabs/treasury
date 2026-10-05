@@ -1,8 +1,9 @@
 import { describe, it, expect } from "vitest";
-import { BaseError, ContractFunctionExecutionError, ContractFunctionRevertedError } from "viem";
+import { BaseError, ContractFunctionExecutionError, ContractFunctionRevertedError, ExecutionRevertedError } from "viem";
 import { erc4626Abi, knownRevertSelectors } from "../src/abi/erc4626.js";
 import { registrySchema } from "../src/registry-schema.js";
 import { classifyRevert, extractRevert, preflightDeposit } from "../src/preflight.js";
+import { quoteDeposit } from "../src/quote.js";
 import { getVault, loadRegistry } from "../src/registry.js";
 import { FIXTURE, fixtureVault } from "./fixtures/registry.js";
 import { EARN } from "../src/config/earn.js";
@@ -101,5 +102,52 @@ describe("preflightDeposit refuses before touching the chain when the registry a
     const r = registrySchema.safeParse(raw);
     expect(r.success).toBe(false);
     expect(JSON.stringify(r.success ? null : r.error.issues)).toMatch(/unrecognized_keys|lifecycle/);
+  });
+});
+
+describe("a previewDeposit failure is named for what failed: the RPC or the vault", () => {
+  const vault = getVault("tlCashPlusUSDC2B");
+  const transferFromReverted = () =>
+    new ContractFunctionExecutionError(new ContractFunctionRevertedError({ abi: erc4626Abi, functionName: "deposit", data: "0xe65b7a77" }), { abi: erc4626Abi, functionName: "deposit", args: [1n, STRANGER] });
+  const previewReverted = () =>
+    new ContractFunctionExecutionError(new ContractFunctionRevertedError({ abi: erc4626Abi, functionName: "previewDeposit", data: "0xdeadbeef" }), { abi: erc4626Abi, functionName: "previewDeposit", args: [1n] });
+  const client = (previewFails: () => Error) =>
+    ({
+      getBlockNumber: async () => 1n,
+      readContract: async ({ functionName }: { functionName: string }) => {
+        if (functionName === "asset") return vault.asset.address;
+        if (functionName === "decimals") return vault.shareDecimals;
+        if (functionName === "previewDeposit") throw previewFails();
+        if (functionName === "convertToAssets") return 1_000_000n;
+        return 0n;
+      },
+      simulateContract: async () => {
+        throw transferFromReverted();
+      },
+    }) as never;
+
+  it("a rate-limited read says the RPC failed, never that the vault reverted", async () => {
+    const rateLimited = () => new BaseError("RPC Request failed. over rate limit");
+    const pre = await preflightDeposit({ vault, depositor: STRANGER, assetsHuman: "1", client: client(rateLimited) });
+    expect(pre.status).toBe("NEEDS_APPROVAL");
+    expect(pre.findings.join("\n")).toMatch(/previewDeposit\(\) could not be read.*the RPC failed, not the vault.*over rate limit/);
+    expect(pre.findings.join("\n")).not.toMatch(/previewDeposit\(\) reverted/);
+    const q = await quoteDeposit({ vault, depositor: STRANGER, assetsHuman: "1", client: client(rateLimited) });
+    expect(q.expectedShares).toMatch(/could not be read; the RPC failed, not the vault/);
+  });
+
+  it("a revert with no data (a bare revert, code -32000 from a geth-family node) is still the vault's", async () => {
+    const bareRevert = () => new BaseError("previewDeposit reverted", { cause: new ExecutionRevertedError({ cause: new Error("execution reverted") }) });
+    const pre = await preflightDeposit({ vault, depositor: STRANGER, assetsHuman: "1", client: client(bareRevert) });
+    expect(pre.findings).toContain("previewDeposit() reverted; no shares quote");
+    const q = await quoteDeposit({ vault, depositor: STRANGER, assetsHuman: "1", client: client(bareRevert) });
+    expect(q.expectedShares).toBe("unavailable (previewDeposit reverted)");
+  });
+
+  it("a real revert is still reported as a revert", async () => {
+    const pre = await preflightDeposit({ vault, depositor: STRANGER, assetsHuman: "1", client: client(previewReverted) });
+    expect(pre.findings).toContain("previewDeposit() reverted; no shares quote");
+    const q = await quoteDeposit({ vault, depositor: STRANGER, assetsHuman: "1", client: client(previewReverted) });
+    expect(q.expectedShares).toBe("unavailable (previewDeposit reverted)");
   });
 });

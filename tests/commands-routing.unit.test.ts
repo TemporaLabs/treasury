@@ -4,7 +4,7 @@
  * Measured in review, confirmed by three reviewers independently: swapping the two branches
  * so `direction: "deposit"` called `quoteWithdraw` and vice versa left `tsc -b` CLEAN and all 61
  * tests passing, byte-identical. Nothing discriminated it — merging two tools behind a flag
- * created a routing decision that nothing verified, and `server.unit.test.ts` only ever touched
+ * created a routing decision that nothing verified, and `commands.unit.test.ts` only ever touched
  * the inputSchema, never the handler.
  *
  * The tag is now emitted inside each branch, so tag and body cannot disagree. That makes a swap
@@ -22,14 +22,14 @@ vi.mock("../src/quote.js", () => ({
   quoteWithdraw: vi.fn(async () => WITHDRAW_MARK),
 }));
 
-type Handler = (a: unknown, extra: unknown) => Promise<{ content: { text: string }[] }>;
+type Handler = (a: unknown, extra: unknown) => Promise<string>;
 const ACCOUNT = EARN.fixtures.stranger;
 
 const call = async (direction: string) => {
-  const { buildServer } = await import("../src/mcp/server.js");
-  const tools = (buildServer() as unknown as { _registeredTools: Record<string, { handler: Handler }> })._registeredTools;
+  const { buildCommands } = await import("../src/earn/commands.js");
+  const tools = (buildCommands() as unknown as Record<string, { handler: Handler }>);
   const res = await tools["earn_quote"]!.handler({ account: ACCOUNT, amount_usdc: "25", direction }, {});
-  return JSON.parse(res.content[0]!.text);
+  return JSON.parse(res);
 };
 
 describe("earn_quote — direction routes to the matching side", () => {

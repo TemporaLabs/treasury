@@ -1,8 +1,9 @@
 import { afterEach, describe, expect, it } from "vitest";
-import { logsFallbackUrlFromEnv, logsRpcUrlFromEnv, makePublicClient, makeRateLimitedFetch, resolvedRpcSecrets, RPC_TIMEOUT_MS, rpcUrlFromEnv } from "../src/client.js";
+import { CHAIN_INFO, chainIdForKey, chains, logsFallbackUrlFromEnv, logsRpcUrlFromEnv, makePublicClient, makeRateLimitedFetch, PUBLIC_RPC, publicRpcHint, resolvedRpcSecrets, RPC_TIMEOUT_MS, endpointChainId, firstEndpointOnWrongChain, __forgetEndpointChainsForTests, logsRpcSourceForEnv, rpcSourceForEnv, rpcUrlFromEnv, supportedChainIds } from "../src/client.js";
 import { createServer } from "node:http";
 
-const KEYS = ["TREASURY_RPC_BASE", "TREASURY_LOGS_RPC_BASE", "BASE_RPC_URL"] as const;
+// TREASURY_LOGS_FALLBACK is restored with the rest, so a test that fails mid-way cannot leak a value into the next.
+const KEYS = ["TREASURY_RPC_BASE", "TREASURY_LOGS_RPC_BASE", "BASE_RPC_URL", "TREASURY_RPC_ARBITRUM", "TREASURY_LOGS_RPC_ARBITRUM", "ARBITRUM_RPC_URL", "TREASURY_LOGS_FALLBACK"] as const;
 const saved: Record<string, string | undefined> = {};
 for (const k of KEYS) saved[k] = process.env[k];
 afterEach(() => {
@@ -219,7 +220,7 @@ describe("makePublicClient — a provider at its quota is reported as a 429, not
 
 describe("resolvedRpcSecrets — every URL the package will actually call is a secret source", () => {
   it("registers the key in TREASURY_LOGS_FALLBACK — a real transport, not only a flag", () => {
-    // Measured in review, 2026-09-17: the fallback URL builds a real client (mcp/server.ts) that
+    // Measured in review, 2026-09-17: the fallback URL builds a real client (earn/commands.ts) that
     // getPosition scans through, and a provider body echoing ITS key survived redaction because only the
     // three primary variables were registered. Dormant until describeError started reading `details`.
     clearAll();
@@ -292,5 +293,281 @@ describe("makePublicClient — CCIP-read is OFF, so a contract cannot send this 
     // viem's default is enabled (`client.ccipRead !== false` gates the OffchainLookup branch), so an
     // absent value would read as "on". Assert the literal, not merely that it is falsy.
     expect(makePublicClient(8453, "https://rpc.example/key").ccipRead).toBe(false);
+  });
+});
+
+/**
+ * A second chain means a second set of variables. The property that matters is ISOLATION: a chain
+ * reads its own names and nothing else, because the same address read on the other chain answers
+ * with empty data — "no position", "no contract" — and never with an error naming the mistake.
+ */
+describe("each chain resolves its RPC from its OWN variables", () => {
+  const ARB_PUBLIC = "https://arb1.arbitrum.io/rpc";
+
+  it("the chain table is complete: every supported chain has a key, a name, variables and a public endpoint", () => {
+    expect(supportedChainIds).toEqual([8453, 42161, 4663]);
+    expect(supportedChainIds.map((id) => CHAIN_INFO[id].key)).toEqual(["base", "arbitrum", "robinhood"]);
+    // The listed order is declared, not derived — so the list must still be exactly the keys of `chains`.
+    expect([...supportedChainIds].sort((a, b) => a - b)).toEqual(Object.keys(chains).map(Number).sort((a, b) => a - b));
+    for (const id of supportedChainIds) {
+      const info = CHAIN_INFO[id];
+      expect(chainIdForKey(info.key)).toBe(id);
+      expect(info.rpcEnv.length).toBeGreaterThan(0);
+      expect(PUBLIC_RPC[id]).toBe(info.publicRpc);
+      expect(info.publicRpc).toMatch(/^https:\/\//);
+    }
+    expect(chainIdForKey("solana")).toBeUndefined();
+    // no variable name is shared between two chains — a shared name would cross the two endpoints
+    const names = supportedChainIds.flatMap((id) => [...CHAIN_INFO[id].rpcEnv, CHAIN_INFO[id].logsRpcEnv]);
+    expect(new Set(names).size).toBe(names.length);
+  });
+
+  it("nothing set → each chain's own public endpoint", () => {
+    clearAll();
+    expect(rpcUrlFromEnv(42161)).toBe(ARB_PUBLIC);
+    expect(logsRpcUrlFromEnv(42161)).toBe(ARB_PUBLIC);
+    expect(rpcSourceForEnv(42161)).toEqual({ source: "public default", configured: false });
+  });
+
+  it("🔴 Base's variables never reach an Arbitrum call, and Arbitrum's never reach a Base call", () => {
+    clearAll();
+    process.env.TREASURY_RPC_BASE = "https://base.example.invalid/v2/BASEKEY1234";
+    process.env.BASE_RPC_URL = "https://base2.example.invalid/v2/BASEKEY5678";
+    process.env.TREASURY_LOGS_RPC_BASE = "https://baselogs.example.invalid/v2/BASEKEY9012";
+    expect(rpcUrlFromEnv(42161)).toBe(ARB_PUBLIC);
+    expect(logsRpcUrlFromEnv(42161)).toBe(ARB_PUBLIC);
+    expect(rpcSourceForEnv(42161).configured).toBe(false);
+    clearAll();
+    process.env.TREASURY_RPC_ARBITRUM = "https://arb.example.invalid/v2/ARBKEY1234";
+    process.env.TREASURY_LOGS_RPC_ARBITRUM = "https://arblogs.example.invalid/v2/ARBKEY5678";
+    expect(rpcUrlFromEnv(8453)).toBe(PUBLIC);
+    expect(logsRpcUrlFromEnv(8453)).toBe(PUBLIC);
+    expect(rpcSourceForEnv(8453).configured).toBe(false);
+    // and each is used for its own chain
+    expect(rpcUrlFromEnv(42161)).toBe("https://arb.example.invalid/v2/ARBKEY1234");
+    expect(logsRpcUrlFromEnv(42161)).toBe("https://arblogs.example.invalid/v2/ARBKEY5678");
+    expect(rpcSourceForEnv(42161)).toEqual({ source: "TREASURY_RPC_ARBITRUM", configured: true });
+  });
+
+  it("the conventional name is the second candidate, and a placeholder is not a URL — the same rules as Base", () => {
+    clearAll();
+    process.env.TREASURY_RPC_ARBITRUM = "${TREASURY_RPC_ARBITRUM}";
+    expect(rpcUrlFromEnv(42161)).toBe(ARB_PUBLIC);
+    process.env.ARBITRUM_RPC_URL = "https://arb-mainnet.example.invalid/v2/KEY12345";
+    expect(rpcUrlFromEnv(42161)).toBe("https://arb-mainnet.example.invalid/v2/KEY12345");
+    expect(rpcSourceForEnv(42161).source).toBe("ARBITRUM_RPC_URL");
+    // the logs variable falls through to the general one for the SAME chain
+    process.env.TREASURY_LOGS_RPC_ARBITRUM = "${TREASURY_LOGS_RPC_ARBITRUM}";
+    expect(logsRpcUrlFromEnv(42161)).toBe("https://arb-mainnet.example.invalid/v2/KEY12345");
+  });
+
+  it("every Arbitrum endpoint is a secret source for the redactor, exactly as Base's are", () => {
+    clearAll();
+    process.env.TREASURY_RPC_ARBITRUM = "https://arb.example.invalid/v2/arbsecret11";
+    process.env.TREASURY_LOGS_RPC_ARBITRUM = "https://arblogs.example.invalid/v2/arbsecret22";
+    process.env.ARBITRUM_RPC_URL = "https://arb3.example.invalid/v2/arbsecret33";
+    const s = resolvedRpcSecrets();
+    for (const k of ["arbsecret11", "arbsecret22", "arbsecret33"]) expect(s, k).toContain(k);
+  });
+
+  it("the setup hint names the chain that failed, its variable and its public host", () => {
+    clearAll();
+    const arb = publicRpcHint(42161)!;
+    expect(arb).toMatch(/Arbitrum One/);
+    expect(arb).toMatch(/TREASURY_RPC_ARBITRUM/);
+    expect(arb).toMatch(/arb1\.arbitrum\.io/);
+    expect(arb).not.toMatch(/TREASURY_RPC_BASE|mainnet\.base\.org/);
+    const base = publicRpcHint(8453)!;
+    expect(base).toMatch(/TREASURY_RPC_BASE/);
+    expect(base).toMatch(/mainnet\.base\.org/);
+    expect(base).not.toMatch(/ARBITRUM|arbitrum/);
+    // configuring ONE chain silences only that chain's hint
+    process.env.TREASURY_RPC_BASE = "https://base.example.invalid/v2/BASEKEY1234";
+    expect(publicRpcHint(8453)).toBeUndefined();
+    expect(publicRpcHint(42161)).toBeDefined();
+  });
+});
+
+describe("logsFallbackUrlFromEnv on a second chain — TREASURY_LOGS_FALLBACK names a Base endpoint", () => {
+  const ARB_PRIMARY = "https://arb.example.invalid/v2/KEY";
+  const ARB_PUBLIC = "https://arb1.arbitrum.io/rpc";
+  it("unset → Arbitrum's own public endpoint, never Base's", () => {
+    clearAll(); delete process.env.TREASURY_LOGS_FALLBACK;
+    expect(logsFallbackUrlFromEnv(42161, ARB_PRIMARY)).toBe(ARB_PUBLIC);
+    process.env.TREASURY_LOGS_FALLBACK = "${TREASURY_LOGS_FALLBACK}"; // an unexpanded placeholder is unset
+    expect(logsFallbackUrlFromEnv(42161, ARB_PRIMARY)).toBe(ARB_PUBLIC);
+    delete process.env.TREASURY_LOGS_FALLBACK;
+    expect(logsFallbackUrlFromEnv(42161, ARB_PUBLIC)).toBeUndefined(); // equal to the primary: not a fallback
+  });
+  it("Robinhood Chain: its own public endpoint, and a set TREASURY_LOGS_FALLBACK means no fallback there either", () => {
+    const RH_PUBLIC = "https://rpc.mainnet.chain.robinhood.com";
+    const RH_PRIMARY = "https://rh.example.invalid/v2/KEY";
+    clearAll(); delete process.env.TREASURY_LOGS_FALLBACK;
+    expect(rpcUrlFromEnv(4663)).toBe(RH_PUBLIC);
+    expect(logsRpcUrlFromEnv(4663)).toBe(RH_PUBLIC);
+    expect(logsFallbackUrlFromEnv(4663, RH_PRIMARY)).toBe(RH_PUBLIC);
+    process.env.TREASURY_LOGS_FALLBACK = "https://my-base-archive.invalid/rpc";
+    try {
+      expect(logsFallbackUrlFromEnv(4663, RH_PRIMARY)).toBeUndefined();
+    } finally {
+      delete process.env.TREASURY_LOGS_FALLBACK;
+    }
+  });
+  it("🔴 a URL there is NEVER used for Arbitrum: it is a Base endpoint, and Base's logs are not this chain's history", () => {
+    clearAll();
+    process.env.TREASURY_LOGS_FALLBACK = "https://my-base-archive.invalid/rpc";
+    try {
+      expect(logsFallbackUrlFromEnv(8453, "https://base.example.invalid")).toBe("https://my-base-archive.invalid/rpc"); // Base: used
+      expect(logsFallbackUrlFromEnv(42161, ARB_PRIMARY)).toBeUndefined(); // Arbitrum: no fallback at all
+    } finally {
+      delete process.env.TREASURY_LOGS_FALLBACK;
+    }
+  });
+  it("the opt-out applies on every chain", () => {
+    clearAll();
+    for (const v of ["off", "disabled", "not a url"]) {
+      process.env.TREASURY_LOGS_FALLBACK = v;
+      expect(logsFallbackUrlFromEnv(42161, ARB_PRIMARY), v).toBeUndefined();
+    }
+    delete process.env.TREASURY_LOGS_FALLBACK;
+  });
+});
+
+describe("endpointChainId — which chain does the endpoint say it is", () => {
+  /** `chainReply` answers eth_chainId: a hex id, "hang" to never answer, or "error" for a JSON-RPC error. */
+  const serve = async (chainReply: string) => {
+    let chainIdCalls = 0;
+    const srv = createServer((req, res) => {
+      let b = "";
+      req.on("data", (c) => (b += c));
+      req.on("end", () => {
+        const r = JSON.parse(b) as { id: number; method: string };
+        if (r.method === "eth_chainId") {
+          chainIdCalls++;
+          if (chainReply === "hang") return; // never answers
+          if (chainReply === "error") {
+            res.writeHead(200, { "content-type": "application/json" });
+            res.end(JSON.stringify({ jsonrpc: "2.0", id: r.id, error: { code: -32000, message: "method not available" } }));
+            return;
+          }
+        }
+        res.writeHead(200, { "content-type": "application/json" });
+        res.end(JSON.stringify({ jsonrpc: "2.0", id: r.id, result: r.method === "eth_chainId" ? chainReply : "0x1" }));
+      });
+    });
+    await new Promise<void>((r) => srv.listen(0, "127.0.0.1", r));
+    const { port } = srv.address() as { port: number };
+    return { url: `http://127.0.0.1:${port}`, calls: () => chainIdCalls, close: () => new Promise<void>((r) => { srv.closeAllConnections(); srv.close(() => r()); }) };
+  };
+  afterEach(() => __forgetEndpointChainsForTests());
+
+  it("returns what the endpoint says — whatever chain the CLIENT was built for", async () => {
+    const baseEndpoint = await serve("0x2105");
+    try {
+      // an Arbitrum client on a Base endpoint: the endpoint's answer, not the client's assumption
+      expect(await endpointChainId(makePublicClient(42161, baseEndpoint.url), baseEndpoint.url)).toBe(8453);
+    } finally {
+      await baseEndpoint.close();
+    }
+  });
+
+  it("an endpoint that answers with an error did not SAY — undefined, never a match and never a mismatch", async () => {
+    const mute = await serve("error");
+    try {
+      expect(await endpointChainId(makePublicClient(42161, mute.url), mute.url)).toBeUndefined();
+    } finally {
+      await mute.close();
+    }
+  });
+
+  it("🔴 is bounded: an endpoint that never answers eth_chainId costs the probe's own deadline, not the transport's 10 s", async () => {
+    const slow = await serve("hang");
+    try {
+      const t0 = Date.now();
+      expect(await endpointChainId(makePublicClient(42161, slow.url), slow.url, 300)).toBeUndefined();
+      const elapsed = Date.now() - t0;
+      expect(elapsed).toBeGreaterThanOrEqual(250);
+      expect(elapsed).toBeLessThan(2_000); // the transport deadline is RPC_TIMEOUT_MS
+      expect(RPC_TIMEOUT_MS).toBeGreaterThan(2_000); // …which is what makes the line above a bound
+    } finally {
+      await slow.close();
+    }
+  });
+
+  it("asks each endpoint ONCE per process — and does not remember a non-answer", async () => {
+    const arb = await serve("0xa4b1");
+    const mute = await serve("error");
+    try {
+      const c = makePublicClient(42161, arb.url);
+      expect(await endpointChainId(c, arb.url)).toBe(42161);
+      expect(await endpointChainId(c, arb.url)).toBe(42161);
+      expect(arb.calls()).toBe(1);
+      const m = makePublicClient(42161, mute.url);
+      await endpointChainId(m, mute.url);
+      await endpointChainId(m, mute.url);
+      expect(mute.calls()).toBe(2); // a failure is asked again next time
+    } finally {
+      await arb.close();
+      await mute.close();
+    }
+  });
+});
+
+describe("firstEndpointOnWrongChain — which configured endpoint is on another chain", () => {
+  afterEach(() => __forgetEndpointChainsForTests());
+  /** A stand-in client that says it is `id` (or throws), and counts how often it was asked. */
+  const fake = (id: number | "throws") => {
+    const c = { asked: 0, getChainId: async () => { c.asked++; if (id === "throws") throw new Error("no answer"); return id; } };
+    return c;
+  };
+  it("names the first endpoint that answers for another chain, by its variable — and skips ones that match or do not say", async () => {
+    const ok = fake(42161), mute = fake("throws"), wrong = fake(8453);
+    const found = await firstEndpointOnWrongChain(42161, [
+      { client: ok as never, url: "https://a.invalid/1", source: "TREASURY_RPC_ARBITRUM" },
+      { client: mute as never, url: "https://a.invalid/2", source: "TREASURY_LOGS_RPC_ARBITRUM" },
+      { client: wrong as never, url: "https://a.invalid/3", source: "TREASURY_LOGS_FALLBACK" },
+    ]);
+    expect(found).toEqual({ source: "TREASURY_LOGS_FALLBACK", answersFor: 8453 });
+    expect(await firstEndpointOnWrongChain(42161, [{ client: ok as never, url: "https://a.invalid/1", source: "TREASURY_RPC_ARBITRUM" }])).toBeUndefined();
+  });
+  it("never asks a chain's own public endpoint — it is this client's constant, and the question is a third-party request with a known answer", async () => {
+    const pub = fake(8453); // would be reported as wrong if it were asked
+    expect(await firstEndpointOnWrongChain(42161, [{ client: pub as never, url: PUBLIC_RPC[42161], source: "public default" }])).toBeUndefined();
+    expect(pub.asked).toBe(0);
+    // the control: the same stand-in under any other URL IS asked, and is reported
+    expect(await firstEndpointOnWrongChain(42161, [{ client: pub as never, url: "https://not-the-public-one.invalid", source: "X" }])).toEqual({ source: "X", answersFor: 8453 });
+    expect(pub.asked).toBe(1);
+  });
+});
+
+describe("logsRpcSourceForEnv — the NAME of the variable the event scan reads through", () => {
+  it("the chain's logs variable when it resolves, otherwise whatever supplied the general RPC", () => {
+    clearAll();
+    expect(logsRpcSourceForEnv(42161)).toEqual({ source: "public default", configured: false });
+    process.env.TREASURY_RPC_ARBITRUM = "https://arb.example.invalid/v2/ARBKEY1234";
+    expect(logsRpcSourceForEnv(42161)).toEqual({ source: "TREASURY_RPC_ARBITRUM", configured: true });
+    process.env.TREASURY_LOGS_RPC_ARBITRUM = "https://arblogs.example.invalid/v2/ARBKEY5678";
+    expect(logsRpcSourceForEnv(42161)).toEqual({ source: "TREASURY_LOGS_RPC_ARBITRUM", configured: true });
+    expect(logsRpcSourceForEnv(8453)).toEqual({ source: "public default", configured: false }); // Base is untouched by Arbitrum's
+  });
+});
+
+describe("resolvedRpcSecrets — a chain's own name in the URL is not a secret", () => {
+  // Providers put the chain in the URL. A path segment or first host label of 8+ characters is
+  // registered as a secret, and "arbitrum" is exactly 8: with such a URL every refusal naming the
+  // chain read `chains with a vault: base, <redacted>` (measured in review, three provider shapes).
+  for (const url of ["https://rpc.provider.invalid/arbitrum/KEYabcdef123456", "https://arbitrum.gateway.provider.invalid/KEYabcdef123456", "https://ARBITRUM.provider.invalid/v1/KEYabcdef123456"]) {
+    it(`${url.replace("KEYabcdef123456", "<key>")}: the key is registered, the chain name is not`, () => {
+      clearAll();
+      process.env.TREASURY_RPC_ARBITRUM = url;
+      const s = resolvedRpcSecrets();
+      expect(s).toContain("KEYabcdef123456"); // the control: the redactor still has the real secret
+      expect(s.map((x) => x.toLowerCase())).not.toContain("arbitrum");
+    });
+  }
+  it("a longer segment that merely CONTAINS the chain name is still registered", () => {
+    clearAll();
+    process.env.TREASURY_RPC_ARBITRUM = "https://rpc.provider.invalid/arbitrum-KEYabcdef123456";
+    expect(resolvedRpcSecrets()).toContain("arbitrum-KEYabcdef123456");
   });
 });

@@ -67,7 +67,7 @@
  *   B. the ENVIRONMENT surface — the exact names any audited file READS, plus a live poisoning run
  *      so a RENAMED fund variable fails on the property rather than the prefix;
  *   C. the REGISTRY source — the shipped JSON, parsed with fund-shaped variables poisoned;
- *   D. ENZYME refused at build and at the MCP boundary;
+ *   D. ENZYME refused at build and at the command boundary;
  *   E. the AUDITED surface — every `.ts` under `src/`, `scripts/` and `tests/` (the rule's wording is
  *      "no code path, test, script, env var or doc"), including who may start a process and what.
  */
@@ -79,7 +79,7 @@ import ts from "typescript";
 import { rpcUrlFromEnv } from "../src/client.js";
 import { loadRegistry, getVault, depositableVaults } from "../src/registry.js";
 import { buildDeposit, buildWithdraw } from "../src/build.js";
-import { buildServer } from "../src/mcp/server.js";
+import { buildCommands } from "../src/earn/commands.js";
 import { FIXTURE, fixtureVault, useFixtureRegistry, useShippedRegistry } from "./fixtures/registry.js";
 
 const here = dirname(fileURLToPath(import.meta.url));
@@ -91,13 +91,37 @@ const pkg = JSON.parse(readFileSync(resolve(pkgRoot, "package.json"), "utf8")) a
 // dependencies below and the devDependencies the tooling graph is checked against.
 const rootPkg = pkg as { devDependencies?: Record<string, string> };
 
-/** The two ways this package is entered: the library root, and the MCP server the plugin runs. */
-const ENTRY_POINTS = ["src/index.ts", "src/mcp/server.ts"];
+/** The two ways this package is entered: the library root, and the CLI the plugin runs. */
+const ENTRY_POINTS = ["src/index.ts", "src/cli.ts"];
 
 /** Variable names any audited file may READ. A write (the poisoning runs below) is not a read. */
 // TREASURY_LOGS_FALLBACK: the event scan's fallback endpoint, or `off` to forbid the fallback
 // entirely — an operator who may not reach a third party they did not name.
-const ENV_READS_ALLOWED = ["BASE_RPC_URL", "TREASURY_FORK", "TREASURY_LOGS_FALLBACK", "TREASURY_LOGS_RPC_BASE", "TREASURY_RPC_BASE"];
+// One RPC pair and one logs variable PER CHAIN (`CHAIN_INFO` in src/client.ts). A chain reads only its
+// own names — an Arbitrum or Robinhood Chain call never falls back to a Base endpoint.
+const ENV_READS_ALLOWED = [
+  "ARBITRUM_RPC_URL",
+  "BASE_RPC_URL",
+  "ROBINHOOD_RPC_URL",
+  // `treasury connect` (src/connect/): its own optional settings, and the four a browser launcher
+  // needs to tell whether there is a browser to open at all.
+  "DISPLAY",
+  "PRIVY_APP_ID",
+  "SSH_CONNECTION",
+  "SSH_TTY",
+  "TREASURY_CONNECT_HOME",
+  "TREASURY_CONNECT_NO_OPEN",
+  "TREASURY_CONNECT_PORT",
+  "WAYLAND_DISPLAY",
+  "TREASURY_FORK",
+  "TREASURY_LOGS_FALLBACK",
+  "TREASURY_LOGS_RPC_ARBITRUM",
+  "TREASURY_LOGS_RPC_BASE",
+  "TREASURY_LOGS_RPC_ROBINHOOD",
+  "TREASURY_RPC_ARBITRUM",
+  "TREASURY_RPC_BASE",
+  "TREASURY_RPC_ROBINHOOD",
+];
 
 /**
  * Files that may compute an env key instead of writing it literally, and every uppercase string
@@ -108,7 +132,7 @@ const MAY_COMPUTE_ENV_KEY = ["src/client.ts", "tests/client.unit.test.ts"];
 /**
  * The only files that may reach `node:child_process`, and the only programs they may start.
  * Exact membership, like the dependency assertion. A flat ban would be wrong — `roundtrip.ts`
- * legitimately spawns the MCP server over stdio — and a flat allow is the hole.
+ * legitimately spawns the CLI, once per step — and a flat allow is the hole.
  */
 /**
  * 🔴 BUILTINS ARE ALLOWLISTED, NOT DENIED. Normalised, so `x` and `node:x` are one entry. Anything
@@ -116,9 +140,13 @@ const MAY_COMPUTE_ENV_KEY = ["src/client.ts", "tests/client.unit.test.ts"];
  * the same exact-membership shape as the dependency assertion, which is the one rule in this file
  * no reviewer has evaded in nine attempts.
  */
-const BUILTINS_ALLOWED = ["fs", "path", "url", "http", "util", "readline"];
+const BUILTINS_ALLOWED = ["fs", "path", "url", "http", "util"];
 const BUILTINS_ALLOWED_PER_FILE: Record<string, string[]> = {
-  "scripts/roundtrip.ts": ["child_process"], //            spawns the MCP server under test, over stdio
+  "scripts/roundtrip.ts": ["child_process"], //            spawns the CLI under test, once per step
+  "src/connect/http.ts": ["crypto"], //                    the one-shot page server's random secret and constant-time compare
+  "src/connect/open.ts": ["child_process"], //             opens the operator's browser at the local page
+  "src/connect/session.ts": ["os"], //                     the session file lives under the home directory
+  "tests/connect.unit.test.ts": ["os", "net"], //           a temporary session directory; a free local port per test
   "tests/fork.test.ts": ["child_process"], //              spawns anvil; anvil holds the keys, this repo never does
   "tests/registry-check.chain.test.ts": ["child_process"], // runs scripts/registry-check.ts against a mock chain
   "tests/entrypoint.unit.test.ts": ["child_process", "os"], // runs the committed bundle by symlink and by import; tmpdir for the symlink
@@ -127,6 +155,7 @@ const BUILTINS_ALLOWED_PER_FILE: Record<string, string[]> = {
 
 const MAY_SPAWN: Record<string, string[]> = {
   "scripts/roundtrip.ts": ["node", "npx"],
+  "src/connect/open.ts": ["open", "cmd", "xdg-open"], //    the platform's own "open this URL" command, nothing else
   "tests/fork.test.ts": ["anvil"],
   "tests/registry-check.chain.test.ts": ["npx"],
   "tests/entrypoint.unit.test.ts": ["node"],
@@ -197,9 +226,11 @@ const resolveTs = (from: string, spec: string): string | null => {
 };
 
 /** Walk the runtime import graph from the entry points. */
-function reachable(): { files: Set<string>; external: Set<string>; escapes: string[] } {
+function reachable(): { files: Set<string>; external: Set<string>; importers: Map<string, Set<string>>; escapes: string[] } {
   const files = new Set<string>();
   const external = new Set<string>();
+  // Which files import each external specifier, so a per-file builtin allowance applies to that file only.
+  const importers = new Map<string, Set<string>>();
   const escapes: string[] = [];
   const queue = ENTRY_POINTS.map((p) => resolve(pkgRoot, p));
   while (queue.length) {
@@ -209,14 +240,18 @@ function reachable(): { files: Set<string>; external: Set<string>; escapes: stri
     const { specs, opaque } = moduleReaches(file);
     for (const o of opaque) escapes.push(`${rel(file)}: unanalysable module reach — ${o}`);
     for (const spec of specs) {
-      if (!spec.startsWith(".")) { external.add(spec); continue; }
+      if (!spec.startsWith(".")) {
+        external.add(spec);
+        importers.set(spec, (importers.get(spec) ?? new Set()).add(rel(file)));
+        continue;
+      }
       const target = resolveTs(file, spec);
       if (!target) escapes.push(`${rel(file)} → ${spec} (does not resolve to a file in this package)`);
       else if (!target.startsWith(srcRoot + sep)) escapes.push(`${rel(file)} → ${spec} resolves OUTSIDE src/`);
       else queue.push(target);
     }
   }
-  return { files, external, escapes };
+  return { files, external, importers, escapes };
 }
 
 /** Every `.ts` this repo ships or runs. */
@@ -267,7 +302,7 @@ function envLikeLiterals(file: string): string[] {
 }
 
 describe("A. the runtime module graph cannot leave this package", () => {
-  const { files, external, escapes } = reachable();
+  const { files, external, importers, escapes } = reachable();
 
   it("reaches a real graph (positive control — without this every assertion below is vacuous)", () => {
     expect(files.size).toBeGreaterThan(8);
@@ -283,16 +318,18 @@ describe("A. the runtime module graph cannot leave this package", () => {
     // By EXCLUSION, so nothing is exempt: a specifier is a declared dependency, or it is on the
     // builtin allowlist, or it is a failure. There is no "is this a builtin in general?" question
     // any more — that question is what created the denial half.
+    // A builtin outside the global list passes only when EVERY file importing it holds a per-file
+    // allowance for it — the same allowance the audited-surface check (E) enforces.
+    const perFileOk = (s: string) => [...(importers.get(s) ?? [])].every((f) => (BUILTINS_ALLOWED_PER_FILE[f] ?? []).includes(bare(s)));
     const undeclared = [...external].filter((s) => {
       const name = s.startsWith("@") ? s.split("/").slice(0, 2).join("/") : s.split("/")[0]!;
-      return !declared.has(name) && !BUILTINS_ALLOWED.includes(bare(s));
+      return !declared.has(name) && !BUILTINS_ALLOWED.includes(bare(s)) && !perFileOk(s);
     });
     expect(undeclared).toEqual([]);
   });
 
-  it("the dependency set is EXACTLY these three — membership, so a swap holding the count fails too", () => {
+  it("the dependency set is EXACTLY these two — membership, so a swap holding the count fails too", () => {
     expect(Object.keys(pkg.dependencies ?? {}).sort()).toEqual([
-      "@modelcontextprotocol/sdk",
       "viem",
       "zod",
     ]);
@@ -309,13 +346,32 @@ describe("B. the environment surface, statically and at runtime", () => {
       // This is why moving a name out of the `candidates` array does not move it out of this set.
       if (MAY_COMPUTE_ENV_KEY.includes(rel(f))) for (const lit of envLikeLiterals(f)) names.add(lit);
     }
-    expect([...names].sort()).toEqual(["BASE_RPC_URL", "TREASURY_LOGS_FALLBACK", "TREASURY_LOGS_RPC_BASE", "TREASURY_RPC_BASE"]);
+    expect([...names].sort()).toEqual([
+      "ARBITRUM_RPC_URL",
+      "BASE_RPC_URL",
+      "DISPLAY",
+      "PRIVY_APP_ID",
+      "ROBINHOOD_RPC_URL",
+      "SSH_CONNECTION",
+      "SSH_TTY",
+      "TREASURY_CONNECT_HOME",
+      "TREASURY_CONNECT_NO_OPEN",
+      "TREASURY_CONNECT_PORT",
+      "TREASURY_LOGS_FALLBACK",
+      "TREASURY_LOGS_RPC_ARBITRUM",
+      "TREASURY_LOGS_RPC_BASE",
+      "TREASURY_LOGS_RPC_ROBINHOOD",
+      "TREASURY_RPC_ARBITRUM",
+      "TREASURY_RPC_BASE",
+      "TREASURY_RPC_ROBINHOOD",
+      "WAYLAND_DISPLAY",
+    ]);
   });
 
   it("a fund variable in the environment is not used, WHATEVER it is called — the property, not the prefix", () => {
     const saved = { ...process.env };
     try {
-      for (const k of ["TREASURY_RPC_BASE", "TREASURY_LOGS_RPC_BASE", "TREASURY_LOGS_FALLBACK", "BASE_RPC_URL"]) delete process.env[k];
+      for (const k of ["TREASURY_RPC_BASE", "TREASURY_LOGS_RPC_BASE", "TREASURY_LOGS_FALLBACK", "BASE_RPC_URL", "TREASURY_RPC_ARBITRUM", "TREASURY_LOGS_RPC_ARBITRUM", "ARBITRUM_RPC_URL", "TREASURY_RPC_ROBINHOOD", "TREASURY_LOGS_RPC_ROBINHOOD", "ROBINHOOD_RPC_URL"]) delete process.env[k];
       // Three DISTINCT naming conventions, because the title's claim is "whatever it is called". A
       // mechanical rename once collapsed two of these into one line — the test still passed, and
       // proved one convention fewer than it said (caught in review of the public release).
@@ -325,8 +381,14 @@ describe("B. the environment surface, statically and at runtime", () => {
       const url = rpcUrlFromEnv(8453); // a throw here fails the test, it does not pass it
       expect(url).toBe("https://mainnet.base.org");
       expect(url).not.toMatch(/sibling|fund|generic/i);
+      // The same property on the second chain, with that chain's own look-alike names.
+      process.env["SIBLING_RPC_ARBITRUM"] = "https://sibling.example/KEY";
+      process.env["FUND_RPC_ARBITRUM"] = "https://fund.example/KEY";
+      const arb = rpcUrlFromEnv(42161);
+      expect(arb).toBe("https://arb1.arbitrum.io/rpc");
+      expect(arb).not.toMatch(/sibling|fund|generic/i);
     } finally {
-      for (const k of ["SIBLING_RPC_BASE", "FUND_RPC_BASE", "RPC_URL"]) delete process.env[k];
+      for (const k of ["SIBLING_RPC_BASE", "FUND_RPC_BASE", "RPC_URL", "SIBLING_RPC_ARBITRUM", "FUND_RPC_ARBITRUM"]) delete process.env[k];
       Object.assign(process.env, saved);
     }
   });
@@ -395,8 +457,8 @@ describe("D. Enzyme stays refused at BUILD — the boundary, not a note in a doc
     expect(() => buildWithdraw(enzyme(), { assetsHuman: "1", receiver: ADDR, owner: ADDR })).toThrow(/no ERC-4626 deposit\/redeem path/);
   });
 
-  it("the refusal survives the MCP boundary — no calls array reaches a caller", async () => {
-    const tools = (buildServer() as unknown as { _registeredTools: Record<string, { handler: (a: unknown, b: unknown) => Promise<unknown> }> })._registeredTools;
+  it("the refusal survives the command boundary — no calls array reaches a caller", async () => {
+    const tools = buildCommands() as unknown as Record<string, { handler: (a: unknown, b: unknown) => Promise<unknown> }>;
     await expect(
       tools["earn_prepare_deposit"]!.handler({ vault: FIXTURE.enzyme, account: ADDR, receiver: ADDR, amount_usdc: "1" }, {}),
     ).rejects.toThrow(/no ERC-4626 deposit\/redeem path/);
@@ -500,7 +562,7 @@ describe("E. the AUDITED surface is every .ts under src/, scripts/ and tests/", 
 /**
  * D. What gets published is what was attested.
  *
- * CI attests the COMMITTED `dist/mcp-server.mjs` — that path is the SLSA provenance subject, and
+ * CI attests the COMMITTED `dist/treasury.mjs` — that path is the SLSA provenance subject, and
  * `verify_the_bundle.md` tells a stranger to check their download against it. But `prepack` fires on
  * `npm pack` AND `npm publish`, so a publish REBUILDS the bundle and ships whatever the publishing
  * machine produced, not the attested file. They agree only while the build is byte-deterministic,
@@ -523,13 +585,13 @@ describe("D. what gets published is what was attested", () => {
   });
 
   it("prepack cannot ship a bundle that differs from the attested committed one", () => {
-    expect(scripts["prepack"]).toContain("git diff --exit-code -- dist/mcp-server.mjs");
+    expect(scripts["prepack"]).toContain("git diff --exit-code -- dist/treasury.mjs");
   });
 
   it("nor third-party notices that differ from the committed ones", () => {
     // The build also rewrites THIRD_PARTY_NOTICES.md, which is in `files`: a rebuild on the publishing
     // machine against different dependencies would otherwise ship notices nobody committed.
     const guarded = (scripts["prepack"] ?? "").split("git diff --exit-code --")[1]?.trim().split(/\s+/) ?? [];
-    expect(guarded).toEqual(expect.arrayContaining(["dist/mcp-server.mjs", "THIRD_PARTY_NOTICES.md"]));
+    expect(guarded).toEqual(expect.arrayContaining(["dist/treasury.mjs", "THIRD_PARTY_NOTICES.md"]));
   });
 });

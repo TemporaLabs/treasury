@@ -1,7 +1,7 @@
 /**
  * The unit tiers' vaults — SYNTHETIC, and deliberately not the shipped ones.
  *
- * The registry ships two Tempora vaults (the open default and a gated sibling). The client's code paths are wider
+ * The registry ships two Tempora Labs vaults (the open default and a gated sibling). The client's code paths are wider
  * than that by design: 18-decimal shares against a 6-decimal asset, a chassis with no ERC-4626
  * deposit path, a vault measured OPEN to any account. Pinning those paths to whichever vaults
  * happen to be in the registry made the unit tiers fail every time the fund's offering changed —

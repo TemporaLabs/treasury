@@ -3,8 +3,10 @@ Copyright 2026 Tempora Labs
 
 This product includes software developed by Tempora Labs.
 
-The third-party components bundled into dist/mcp-server.mjs keep their own licences. Each is
-reproduced in full, for the exact version bundled, in THIRD_PARTY_NOTICES.md.
+The third-party components bundled into dist/treasury.mjs keep their own licences. Each is
+reproduced in full, for the exact version bundled, in THIRD_PARTY_NOTICES.md. The same holds for
+dist/connect-page.js, the page `treasury connect` serves, whose components are reproduced in
+THIRD_PARTY_NOTICES.connect-page.md.
 
 "Tempora", "Tempora Labs" and "Agent Treasury" are names of Tempora Labs. The Apache License
 (section 6) does not grant permission to use them beyond describing where the work came from.

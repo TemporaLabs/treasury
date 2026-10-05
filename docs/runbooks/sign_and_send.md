@@ -1,14 +1,20 @@
 # Signing and sending Treasury's unsigned calls — a runbook
 
-Treasury never signs, never sends, never holds a key. Something else has to.
+Treasury never signs and never holds a key. Something else has to: your own wallet, or, as in this
+runbook, a process that holds a key.
 This is that something else, written up from the first time it was actually done: a real 0.05 USDC
-deposit → withdraw round trip against a Tempora Morpho V2 vault on Base mainnet, 2026-09-11, using a
+deposit → withdraw round trip against a Tempora Labs Morpho V2 vault on Base mainnet, 2026-09-11, using a
 key the operator already held on their own host — not a fork, not a testnet,
 real signed transactions (`0xd34111…`, `0x3bad94…`, `0x7a64b7…`, all `status: success`).
 
-This is the shape a real consumer of Treasury takes: **call the MCP tools to get intent and unsigned
+This is the shape a real consumer of Treasury takes: **run the `treasury earn` commands to get intent and unsigned
 calls, then hand those calls to something that holds a key and never let the key touch the same
 process the calls came from.** The two are deliberately different trust domains.
+
+**The chain comes from the calls.** This run was on Base, and the script below hard-codes
+`chain: base`. Every call Treasury prepares carries its `chainId`, and the envelope names the chain:
+a signer for a vault on Arbitrum One uses `arbitrum` from `viem/chains` and an Arbitrum RPC (on
+Robinhood Chain, `robinhood` and a Robinhood Chain RPC), and should refuse a call whose `chainId` is not the chain it is connected to.
 
 ## The three-step shape
 
@@ -17,10 +23,11 @@ process the calls came from.** The two are deliberately different trust domains.
    blocked — `maxDeposit()` is not trusted, the simulated call is).
 2. **Prepare** (`earn_prepare_deposit` / `earn_prepare_withdraw`) — pure computation, no key
    involved. Returns `{ requires_signature: true, status: "unsigned", calls }`, each call
-   `{to, data, value, gasAdvice}`. This is the entire handoff surface: nothing else crosses from
-   Treasury's process into the signer's. ⚠️ Consuming the LIBRARY directly rather than the MCP
-   server — as this runbook's own script does — gets the bare `UnsignedCall[]` with no envelope;
-   the envelope is a property of the tool boundary, not of `buildDeposit`/`buildWithdraw`.
+   `{ chainId, to, data, value, gasAdvice, precondition? }` plus display fields (`function`, `args`,
+   `description`, `step`, `of`). This is the entire handoff surface: nothing else crosses from
+   Treasury's process into the signer's. ⚠️ Consuming the LIBRARY directly rather than the CLI
+   — as this runbook's own script does — gets the bare `UnsignedCall[]` with no envelope;
+   the envelope is a property of the command boundary, not of `buildDeposit`/`buildWithdraw`.
 3. **Sign and send** — outside Treasury entirely. The runbook below is one way to do this when the
    signer is a key held on a remote host the operator runs, rather than a local wallet.
 
@@ -142,15 +149,15 @@ logged, only in the process's own environment.
 
 ## The trap `earn_balance` exists to catch — and did
 
-Before withdrawing, `earn_balance` was called to get `sharesExact` for `earn_prepare_withdraw({all:
-true})`. The wallet used for this test already held ~5.0 unrelated shares of that vault from prior
-work — `sharesExact` is the **whole balance**, not "whatever this session deposited." Using
-`all: true` here would have withdrawn someone else's position along with the test's own 0.05 USDC.
+Before withdrawing, `earn balance` was run to get `sharesExact` for `earn prepare_withdraw --all
+--shares_exact <sharesExact>`. The wallet used for this test already held ~5.0 unrelated shares of that
+vault from prior work — `sharesExact` is the **whole balance**, not "whatever this test deposited."
+Using `--all` here would have withdrawn someone else's position along with the test's own 0.05 USDC.
 
-**The fix was the tool doing what it's for**, not a special case: `earn_prepare_withdraw` also accepts a
-USDC-denominated `amount_usdc`, which withdraws exactly that much and leaves the rest of the
-position untouched. `all: true` is for actually emptying an account; a bounded test withdraws a
-bounded amount. Before assuming a wallet is "empty enough to use `all`," check its existing
+**The fix was the tool doing what it's for**, not a special case: `earn prepare_withdraw` also accepts
+`--amount_usdc`, in the vault's asset, which withdraws exactly that much and leaves the rest of the
+position untouched. `--all` is for actually emptying an account; a bounded test withdraws a
+bounded amount. Before assuming a wallet is "empty enough to use `--all`," check its existing
 position first — the tool will tell you, but only if asked before, not after.
 
 ## Verifying the round trip actually closed cleanly

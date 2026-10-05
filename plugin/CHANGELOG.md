@@ -4,6 +4,42 @@ All notable changes to the Agent Treasury plugin are recorded here. The format f
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versions follow [SemVer](https://semver.org/).
 The product's own changes are in the repository's [`CHANGELOG.md`](../CHANGELOG.md).
 
+## [v0.1.2] - 2026-10-05
+
+Carries `@temporalabs/treasury` v0.1.2.
+
+### Changed
+- **Headless: the plugin declares no MCP server.** The `earn` skill runs the bundled CLI,
+  `node "${CLAUDE_PLUGIN_ROOT}/dist/treasury.mjs" earn <command>`, through the shell, one command at a
+  time, and pre-approves that command for the turn it is used in. `plugin/.mcp.json` is gone, and so
+  is the server that had to connect before its tools appeared. Start a new session after installing or
+  upgrading so the skill loads.
+
+### Added
+- **The `earn` skill hands calls to the operator's own wallet first**, through `treasury connect`: a
+  sign-in page with one Connect button (browser wallet, or an email, Google, Apple or X login), then
+  a confirm page that shows each call in turn. The prepare-and-sign path stays for any other receiver or when there
+  is no browser on the machine.
+- **The skill makes the operator acknowledge before any signing page opens.** `connect deposit` and
+  `connect withdraw` now run twice: the first run opens nothing and returns one fixed acknowledgement
+  (amount, chain, vault, receiver, the vault's warning and the disclosures in plain words); the skill posts it word for
+  word and re-runs with `--ack <code>` only on the operator's yes. The code works once, for 15 minutes,
+  for exactly those calls. The skill no longer treats the page's own confirm as a substitute.
+- `dist/connect-page.js`, the connect page, and its notices in `THIRD_PARTY_NOTICES.connect-page.md`.
+- **The `earn` skill works on more than one chain.** Its description now names Base and Arbitrum,
+  and it has a section on choosing the chain: the agent asks the operator which chain before
+  preparing a deposit when they have not said, and reads every listed vault before answering a
+  balance or withdrawal question that names none.
+- `TREASURY_RPC_ARBITRUM` and `TREASURY_LOGS_RPC_ARBITRUM` reach the CLI from the environment, beside
+  the two Base variables.
+- A trigger case for a deposit on Arbitrum.
+- Robinhood Chain (#89): the skill body names it, its USDG vault and its variables
+  (`TREASURY_RPC_ROBINHOOD`, `TREASURY_LOGS_RPC_ROBINHOOD`), and tells the agent to say USDG there.
+  The skill's `description` is unchanged.
+- The manifests' descriptions name Robinhood Chain and USDG, and their keywords add `robinhood` and
+  `usdg`. The skill body names the vault's asset (USDC, or USDG on Robinhood Chain) where it said USDC
+  alone, and says what `opened: false` means on each `connect` run.
+
 ## [v0.1.1] - 2026-09-29
 
 Carries `@temporalabs/treasury` v0.1.1.

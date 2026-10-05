@@ -1,9 +1,12 @@
 /**
- * The allocate → deallocate round trip, driven THROUGH THE SKILL — the MCP tools over stdio, the
+ * The allocate → deallocate round trip, driven THROUGH THE SKILL — the `treasury earn` commands, the
  * same boundary an agent uses — and stopping exactly where the skill stops: at unsigned calls.
  *
  *   TREASURY_RPC_BASE=… npx tsx scripts/roundtrip.ts --account 0x… --receiver 0x… \
- *     [--vault <ticker>] [--amount 0.05] [--out ./roundtrip-out] [--server dist|src]
+ *     [--vault <ticker>] [--amount 0.05] [--out ./roundtrip-out] [--cli dist|src]
+ *
+ * `--vault` decides the chain: a vault is on one chain, and the run uses that chain's RPC variable
+ * (`TREASURY_RPC_ARBITRUM` for a vault on Arbitrum One, `TREASURY_RPC_ROBINHOOD` on Robinhood Chain).
  *
  * The round-trip harness. Vault and amount default from src/config/earn.ts (`roundTripVault`,
  * `roundTripAmountUsdc`) — the default vault; change `EARN.roundTripVault`, not this script. The
@@ -12,7 +15,7 @@
  *
  * What it does: earn_vaults → earn_terms → earn_status (health, then preflight) →
  * earn_balance → earn_quote (both directions) → earn_prepare_deposit →
- * earn_prepare_withdraw. It decodes every unsigned call independently of the server and asserts
+ * earn_prepare_withdraw. It decodes every unsigned call independently of the CLI and asserts
  * the argument slots (receiver vs owner — the transposition `build.test.ts` exists to catch), then writes the
  * two `calls` arrays for a signer that lives OUTSIDE this repository.
  *
@@ -23,7 +26,6 @@
  */
 import { spawn } from "node:child_process";
 import { existsSync, mkdirSync, writeFileSync } from "node:fs";
-import { createInterface } from "node:readline";
 import { fileURLToPath } from "node:url";
 import { dirname, resolve } from "node:path";
 import { decodeFunctionData, getAddress, isAddress, parseUnits } from "viem";
@@ -37,7 +39,7 @@ const flag = (name: string): string | undefined => {
   return i >= 0 ? argv[i + 1] : undefined;
 };
 const usage = (msg: string): never => {
-  console.error(`roundtrip: ${msg}\nusage: --account <0x…> --receiver <0x…> [--vault <ticker>] [--amount <usdc>] [--out dir] [--server dist|src]`);
+  console.error(`roundtrip: ${msg}\nusage: --account <0x…> --receiver <0x…> [--vault <ticker>] [--amount <usdc>] [--out dir] [--cli dist|src]`);
   process.exit(2);
 };
 const vault = flag("vault") ?? EARN.roundTripVault;
@@ -51,48 +53,44 @@ if (!/^\d+(\.\d+)?$/.test(amount)) usage(`--amount must be a decimal USDC string
 const account = getAddress(accountRaw);
 const receiver = getAddress(receiverRaw);
 
-// ---- the server, over stdio — the artifact the plugin ships if built, the source otherwise ------
+// ---- the CLI, one process per step — the artifact the plugin ships if built, the source otherwise ----
 const here = dirname(fileURLToPath(import.meta.url));
 const pkg = resolve(here, "..");
-const dist = resolve(pkg, "dist/mcp-server.mjs");
-const useDist = (flag("server") ?? (existsSync(dist) ? "dist" : "src")) === "dist";
-const child = useDist
-  ? spawn("node", [dist], { cwd: pkg, stdio: ["pipe", "pipe", "pipe"] })
-  : spawn("npx", ["tsx", "src/mcp/server.ts"], { cwd: pkg, stdio: ["pipe", "pipe", "pipe"] });
-let stderr = "";
-child.stderr.on("data", (d) => (stderr += String(d)));
-const lines = createInterface({ input: child.stdout });
-const pending = new Map<number, (v: unknown) => void>();
-lines.on("line", (l) => {
-  let msg: { id?: number; result?: unknown; error?: unknown };
-  try {
-    msg = JSON.parse(l);
-  } catch {
-    return;
-  }
-  if (typeof msg.id === "number") pending.get(msg.id)?.(msg.error ? { error: msg.error } : msg.result);
-});
-let nextId = 1;
-function rpc(method: string, params: unknown): Promise<unknown> {
-  const id = nextId++;
-  child.stdin.write(JSON.stringify({ jsonrpc: "2.0", id, method, params }) + "\n");
+const dist = resolve(pkg, "dist/treasury.mjs");
+const useDist = (flag("cli") ?? (existsSync(dist) ? "dist" : "src")) === "dist";
+
+/** `earn_quote` + `{ direction: "deposit" }` → `treasury earn quote --direction deposit`, run exactly as an agent runs it. */
+function tool<T = Record<string, unknown>>(name: string, args: Record<string, unknown> = {}): Promise<T> {
+  // A switch is given bare or not at all; an unset argument is left out rather than sent as "undefined".
+  const flags = Object.entries(args).flatMap(([k, v]) => (v === undefined || v === false ? [] : v === true ? [`--${k}`] : [`--${k}`, String(v)]));
+  const argv = ["earn", name.replace(/^earn_/, ""), ...flags];
+  const child = useDist
+    ? spawn("node", [dist, ...argv], { cwd: pkg, stdio: ["ignore", "pipe", "pipe"] })
+    : spawn("npx", ["tsx", "src/cli.ts", ...argv], { cwd: pkg, stdio: ["ignore", "pipe", "pipe"] });
+  let stdout = "";
+  let stderr = "";
+  child.stdout.on("data", (d) => (stdout += String(d)));
+  child.stderr.on("data", (d) => (stderr += String(d)));
   return new Promise((res, rej) => {
-    pending.set(id, res);
-    setTimeout(() => rej(new Error(`${method} timed out; server stderr: ${stderr.slice(-400)}`)), 120_000);
+    const timer = setTimeout(() => {
+      child.kill();
+      rej(new Error(`${name} timed out; stderr: ${stderr.slice(-400)}`));
+    }, 120_000);
+    child.on("close", (code) => {
+      clearTimeout(timer);
+      if (code !== 0) {
+        // A command-level error is the skill saying it could not answer (most often the RPC: rate
+        // limit, transient HTTP failure). That is a FAIL for this run, not a crash — say which step and stop.
+        console.log(`  FAIL ${name} returned an error: ${stderr.slice(0, 300)}\n       (an RPC transient reads like this — re-run; if it persists, the vault or the RPC is the finding)`);
+        process.exit(1);
+      }
+      try {
+        res(JSON.parse(stdout) as T);
+      } catch (e) {
+        rej(new Error(`${name}: stdout is not JSON (${String(e)}): ${stdout.slice(0, 300)}`));
+      }
+    });
   });
-}
-async function tool<T = Record<string, unknown>>(name: string, args: Record<string, unknown> = {}): Promise<T> {
-  const r = (await rpc("tools/call", { name, arguments: args })) as { content?: { text?: string }[]; isError?: boolean; error?: unknown };
-  if (r.error) throw new Error(`${name}: ${JSON.stringify(r.error)}`);
-  const text = r.content?.[0]?.text ?? "";
-  if (r.isError) {
-    // A tool-level error is the skill saying it could not answer (most often the RPC: rate limit,
-    // transient HTTP failure). That is a FAIL for this run, not a crash — say which step and stop.
-    console.log(`  FAIL ${name} returned an error: ${text.slice(0, 300)}\n       (an RPC transient reads like this — re-run; if it persists, the vault or the RPC is the finding)`);
-    child.kill();
-    process.exit(1);
-  }
-  return JSON.parse(text) as T;
 }
 
 // ---- assertions that print what they checked --------------------------------------------------
@@ -102,29 +100,27 @@ function check(cond: boolean, what: string, detail?: unknown): void {
   if (!cond) failures++;
 }
 type Precondition = { read: string; contract: string; owner: string; spender: string; minimum: string; why: string };
-type Call = { to: string; data: `0x${string}`; value: string; description: string; step: number; of: number; precondition?: Precondition };
-type Envelope = { requires_signature: boolean; status: string; next_step: string; calls: Call[] };
+type Call = { chainId: number; to: string; data: `0x${string}`; value: string; description: string; step: number; of: number; precondition?: Precondition };
+type Envelope = { requires_signature: boolean; status: string; chain: string; chainId: number; next_step: string; calls: Call[] };
 const decode = (c: Call) => decodeFunctionData({ abi: erc4626Abi, data: c.data });
 
 // ---- the eight steps ----------------------------------------------------------------------------
-await rpc("initialize", { protocolVersion: "2025-06-18", capabilities: {}, clientInfo: { name: "roundtrip", version: "0" } });
-child.stdin.write(JSON.stringify({ jsonrpc: "2.0", method: "notifications/initialized" }) + "\n");
-console.log(`server: ${useDist ? "dist/mcp-server.mjs" : "src/mcp/server.ts (tsx)"}  vault: ${vault}  account: ${account}  amount: ${amount} USDC`);
+console.log(`cli: ${useDist ? "dist/treasury.mjs" : "src/cli.ts (tsx)"}  vault: ${vault}  account: ${account}  amount: ${amount} USDC`);
 
 console.log("\n1. earn_vaults");
-const vaults = await tool<{ vaults: { symbol: string; address: string; chassis: string; isDefault: boolean; asset: { address: string } }[] }>("earn_vaults");
+const vaults = await tool<{ vaults: { symbol: string; address: string; chassis: string; isDefault: boolean; chain: string; chainId: number; asset: { address: string } }[] }>("earn_vaults");
 const row = vaults.vaults.find((v) => v.symbol === vault);
 check(Boolean(row), `registry lists ${vault}`, vaults.vaults.map((v) => v.symbol));
 if (!row) process.exit(1);
-console.log(`       ${row.address}  chassis=${row.chassis}  default=${row.isDefault}`);
+console.log(`       ${row.address}  chain=${row.chain} (${row.chainId})  chassis=${row.chassis}  default=${row.isDefault}`);
 
 console.log("\n2. earn_terms");
 const terms = await tool("earn_terms");
 check(Object.keys(terms).length > 0, "disclosures returned (an operator must acknowledge these before the first deposit)");
 
 console.log("\n3. earn_status — health, then preflight");
-const health = await tool<{ mode: string; rpcSource?: string; rpcConfigured?: boolean; chainId?: number }>("earn_status");
-check(health.mode === "health" && health.chainId === 8453, "server up on chain 8453", health);
+const health = await tool<{ mode: string; rpc?: string; rpcSource?: string; rpcConfigured?: boolean; chainId?: number }>("earn_status", { chain: row.chain });
+check(health.mode === "health" && health.chainId === row.chainId && health.rpc === "ok", `CLI healthy, and the ${row.chain} RPC answers for chain ${row.chainId}`, health);
 check(health.rpcConfigured === true, `RPC configured (source: ${health.rpcSource ?? "none"}) — on the public endpoint the steps below rate-limit`, health);
 const pre = await tool<{ mode: string; status: string; canDeposit: boolean; findings: string[]; balances?: { asset: string; shares: string } }>("earn_status", { vault, account, amount_usdc: amount });
 check(pre.mode === "preflight", "preflight mode", pre);
@@ -150,6 +146,7 @@ console.log("\n6. earn_prepare_deposit — the ALLOCATE leg (shares land on the 
 const dep = await tool<Envelope>("earn_prepare_deposit", { vault, account, amount_usdc: amount, receiver: account });
 check(dep.requires_signature === true && dep.status === "unsigned", "envelope: requires_signature=true, status=unsigned", dep);
 check(dep.calls.length === 2, "two calls: approve, then deposit", dep.calls.map((c) => c.description));
+check(dep.chainId === row.chainId && dep.calls.every((c) => c.chainId === row.chainId), `the envelope and every call are for chain ${row.chainId} (${row.chain})`, { envelope: dep.chainId, calls: dep.calls.map((c) => c.chainId) });
 const raw = parseUnits(amount, 6);
 {
   const [a, d] = dep.calls.map(decode);
@@ -171,6 +168,7 @@ console.log("\n7. earn_prepare_withdraw — the DEALLOCATE leg");
 const wd = await tool<Envelope>("earn_prepare_withdraw", { vault, account, receiver, amount_usdc: amount });
 check(wd.requires_signature === true && wd.status === "unsigned", "envelope: requires_signature=true, status=unsigned", wd);
 check(wd.calls.length === 1, "one call", wd.calls.map((c) => c.description));
+check(wd.chainId === row.chainId && wd.calls.every((c) => c.chainId === row.chainId), `the envelope and its call are for chain ${row.chainId} (${row.chain})`, { envelope: wd.chainId, calls: wd.calls.map((c) => c.chainId) });
 {
   const w = decode(wd.calls[0]!);
   check(w.functionName === "withdraw", "withdraw(assets, receiver, owner)", w);
@@ -195,7 +193,5 @@ const order = usdcHeld >= Number(amount) ? "allocate first (the account holds th
 console.log(`       ${out}/allocate.calls.json, deallocate.calls.json, summary.json\n       recommended order: ${order}`);
 console.log(`       sign per docs/runbooks/sign_and_send.md — the key never enters this process, and nothing has moved.`);
 
-child.stdin.end();
-child.kill();
 console.log(`\n${failures === 0 ? "consistent" : `${failures} FAILED`}: the skill's outputs ${failures === 0 ? "agree with each other and with the calldata" : "disagree — do not hand these calls to a signer"}`);
 process.exit(failures === 0 ? 0 : 1);

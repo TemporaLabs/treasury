@@ -65,6 +65,18 @@ describe("earn_balance says what can be withdrawn now, not only what the positio
     expect(v.calls).toEqual(["14999970", "1498873"]); // the full position first, then the liquid bound
   });
 
+  it("the unwind explanation is Fusion's alone: on Morpho V2 the paid idle-balance bound is reported as a lower bound (#78)", async () => {
+    const fusion = await getPosition({ vault, principal: ACCOUNT, client: vaultClient({ shares: 1_500_000_000n, value: 14_999_970n, liquid: 1_498_873n, payable: 1_498_873n }).client, maxLogRequests: 1 });
+    expect(fusion.exit.note).toMatch(/pays withdrawals from the vault's own balance/);
+    const morpho = getVault("tlCashPlusUSDC2B");
+    expect(morpho.chassis).toBe("morpho-v2");
+    const m = await getPosition({ vault: morpho, principal: ACCOUNT, client: vaultClient({ shares: 15n * 10n ** 18n, value: 14_999_970n, liquid: 1_498_873n, payable: 1_498_873n }).client, maxLogRequests: 1 });
+    expect(m.exit.exitableNow).toBe("1.498873 USDC");
+    expect(m.exit.measuredAs).toBe("vault's liquid balance");
+    expect(m.exit.note).not.toMatch(/pays withdrawals from the vault's own balance|unwind/);
+    expect(m.exit.note).toMatch(/more than that may be withdrawable now/);
+  });
+
   it("a vault that pays the whole position says so, and stops after one simulation", async () => {
     const v = vaultClient({ shares: 5n * 10n ** 18n, value: 5_100_000n, liquid: 0n, payable: 5_100_000n });
     const p = await getPosition({ vault, principal: ACCOUNT, client: v.client, maxLogRequests: 1 });
@@ -88,6 +100,31 @@ describe("earn_balance says what can be withdrawn now, not only what the positio
     expect(p.exit.exitableNow).toBe("unknown");
     expect(p.exit.measuredAs).toBe("refused, size unknown");
     expect(p.exit.note).toMatch(/REFUSED a full-position withdrawal and one bounded by its liquid balance/);
+  });
+
+  it("a liquid balance of 0 is not counted as a second refusal: one withdrawal was asked, and the note says so", async () => {
+    const v = vaultClient({ shares: 10n ** 18n, value: 1_000_000n, liquid: 0n, payable: 0n });
+    const p = await getPosition({ vault, principal: ACCOUNT, client: v.client, maxLogRequests: 1 });
+    expect(v.calls).toEqual(["1000000"]);
+    expect(p.exit.exitableNow).toBe("unknown");
+    expect(p.exit.measuredAs).toBe("refused, size unknown");
+    expect(p.exit.note).toMatch(/no smaller withdrawal bounded by it was tried/);
+    expect(p.exit.note).not.toMatch(/Both refusals|twice|one bounded by its liquid balance/);
+  });
+
+  it("with no liquid balance, only Morpho V2 is told a smaller withdrawal may still pass; Fusion is told why it likely will not", async () => {
+    const fusion = await getPosition({ vault, principal: ACCOUNT, client: vaultClient({ shares: 10n ** 18n, value: 1_000_000n, liquid: 0n, payable: 0n }).client, maxLogRequests: 1 });
+    expect(fusion.exit.note).toMatch(/pays withdrawals from the vault's own balance unless the fund has instant-withdrawal fuses/);
+    expect(fusion.exit.note).toMatch(/likely to be refused too until the fund unwinds/);
+    expect(fusion.exit.note).not.toMatch(/may still pass/);
+    const morpho = getVault("tlCashPlusUSDC2B");
+    const m = await getPosition({ vault: morpho, principal: ACCOUNT, client: vaultClient({ shares: 10n ** 18n, value: 1_000_000n, liquid: 0n, payable: 0n }).client, maxLogRequests: 1 });
+    expect(m.exit.note).toMatch(/also pays out of its markets, so a smaller amount may still pass/);
+    expect(m.exit.note).not.toMatch(/unwind/);
+    for (const p of [fusion, m]) {
+      expect(p.exit.exitableNow).toBe("unknown");
+      expect(p.exit.note).toMatch(/earn quote --direction withdraw/);
+    }
   });
 
   it("🔴 a second probe that PAYS is believed, whatever bound produced it", async () => {

@@ -10,13 +10,13 @@
  */
 import { describe, it, expect, beforeEach, afterEach } from "vitest";
 import { createServer, type Server } from "node:http";
-import { buildServer } from "../src/mcp/server.js";
+import { buildCommands } from "../src/earn/commands.js";
 import { publicRpcHint } from "../src/client.js";
 
 const PORT = 59993;
 let srv: Server | undefined;
-type Handler = (a: unknown, extra: unknown) => Promise<{ content: { text: string }[] }>;
-const tools = () => (buildServer() as unknown as { _registeredTools: Record<string, { handler: Handler }> })._registeredTools;
+type Handler = (a: unknown, extra: unknown) => Promise<string>;
+const tools = () => (buildCommands() as unknown as Record<string, { handler: Handler }>);
 
 beforeEach(async () => {
   // a server that always fails, so every case below is a transport failure
@@ -29,6 +29,7 @@ afterEach(async () => {
   await new Promise<void>((r) => (srv ? srv.close(() => r()) : r()));
   srv = undefined;
   delete process.env["TREASURY_RPC_BASE"];
+  delete process.env["TREASURY_RPC_ARBITRUM"];
 });
 
 describe("the public-endpoint hint", () => {
@@ -48,15 +49,28 @@ describe("the public-endpoint hint", () => {
 
   it("does NOT appear when a keyed RPC IS configured — a real fault must not read as a setup problem", async () => {
     process.env["TREASURY_RPC_BASE"] = `http://127.0.0.1:${PORT}/v2/configuredkey123`;
-    const out = (await tools()["earn_status"]!.handler({}, {})).content[0]!.text;
+    const out = (await tools()["earn_status"]!.handler({}, {}));
     const d = JSON.parse(out);
     expect(d.rpc).toBe("unreachable"); // it still failed
     expect(d.setup_required).toBeUndefined(); // but it is not a setup problem
     expect(d.rpcSource).toBe("TREASURY_RPC_BASE");
   });
 
+  it("a failure on ARBITRUM with Arbitrum's RPC configured is not a setup problem either, whatever Base has", async () => {
+    // Base unconfigured, Arbitrum configured and failing: the hint is about the chain that was
+    // CALLED. A hint keyed on Base would tell this operator to set a variable for the wrong chain.
+    delete process.env["TREASURY_RPC_BASE"];
+    process.env["TREASURY_RPC_ARBITRUM"] = `http://127.0.0.1:${PORT}/v2/configuredkey123`;
+    const out = (await tools()["earn_status"]!.handler({ chain: "arbitrum" }, {}));
+    const d = JSON.parse(out);
+    expect(d.rpc).toBe("unreachable");
+    expect(d.setup_required).toBeUndefined();
+    expect(d.rpcSource).toBe("TREASURY_RPC_ARBITRUM");
+    expect(out).not.toMatch(/TREASURY_RPC_BASE/);
+  });
+
   it("does not fire on a SUCCESSFUL result that merely mentions nothing about RPC", async () => {
-    const out = (await tools()["earn_terms"]!.handler({}, {})).content[0]!.text;
+    const out = (await tools()["earn_terms"]!.handler({}, {}));
     expect(out).not.toMatch(/setup_required/);
   });
 });

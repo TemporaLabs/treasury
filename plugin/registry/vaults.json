@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "reconciledAtIso": "2026-09-18T16:25:46Z",
+  "reconciledAtIso": "2026-10-04T21:22:04Z",
   "vaults": [
     {
       "symbol": "tlCashPlusUSDC2",
@@ -10,7 +10,7 @@
       "address": "0x040fCA12673778FEED5DA7b2ccFbbAb0cc0134Cf",
       "chassis": "morpho-v2",
       "backend": "tempora",
-      "isDefault": true,
+      "isDefault": false,
       "asset": {
         "address": "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913",
         "symbol": "USDC",
@@ -30,7 +30,7 @@
         "Morpho Vault V2. maxDeposit() and maxWithdraw() return 0 to every caller by protocol design; the pre-flight simulates the real call and earn_balance simulates the exit. Neither reads those views.",
         "Withdrawals are served from idle USDC, then through the vault's liquidity adapter; a withdrawal larger than that reverts until positions are unwound. earn_balance reports exitableNow by simulating the withdrawal.",
         "No fee is set: performanceFee() = 0 and managementFee() = 0 at block 51372415. The curator can introduce one, and the vault's fee timelocks are 0 (timelock(setPerformanceFee) = timelock(setManagementFee) = 0 at block 51404161), so a change needs no notice. Read both fees before depositing.",
-        "The DEFAULT vault, and open to any account: it is in depositable."
+        "The DEMO vault. Open to any account and in depositable, but not the default: name it with `--vault tlCashPlusUSDC2`. Its structure is the one Test 2B restores as a sibling."
       ]
     },
     {
@@ -60,8 +60,109 @@
       "notes": [
         "8-decimal shares against a 6-decimal asset — a share amount is never an asset amount here.",
         "getInstantWithdrawalFuses() returns three fuses (measured at block 51361109), so a withdrawal is served from the vault's liquid balance and then, in fuse order, by unwinding its positions in the same transaction. A withdrawal larger than what those positions can release in-block still reverts; earn_balance reports exitableNow, which simulates the withdrawal rather than reading maxWithdraw.",
-        "Deposits need role 800 on the AccessManager. An account without it gets WHITELIST_GATED from earn_status and earn_quote, and this client refuses to build a deposit for it. Withdrawals are public.",
+        "Deposits need role 800 on the AccessManager. An account without it gets WHITELIST_GATED from earn_status and earn_quote. Neither earn prepare_deposit nor connect deposit checks the role: a deposit built for such an account reverts on-chain (AccessManagedUnauthorized), so run earn_status for the account first. Withdrawals are public.",
         "Whitelist-gated (role 800 on its AccessManager): not in depositable. Listed so that an admitted account's position can be read and exited; a non-member gets WHITELIST_GATED from earn_status before anything is built."
+      ]
+    },
+    {
+      "symbol": "tlCashPlusUSDC2B",
+      "name": "Tempora Labs Cash Plus USDC (Test 2B)",
+      "warning": "TEST VAULT — unproven. It exists to exercise this product, not to hold savings. Deposit only an amount you are fully prepared to lose entirely, and do not move significant funds into it. Show this warning before preparing any deposit.",
+      "chainId": 8453,
+      "address": "0x91BcEbA5feCB9E92d80F1845B55cC56621E9352F",
+      "chassis": "morpho-v2",
+      "backend": "tempora",
+      "isDefault": true,
+      "asset": {
+        "address": "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913",
+        "symbol": "USDC",
+        "decimals": 6
+      },
+      "shareDecimals": 18,
+      "depositOpen": {
+        "open": true,
+        "method": "simulated-deposit-from-stranger",
+        "measuredAtBlock": 52097648,
+        "measuredAtIso": "2026-10-02T23:44:03Z",
+        "detail": "deposit(1 USDC, 0x…dEaD) from 0x…dEaD reverted 0xe65b7a77 TransferFromReverted at block 52097648 — it reached the token pull, so access is open; maxDeposit() reads 0 to every caller on this chassis by design and is not consulted."
+      },
+      "deployedAtBlock": 51436870,
+      "notes": [
+        "18-decimal shares against a 6-decimal asset — a share amount is never an asset amount here.",
+        "Morpho Vault V2. maxDeposit() and maxWithdraw() return 0 to every caller by protocol design; the pre-flight simulates the real call and earn_balance simulates the exit. Neither reads those views.",
+        "Withdrawals are served from idle USDC, then through the vault's liquidity adapter; a withdrawal larger than that reverts until positions are unwound. earn_balance reports exitableNow by simulating the withdrawal.",
+        "No fee is set: performanceFee() = 0 and managementFee() = 0 at block 52097648. The curator can introduce one, and the vault's fee timelocks are 0 (timelock(setPerformanceFee) = timelock(setManagementFee) = 0 at block 52097648), so a change needs no notice. Read both fees before depositing.",
+        "Three configured adapters (measured at block 52097648); Treasury does not model the fund's allocation across them — read the vault's positions on-chain before a first deposit.",
+        "Morpho's own app has no page for this vault (app.morpho.org answered 404 for it on 2026-10-02, and Morpho's API does not list it), unlike Test 2. Positions cannot be cross-checked there; verify on-chain or on BaseScan instead.",
+        "The DEFAULT vault on Base, and open to any account: it is in depositable."
+      ]
+    },
+    {
+      "symbol": "tlCashPlusUSDC2C",
+      "name": "Tempora Labs Cash Plus USDC (Test 2C)",
+      "warning": "TEST VAULT — unproven. It exists to exercise this product, not to hold savings. Deposit only an amount you are fully prepared to lose entirely, and do not move significant funds into it. Show this warning before preparing any deposit.",
+      "chainId": 42161,
+      "address": "0x4057a63953142Ac2b3E5dB1954Fc14d578662587",
+      "chassis": "morpho-v2",
+      "backend": "tempora",
+      "isDefault": true,
+      "asset": {
+        "address": "0xaf88d065e77c8cC2239327C5EDb3A432268e5831",
+        "symbol": "USDC",
+        "decimals": 6
+      },
+      "shareDecimals": 18,
+      "depositOpen": {
+        "open": true,
+        "method": "simulated-deposit-from-stranger",
+        "measuredAtBlock": 511070816,
+        "measuredAtIso": "2026-10-02T18:43:33Z",
+        "detail": "deposit(1 USDC, 0x…dEaD) from 0x…dEaD reverted 0xe65b7a77 TransferFromReverted at block 511070816 — it reached the token pull, so access is open; maxDeposit() reads 0 to every caller on this chassis by design and is not consulted."
+      },
+      "deployedAtBlock": 510270114,
+      "notes": [
+        "On Arbitrum One (chain 42161). Calls for this vault are sent on Arbitrum, and its RPC is TREASURY_RPC_ARBITRUM.",
+        "The asset is native USDC on Arbitrum One, not bridged USDC.e, which is a different token this vault does not take.",
+        "18-decimal shares against a 6-decimal asset — a share amount is never an asset amount here.",
+        "Morpho Vault V2. maxDeposit() and maxWithdraw() return 0 to every caller by protocol design; the pre-flight simulates the real call and earn_balance simulates the exit. Neither reads those views.",
+        "Withdrawals are served from idle USDC, then through the vault's liquidity adapter; a withdrawal larger than that reverts until positions are unwound. earn_balance reports exitableNow by simulating the withdrawal.",
+        "No fee is set: performanceFee() = 0 and managementFee() = 0 at block 511070816. The curator can introduce one, and the vault's fee timelocks are 0 (timelock(setPerformanceFee) = timelock(setManagementFee) = 0 at block 511070816), so a change needs no notice. Read both fees before depositing.",
+        "The default vault on Arbitrum One, and open to any account: it is in depositable."
+      ]
+    },
+    {
+      "symbol": "tlCashPlusUSDG2D",
+      "name": "Tempora Labs Cash Plus USDG (Test 2D)",
+      "warning": "TEST VAULT — unproven. It exists to exercise this product, not to hold savings. Deposit only an amount you are fully prepared to lose entirely, and do not move significant funds into it. Show this warning before preparing any deposit.",
+      "chainId": 4663,
+      "address": "0x758f00731943aA88e8C7fB709e0B727903B4F833",
+      "chassis": "morpho-v2",
+      "backend": "tempora",
+      "isDefault": true,
+      "asset": {
+        "address": "0x5fc5360D0400a0Fd4f2af552ADD042D716F1d168",
+        "symbol": "USDG",
+        "decimals": 6
+      },
+      "shareDecimals": 18,
+      "depositOpen": {
+        "open": true,
+        "method": "simulated-deposit-from-stranger",
+        "measuredAtBlock": 79974900,
+        "measuredAtIso": "2026-10-04T13:35:53Z",
+        "detail": "deposit(1 USDG, 0x…dEaD) from 0x…dEaD reverted 0xe65b7a77 TransferFromReverted at block 79974900 — it reached the token pull, so access is open; maxDeposit() reads 0 to every caller on this chassis by design and is not consulted."
+      },
+      "deployedAtBlock": 79381803,
+      "notes": [
+        "On Robinhood Chain (chain 4663). Calls for this vault are sent on Robinhood Chain, and its RPC is TREASURY_RPC_ROBINHOOD.",
+        "The asset is USDG (Global Dollar), not USDC: the first vault in this registry whose asset is not USDC. Amounts in and out of this vault are USDG, in USDG's own 6 decimals; a tool argument or result field named for USDC (amount_usdc, usdcValue) carries USDG here.",
+        "18-decimal shares against a 6-decimal asset — a share amount is never an asset amount here.",
+        "Morpho Vault V2. maxDeposit() and maxWithdraw() return 0 to every caller by protocol design; the pre-flight simulates the real call and earn_balance simulates the exit. Neither reads those views.",
+        "Withdrawals are served from idle USDG, then through the vault's liquidity adapter; a withdrawal larger than that reverts until positions are unwound. earn_balance reports exitableNow by simulating the withdrawal.",
+        "No fee is set: performanceFee() = 0 and managementFee() = 0 at block 79974900. The curator can introduce one, and the vault's fee timelocks are 0 (timelock(setPerformanceFee) = timelock(setManagementFee) = 0 at block 79974900), so a change needs no notice. Read both fees before depositing.",
+        "Three configured adapters (measured at block 79974900); Treasury does not model the fund's allocation across them — read the vault's positions on-chain before a first deposit.",
+        "The public Robinhood Chain endpoint answered a single eth_getLogs over 674,901 blocks (79,300,000 to 79,974,900, on 2026-10-04), which covers this vault's whole history; it does not serve state at past blocks, which nothing in this client reads.",
+        "The default vault on Robinhood Chain, and open to any account: it is in depositable."
       ]
     }
   ]

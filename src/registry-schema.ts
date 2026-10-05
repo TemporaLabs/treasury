@@ -14,15 +14,15 @@ export type Chassis = z.infer<typeof chassisSchema>;
 /**
  * Which chassis expose a standard ERC-4626 `deposit`/`redeem` to a depositor. Enzyme does not
  * (`buyShares` via the comptroller), which is what every refusal path in this client is measured
- * against: build, pre-flight, the MCP boundary and the default-vault rule all discriminate on it.
+ * against: build, pre-flight, the command boundary and the default-vault rule all discriminate on it.
  */
 export const erc4626Chassis: ReadonlySet<Chassis> = new Set<Chassis>(["morpho-v2", "fusion"]);
 
 
 /**
  * Whose contract the depositor's USDC actually enters.
- * - `morpho`: a public third-party Morpho vault, reached directly. No row uses it today (Tempora vaults only).
- * - `tempora`: a Tempora fund vault (the product; each fund joins as it goes live).
+ * - `morpho`: a public third-party Morpho vault, reached directly. No row uses it today (Tempora Labs vaults only).
+ * - `tempora`: a Tempora Labs fund vault (the product; each fund joins as it goes live).
  */
 export const backendSchema = z.enum(["morpho", "tempora"]);
 export type Backend = z.infer<typeof backendSchema>;
@@ -61,11 +61,20 @@ export const vaultEntrySchema = z
      * than summarising it.
      */
     warning: z.string().min(1),
-    chainId: z.literal(8453),
+    /**
+     * The chain the vault is on. One literal per chain in `chains` (`src/client.ts`), spelled out so
+     * `VaultEntry["chainId"]` stays a union of literals — `registry.test.ts` holds the two lists equal.
+     * 🔴 Adding a chain here also needs its row in `CHAIN_INFO` (a compile error until it has one) and
+     * in `links.ts`'s explorer map (which throws on a chain it does not know).
+     */
+    chainId: z.union([z.literal(8453), z.literal(42161), z.literal(4663)]),
     address,
     chassis: chassisSchema,
     backend: backendSchema,
-    /** Exactly one vault in the registry carries this; it is what the tools use when no `vault` is given. */
+    /**
+     * Exactly one vault PER CHAIN carries this: the vault the tools use when a caller names a chain
+     * and no vault. Which chain is used when the caller names neither is `EARN.defaultChain`.
+     */
     isDefault: z.boolean().default(false),
     asset: z.object({ address, symbol: z.string().min(1), decimals: z.number().int().min(0).max(36) }),
     /** Measured on-chain via `decimals()`. 18 on Morpho V2 and Enzyme, 8 on Fusion — never assume. */
@@ -112,17 +121,22 @@ export const registrySchema = z
   .superRefine((r, ctx) => {
     const symbols = new Set<string>();
     const addrs = new Set<string>();
-    const defaults = r.vaults.filter((v) => v.isDefault);
-    if (defaults.length !== 1) {
-      ctx.addIssue({ code: "custom", path: ["vaults"], message: `exactly one vault must be isDefault; found ${defaults.length}` });
-    }
-    const d = defaults[0];
-    // A default may be WHITELIST_GATED. The
-    // pre-flight re-measures access live on every call and refuses a non-member, so
-    // a gated default costs an agent a clear refusal, never funds. It must still be a chassis this client
-    // can build for, and it may not be closed for any other reason.
-    if (d && !(erc4626Chassis.has(d.chassis) && (d.depositOpen.open || d.depositOpen.reason === "WHITELIST_GATED"))) {
-      ctx.addIssue({ code: "custom", path: ["vaults"], message: `the default vault (${d.symbol}) must be ERC-4626 and either measured open or WHITELIST_GATED` });
+    // One default PER CHAIN that has a vault: a caller who names a chain and no vault must get an
+    // answer on every chain the registry offers, and exactly one.
+    for (const chainId of [...new Set(r.vaults.map((v) => v.chainId))]) {
+      const defaults = r.vaults.filter((v) => v.chainId === chainId && v.isDefault);
+      if (defaults.length !== 1) {
+        ctx.addIssue({ code: "custom", path: ["vaults"], message: `exactly one vault per chain must be isDefault; chain ${chainId} has ${defaults.length}` });
+      }
+      // A default may be WHITELIST_GATED. The
+      // pre-flight re-measures access live on every call and refuses a non-member, so
+      // a gated default costs an agent a clear refusal, never funds. It must still be a chassis this client
+      // can build for, and it may not be closed for any other reason.
+      for (const d of defaults) {
+        if (!(erc4626Chassis.has(d.chassis) && (d.depositOpen.open || d.depositOpen.reason === "WHITELIST_GATED"))) {
+          ctx.addIssue({ code: "custom", path: ["vaults"], message: `the default vault (${d.symbol}) must be ERC-4626 and either measured open or WHITELIST_GATED` });
+        }
+      }
     }
     r.vaults.forEach((v, i) => {
       if (symbols.has(v.symbol)) ctx.addIssue({ code: "custom", path: ["vaults", i, "symbol"], message: `duplicate symbol ${v.symbol}` });

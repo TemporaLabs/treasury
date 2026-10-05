@@ -1,6 +1,7 @@
 import {
   BaseError,
   ContractFunctionRevertedError,
+  ExecutionRevertedError,
   type Address,
   type Hex,
 } from "viem";
@@ -61,6 +62,18 @@ export function classifyRevert(obs: RevertObservation): { status: PreflightStatu
       `this client does not name the cause. Check, in no particular order: vault paused; per-block or supply cap; ` +
       `insufficient asset balance at the depositor; a chassis-specific gate this client has not seen. Raw: ${obs.raw ?? "n/a"}.`,
   };
+}
+
+/**
+ * Did the CHAIN refuse this, or did the RPC fail to ask it? Every failure used to read as "cannot pay",
+ * so one HTTP 502 on the first simulation reported a fully-exitable position as unexitable AND blamed
+ * the vault for it (measured through a proxy that failed exactly one call: one attempt made, the vault
+ * never asked, `exitableNow: "unknown"`, note "the refusal is the vault's").
+ * viem's own error chain separates them: a real revert carries a ContractFunctionRevertedError or an
+ * ExecutionRevertedError; a transport failure does not.
+ */
+export function isRevert(e: unknown): boolean {
+  return e instanceof BaseError && e.walk((x) => x instanceof ContractFunctionRevertedError || x instanceof ExecutionRevertedError) !== null;
 }
 
 /** Pulls the revert payload out of viem's error chain. Returns undefined for anything that is not a definite revert. */
@@ -177,8 +190,8 @@ export async function preflightDeposit(args: PreflightArgs): Promise<PreflightRe
   try {
     const previewShares = await client.readContract({ address: vault.address, abi: erc4626Abi, functionName: "previewDeposit", args: [assets] });
     quotes.previewShares = `${formatAmount(previewShares, vault.shareDecimals)} ${vault.symbol}`;
-  } catch {
-    findings.push("previewDeposit() reverted; no shares quote");
+  } catch (e) {
+    findings.push(isRevert(e) ? "previewDeposit() reverted; no shares quote" : `previewDeposit() could not be read, so no shares quote (the RPC failed, not the vault): ${describeError(e)}`);
   }
 
   // The verdict: simulate the real call from the real depositor.

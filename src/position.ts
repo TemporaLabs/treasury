@@ -1,9 +1,10 @@
-import { BaseError, ContractFunctionRevertedError, ExecutionRevertedError, parseAbiItem, type Address } from "viem";
+import { parseAbiItem, type Address } from "viem";
 import { erc4626Abi } from "./abi/erc4626.js";
 import { type VaultEntry } from "./registry-schema.js";
 import { describeError } from "./redact.js";
+import { isRevert } from "./preflight.js";
 import { formatAmount } from "./units.js";
-import type { ReadClient } from "./client.js";
+import { CHAIN_INFO, type ReadClient } from "./client.js";
 
 /** ERC-4626's own events — the only durable record of what an account put in and took out. */
 const depositEvent = parseAbiItem("event Deposit(address indexed sender, address indexed owner, uint256 assets, uint256 shares)");
@@ -57,7 +58,7 @@ export interface Position {
   sharePriceInAssets: string;
   /**
    * `source` names which RPC served the event scan, never its URL: `"logs rpc"` (the configured one)
-   * or `"fallback"` (the endpoint `TREASURY_LOGS_FALLBACK` names, Base's public one by default, used
+   * or `"fallback"` (the endpoint `TREASURY_LOGS_FALLBACK` names, the chain's public one by default, used
    * when the configured one could not cover the range). 🔴 `complete` is only a RECONCILIATION and is
    * vacuously true for an empty window — `wholeHistory` is the coverage claim, and the note is written
    * from it.
@@ -112,8 +113,9 @@ export interface PositionArgs {
    * A second read client for the event scan, used only when `client` cannot cover the range: its
    * eth_getLogs error is one no window can be sized from (measured 2026-09-14: publicnode refuses any
    * range older than ~2,000 blocks with "Archive requests require a personal token"), or its window
-   * would need more than `maxLogRequests` requests (Alchemy free tier: 10 blocks). The server passes
-   * Base's public endpoint, whose 2,000-block window serves history. Omitted ⇒ no fallback.
+   * would need more than `maxLogRequests` requests (Alchemy free tier: 10 blocks). The CLI passes
+   * the chain's public endpoint: Base's, whose 2,000-block window serves history, or Arbitrum One's,
+   * which served an 800,000-block range in one request (measured 2026-10-02). Omitted ⇒ no fallback.
    */
   fallbackClient?: ReadClient;
   /**
@@ -133,13 +135,15 @@ type LogEvent = typeof depositEvent | typeof withdrawEvent;
 
 /**
  * Parses the provider's stated maximum range out of its error, e.g. "limited to a 2,000 range" /
- * "up to a 10 block range". `undefined` means the failure is NOT a window refusal — a caller must
+ * "up to a 10 block range" / "range 798952 exceeds limit of 10000" (Infura on Arbitrum One, measured
+ * 2026-10-02). `undefined` means the failure is NOT a window refusal — a caller must
  * rethrow rather than narrow, or a dead provider and an empty result become the same answer.
  * Exported for `tests/access.ts`, which walks a different contract's logs and needs the same
  * distinction; NOT re-exported from index.ts.
  */
 export function rangeLimitFromError(e: unknown): bigint | undefined {
-  const m = String(e).replace(/,/g, "").match(/(?:limited to a|up to a)\s+(\d+)\s*(?:block)?\s*range/i);
+  const text = String(e).replace(/,/g, "");
+  const m = text.match(/(?:limited to a|up to a)\s+(\d+)\s*(?:block)?\s*range/i) ?? text.match(/range\s+\d+\s+exceeds limit of\s+(\d+)/i);
   return m ? BigInt(m[1]!) : undefined;
 }
 
@@ -245,18 +249,6 @@ function txsOf(logs: EventLog[], decimals: number, symbol: string): ScanTx[] {
 }
 
 /**
- * Did the CHAIN refuse this, or did the RPC fail to ask it? Every failure used to read as "cannot pay",
- * so one HTTP 502 on the first simulation reported a fully-exitable position as unexitable AND blamed
- * the vault for it (measured through a proxy that failed exactly one call: one attempt made, the vault
- * never asked, `exitableNow: "unknown"`, note "the refusal is the vault's").
- * viem's own error chain separates them: a real revert carries a ContractFunctionRevertedError or an
- * ExecutionRevertedError; a transport failure does not.
- */
-function isRevert(e: unknown): boolean {
-  return e instanceof BaseError && e.walk((x) => x instanceof ContractFunctionRevertedError || x instanceof ExecutionRevertedError) !== null;
-}
-
-/**
  * At most two simulated withdrawals — the whole position, then the vault's own liquid balance — and the
  * answer is whichever the chain accepts. Simulation rather than arithmetic because the ceiling is
  * chassis-specific: a Fusion vault with no instant-withdrawal fuses pays only from its own balance,
@@ -345,6 +337,21 @@ async function measureExit(a: {
   // must NOT happen is describing it as something it was not: the note says what was
   // asked, and a success is believed whatever bound produced it.
   const boundedByLiquid = liquid < value;
+  // A liquid bound of 0 is no withdrawal to ask about: say it was not tried, never count it as a refusal.
+  if (liquid === 0n) {
+    return {
+      exitableNow: "unknown",
+      measuredAs: "refused, size unknown",
+      instantLiquidity: liquidText,
+      maxWithdrawSays: maxText,
+      // Whether a smaller amount can pass depends on the chassis, as in the liquid-bound note below.
+      note: `the vault REFUSED a full-position withdrawal at this block. Its liquid balance is ${liquidText}, so no smaller withdrawal bounded by it was tried. ${
+        vault.chassis === "fusion"
+          ? "This chassis pays withdrawals from the vault's own balance unless the fund has instant-withdrawal fuses, so a smaller amount is likely to be refused too until the fund unwinds"
+          : "This chassis also pays out of its markets, so a smaller amount may still pass"
+      } — quote one with \`earn quote --direction withdraw\`. The refusal came from the vault, but it is not a shortfall this client could size.${advisory}`,
+    };
+  }
   const askedFor = boundedByLiquid ? liquid : value;
   const bounded = await attempt(askedFor);
   if (bounded === "paid" && boundedByLiquid) {
@@ -353,7 +360,14 @@ async function measureExit(a: {
       measuredAs: "vault's liquid balance",
       instantLiquidity: liquidText,
       maxWithdrawSays: maxText,
-      note: `the whole position does NOT come out at this block: this chassis pays withdrawals from the vault's own balance, and the rest is deployed. ${fmt(liquid)} of ${fmt(value)} is payable now; the remainder needs the fund to unwind first.${advisory}`,
+      // Only Fusion pays a withdrawal from the vault's own balance, so only there is the idle balance the
+      // ceiling and "the rest needs an unwind" the explanation. A Morpho Vault V2 also pays through its
+      // liquidity adapter: there the idle balance is a bound that was probed and paid, not the most that can
+      // come out (#78; sizing the rest is #69).
+      note:
+        vault.chassis === "fusion"
+          ? `the whole position does NOT come out at this block: this chassis pays withdrawals from the vault's own balance, and the rest is deployed. ${fmt(liquid)} of ${fmt(value)} is payable now; the remainder needs the fund to unwind first.${advisory}`
+          : `the whole position does NOT come out at this block; a withdrawal of ${fmt(liquid)}, the vault's idle balance, simulates OK. This chassis also pays out of its markets, so more than that may be withdrawable now; the larger amount was not sized.${advisory}`,
     };
   }
   // 🔴 A success is a success whatever bound produced it. The old gate reused the ATTEMPT condition as
@@ -480,6 +494,12 @@ export async function getPosition(args: PositionArgs): Promise<Position> {
   const basisUnknown = !wholeHistory;
 
   const fmtA = (x: bigint) => `${formatAmount(x, vault.asset.decimals)} ${vault.asset.symbol}`;
+  // The notes name the variable an operator would set, and that differs by chain.
+  const chain = CHAIN_INFO[vault.chainId];
+  const logsEnv = chain.logsRpcEnv;
+  // TREASURY_LOGS_FALLBACK can NAME a fallback on Base only; elsewhere it can only forbid one.
+  const fallbackNamedBy =
+    vault.chainId === 8453 ? `TREASURY_LOGS_FALLBACK, ${chain.name}'s public endpoint by default` : `${chain.name}'s public endpoint; TREASURY_LOGS_FALLBACK=off forbids it`;
   return {
     vault: vault.symbol,
     principal,
@@ -504,12 +524,12 @@ export async function getPosition(args: PositionArgs): Promise<Position> {
       ...(providerWindow !== undefined ? { providerWindow: providerWindow.toString() } : {}),
       source,
       wholeHistory,
-      note: (handover && !scanFailure ? `the configured logs RPC could not cover this range (${handover}), so the fallback endpoint (TREASURY_LOGS_FALLBACK, Base's public endpoint by default) served the scan. ` : "") + (scanFailure
-        ? `event scan FAILED (${scanFailure}): the provider's eth_getLogs error was not one this client can size a window from, so no history was read — basis and yield are unknown, not zero. Set TREASURY_LOGS_RPC_BASE to a provider with a known window (Alchemy, Base public), or use the agent's own deposit receipts.`
+      note: (handover && !scanFailure ? `the configured logs RPC could not cover this range (${handover}), so the fallback endpoint (${fallbackNamedBy}) served the scan. ` : "") + (scanFailure
+        ? `event scan FAILED (${scanFailure}): the provider's eth_getLogs error was not one this client can size a window from, so no history was read — basis and yield are unknown, not zero. Set ${logsEnv} to a provider with a known window (Alchemy, Infura, ${chain.name} public), or use the agent's own deposit receipts.`
         : wholeHistory
           ? "the scan covered every block from the vault's deployment, and shares in − shares out reconciles to the balance: the basis covers this position's whole history"
           : capped
-            ? `the scan was CUT SHORT — ${block - fromBlock + 1n} of the ${block - (deployed ?? 0n) + 1n} blocks since deployment, at the provider's ${providerWindow ?? "?"}-block eth_getLogs window and ${timedOut ? `a ${Math.round((args.budgetMs ?? 30_000) / 1000)}s time budget` : `${maxReq} requests`}; covering the rest needs about ${providerWindow ? (block - (deployed ?? 0n) + providerWindow) / providerWindow : BigInt(maxReq)} requests per event. ${complete ? "Shares in − shares out happens to reconcile over that window, which an empty window does vacuously — it is NOT evidence the history was covered." : "Basis and yield are unknown, not bounds."} Set TREASURY_LOGS_RPC_BASE to a provider with a wide eth_getLogs range${timedOut ? "" : ", raise max_log_requests"}, or use the agent's own deposit receipts.`
+            ? `the scan was CUT SHORT — ${block - fromBlock + 1n} of the ${block - (deployed ?? 0n) + 1n} blocks since deployment, at the provider's ${providerWindow ?? "?"}-block eth_getLogs window and ${timedOut ? `a ${Math.round((args.budgetMs ?? 30_000) / 1000)}s time budget` : `${maxReq} requests`}; covering the rest needs about ${providerWindow ? (block - (deployed ?? 0n) + providerWindow) / providerWindow : BigInt(maxReq)} requests per event. ${complete ? "Shares in − shares out happens to reconcile over that window, which an empty window does vacuously — it is NOT evidence the history was covered." : "Basis and yield are unknown, not bounds."} Set ${logsEnv} to a provider with a wide eth_getLogs range${timedOut ? "" : ", raise max_log_requests"}, or use the agent's own deposit receipts.`
             : complete
               ? `shares in − shares out reconciles over the ${block - fromBlock + 1n} blocks scanned, but the scan started at block ${fromBlock}${deployed === undefined ? " and the registry does not record when this vault was deployed" : `, after the vault's deployment block ${deployed}`} — deposits and withdrawals before it cancel out unseen, so this is a WINDOW, NOT the whole history. Omit lookback_blocks to scan from deployment.`
               : "shares in − shares out ≠ balance: history predates the window or shares moved by transfer — basis and yield are unknown, not totals"),

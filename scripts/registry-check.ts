@@ -1,7 +1,11 @@
 /**
  * Registry reconciliation: does every row agree with the CHAIN?
  *
- *   TREASURY_RPC_BASE=https://... npx tsx scripts/registry-check.ts
+ *   TREASURY_RPC_BASE=https://... TREASURY_RPC_ARBITRUM=https://... TREASURY_RPC_ROBINHOOD=https://... npx tsx scripts/registry-check.ts
+ *
+ * Each row is checked on ITS chain, through that chain's endpoint (`rpcUrlFromEnv`: the chain's
+ * variable, else its public endpoint). A row whose chain's endpoint did not answer, or answered for
+ * a different chain, is NOT CHECKED — it is never compared against another chain's state.
  *
  * The chain is the only source a row is checked against. A row is a claim about a contract at an
  * address; `symbol()`, `name()`, `decimals()` and `asset()` are what the contract says about itself, and a
@@ -27,9 +31,9 @@
  * `depositOpen` is NOT reconciled here — it is a measurement with a block on it, re-taken live by
  * `preflightDeposit` on every call, so a stale value is a note, not a defect.
  */
-import { createPublicClient, http } from "viem";
-import { base } from "viem/chains";
+import { createPublicClient, http, type PublicClient } from "viem";
 import { erc4626Abi } from "../src/abi/erc4626.js";
+import { CHAIN_INFO, chains, rpcSourceForEnv, rpcUrlFromEnv, type SupportedChainId } from "../src/client.js";
 import { loadRegistry } from "../src/registry.js";
 import { describeError } from "../src/redact.js";
 
@@ -62,26 +66,55 @@ const isRevert = (e: unknown): boolean => {
 /** Redacted, always: the endpoint is a secret and viem puts it in the message. */
 const why = (e: unknown): string => describeError(e, 120);
 
-const rpc = process.env["TREASURY_RPC_BASE"] || process.env["BASE_RPC_URL"] || "https://mainnet.base.org";
-const client = createPublicClient({ chain: base, transport: http(rpc, { timeout: 30_000 }) });
-let block: bigint;
-try {
-  block = await client.getBlockNumber();
-} catch (e) {
-  // The endpoint is unreachable, so NOTHING was checked. Never a claim about the registry.
-  console.error(`the endpoint did not answer — NOTHING was checked, and this says nothing about the registry.`);
-  console.error(`  ${describeError(e, 160)}`);
-  console.error(`\nRetry, or point TREASURY_RPC_BASE at a reachable endpoint.`);
+/**
+ * One client per chain that has a row, each proven to be ON that chain before any row is read
+ * through it. An endpoint that answers for a different chain would report "no contract at this
+ * address" for every row — a disagreement that is really a misconfigured variable.
+ */
+type ChainState = { client: PublicClient; block: bigint } | { unreachable: string };
+const chainState = new Map<SupportedChainId, ChainState>();
+for (const chainId of [...new Set(reg.vaults.map((v) => v.chainId))]) {
+  const info = CHAIN_INFO[chainId];
+  const client = createPublicClient({ chain: chains[chainId], transport: http(rpcUrlFromEnv(chainId), { timeout: 30_000 }) }) as PublicClient;
+  try {
+    const [block, answersFor] = await Promise.all([client.getBlockNumber(), client.getChainId()]);
+    if (answersFor !== chainId) {
+      chainState.set(chainId, { unreachable: `the endpoint in ${rpcSourceForEnv(chainId).source} answers for chain ${answersFor}, not ${info.name} (${chainId})` });
+    } else {
+      chainState.set(chainId, { client, block });
+    }
+  } catch (e) {
+    chainState.set(chainId, { unreachable: `the ${info.name} endpoint did not answer: ${describeError(e, 160)}` });
+  }
+}
+const reached = [...chainState.entries()].filter(([, st]) => "client" in st) as [SupportedChainId, { client: PublicClient; block: bigint }][];
+if (reached.length === 0) {
+  // No endpoint could be used, so NOTHING was checked. Never a claim about the registry.
+  console.error(`no endpoint could be used — NOTHING was checked, and this says nothing about the registry.`);
+  for (const [, st] of chainState) if ("unreachable" in st) console.error(`  ${st.unreachable}`);
+  console.error(`\nRetry, or point ${[...chainState.keys()].map((id) => CHAIN_INFO[id].rpcEnv[0]).join(" / ")} at a reachable endpoint for its own chain.`);
   process.exit(1);
 }
-console.log(`registry reconciledAtIso=${reg.reconciledAtIso}; chain check at block ${block}, ${reg.vaults.length} rows`);
+console.log(
+  `registry reconciledAtIso=${reg.reconciledAtIso}; chain check at ${reached.map(([id, st]) => `${CHAIN_INFO[id].name} block ${st.block}`).join(", ")}; ${reg.vaults.length} rows`,
+);
 
 for (const v of reg.vaults) {
-  if (v.chainId !== base.id) {
-    fail(`${v.symbol}: chainId ${v.chainId} is not Base (${base.id}) — this script only reaches Base`);
+  const st = chainState.get(v.chainId)!;
+  if ("unreachable" in st) {
+    cannotCheck(`${v.symbol}: every check`, st.unreachable);
     continue;
   }
-  const code = await client.getCode({ address: v.address });
+  const client = st.client;
+  // `getCode` is a read like any other: it can fail in TRANSPORT, and an unhandled throw here
+  // printed the endpoint's full URL (see the file header — every error path goes through `why`).
+  let code: string | undefined;
+  try {
+    code = await client.getCode({ address: v.address });
+  } catch (e) {
+    cannotCheck(`${v.symbol}: every check`, why(e));
+    continue;
+  }
   if (!code || code === "0x") {
     fail(`${v.symbol}: no contract at ${v.address}`);
     continue;
@@ -90,13 +123,17 @@ for (const v of reg.vaults) {
   // drops a first deposit. The chain settles it in two reads: code AT that block, none the block before.
   if (v.deployedAtBlock !== undefined) {
     const at = BigInt(v.deployedAtBlock);
-    const [there, before] = await Promise.all([
-      client.getCode({ address: v.address, blockNumber: at }),
-      at > 0n ? client.getCode({ address: v.address, blockNumber: at - 1n }) : Promise.resolve(undefined),
-    ]);
-    if (!there || there === "0x") fail(`${v.symbol}: deployedAtBlock ${at} has no code at ${v.address}`);
-    else if (before && before !== "0x") fail(`${v.symbol}: deployedAtBlock ${at} is LATE — code already exists at ${at - 1n}`);
-    else ok(`${v.symbol}: deployedAtBlock ${at} is the first block with code`);
+    try {
+      const [there, before] = await Promise.all([
+        client.getCode({ address: v.address, blockNumber: at }),
+        at > 0n ? client.getCode({ address: v.address, blockNumber: at - 1n }) : Promise.resolve(undefined),
+      ]);
+      if (!there || there === "0x") fail(`${v.symbol}: deployedAtBlock ${at} has no code at ${v.address}`);
+      else if (before && before !== "0x") fail(`${v.symbol}: deployedAtBlock ${at} is LATE — code already exists at ${at - 1n}`);
+      else ok(`${v.symbol}: deployedAtBlock ${at} is the first block with code`);
+    } catch (e) {
+      cannotCheck(`${v.symbol}: deployedAtBlock ${at}`, why(e));
+    }
   }
   try {
     const dec = await client.readContract({ address: v.address, abi: erc4626Abi, functionName: "decimals" });
@@ -155,8 +192,8 @@ if (failures) {
 if (unresolved) {
   console.error(
     `\n${unresolved} check(s) COULD NOT BE MADE — the endpoint failed, which says nothing about the registry.` +
-      `\nThis is not a disagreement. Retry, or point TREASURY_RPC_BASE at an endpoint with headroom:` +
-      `\n  TREASURY_RPC_BASE=https://... npx tsx scripts/registry-check.ts`,
+      `\nThis is not a disagreement. Retry, or point the chain's variable at an endpoint with headroom:` +
+      `\n  TREASURY_RPC_BASE=https://... TREASURY_RPC_ARBITRUM=https://... TREASURY_RPC_ROBINHOOD=https://... npx tsx scripts/registry-check.ts`,
   );
 }
 if (failures || unresolved) process.exit(1);
