@@ -28,7 +28,7 @@ const live = hasRpc ? describe : describe.skip;
 /** Spark USDC Vault (MetaMorpho, sparkUSDC) — a public 4626 that is NOT ours. The positive control. (name() verified on-chain 2026-09-11) */
 const control: VaultEntry = {
   symbol: "sparkUSDC",
-  name: "Spark USDC Vault (control, not a Tempora vault)",
+  name: "Spark USDC Vault (control, not a Tempora Labs vault)",
   warning: "CONTROL ROW — a third-party vault used to prove a measurement discriminates. Never offered.",
   chainId: 8453,
   address: "0x7BfA7C4f149E7415b73bdeDfe609237e29CBF34A",
@@ -95,7 +95,7 @@ live("preflight against live Base (read-only)", () => {
   }, 180_000);
 
   it("getPosition returns a well-formed, internally consistent view for an arbitrary holder", async () => {
-    // Do not assert a ZERO position for a fixed address: 0x…dEaD was found holding one share of a Tempora
+    // Do not assert a ZERO position for a fixed address: 0x…dEaD was found holding one share of a Tempora Labs
     // vault on Base (2026-09-11) — a premise about chain state nobody had checked. Assert shape
     // and consistency instead, which cannot be falsified by someone burning shares to the address.
     const a = await getPosition({ vault: control, principal: STRANGER, client, maxLogRequests: 2 });

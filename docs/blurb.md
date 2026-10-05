@@ -11,7 +11,7 @@ sends no telemetry; the optional sign-in page loads Privy, whose script sends it
 
 ## The first skill: Earn
 
-Earn puts idle USDC to work in Tempora-curated vaults on Base and Arbitrum One, and idle USDG on Robinhood Chain. With it, an agent can:
+Earn puts idle USDC to work in vaults curated by Tempora Labs on Base and Arbitrum One, and idle USDG on Robinhood Chain. With it, an agent can:
 
 - **Inspect vaults:** assets, fees, deposit access, and links to verify each contract independently.
 - **Prepare a deposit:** review the terms, simulate access, then build unsigned calls.
@@ -94,7 +94,7 @@ no money. Later:
 ## Security
 
 - **No keys, no custody:** the operator's wallet holds the position. Only its signer can move funds.
-- **Direct RPC:** no Tempora service in the request path, and no telemetry from Treasury itself. Keyed RPC URLs are redacted
+- **Direct RPC:** no Tempora Labs service in the request path, and no telemetry from Treasury itself. Keyed RPC URLs are redacted
   from every output.
 - **Verifiable builds:** CI checks the committed bundle, and each npm release carries provenance.
 - Vulnerabilities go through private reporting, not public issues.

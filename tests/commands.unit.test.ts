@@ -78,7 +78,7 @@ describe("tool surface", () => {
   });
 });
 
-describe("earn_vaults — Tempora vaults only, and the access of each is reported", () => {
+describe("earn_vaults — Tempora Labs vaults only, and the access of each is reported", () => {
   it("default is Cash Plus USDC 2 with defaultAccess open; it IS depositable; the gated sibling is listed but not depositable", async () => {
     const out = payload(await tools()["earn_vaults"]!.handler({}, {})) as {
       default: string;

@@ -1,9 +1,9 @@
 # Agent Treasury — documentation
 
-Treasury is the depositor-side client for Tempora's vaults: libraries and an agent skill that let an
-agent (or any program holding its own signer) open an Earn position in a Tempora vault, read what it
+Treasury is the depositor-side client for Tempora Labs' vaults: libraries and an agent skill that let an
+agent (or any program holding its own signer) open an Earn position in a Tempora Labs vault, read what it
 is worth, and prepare — never sign — the transactions to deposit and withdraw. The vaults are ERC-4626
-contracts on Base, Arbitrum One and Robinhood Chain; the client talks to them directly, with no service of Tempora's in the path.
+contracts on Base, Arbitrum One and Robinhood Chain; the client talks to them directly, with no Tempora Labs service in the path.
 
 Every document here is written to be read by an agent as well as a person: plain Markdown, one
 subject per file, facts stated with the block or date they were measured at.

@@ -11,7 +11,7 @@
 
 
 Open Agent Treasury (OAT) helps agents manage on-chain capital. Its first skill, **Earn**, lets
-agents inspect Tempora-curated vaults on Base, Arbitrum One and Robinhood Chain, track positions, and prepare deposits and
+agents inspect vaults curated by Tempora Labs on Base, Arbitrum One and Robinhood Chain, track positions, and prepare deposits and
 withdrawals. It ships as an agent plugin, a command-line program, and a TypeScript/JavaScript library.
 
 **OAT prepares transactions. Your wallet executes them.** It never holds private keys or signs: with
@@ -30,7 +30,7 @@ A transaction goes out only from your own wallet, after you approve it there. Yo
 - **Track a position:** see its value, deposits, and earnings from on-chain records.
 - **Prepare a withdrawal:** check how much is withdrawable now and build unsigned calls.
 
-Earn currently supports **USDC in, USDC out** through Tempora's ERC-4626 vaults on Base and
+Earn currently supports **USDC in, USDC out** through Tempora Labs' ERC-4626 vaults on Base and
 Arbitrum One, and **USDG in, USDG out** on Robinhood Chain. Base is the default chain, and Test 2B its
 default vault; the agent asks which chain when you have not said, and the funds have to be on that
 chain already. See [Vaults](#vaults).
@@ -116,7 +116,7 @@ When you have not said which chain, the agent shows these and asks before it pre
 All of them are experimental vaults using real funds (USDC, or USDG on Robinhood Chain), not bank savings accounts. None currently has a
 lock-up, but liquidity can limit withdrawals.
 
-Tempora Labs curates these vaults and can set fees. OAT offers Tempora's vaults; it does not compare
+Tempora Labs curates these vaults and can set fees. OAT offers Tempora Labs' vaults; it does not compare
 them against the market or promise the best yield. It reports your position's value and earnings,
 not a quoted APY.
 
@@ -125,8 +125,8 @@ See [vault details](docs/vaults.md) for addresses, access rules, fees, and dated
 ## Security
 
 - **No keys or custody:** your wallet holds the position; Treasury never holds a key. With an email or social login, that wallet's keys are managed by Privy; see [risks](docs/risks.md).
-- **Direct RPC access:** the `earn` commands talk only to the chain's RPC (yours, or the chain's public endpoint when none is set or a history scan needs it; see [configuration](docs/configuration.md)), with no Tempora service in the request path and no telemetry. Keyed RPC URLs are redacted.
-- **Sign-in through Privy:** `treasury connect` signs you in through [Privy](https://privy.io), using Tempora's Privy app unless you set `PRIVY_APP_ID`. Privy, and Tempora as that app's owner, see your login and wallet address, and Privy's script on the page sends its own analytics. The page also loads Cloudflare's bot check (challenges.cloudflare.com) for Privy's sign-in.
+- **Direct RPC access:** the `earn` commands talk only to the chain's RPC (yours, or the chain's public endpoint when none is set or a history scan needs it; see [configuration](docs/configuration.md)), with no Tempora Labs service in the request path and no telemetry. Keyed RPC URLs are redacted.
+- **Sign-in through Privy:** `treasury connect` signs you in through [Privy](https://privy.io), using Tempora Labs' Privy app unless you set `PRIVY_APP_ID`. Privy, and Tempora Labs as that app's owner, see your login and wallet address, and Privy's script on the page sends its own analytics. The page also loads Cloudflare's bot check (challenges.cloudflare.com) for Privy's sign-in.
 - **Verifiable builds:** CI checks the committed bundle; [verify its provenance](docs/runbooks/verify_the_bundle.md).
 - **Private vulnerability reporting:** follow [SECURITY.md](SECURITY.md), not a public issue.
 
@@ -145,6 +145,6 @@ certifying the [Developer Certificate of Origin](DCO.md).
 ## Licence
 
 [Apache-2.0](LICENSE). Keep [LICENSE](LICENSE) and [NOTICE](NOTICE) when redistributing.
-The licence does not grant rights to Tempora's names or marks; forks must not claim to be the
-official distribution. Tempora's fund-operations infrastructure is separate from this repository.
+The licence does not grant rights to Tempora Labs' names or marks; forks must not claim to be the
+official distribution. Tempora Labs' fund-operations infrastructure is separate from this repository.
 See [licensing](docs/licensing.md) for details.

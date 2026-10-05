@@ -21,8 +21,8 @@ export const erc4626Chassis: ReadonlySet<Chassis> = new Set<Chassis>(["morpho-v2
 
 /**
  * Whose contract the depositor's USDC actually enters.
- * - `morpho`: a public third-party Morpho vault, reached directly. No row uses it today (Tempora vaults only).
- * - `tempora`: a Tempora fund vault (the product; each fund joins as it goes live).
+ * - `morpho`: a public third-party Morpho vault, reached directly. No row uses it today (Tempora Labs vaults only).
+ * - `tempora`: a Tempora Labs fund vault (the product; each fund joins as it goes live).
  */
 export const backendSchema = z.enum(["morpho", "tempora"]);
 export type Backend = z.infer<typeof backendSchema>;

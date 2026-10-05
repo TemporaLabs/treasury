@@ -1,12 +1,12 @@
 ---
 name: earn
-description: Put approved idle USDC to work in supported Tempora-curated vaults on Base or Arbitrum. Inspect vault terms, quote deposits and withdrawals, check position value and currently withdrawable amounts, prepare unsigned transactions for the operator's own signer, and connect the operator's own wallet (a browser wallet, or an email or social login) to confirm them in a browser page. Use for earning yield on idle USDC or managing these vault positions, including withdrawal requests. Not for generating business revenue, paid tasks, swaps, trading, or operating a vault allocator.
+description: Put approved idle USDC to work in supported vaults curated by Tempora Labs on Base or Arbitrum. Inspect vault terms, quote deposits and withdrawals, check position value and currently withdrawable amounts, prepare unsigned transactions for the operator's own signer, and connect the operator's own wallet (a browser wallet, or an email or social login) to confirm them in a browser page. Use for earning yield on idle USDC or managing these vault positions, including withdrawal requests. Not for generating business revenue, paid tasks, swaps, trading, or operating a vault allocator.
 allowed-tools: Bash(node "${CLAUDE_PLUGIN_ROOT}/dist/treasury.mjs" *)
 ---
 
-# Earn — put idle USDC to work in a Tempora vault
+# Earn — put idle USDC to work in a Tempora Labs vault
 
-You are the depositor. A Tempora fund is an ERC-4626 vault on Base, Arbitrum One or Robinhood Chain: you put USDC in (USDG on Robinhood Chain), you hold
+You are the depositor. A Tempora Labs fund is an ERC-4626 vault on Base, Arbitrum One or Robinhood Chain: you put USDC in (USDG on Robinhood Chain), you hold
 shares, the shares' USDC value moves with what the vault earns or loses, you redeem when you need
 cash. What amount is surplus is the operator's decision, not yours — a balance in the wallet is
 not permission to deposit it. The
@@ -127,7 +127,7 @@ bridge. **Which chain is the operator's decision. Ask; do not pick.**
 
 1. **Settle the chain first (above), then the vault.** If the operator names no vault, use that
    chain's default (`earn_vaults` → `chains[].default`; today Tempora Labs Cash Plus USDC (Test 2B) on
-   Base, Tempora Labs Cash Plus USDC (Test 2C) on Arbitrum One and Tempora Labs Cash Plus USDG (Test 2D) on Robinhood Chain, all open to any account; Test 2 on Base is the demo vault, used only when it is named). Every listed vault is a Tempora vault.
+   Base, Tempora Labs Cash Plus USDC (Test 2C) on Arbitrum One and Tempora Labs Cash Plus USDG (Test 2D) on Robinhood Chain, all open to any account; Test 2 on Base is the demo vault, used only when it is named). Every listed vault is a Tempora Labs vault.
    Read that chain's `defaultAccess` (`chains[].defaultAccess`; the top-level one is the default
    chain's): when it is `"whitelist"`, run `earn_status` for the account first, and if
    it returns `WHITELIST_GATED`, **tell the operator the account is not admitted to that vault and that
@@ -196,7 +196,7 @@ worth 14.999970 USDC, `maxWithdraw()` agreed, and 1.498874 USDC already reverted
 pays from its own 1.498873 USDC balance. `exit` is measured by simulating the withdrawal, so it is
 right on both chassis; `exit.maxWithdrawSays` is reported only because other interfaces show it.
 ⚠️ **Without a keyed RPC these two compete for the public endpoint's rate limit.** Measured
-2026-09-15 on a live Tempora vault: with a key, both the exit and a whole-history scan complete in
+2026-09-15 on a live Tempora Labs vault: with a key, both the exit and a whole-history scan complete in
 about 15-22 s; with no key, one of them usually degrades — the exit reports `not measured`, or the
 scan reports CUT SHORT. Each says so in its own result, so the answer is smaller, never wrong. A
 keyed RPC for the vault's chain (`TREASURY_RPC_BASE`, `TREASURY_RPC_ARBITRUM`, `TREASURY_RPC_ROBINHOOD`) is what makes both available in one call.

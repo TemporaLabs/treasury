@@ -47,7 +47,7 @@ anyone's reach — clause (d) of [`DCO.md`](DCO.md) is what has you acknowledge 
 
 - **Third-party code is disclosed.** A contribution that includes code you did not write names its
   source and licence. Code under a licence incompatible with Apache-2.0 cannot merge.
-- **Names are separate.** Section 6 of the licence grants no right to the Tempora names and marks
+- **Names are separate.** Section 6 of the licence grants no right to the Tempora Labs names and marks
   beyond describing where the work came from.
 
 ## Before you start
@@ -76,7 +76,7 @@ Both rules are enforced by tests, not by review alone.
 
 Every row in `registry/vaults.json` is a vault the client will list and build calls
 for, so a new row is a product decision, not only a passing build. Treasury's official registry lists
-Tempora vaults. Proposing a new destination needs Tempora Labs' agreement; say so in the pull request.
+Tempora Labs vaults. Proposing a new destination needs Tempora Labs' agreement; say so in the pull request.
 
 A row is a set of measurements. `scripts/registry-check.ts` reconciles each one against the chain it
 is on, and the pull request should say which block it was measured at.
