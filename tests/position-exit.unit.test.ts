@@ -112,6 +112,21 @@ describe("earn_balance says what can be withdrawn now, not only what the positio
     expect(p.exit.note).not.toMatch(/Both refusals|twice|one bounded by its liquid balance/);
   });
 
+  it("with no liquid balance, only Morpho V2 is told a smaller withdrawal may still pass; Fusion is told why it likely will not", async () => {
+    const fusion = await getPosition({ vault, principal: ACCOUNT, client: vaultClient({ shares: 10n ** 18n, value: 1_000_000n, liquid: 0n, payable: 0n }).client, maxLogRequests: 1 });
+    expect(fusion.exit.note).toMatch(/pays withdrawals from the vault's own balance unless the fund has instant-withdrawal fuses/);
+    expect(fusion.exit.note).toMatch(/likely to be refused too until the fund unwinds/);
+    expect(fusion.exit.note).not.toMatch(/may still pass/);
+    const morpho = getVault("tlCashPlusUSDC2B");
+    const m = await getPosition({ vault: morpho, principal: ACCOUNT, client: vaultClient({ shares: 10n ** 18n, value: 1_000_000n, liquid: 0n, payable: 0n }).client, maxLogRequests: 1 });
+    expect(m.exit.note).toMatch(/also pays out of its markets, so a smaller amount may still pass/);
+    expect(m.exit.note).not.toMatch(/unwind/);
+    for (const p of [fusion, m]) {
+      expect(p.exit.exitableNow).toBe("unknown");
+      expect(p.exit.note).toMatch(/earn quote --direction withdraw/);
+    }
+  });
+
   it("🔴 a second probe that PAYS is believed, whatever bound produced it", async () => {
     // Reproduced live: liquid 5 USDC against a 1 USDC position, the first attempt
     // reverts and an identical retry succeeds — two calls against "latest" can straddle a block, or a
