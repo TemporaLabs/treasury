@@ -319,7 +319,7 @@ the receipt:
 |---|---|
 | `matched` | the vault's (or token's) own event for the connected account and the exact amount is there, and no other transfer of the vault's asset left the account |
 | `extra_transfer` | as `matched`, but the account ALSO sent the asset elsewhere in the same transaction (`alsoMoved`) — often a wallet's fee for paying gas in tokens. Tell the operator |
-| `mismatch` | the transaction succeeded without the expected event. Stop |
+| `mismatch` | the transaction succeeded without the expected event, or was mined before this flow started (an older transaction, not this one). Stop |
 | `reverted` | it failed on chain; nothing it was meant to do happened |
 | `unverified` | no receipt in time; look the hash up before retrying anything |
 

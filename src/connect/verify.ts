@@ -40,7 +40,7 @@ export async function verifyLanded(
   hash: Hex,
   call: Admitted,
   account: Address,
-  opts: { attempts?: number; delayMs?: number; deadline?: number } = {},
+  opts: { attempts?: number; delayMs?: number; deadline?: number; notBefore?: bigint } = {},
 ): Promise<Verdict> {
   const attempts = opts.attempts ?? 30;
   const delayMs = opts.delayMs ?? 2_000;
@@ -55,6 +55,11 @@ export async function verifyLanded(
   }
   if (!receipt) return { verified: "unverified", detail: `no receipt for ${hash} in time; look it up on the explorer before retrying anything` };
   if (receipt.status !== "success") return { verified: "reverted", detail: `${hash} reverted on chain; nothing it was meant to do happened` };
+  // `notBefore`: the chain head when the confirm flow started. A receipt mined in that block or earlier
+  // is an older transaction of the same shape, not one this flow sent.
+  if (opts.notBefore !== undefined && receipt.blockNumber <= opts.notBefore) {
+    return { verified: "mismatch", detail: `${hash} was mined in block ${receipt.blockNumber}, which already existed when this confirm flow started (at block ${opts.notBefore}); it is not a transaction from this flow` };
+  }
 
   const vault = call.vault.address;
   const asset = call.vault.asset.address;

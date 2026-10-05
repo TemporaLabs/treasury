@@ -1,7 +1,8 @@
-import { BaseError, ContractFunctionRevertedError, ExecutionRevertedError, parseAbiItem, type Address } from "viem";
+import { parseAbiItem, type Address } from "viem";
 import { erc4626Abi } from "./abi/erc4626.js";
 import { type VaultEntry } from "./registry-schema.js";
 import { describeError } from "./redact.js";
+import { isRevert } from "./preflight.js";
 import { formatAmount } from "./units.js";
 import { CHAIN_INFO, type ReadClient } from "./client.js";
 
@@ -247,17 +248,6 @@ function txsOf(logs: EventLog[], decimals: number, symbol: string): ScanTx[] {
   }));
 }
 
-/**
- * Did the CHAIN refuse this, or did the RPC fail to ask it? Every failure used to read as "cannot pay",
- * so one HTTP 502 on the first simulation reported a fully-exitable position as unexitable AND blamed
- * the vault for it (measured through a proxy that failed exactly one call: one attempt made, the vault
- * never asked, `exitableNow: "unknown"`, note "the refusal is the vault's").
- * viem's own error chain separates them: a real revert carries a ContractFunctionRevertedError or an
- * ExecutionRevertedError; a transport failure does not.
- */
-function isRevert(e: unknown): boolean {
-  return e instanceof BaseError && e.walk((x) => x instanceof ContractFunctionRevertedError || x instanceof ExecutionRevertedError) !== null;
-}
 
 /**
  * At most two simulated withdrawals — the whole position, then the vault's own liquid balance — and the
@@ -348,6 +338,16 @@ async function measureExit(a: {
   // must NOT happen is describing it as something it was not: the note says what was
   // asked, and a success is believed whatever bound produced it.
   const boundedByLiquid = liquid < value;
+  // A liquid bound of 0 is no withdrawal to ask about: say it was not tried, never count it as a refusal.
+  if (liquid === 0n) {
+    return {
+      exitableNow: "unknown",
+      measuredAs: "refused, size unknown",
+      instantLiquidity: liquidText,
+      maxWithdrawSays: maxText,
+      note: `the vault REFUSED a full-position withdrawal at this block. Its liquid balance is ${liquidText}, so no smaller withdrawal bounded by it was tried; a smaller amount may still pass — quote one with \`earn quote --direction withdraw\`. The refusal came from the vault, but it is not a shortfall this client could size.${advisory}`,
+    };
+  }
   const askedFor = boundedByLiquid ? liquid : value;
   const bounded = await attempt(askedFor);
   if (bounded === "paid" && boundedByLiquid) {
