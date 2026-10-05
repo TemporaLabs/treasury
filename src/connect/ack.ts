@@ -79,8 +79,10 @@ export interface AckSummary {
  * ("Show this warning before preparing any deposit."). The operator is reading the warning itself, so
  * that sentence is dropped here. The registry text is unchanged: `earn` output and the registry check use it.
  */
-export function operatorWarning(w: string): string {
-  return w.replace(/\s*Show this warning before preparing any deposit\.\s*$/, "").trim();
+export function operatorWarning(w: string, action: "deposit" | "withdraw" = "deposit"): string {
+  const s = w.replace(/\s*Show this warning before preparing any deposit\.\s*$/, "").trim();
+  // Before a withdrawal, advice on how much to deposit does not apply.
+  return action === "withdraw" ? s.replace(/\s*Deposit only [^.]*\./g, "").trim() : s;
 }
 
 export function summarize(action: "deposit" | "withdraw", calls: UnsignedCall[], admitted: Admitted[], receiver: Address): AckSummary {
@@ -99,7 +101,7 @@ export function summarize(action: "deposit" | "withdraw", calls: UnsignedCall[],
     chainId,
     vault: { symbol: v.symbol, name: v.name, address: v.address, explorer: linksFor(v).explorer },
     receiver,
-    warning: operatorWarning(v.warning),
+    warning: operatorWarning(v.warning, action),
     // The disclosures in plain words (`DISCLOSURES.plain`): the operator reads this before every page,
     // so it is the short form. Before a withdrawal, only what holds for every action.
     disclosures:

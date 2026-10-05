@@ -29,15 +29,24 @@ export async function quoteDeposit(args: { vault: VaultEntry; depositor: Address
   const { vault, depositor, client } = args;
   const assets = parseAmount(args.assetsHuman, vault.asset.decimals, `deposit amount (${vault.asset.symbol})`);
   const pre = await preflightDeposit({ vault, depositor, assetsHuman: args.assetsHuman, client });
+  let previewError: unknown;
   const [previewShares, oneShareInAssets] = await Promise.all([
-    client.readContract({ address: vault.address, abi: erc4626Abi, functionName: "previewDeposit", args: [assets] }).catch(() => undefined),
+    client.readContract({ address: vault.address, abi: erc4626Abi, functionName: "previewDeposit", args: [assets] }).catch((e: unknown) => {
+      previewError = e;
+      return undefined;
+    }),
     client.readContract({ address: vault.address, abi: erc4626Abi, functionName: "convertToAssets", args: [10n ** BigInt(vault.shareDecimals)] }),
   ]);
   const q: DepositQuote = {
     vault: vault.symbol,
     depositor,
     amountUsdc: `${formatAmount(assets, vault.asset.decimals)} ${vault.asset.symbol}`,
-    expectedShares: previewShares === undefined ? "unavailable (previewDeposit reverted)" : `${formatAmount(previewShares, vault.shareDecimals)} ${vault.symbol}`,
+    expectedShares:
+      previewShares !== undefined
+        ? `${formatAmount(previewShares, vault.shareDecimals)} ${vault.symbol}`
+        : extractRevert(previewError) !== undefined
+          ? "unavailable (previewDeposit reverted)"
+          : `unavailable (previewDeposit could not be read; the RPC failed, not the vault: ${describeError(previewError)})`,
     sharePriceInAssets: `${formatAmount(oneShareInAssets, vault.asset.decimals)} ${vault.asset.symbol} per share`,
     preflight: pre,
     canProceed: pre.canDeposit,

@@ -102,6 +102,16 @@ describe("earn_balance says what can be withdrawn now, not only what the positio
     expect(p.exit.note).toMatch(/REFUSED a full-position withdrawal and one bounded by its liquid balance/);
   });
 
+  it("a liquid balance of 0 is not counted as a second refusal: one withdrawal was asked, and the note says so", async () => {
+    const v = vaultClient({ shares: 10n ** 18n, value: 1_000_000n, liquid: 0n, payable: 0n });
+    const p = await getPosition({ vault, principal: ACCOUNT, client: v.client, maxLogRequests: 1 });
+    expect(v.calls).toEqual(["1000000"]);
+    expect(p.exit.exitableNow).toBe("unknown");
+    expect(p.exit.measuredAs).toBe("refused, size unknown");
+    expect(p.exit.note).toMatch(/no smaller withdrawal bounded by it was tried/);
+    expect(p.exit.note).not.toMatch(/Both refusals|twice|one bounded by its liquid balance/);
+  });
+
   it("🔴 a second probe that PAYS is believed, whatever bound produced it", async () => {
     // Reproduced live: liquid 5 USDC against a 1 USDC position, the first attempt
     // reverts and an identical retry succeeds — two calls against "latest" can straddle a block, or a

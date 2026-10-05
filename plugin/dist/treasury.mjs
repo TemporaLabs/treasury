@@ -38967,8 +38967,8 @@ async function preflightDeposit(args) {
   try {
     const previewShares = await client.readContract({ address: vault.address, abi: erc4626Abi, functionName: "previewDeposit", args: [assets2] });
     quotes.previewShares = `${formatAmount(previewShares, vault.shareDecimals)} ${vault.symbol}`;
-  } catch {
-    findings.push("previewDeposit() reverted; no shares quote");
+  } catch (e) {
+    findings.push(extractRevert(e) !== void 0 ? "previewDeposit() reverted; no shares quote" : `previewDeposit() could not be read, so no shares quote (the RPC failed, not the vault): ${describeError(e)}`);
   }
   try {
     await client.simulateContract({
@@ -39116,6 +39116,15 @@ async function measureExit(a) {
   if (full === "unresolved") return unresolved("the simulation of a full-position withdrawal did not complete");
   if (liquid === void 0) return unresolved("the vault refused a full-position withdrawal and the vault's liquid balance could not be read");
   const boundedByLiquid = liquid < value;
+  if (liquid === 0n) {
+    return {
+      exitableNow: "unknown",
+      measuredAs: "refused, size unknown",
+      instantLiquidity: liquidText,
+      maxWithdrawSays: maxText,
+      note: `the vault REFUSED a full-position withdrawal at this block. Its liquid balance is ${liquidText}, so no smaller withdrawal bounded by it was tried; a smaller amount may still pass \u2014 quote one with \`earn quote --direction withdraw\`. The refusal came from the vault, but it is not a shortfall this client could size.${advisory}`
+    };
+  }
   const askedFor = boundedByLiquid ? liquid : value;
   const bounded = await attempt(askedFor);
   if (bounded === "paid" && boundedByLiquid) {
@@ -39246,15 +39255,19 @@ async function quoteDeposit(args) {
   const { vault, depositor, client } = args;
   const assets2 = parseAmount(args.assetsHuman, vault.asset.decimals, `deposit amount (${vault.asset.symbol})`);
   const pre = await preflightDeposit({ vault, depositor, assetsHuman: args.assetsHuman, client });
+  let previewError;
   const [previewShares, oneShareInAssets] = await Promise.all([
-    client.readContract({ address: vault.address, abi: erc4626Abi, functionName: "previewDeposit", args: [assets2] }).catch(() => void 0),
+    client.readContract({ address: vault.address, abi: erc4626Abi, functionName: "previewDeposit", args: [assets2] }).catch((e) => {
+      previewError = e;
+      return void 0;
+    }),
     client.readContract({ address: vault.address, abi: erc4626Abi, functionName: "convertToAssets", args: [10n ** BigInt(vault.shareDecimals)] })
   ]);
   const q = {
     vault: vault.symbol,
     depositor,
     amountUsdc: `${formatAmount(assets2, vault.asset.decimals)} ${vault.asset.symbol}`,
-    expectedShares: previewShares === void 0 ? "unavailable (previewDeposit reverted)" : `${formatAmount(previewShares, vault.shareDecimals)} ${vault.symbol}`,
+    expectedShares: previewShares !== void 0 ? `${formatAmount(previewShares, vault.shareDecimals)} ${vault.symbol}` : extractRevert(previewError) !== void 0 ? "unavailable (previewDeposit reverted)" : `unavailable (previewDeposit could not be read; the RPC failed, not the vault: ${describeError(previewError)})`,
     sharePriceInAssets: `${formatAmount(oneShareInAssets, vault.asset.decimals)} ${vault.asset.symbol} per share`,
     preflight: pre,
     canProceed: pre.canDeposit,
@@ -39832,8 +39845,9 @@ function checkAck(code, pending, calls, account, now) {
     throw new Error(`refused: these calls are not the ones the operator acknowledged (the amount, vault, chain, receiver or connected account changed); ${again}`);
   }
 }
-function operatorWarning(w) {
-  return w.replace(/\s*Show this warning before preparing any deposit\.\s*$/, "").trim();
+function operatorWarning(w, action = "deposit") {
+  const s = w.replace(/\s*Show this warning before preparing any deposit\.\s*$/, "").trim();
+  return action === "withdraw" ? s.replace(/\s*Deposit only [^.]*\./g, "").trim() : s;
 }
 function summarize(action, calls, admitted, receiver) {
   const main = admitted.find((a) => a.kind !== "approve");
@@ -39848,7 +39862,7 @@ function summarize(action, calls, admitted, receiver) {
     chainId,
     vault: { symbol: v.symbol, name: v.name, address: v.address, explorer: linksFor(v).explorer },
     receiver,
-    warning: operatorWarning(v.warning),
+    warning: operatorWarning(v.warning, action),
     // The disclosures in plain words (`DISCLOSURES.plain`): the operator reads this before every page,
     // so it is the short form. Before a withdrawal, only what holds for every action.
     disclosures: action === "deposit" ? [...DISCLOSURES.plain.deposit, ...v.depositOpen.open ? [] : [DISCLOSURES.plain.gatedDeposit], ...DISCLOSURES.plain.always] : [...DISCLOSURES.plain.always]
@@ -40274,6 +40288,9 @@ async function verifyLanded(client, hash4, call2, account, opts = {}) {
   }
   if (!receipt) return { verified: "unverified", detail: `no receipt for ${hash4} in time; look it up on the explorer before retrying anything` };
   if (receipt.status !== "success") return { verified: "reverted", detail: `${hash4} reverted on chain; nothing it was meant to do happened` };
+  if (opts.notBefore !== void 0 && receipt.blockNumber < opts.notBefore) {
+    return { verified: "mismatch", detail: `${hash4} was mined in block ${receipt.blockNumber}, before this confirm flow started (block ${opts.notBefore}); it is not a transaction from this flow` };
+  }
   const vault = call2.vault.address;
   const asset = call2.vault.asset.address;
   const logs = receipt.logs;
@@ -40395,7 +40412,8 @@ async function runConfirm(calls, session, deps = {}) {
   let stopReason;
   const ttlMs = deps.ttlMs ?? CONFIRM_TTL_MS;
   const deadline = Date.now() + ttlMs;
-  const verifyOpts = { ...deps.verifyOpts, deadline };
+  const notBefore = client.getBlockNumber ? await Promise.race([client.getBlockNumber().catch(() => void 0), new Promise((r) => setTimeout(() => r(void 0), deps.balanceTimeoutMs ?? 5e3))]) : void 0;
+  const verifyOpts = { ...deps.verifyOpts, deadline, ...notBefore !== void 0 ? { notBefore } : {} };
   const wellFormedHash = (h) => typeof h === "string" && /^0x[0-9a-fA-F]{64}$/.test(h);
   const known = (h) => done.some((t) => t.hash.toLowerCase() === h.toLowerCase());
   const allowanceVisible = async (index2) => {

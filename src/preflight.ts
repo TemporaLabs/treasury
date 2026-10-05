@@ -177,8 +177,8 @@ export async function preflightDeposit(args: PreflightArgs): Promise<PreflightRe
   try {
     const previewShares = await client.readContract({ address: vault.address, abi: erc4626Abi, functionName: "previewDeposit", args: [assets] });
     quotes.previewShares = `${formatAmount(previewShares, vault.shareDecimals)} ${vault.symbol}`;
-  } catch {
-    findings.push("previewDeposit() reverted; no shares quote");
+  } catch (e) {
+    findings.push(extractRevert(e) !== undefined ? "previewDeposit() reverted; no shares quote" : `previewDeposit() could not be read, so no shares quote (the RPC failed, not the vault): ${describeError(e)}`);
   }
 
   // The verdict: simulate the real call from the real depositor.

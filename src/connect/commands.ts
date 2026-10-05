@@ -83,7 +83,7 @@ export interface ConnectDeps {
   verifySignature?: (a: { address: Address; message: string; signature: Hex }) => Promise<boolean>;
   open?: (url: string) => boolean;
   /** The confirm flow's chain reads (receipts, allowance, balances), injectable for tests. */
-  client?: (chainId: number) => Pick<ReturnType<typeof makePublicClient>, "getTransactionReceipt" | "readContract"> & Partial<Pick<ReturnType<typeof makePublicClient>, "getBalance">>;
+  client?: (chainId: number) => Pick<ReturnType<typeof makePublicClient>, "getTransactionReceipt" | "readContract"> & Partial<Pick<ReturnType<typeof makePublicClient>, "getBalance" | "getBlockNumber">>;
   verifyOpts?: { attempts?: number; delayMs?: number };
   /** Overrides the flow's time limit and the cancel grace period (tests). */
   ttlMs?: number;
@@ -156,7 +156,12 @@ export async function runConfirm(
   const ttlMs = deps.ttlMs ?? CONFIRM_TTL_MS;
   // Every chain read stops waiting when the flow's time limit is up, so the command returns inside it.
   const deadline = Date.now() + ttlMs;
-  const verifyOpts = { ...deps.verifyOpts, deadline };
+  // The chain head when the flow starts: a receipt mined before it cannot be from this flow.
+  // A read that fails or is slow leaves no floor, never blocks the flow.
+  const notBefore = client.getBlockNumber
+    ? await Promise.race([client.getBlockNumber().catch(() => undefined), new Promise<undefined>((r) => setTimeout(() => r(undefined), deps.balanceTimeoutMs ?? 5_000))])
+    : undefined;
+  const verifyOpts = { ...deps.verifyOpts, deadline, ...(notBefore !== undefined ? { notBefore } : {}) };
   const wellFormedHash = (h: unknown): h is string => typeof h === "string" && /^0x[0-9a-fA-F]{64}$/.test(h);
   const known = (h: string) => done.some((t) => t.hash.toLowerCase() === h.toLowerCase());
 

@@ -159,6 +159,14 @@ Pre-1.0, minor versions may change tool names, schemas and behaviour.
     `--shares_exact` without `--all`, instead of silently using one of them.
 - A chain's own name in an RPC URL (`…/arbitrum/<key>`) is no longer treated as a secret, so an
   error that names the chain is not masked.
+- From the release smoke test:
+  - A `previewDeposit` that fails because the RPC failed (a rate limit, for one) is reported as such
+    in the pre-flight findings and in `earn quote`'s `expectedShares`, no longer as a revert by the vault.
+  - A withdrawal's acknowledgement leaves out the vault warning's advice on how much to deposit.
+  - The confirm flow reads the chain's block number when it starts, and a receipt mined before it is
+    `mismatch` (it is not this flow's transaction) instead of `matched` (#102).
+  - `earn balance` no longer reports a full exit on a vault with no liquid balance as refused twice:
+    only the full withdrawal was asked, and the note says no smaller one was tried (#103).
 - `scripts/registry-check.ts` reports a failed `eth_getCode` as not checked, through the same
   redaction as every other read; it used to escape as an uncaught error.
 

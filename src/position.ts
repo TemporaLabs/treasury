@@ -348,6 +348,16 @@ async function measureExit(a: {
   // must NOT happen is describing it as something it was not: the note says what was
   // asked, and a success is believed whatever bound produced it.
   const boundedByLiquid = liquid < value;
+  // A liquid bound of 0 is no withdrawal to ask about: say it was not tried, never count it as a refusal.
+  if (liquid === 0n) {
+    return {
+      exitableNow: "unknown",
+      measuredAs: "refused, size unknown",
+      instantLiquidity: liquidText,
+      maxWithdrawSays: maxText,
+      note: `the vault REFUSED a full-position withdrawal at this block. Its liquid balance is ${liquidText}, so no smaller withdrawal bounded by it was tried; a smaller amount may still pass — quote one with \`earn quote --direction withdraw\`. The refusal came from the vault, but it is not a shortfall this client could size.${advisory}`,
+    };
+  }
   const askedFor = boundedByLiquid ? liquid : value;
   const bounded = await attempt(askedFor);
   if (bounded === "paid" && boundedByLiquid) {
