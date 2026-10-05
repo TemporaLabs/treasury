@@ -4,8 +4,9 @@
  *
  * Run without `--ack`, either command builds and gate-checks its calls, records them as pending, and
  * returns `acknowledgement`: one fixed text, written here and not by the agent, naming the action,
- * amount, chain, vault, its explorer link, the receiver, the vault's warning and (for a deposit) the
- * pre-deposit disclosures. The agent posts it to the operator and waits for an explicit yes. Run again
+ * amount, chain, vault, its explorer link, the receiver, the vault's warning and the disclosures in
+ * plain words (`DISCLOSURES.plain`; the full text stays in `earn terms`). The agent posts it to the
+ * operator and waits for an explicit yes. Run again
  * with `--ack <code>`, the page opens only if the code names the pending acknowledgement, it has not
  * expired, and the calls are exactly the ones it described. The code is then spent, so every page
  * open is preceded by its own acknowledgement.
@@ -99,8 +100,12 @@ export function summarize(action: "deposit" | "withdraw", calls: UnsignedCall[],
     vault: { symbol: v.symbol, name: v.name, address: v.address, explorer: linksFor(v).explorer },
     receiver,
     warning: operatorWarning(v.warning),
-    // Before a deposit, the full pre-deposit disclosures; before a withdrawal, what the client is.
-    disclosures: action === "deposit" ? [...DISCLOSURES.items, ...DISCLOSURES.clientNotes] : [...DISCLOSURES.clientNotes],
+    // The disclosures in plain words (`DISCLOSURES.plain`): the operator reads this before every page,
+    // so it is the short form. Before a withdrawal, only what holds for every action.
+    disclosures:
+      action === "deposit"
+        ? [...DISCLOSURES.plain.deposit, ...(v.depositOpen.open ? [] : [DISCLOSURES.plain.gatedDeposit]), ...DISCLOSURES.plain.always]
+        : [...DISCLOSURES.plain.always],
   };
 }
 
@@ -125,6 +130,7 @@ export function acknowledgementText(s: AckSummary): string {
     ``,
     `Before you agree:`,
     ...s.disclosures.map((d) => `  - ${d}`),
+    `  ${DISCLOSURES.plain.fullTerms}`,
     ``,
     `Do you acknowledge and want the signing page opened for exactly this ${s.action}? Reply yes or no.`,
   ].join("\n");
