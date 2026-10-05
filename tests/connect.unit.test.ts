@@ -856,6 +856,10 @@ describe("the acknowledgement before any signing page opens", () => {
       }
     });
 
+    it("the deposit advice is cut at its sentence end, not at a decimal point", () => {
+      expect(operatorWarning("Test vault. Deposit only up to 0.5 USDC per account. Funds can be lost.", "withdraw")).toBe("Test vault. Funds can be lost.");
+    });
+
     it("a withdrawal's warning drops the deposit advice; a deposit's keeps it", async () => {
       expect(vault.warning, "premise: the registry's warning carries deposit advice").toMatch(/Deposit only an amount/);
       const wd = String((await connect("connect_withdraw", { amount_usdc: "1" }))["acknowledgement"]);
@@ -1060,12 +1064,13 @@ describe("the acknowledgement before any signing page opens", () => {
 describe("a receipt mined before the confirm flow started is not this flow's transaction", () => {
   const atBlock = (blockNumber: bigint, logs: ReturnType<typeof log>[]) => ({ getTransactionReceipt: async () => ({ status: "success", blockNumber, logs }) as never });
 
-  it("verifyLanded: an older receipt of the same shape is a mismatch; one at or after the start block matches", async () => {
+  it("verifyLanded: a receipt in or before the start block is a mismatch; one after it matches", async () => {
     const logs = [transferLog(ACCOUNT, vault.address, 600_000n), depositLog(ACCOUNT, 600_000n)];
     const old = await verifyLanded(atBlock(99n, logs), HASH, depositCall, ACCOUNT, { notBefore: 100n });
     expect(old.verified).toBe("mismatch");
-    expect(old.detail).toMatch(/block 99, before this confirm flow started \(block 100\)/);
-    expect((await verifyLanded(atBlock(100n, logs), HASH, depositCall, ACCOUNT, { notBefore: 100n })).verified).toBe("matched");
+    expect(old.detail).toMatch(/block 99, which already existed when this confirm flow started \(at block 100\)/);
+    expect((await verifyLanded(atBlock(100n, logs), HASH, depositCall, ACCOUNT, { notBefore: 100n })).verified).toBe("mismatch");
+    expect((await verifyLanded(atBlock(101n, logs), HASH, depositCall, ACCOUNT, { notBefore: 100n })).verified).toBe("matched");
   });
 
   it("runConfirm reads the start block and stops on a hash from before it", async () => {
@@ -1083,6 +1088,6 @@ describe("a receipt mined before the confirm flow started is not this flow's tra
     const out = JSON.parse(outcome(vault.chainId, ACCOUNT, await run)) as { status: string; txs: { verified: string; detail?: string }[] };
     expect(out.status).toBe("stopped");
     expect(out.txs[0]!.verified).toBe("mismatch");
-    expect(out.txs[0]!.detail).toMatch(/before this confirm flow started/);
+    expect(out.txs[0]!.detail).toMatch(/already existed when this confirm flow started/);
   });
 });

@@ -4,7 +4,7 @@ import { type VaultEntry } from "./registry-schema.js";
 import { describeError } from "./redact.js";
 import { parseAmount, formatAmount } from "./units.js";
 import type { ReadClient } from "./client.js";
-import { preflightDeposit, extractRevert, type PreflightResult } from "./preflight.js";
+import { preflightDeposit, extractRevert, isRevert, type PreflightResult } from "./preflight.js";
 
 /**
  * Pre-trade quotes. A quote is three things kept apart:
@@ -44,7 +44,7 @@ export async function quoteDeposit(args: { vault: VaultEntry; depositor: Address
     expectedShares:
       previewShares !== undefined
         ? `${formatAmount(previewShares, vault.shareDecimals)} ${vault.symbol}`
-        : extractRevert(previewError) !== undefined
+        : isRevert(previewError)
           ? "unavailable (previewDeposit reverted)"
           : `unavailable (previewDeposit could not be read; the RPC failed, not the vault: ${describeError(previewError)})`,
     sharePriceInAssets: `${formatAmount(oneShareInAssets, vault.asset.decimals)} ${vault.asset.symbol} per share`,

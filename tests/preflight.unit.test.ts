@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { BaseError, ContractFunctionExecutionError, ContractFunctionRevertedError } from "viem";
+import { BaseError, ContractFunctionExecutionError, ContractFunctionRevertedError, ExecutionRevertedError } from "viem";
 import { erc4626Abi, knownRevertSelectors } from "../src/abi/erc4626.js";
 import { registrySchema } from "../src/registry-schema.js";
 import { classifyRevert, extractRevert, preflightDeposit } from "../src/preflight.js";
@@ -134,6 +134,14 @@ describe("a previewDeposit failure is named for what failed: the RPC or the vaul
     expect(pre.findings.join("\n")).not.toMatch(/previewDeposit\(\) reverted/);
     const q = await quoteDeposit({ vault, depositor: STRANGER, assetsHuman: "1", client: client(rateLimited) });
     expect(q.expectedShares).toMatch(/could not be read; the RPC failed, not the vault/);
+  });
+
+  it("a revert with no data (a bare revert, code -32000 from a geth-family node) is still the vault's", async () => {
+    const bareRevert = () => new BaseError("previewDeposit reverted", { cause: new ExecutionRevertedError({ cause: new Error("execution reverted") }) });
+    const pre = await preflightDeposit({ vault, depositor: STRANGER, assetsHuman: "1", client: client(bareRevert) });
+    expect(pre.findings).toContain("previewDeposit() reverted; no shares quote");
+    const q = await quoteDeposit({ vault, depositor: STRANGER, assetsHuman: "1", client: client(bareRevert) });
+    expect(q.expectedShares).toBe("unavailable (previewDeposit reverted)");
   });
 
   it("a real revert is still reported as a revert", async () => {

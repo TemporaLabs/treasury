@@ -156,12 +156,11 @@ export async function runConfirm(
   const ttlMs = deps.ttlMs ?? CONFIRM_TTL_MS;
   // Every chain read stops waiting when the flow's time limit is up, so the command returns inside it.
   const deadline = Date.now() + ttlMs;
-  // The chain head when the flow starts: a receipt mined before it cannot be from this flow.
-  // A read that fails or is slow leaves no floor, never blocks the flow.
-  const notBefore = client.getBlockNumber
-    ? await Promise.race([client.getBlockNumber().catch(() => undefined), new Promise<undefined>((r) => setTimeout(() => r(undefined), deps.balanceTimeoutMs ?? 5_000))])
-    : undefined;
-  const verifyOpts = { ...deps.verifyOpts, deadline, ...(notBefore !== undefined ? { notBefore } : {}) };
+  // The chain head when the flow starts: a receipt mined in it or before it cannot be from this flow.
+  // Read beside the balances below; a read that fails or is slow leaves no floor, never blocks the flow.
+  const notBeforeRead = client.getBlockNumber
+    ? Promise.race([client.getBlockNumber().catch(() => undefined), new Promise<undefined>((r) => setTimeout(() => r(undefined), deps.balanceTimeoutMs ?? 5_000))])
+    : Promise.resolve(undefined);
   const wellFormedHash = (h: unknown): h is string => typeof h === "string" && /^0x[0-9a-fA-F]{64}$/.test(h);
   const known = (h: string) => done.some((t) => t.hash.toLowerCase() === h.toLowerCase());
 
@@ -195,7 +194,11 @@ export async function runConfirm(
     ]);
     return { asset: held.toString(), ...(native !== undefined ? { native: native.toString() } : {}) };
   };
-  const balances = await Promise.race([readBalances().catch(() => undefined), new Promise<undefined>((r) => setTimeout(() => r(undefined), deps.balanceTimeoutMs ?? 5_000))]);
+  const [balances, notBefore] = await Promise.all([
+    Promise.race([readBalances().catch(() => undefined), new Promise<undefined>((r) => setTimeout(() => r(undefined), deps.balanceTimeoutMs ?? 5_000))]),
+    notBeforeRead,
+  ]);
+  const verifyOpts = { ...deps.verifyOpts, deadline, ...(notBefore !== undefined ? { notBefore } : {}) };
   const deposit = admitted.find((a) => a.kind === "deposit");
 
   const handle = await serveOnce<TxOutcome[]>({

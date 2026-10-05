@@ -38886,6 +38886,9 @@ function classifyRevert(obs) {
     note: `deposit() reverted${sel ? ` with selector ${sel}` : ""}${obs.reason ? ` ("${obs.reason}")` : ""}; this client does not name the cause. Check, in no particular order: vault paused; per-block or supply cap; insufficient asset balance at the depositor; a chassis-specific gate this client has not seen. Raw: ${obs.raw ?? "n/a"}.`
   };
 }
+function isRevert(e) {
+  return e instanceof BaseError2 && e.walk((x) => x instanceof ContractFunctionRevertedError || x instanceof ExecutionRevertedError) !== null;
+}
 function extractRevert(err) {
   if (!(err instanceof BaseError2)) return void 0;
   const r = err.walk((e) => e instanceof ContractFunctionRevertedError);
@@ -38968,7 +38971,7 @@ async function preflightDeposit(args) {
     const previewShares = await client.readContract({ address: vault.address, abi: erc4626Abi, functionName: "previewDeposit", args: [assets2] });
     quotes.previewShares = `${formatAmount(previewShares, vault.shareDecimals)} ${vault.symbol}`;
   } catch (e) {
-    findings.push(extractRevert(e) !== void 0 ? "previewDeposit() reverted; no shares quote" : `previewDeposit() could not be read, so no shares quote (the RPC failed, not the vault): ${describeError(e)}`);
+    findings.push(isRevert(e) ? "previewDeposit() reverted; no shares quote" : `previewDeposit() could not be read, so no shares quote (the RPC failed, not the vault): ${describeError(e)}`);
   }
   try {
     await client.simulateContract({
@@ -39058,9 +39061,6 @@ function txsOf(logs, decimals, symbol2) {
     blockNumber: l.blockNumber === null ? null : l.blockNumber.toString(),
     amountUsdc: `${formatAmount(l.args.assets ?? 0n, decimals)} ${symbol2}`
   }));
-}
-function isRevert(e) {
-  return e instanceof BaseError2 && e.walk((x) => x instanceof ContractFunctionRevertedError || x instanceof ExecutionRevertedError) !== null;
 }
 async function measureExit(a) {
   const { vault, principal, client, shares, value } = a;
@@ -39267,7 +39267,7 @@ async function quoteDeposit(args) {
     vault: vault.symbol,
     depositor,
     amountUsdc: `${formatAmount(assets2, vault.asset.decimals)} ${vault.asset.symbol}`,
-    expectedShares: previewShares !== void 0 ? `${formatAmount(previewShares, vault.shareDecimals)} ${vault.symbol}` : extractRevert(previewError) !== void 0 ? "unavailable (previewDeposit reverted)" : `unavailable (previewDeposit could not be read; the RPC failed, not the vault: ${describeError(previewError)})`,
+    expectedShares: previewShares !== void 0 ? `${formatAmount(previewShares, vault.shareDecimals)} ${vault.symbol}` : isRevert(previewError) ? "unavailable (previewDeposit reverted)" : `unavailable (previewDeposit could not be read; the RPC failed, not the vault: ${describeError(previewError)})`,
     sharePriceInAssets: `${formatAmount(oneShareInAssets, vault.asset.decimals)} ${vault.asset.symbol} per share`,
     preflight: pre,
     canProceed: pre.canDeposit,
@@ -39847,7 +39847,7 @@ function checkAck(code, pending, calls, account, now) {
 }
 function operatorWarning(w, action = "deposit") {
   const s = w.replace(/\s*Show this warning before preparing any deposit\.\s*$/, "").trim();
-  return action === "withdraw" ? s.replace(/\s*Deposit only [^.]*\./g, "").trim() : s;
+  return action === "withdraw" ? s.replace(/\s*Deposit only .*?\.(?=\s|$)/g, "").trim() : s;
 }
 function summarize(action, calls, admitted, receiver) {
   const main = admitted.find((a) => a.kind !== "approve");
@@ -40288,8 +40288,8 @@ async function verifyLanded(client, hash4, call2, account, opts = {}) {
   }
   if (!receipt) return { verified: "unverified", detail: `no receipt for ${hash4} in time; look it up on the explorer before retrying anything` };
   if (receipt.status !== "success") return { verified: "reverted", detail: `${hash4} reverted on chain; nothing it was meant to do happened` };
-  if (opts.notBefore !== void 0 && receipt.blockNumber < opts.notBefore) {
-    return { verified: "mismatch", detail: `${hash4} was mined in block ${receipt.blockNumber}, before this confirm flow started (block ${opts.notBefore}); it is not a transaction from this flow` };
+  if (opts.notBefore !== void 0 && receipt.blockNumber <= opts.notBefore) {
+    return { verified: "mismatch", detail: `${hash4} was mined in block ${receipt.blockNumber}, which already existed when this confirm flow started (at block ${opts.notBefore}); it is not a transaction from this flow` };
   }
   const vault = call2.vault.address;
   const asset = call2.vault.asset.address;
@@ -40412,8 +40412,7 @@ async function runConfirm(calls, session, deps = {}) {
   let stopReason;
   const ttlMs = deps.ttlMs ?? CONFIRM_TTL_MS;
   const deadline = Date.now() + ttlMs;
-  const notBefore = client.getBlockNumber ? await Promise.race([client.getBlockNumber().catch(() => void 0), new Promise((r) => setTimeout(() => r(void 0), deps.balanceTimeoutMs ?? 5e3))]) : void 0;
-  const verifyOpts = { ...deps.verifyOpts, deadline, ...notBefore !== void 0 ? { notBefore } : {} };
+  const notBeforeRead = client.getBlockNumber ? Promise.race([client.getBlockNumber().catch(() => void 0), new Promise((r) => setTimeout(() => r(void 0), deps.balanceTimeoutMs ?? 5e3))]) : Promise.resolve(void 0);
   const wellFormedHash = (h) => typeof h === "string" && /^0x[0-9a-fA-F]{64}$/.test(h);
   const known = (h) => done.some((t) => t.hash.toLowerCase() === h.toLowerCase());
   const allowanceVisible = async (index2) => {
@@ -40437,7 +40436,11 @@ async function runConfirm(calls, session, deps = {}) {
     ]);
     return { asset: held.toString(), ...native !== void 0 ? { native: native.toString() } : {} };
   };
-  const balances = await Promise.race([readBalances().catch(() => void 0), new Promise((r) => setTimeout(() => r(void 0), deps.balanceTimeoutMs ?? 5e3))]);
+  const [balances, notBefore] = await Promise.all([
+    Promise.race([readBalances().catch(() => void 0), new Promise((r) => setTimeout(() => r(void 0), deps.balanceTimeoutMs ?? 5e3))]),
+    notBeforeRead
+  ]);
+  const verifyOpts = { ...deps.verifyOpts, deadline, ...notBefore !== void 0 ? { notBefore } : {} };
   const deposit = admitted.find((a) => a.kind === "deposit");
   const handle = await serveOnce({
     mode: "confirm",

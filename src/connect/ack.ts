@@ -82,7 +82,7 @@ export interface AckSummary {
 export function operatorWarning(w: string, action: "deposit" | "withdraw" = "deposit"): string {
   const s = w.replace(/\s*Show this warning before preparing any deposit\.\s*$/, "").trim();
   // Before a withdrawal, advice on how much to deposit does not apply.
-  return action === "withdraw" ? s.replace(/\s*Deposit only [^.]*\./g, "").trim() : s;
+  return action === "withdraw" ? s.replace(/\s*Deposit only .*?\.(?=\s|$)/g, "").trim() : s;
 }
 
 export function summarize(action: "deposit" | "withdraw", calls: UnsignedCall[], admitted: Admitted[], receiver: Address): AckSummary {

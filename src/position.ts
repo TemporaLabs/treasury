@@ -1,7 +1,8 @@
-import { BaseError, ContractFunctionRevertedError, ExecutionRevertedError, parseAbiItem, type Address } from "viem";
+import { parseAbiItem, type Address } from "viem";
 import { erc4626Abi } from "./abi/erc4626.js";
 import { type VaultEntry } from "./registry-schema.js";
 import { describeError } from "./redact.js";
+import { isRevert } from "./preflight.js";
 import { formatAmount } from "./units.js";
 import { CHAIN_INFO, type ReadClient } from "./client.js";
 
@@ -247,17 +248,6 @@ function txsOf(logs: EventLog[], decimals: number, symbol: string): ScanTx[] {
   }));
 }
 
-/**
- * Did the CHAIN refuse this, or did the RPC fail to ask it? Every failure used to read as "cannot pay",
- * so one HTTP 502 on the first simulation reported a fully-exitable position as unexitable AND blamed
- * the vault for it (measured through a proxy that failed exactly one call: one attempt made, the vault
- * never asked, `exitableNow: "unknown"`, note "the refusal is the vault's").
- * viem's own error chain separates them: a real revert carries a ContractFunctionRevertedError or an
- * ExecutionRevertedError; a transport failure does not.
- */
-function isRevert(e: unknown): boolean {
-  return e instanceof BaseError && e.walk((x) => x instanceof ContractFunctionRevertedError || x instanceof ExecutionRevertedError) !== null;
-}
 
 /**
  * At most two simulated withdrawals — the whole position, then the vault's own liquid balance — and the
