@@ -47,7 +47,7 @@ anyone's reach — clause (d) of [`DCO.md`](DCO.md) is what has you acknowledge 
 
 - **Third-party code is disclosed.** A contribution that includes code you did not write names its
   source and licence. Code under a licence incompatible with Apache-2.0 cannot merge.
-- **Names are separate.** Section 6 of the licence grants no right to the Tempora Labs names and marks
+- **Names are separate.** Section 6 of the licence grants no right to Tempora Labs' names and marks ("Tempora", "Tempora Labs" and "Agent Treasury", as NOTICE lists them)
   beyond describing where the work came from.
 
 ## Before you start

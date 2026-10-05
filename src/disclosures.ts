@@ -7,7 +7,7 @@
  * those, not of a fund that has not launched. Change them when the offering changes, and nowhere else.
  */
 export const DISCLOSURES = {
-  source: "Agent Treasury — pre-deposit disclosures, 2026-09-15",
+  source: "Agent Treasury — pre-deposit disclosures, 2026-09-15 (wording revised 2026-10-04: Tempora Labs named in full)",
   presentBefore: "the depositor's first deposit, on every distribution surface",
   items: [
     "EVERY VAULT THIS CLIENT OFFERS TODAY IS A TEST VAULT — unproven, and named as such on-chain. They exist to exercise the product, not to hold savings. Deposit only an amount you are fully prepared to lose entirely, and do not move significant funds into one.",

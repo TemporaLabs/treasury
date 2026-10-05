@@ -145,6 +145,6 @@ certifying the [Developer Certificate of Origin](DCO.md).
 ## Licence
 
 [Apache-2.0](LICENSE). Keep [LICENSE](LICENSE) and [NOTICE](NOTICE) when redistributing.
-The licence does not grant rights to Tempora Labs' names or marks; forks must not claim to be the
+The licence does not grant rights to Tempora Labs' names or marks ("Tempora", "Tempora Labs" and "Agent Treasury", as NOTICE lists them); forks must not claim to be the
 official distribution. Tempora Labs' fund-operations infrastructure is separate from this repository.
 See [licensing](docs/licensing.md) for details.

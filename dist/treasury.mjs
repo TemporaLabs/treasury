@@ -39409,7 +39409,7 @@ function buildWithdraw(vault, args) {
 
 // src/disclosures.ts
 var DISCLOSURES = {
-  source: "Agent Treasury \u2014 pre-deposit disclosures, 2026-09-15",
+  source: "Agent Treasury \u2014 pre-deposit disclosures, 2026-09-15 (wording revised 2026-10-04: Tempora Labs named in full)",
   presentBefore: "the depositor's first deposit, on every distribution surface",
   items: [
     "EVERY VAULT THIS CLIENT OFFERS TODAY IS A TEST VAULT \u2014 unproven, and named as such on-chain. They exist to exercise the product, not to hold savings. Deposit only an amount you are fully prepared to lose entirely, and do not move significant funds into one.",

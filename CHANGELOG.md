@@ -123,6 +123,7 @@ Pre-1.0, minor versions may change tool names, schemas and behaviour.
 - The event scan reads Infura's range refusal (`range N exceeds limit of 10000`) as a window.
 
 ### Changed
+- **Tempora Labs is named in full** in the documentation, the skill body, the connect page and the pre-deposit terms; their wording changed only in that name (`source` notes the revision).
 - **Tempora Labs Cash Plus USDC (Test 2B) is the default on Base**, and Test 2 becomes the demo
   vault: still listed, open and depositable, chosen by naming it. Test 2B's cash-like leg is a
   savings-rate token, not a lending vault (#47). Morpho's app has no page for it, so it carries no
@@ -231,7 +232,7 @@ Then restart your Claude Code session so the tools connect.
 The first public release. Everything below is what ships in it.
 
 ### Added
-- **The `treasury` MCP server** — eight `earn_*` tools that read a Tempora Labs vault and prepare
+- **The `treasury` MCP server** — eight `earn_*` tools that read a Tempora vault and prepare
   unsigned deposits and withdrawals for the operator's own signer. No `sign`, no `send`; the tool
   list is asserted in CI.
 - **The `earn` skill**, which tells an agent how to drive those tools and what to refuse. It ships
@@ -273,7 +274,7 @@ The first public release. Everything below is what ships in it.
 - **No depositor address is configured anywhere.** For the gated vault, the fork tier discovers a
   whitelist member from its own AccessManager, events then `hasRole`, and never writes one down.
 - **Pre-deposit disclosures** are plain-language terms this repository owns, including that the default
-  is a destination curated by Tempora Labs, on which Tempora Labs can set fees.
+  is a Tempora-curated destination on which Tempora can set fees.
 - **The default's fee and position notes say what the chain says.** Its fee timelocks are 0, so a fee
   can be introduced without notice; and one of its positions lends against a stablecoin priced at
   par by a fixed oracle, which the fund's loss model does not price.
