@@ -123,6 +123,7 @@ Pre-1.0, minor versions may change tool names, schemas and behaviour.
 - The event scan reads Infura's range refusal (`range N exceeds limit of 10000`) as a window.
 
 ### Changed
+- **The `earn` skill's description names Robinhood Chain and USDG**, beside Base, Arbitrum and USDC, so a request about idle USDG on Robinhood Chain reaches the skill (#104).
 - **Tempora Labs is named in full** in the documentation, the skill body, the connect page and the pre-deposit terms; their wording changed only in that name (`source` notes the revision).
 - **Tempora Labs Cash Plus USDC (Test 2B) is the default on Base**, and Test 2 becomes the demo
   vault: still listed, open and depositable, chosen by naming it. Test 2B's cash-like leg is a
