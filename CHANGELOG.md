@@ -4,7 +4,7 @@ All notable changes to Agent Treasury are recorded here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versions follow [SemVer](https://semver.org/).
 Pre-1.0, minor versions may change tool names, schemas and behaviour.
 
-## [v0.1.2] - Unreleased
+## [v0.1.2] - 2026-10-05
 
 ### Changed — headless: a command line replaces the MCP server
 - **Treasury is now a command-line program, `treasury earn <command>`, and no longer an MCP server.**
