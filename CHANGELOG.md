@@ -16,7 +16,7 @@ Pre-1.0, minor versions may change tool names, schemas and behaviour.
   `treasury --version` prints the bare version.
 - The bundle is `dist/treasury.mjs` and the npm bin is `treasury`. The plugin declares no server: its
   skill runs `node "${CLAUDE_PLUGIN_ROOT}/dist/treasury.mjs" earn …` through the shell, so no server
-  has to connect at session start (`/reload-plugins` loads the skill). The CLI reads every variable in
+  has to connect at session start; a new session loads the skill. The CLI reads every variable in
   `docs/configuration.md` from the environment it was started in, on every path; nothing filters
   them on the way in.
 - **Upgrading the plugin removes the eight `earn_*` MCP tools.** An agent reaches the same eight

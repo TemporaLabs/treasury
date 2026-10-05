@@ -50,7 +50,7 @@ claude plugin marketplace add TemporaLabs/treasury@v0.1.2
 claude plugin install treasury@treasury
 ```
 
-Run `/reload-plugins` (or start a new Claude Code session) after installing so the Earn skill loads. Keep the `TemporaLabs/treasury@v0.1.2` ref
+Start a new Claude Code session after installing so the Earn skill loads. Keep the `TemporaLabs/treasury@v0.1.2` ref
 explicit so the install stays on a release rather than tracking the default branch. Upgrading an
 earlier install? Run `claude plugin marketplace remove treasury` first, then the two `claude plugin` lines above
 ([details](docs/install.md#upgrading-an-earlier-install)).

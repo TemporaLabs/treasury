@@ -45,8 +45,15 @@ claude plugin marketplace add TemporaLabs/treasury@v0.1.2
 claude plugin install treasury@treasury
 ```
 
-**Run `/reload-plugins` (or start a new Claude Code session) after installing**, or after changing
-the marketplace ref, so the `earn` skill is loaded.
+**Start a new Claude Code session after installing**, or after changing the marketplace ref or
+upgrading, so the `earn` skill is loaded. A session that is already running can keep the skill text
+it loaded before, even after the plugin is reinstalled (measured 2026-10-04).
+
+**Pinned to a release branch rather than a tag,** `claude plugin update` compares only the plugin's
+version, which does not change between commits on the branch: it can report the latest version while
+the installed copy is behind. To pick up new commits, run `claude plugin marketplace update treasury`,
+then `claude plugin uninstall treasury@treasury` and `claude plugin install treasury@treasury`, then
+start a new session.
 
 Set an RPC before you rely on it:
 
