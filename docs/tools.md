@@ -288,7 +288,8 @@ the chain, the vault's name, symbol and explorer link, the receiver, how many wa
 expect (a deposit asks twice, approve then deposit; a withdrawal once), the vault's warning, and the
 disclosures in plain words: a short form of [`earn terms`](#earn_terms--read) before a deposit, and
 before a withdrawal only the two points that hold for every action. It says the full terms can be
-asked for; `earn terms` returns them. It ends by asking for a yes or a no. The agent posts it to the operator word for word.
+asked for; `earn terms` returns them, and the skill still shows them in full before a first deposit.
+It ends by asking for a yes or a no. The agent posts it to the operator word for word.
 
 On the operator's yes, the same command run again with `--ack <ack>` opens the page. The code is
 refused, and nothing opens, when:

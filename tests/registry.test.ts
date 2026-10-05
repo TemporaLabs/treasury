@@ -94,6 +94,14 @@ describe("the shipped registry", () => {
     expect(resolveVault(undefined, "robinhood")).toBe(d);
   });
 
+  it("every row's warning says it is a test vault and to deposit only what you can lose: the acknowledgement relies on it for that disclosure", () => {
+    // `DISCLOSURES.plain` has no sentence for the first full disclosure because the vault's own warning carries it.
+    for (const v of listVaults()) {
+      expect(v.warning, v.symbol).toMatch(/TEST VAULT/);
+      expect(v.warning, v.symbol).toMatch(/prepared to lose entirely/);
+    }
+  });
+
   it("carries MEASURED share decimals — 18 on the Morpho V2 default, 8 on the Fusion sibling, both against 6-decimal USDC", () => {
     const two = getVault("tlCashPlusUSDC2");
     const twoA = getVault("tlCashPlusUSDC2A");

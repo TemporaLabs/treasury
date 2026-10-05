@@ -143,9 +143,10 @@ bridge. **Which chain is the operator's decision. Ask; do not pick.**
    says, and reaching anywhere else is outside what it will build.
 3. **On a first deposit, present `earn_terms` and get an explicit acknowledgement.** The
    fund requires this on every distribution surface, and an agent talking to its
-   operator is one. Do not paraphrase them into something friendlier. Through `connect`, its
-   acknowledgement carries these terms in plain words on every deposit: post that instead, rather than
-   asking twice, and show the full `earn_terms` text whenever the operator asks for it.
+   operator is one. Do not paraphrase them into something friendlier. This holds through `connect`
+   too: post the full `earn_terms` once, before the operator's first deposit. The acknowledgement
+   `connect` returns restates them in plain words before every signing page; it comes after the full
+   terms on a first deposit, never instead of them. Show the full text again whenever the operator asks.
 4. **Always `earn_quote` with `direction: "deposit"`, the real `account`, and the real amount.** It includes the
    pre-flight; read `preflight.status`, not `advisory.maxDepositRaw`: `maxDeposit()` returns "unlimited" on a
    whitelist-gated Fusion vault and `0` on an open Morpho V2 vault — it is wrong in both
@@ -160,7 +161,8 @@ bridge. **Which chain is the operator's decision. Ask; do not pick.**
      second a transport failure. Neither is a verdict about the vault.
 5. **Through `connect`, skip this step:** `connect deposit` builds the same two calls and checks them, and
    opens the signing page only after the operator acknowledges them, every time (see **Handing calls to
-   the signer** below). Its acknowledgement carries the disclosures, in plain words, on every deposit, not only the first.
+   the signer** below). Its acknowledgement restates the disclosures in plain words on every
+   deposit; on a first deposit the full `earn_terms` of step 3 still come first.
    **Otherwise, `earn_prepare_deposit`, then hand BOTH calls in `calls` to the signer in order, and ask before each.** The
    envelope names `chain` and `chainId`: tell the operator which chain these calls are for before
    anything else, because a call sent on the wrong chain can be mined there and do nothing. The

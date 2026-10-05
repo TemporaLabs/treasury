@@ -5,7 +5,8 @@
  * Run without `--ack`, either command builds and gate-checks its calls, records them as pending, and
  * returns `acknowledgement`: one fixed text, written here and not by the agent, naming the action,
  * amount, chain, vault, its explorer link, the receiver, the vault's warning and the disclosures in
- * plain words (`DISCLOSURES.plain`; the full text stays in `earn terms`). The agent posts it to the operator and waits for an explicit yes. Run again
+ * plain words (`DISCLOSURES.plain`; the full text stays in `earn terms`). The agent posts it to the
+ * operator and waits for an explicit yes. Run again
  * with `--ack <code>`, the page opens only if the code names the pending acknowledgement, it has not
  * expired, and the calls are exactly the ones it described. The code is then spent, so every page
  * open is preceded by its own acknowledgement.

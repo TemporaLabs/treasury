@@ -80,7 +80,8 @@ Pre-1.0, minor versions may change tool names, schemas and behaviour.
   `earn` skill posts the acknowledgement word for word before every page open, so an operator's earlier
   yes never carries over to the next deposit or withdrawal.
 - The acknowledgement states the disclosures in plain words, short enough to read every time (about
-  1,500 characters for a deposit). The full text stays in `earn terms`.
+  1,560 characters for a deposit, down from about 2,600). The full text stays in `earn terms`, and the
+  `earn` skill still shows it in full before a first deposit.
 - The disclosure on who signs now names both paths: the operator's own wallet through `connect`, or
   the operator's own signer. It said only "the operator's own signer".
 

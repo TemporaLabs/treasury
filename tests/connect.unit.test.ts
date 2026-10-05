@@ -887,6 +887,8 @@ describe("the acknowledgement before any signing page opens", () => {
       // The full, formal items are what `earn terms` returns; none of them is pasted here.
       for (const full of [...DISCLOSURES.items, ...DISCLOSURES.clientNotes]) expect(text).not.toContain(full);
       expect(text.length).toBeLessThan(1_600);
+      // A gated vault's deposit is the longest form: one more line, and still well short of the full text.
+      expect(String((await connect("connect_deposit", { amount_usdc: "1", vault: "tlCashPlusUSDC2A" }))["acknowledgement"]).length).toBeLessThan(1_750);
       // Every full item still has its plain sentence: the points an operator must not lose.
       for (const point of [/not a bank deposit/, /no deposit insurance/, /can go down/, /third-party protocols/, /past performance, not a promise/, /may not come out right away/, /can charge fees/, /not because it pays the most/, /never signs or moves your money/, /where you live/]) {
         expect(text).toMatch(point);

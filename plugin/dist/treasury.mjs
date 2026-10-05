@@ -39430,7 +39430,9 @@ var DISCLOSURES = {
    * The same points in plain words, for the acknowledgement an operator reads before every signing
    * page (`connect/ack.ts`). A person has to read this each time, so it is short; `items` and
    * `clientNotes` above stay the full text, which `earn_terms` returns. Keep the two in step: a
-   * point added above needs its plain sentence here.
+   * point added above needs its plain sentence here. The first item above (every vault is a test
+   * vault; deposit only what you can lose) has none: the acknowledgement prints the vault's own
+   * `warning` from the registry, which says it, and `registry.test.ts` holds every row to that.
    */
   plain: {
     deposit: [
