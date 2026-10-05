@@ -14,7 +14,7 @@ by hand.
 | `@noble/hashes` | 1.8.0 | MIT |
 | `abitype` | 1.2.3 | MIT |
 | `ox` | 0.14.45 | MIT |
-| `viem` | 2.56.7 | MIT |
+| `viem` | 2.57.2 | MIT |
 | `zod` | 4.6.5 | MIT |
 
 ## @noble/curves 1.9.1 (MIT)
@@ -121,7 +121,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 ```
 
-## viem 2.56.7 (MIT)
+## viem 2.57.2 (MIT)
 
 ```text
 MIT License

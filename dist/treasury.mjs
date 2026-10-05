@@ -1011,7 +1011,7 @@ var version3;
 var init_version2 = __esm({
   "node_modules/viem/_esm/errors/version.js"() {
     "use strict";
-    version3 = "2.56.7";
+    version3 = "2.57.2";
   }
 });
 
@@ -35570,6 +35570,21 @@ async function getStorageAt(client, { address: address2, blockHash, blockNumber,
   return data;
 }
 
+// node_modules/viem/_esm/actions/public/getStorageValues.js
+init_formatBlockParameter();
+async function getStorageValues(client, { blockHash, blockNumber, blockTag = "latest", requireCanonical, requests }) {
+  const block = formatBlockParameter({
+    blockHash,
+    blockNumber,
+    blockTag,
+    requireCanonical
+  });
+  return client.request({
+    method: "eth_getStorageValues",
+    params: [requests, block]
+  });
+}
+
 // node_modules/viem/_esm/actions/public/getTransaction.js
 init_transaction();
 init_toHex();
@@ -35874,6 +35889,7 @@ async function simulateBlocks(client, parameters) {
         const { abi: abi2, args, functionName, to } = blocks[i].calls[j];
         const data = call2.error?.data ?? call2.returnData;
         const gasUsed = BigInt(call2.gasUsed);
+        const maxUsedGas = call2.maxUsedGas === void 0 ? void 0 : BigInt(call2.maxUsedGas);
         const logs = call2.logs?.map((log) => formatLog(log));
         const status = call2.status === "0x1" ? "success" : "failure";
         const result2 = abi2 && status === "success" && data !== "0x" ? decodeFunctionResult({
@@ -35902,6 +35918,9 @@ async function simulateBlocks(client, parameters) {
           data,
           gasUsed,
           logs,
+          // only present when reported by the node, so existing consumers
+          // (and snapshots) are unaffected on nodes that omit it.
+          ...maxUsedGas === void 0 ? {} : { maxUsedGas },
           status,
           ...status === "success" ? {
             result: result2
@@ -36981,7 +37000,6 @@ async function waitForTransactionReceipt(client, parameters) {
     // exponential backoff
     timeout = 18e4
   } = parameters;
-  const observerId = stringify(["waitForTransactionReceipt", client.uid, hash4]);
   const pollingInterval = (() => {
     if (parameters.pollingInterval)
       return parameters.pollingInterval;
@@ -36989,6 +37007,21 @@ async function waitForTransactionReceipt(client, parameters) {
       return client.chain.experimental_preconfirmationTime;
     return client.pollingInterval;
   })();
+  const observerId = stringify([
+    "waitForTransactionReceipt",
+    client.uid,
+    hash4,
+    // Concurrent calls with different behavior-defining options must not
+    // share an observer: the first call's polling closure decides timeout,
+    // confirmations, polling interval and replacement checks for everyone.
+    {
+      checkReplacement,
+      confirmations,
+      pollingInterval,
+      retryCount,
+      timeout
+    }
+  ]);
   let transaction;
   let replacedTransaction;
   let receipt;
@@ -37533,8 +37566,8 @@ function parseSiweDateTime(value) {
 }
 function parseSiweMessage(message) {
   const { scheme, statement, ...prefix } = message.match(prefixRegex)?.groups ?? {};
-  const { chainId, expirationTime, issuedAt, notBefore, requestId, ...suffix } = message.match(suffixRegex)?.groups ?? {};
-  const resources = message.split("Resources:")[1]?.split("\n- ").slice(1);
+  const { chainId, expirationTime, issuedAt, notBefore, requestId, resources: resources_, ...suffix } = message.match(suffixRegex)?.groups ?? {};
+  const resources = resources_?.split("\n- ").slice(1);
   return {
     ...prefix,
     ...suffix,
@@ -37549,7 +37582,7 @@ function parseSiweMessage(message) {
   };
 }
 var prefixRegex = /^(?:(?<scheme>[a-zA-Z][a-zA-Z0-9+\-.]*):\/\/)?(?<domain>[a-zA-Z0-9+-.]*(?::[0-9]{1,5})?) (?:wants you to sign in with your Ethereum account:\n)(?<address>0x[a-fA-F0-9]{40})\n\n(?:(?<statement>.*)\n\n)?/;
-var suffixRegex = /(?:URI: (?<uri>.+))\n(?:Version: (?<version>.+))\n(?:Chain ID: (?<chainId>\d+))\n(?:Nonce: (?<nonce>[a-zA-Z0-9]+))\n(?:Issued At: (?<issuedAt>.+))(?:\nExpiration Time: (?<expirationTime>.+))?(?:\nNot Before: (?<notBefore>.+))?(?:\nRequest ID: (?<requestId>.+))?/;
+var suffixRegex = /(?:URI: (?<uri>.+))\n(?:Version: (?<version>.+))\n(?:Chain ID: (?<chainId>\d+))\n(?:Nonce: (?<nonce>[a-zA-Z0-9]+))\n(?:Issued At: (?<issuedAt>.+))(?:\nExpiration Time: (?<expirationTime>.+))?(?:\nNot Before: (?<notBefore>.+))?(?:\nRequest ID: (?<requestId>.*))?(?:\nResources:(?<resources>(?:\n- .+)*))?/;
 
 // node_modules/viem/_esm/utils/siwe/validateSiweMessage.js
 init_isAddress();
@@ -37883,6 +37916,7 @@ function publicActions(client) {
     fillTransaction: (args) => fillTransaction(client, args),
     getRawTransaction: (args) => getRawTransaction(client, args),
     getStorageAt: (args) => getStorageAt(client, args),
+    getStorageValues: (args) => getStorageValues(client, args),
     getTransaction: (args) => getTransaction(client, args),
     getTransactionConfirmations: (args) => getTransactionConfirmations(client, args),
     getTransactionCount: (args) => getTransactionCount(client, args),
