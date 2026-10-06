@@ -1,0 +1,63 @@
+name: Dependabot target
+
+# Dependabot opens every pull request against the default branch, and `target-branch` cannot be used
+# to change that without also excluding the config from security updates. So the pull requests open
+# against `main` and this workflow moves them to the newest release branch:
+#   - when Dependabot opens one, or resets one (`@dependabot recreate`), it is moved at once;
+#   - when a new release branch is cut, Dependabot pull requests still open against an older release
+#     branch are moved to the new one.
+# It only calls the API: it never checks out or runs anything from a pull request.
+#
+# This file must be on the default branch to take effect for the first of these.
+# A pull request that conflicts with its release branch is left as it is: Dependabot does not
+# rebase it onto that branch, so regenerate the change by hand.
+
+on:
+  pull_request_target:
+    types: [opened, reopened, edited, synchronize]
+  create:
+
+permissions:
+  contents: read
+  pull-requests: write
+
+jobs:
+  on-pull-request:
+    name: Move to the newest release branch
+    if: >-
+      github.event_name == 'pull_request_target'
+      && github.actor == 'dependabot[bot]'
+      && github.event.pull_request.base.ref == github.event.repository.default_branch
+    runs-on: ubuntu-latest
+    steps:
+      - env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          PR: ${{ github.event.pull_request.number }}
+        run: |
+          set -euo pipefail
+          latest=$(gh api "repos/$REPO/branches" --paginate --jq '.[].name' | grep -E '^release/v[0-9]+\.[0-9]+\.[0-9]+$' | sort -V | tail -1 || true)
+          if [ -z "$latest" ]; then echo "::error::no release branch to move it to"; exit 1; fi
+          gh api -X PATCH "repos/$REPO/pulls/$PR" -f base="$latest" --jq '"#\(.number) -> \(.base.ref)"'
+
+  on-new-release-branch:
+    name: Move open pull requests to the new release branch
+    if: >-
+      github.event_name == 'create'
+      && github.ref_type == 'branch'
+      && startsWith(github.ref_name, 'release/v')
+    runs-on: ubuntu-latest
+    steps:
+      - env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          NEW: ${{ github.ref_name }}
+        run: |
+          set -euo pipefail
+          latest=$(gh api "repos/$REPO/branches" --paginate --jq '.[].name' | grep -E '^release/v[0-9]+\.[0-9]+\.[0-9]+$' | sort -V | tail -1 || true)
+          if [ "$latest" != "$NEW" ]; then echo "$NEW is not the newest release branch ($latest); nothing to do"; exit 0; fi
+          gh api "repos/$REPO/pulls?state=open&per_page=100" --paginate \
+            --jq ".[] | select(.user.login==\"dependabot[bot]\" and (.base.ref|test(\"^release/v[0-9]+\\\\.[0-9]+\\\\.[0-9]+\$\")) and .base.ref!=\"$NEW\") | .number" |
+          while read -r n; do
+            gh api -X PATCH "repos/$REPO/pulls/$n" -f base="$NEW" --jq '"#\(.number) -> \(.base.ref)"'
+          done
