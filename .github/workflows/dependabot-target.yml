@@ -9,6 +9,9 @@ name: Dependabot target
 # It only calls the API: it never checks out or runs anything from a pull request.
 #
 # This file must be on the default branch to take effect for the first of these.
+# Moving a pull request does not re-run its checks: the move is made with the workflow's own token,
+# which starts no workflows, so a moved pull request shows checks computed against `main`. Close and
+# reopen it (as a person, not as this workflow) so they run against its new base before merging.
 # A pull request that conflicts with its release branch is left as it is: Dependabot does not
 # rebase it onto that branch, so regenerate the change by hand.
 
@@ -29,13 +32,18 @@ jobs:
       && github.actor == 'dependabot[bot]'
       && github.event.pull_request.base.ref == github.event.repository.default_branch
     runs-on: ubuntu-latest
+    concurrency:
+      group: dependabot-target-${{ github.event.pull_request.number }}
     steps:
       - env:
           GH_TOKEN: ${{ github.token }}
           REPO: ${{ github.repository }}
           PR: ${{ github.event.pull_request.number }}
+          DEFAULT: ${{ github.event.repository.default_branch }}
         run: |
           set -euo pipefail
+          # Another run may have moved it already.
+          if [ "$(gh api "repos/$REPO/pulls/$PR" --jq .base.ref)" != "$DEFAULT" ]; then echo "already moved"; exit 0; fi
           latest=$(gh api "repos/$REPO/branches" --paginate --jq '.[].name' | grep -E '^release/v[0-9]+\.[0-9]+\.[0-9]+$' | sort -V | tail -1 || true)
           if [ -z "$latest" ]; then echo "::error::no release branch to move it to"; exit 1; fi
           gh api -X PATCH "repos/$REPO/pulls/$PR" -f base="$latest" --jq '"#\(.number) -> \(.base.ref)"'
