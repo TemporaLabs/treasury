@@ -289,8 +289,8 @@ jobs:
           if phantom: print("::error::SKILL.md names commands the CLI does not have:", sorted(phantom))
           sys.exit(1 if (missing or phantom) else 0)
           PY
-      # A package.json version is a RUNTIME value: the bundle reports the one beside it as
-      # `treasury --version` and `earn status`, and the manifests are what the marketplaces advertise.
+      # The bundle reports the package.json version it was built from as `treasury --version` and
+      # `earn status`, and the manifests are what the marketplaces advertise: this ties them together.
       - name: every declaration of this repository's own version agrees
         if: steps.pk.outputs.present == 'yes'
         run: bash scripts/check-versions.sh

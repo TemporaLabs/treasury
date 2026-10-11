@@ -5,8 +5,8 @@
 # its folder and, when that folder holds package.json AND a lockfile, runs `npm ci` inside it. The
 # root has both, so a root-level plugin would install every dependency (169 packages, measured)
 # for a CLI bundle that needs none of them. plugin/ therefore carries a version-only
-# package.json and no lockfile, plus the files the CLI reads beside itself at runtime
-# (../registry/vaults.json, ../package.json) and the licence files that must travel with it.
+# package.json and no lockfile, plus the registry and the licence files that must travel with it.
+# (The CLI no longer reads the registry or package.json beside itself: both are inlined into the bundle.)
 #
 # Every file below is a COPY of a file at the root, made in the same commit. Nothing is pinned to
 # a release and nothing is fetched: the check is byte identity against this tree.

@@ -42,6 +42,19 @@ Pre-1.0, minor versions may change tool names, schemas and behaviour.
   Kamino's own SDK by committed fixtures (`vendor/kamino/`); that SDK is not a dependency.
 - `registry:check` reconciles the Solana row against the vault's own state.
 
+### Changed — the registry and the version are inside the bundle
+- The vault registry and the package version are now compiled into the CLI bundle and the library build
+  instead of being read from files beside them. `treasury --version` reports the version the bundle was built
+  from, and `listVaults()` returns the shipped registry even when the library is re-bundled into another
+  application, where it used to look for `registry/vaults.json` beside the consumer's own bundle and read
+  whatever it found there. A registry change now also changes `dist/treasury.mjs`.
+- A bundler that builds on this package must accept JSON import attributes (`with { type: "json" }`);
+  esbuild, webpack 5 and Rollup with its JSON plugin do.
+- The CLI bundle carries only the `version` field of `package.json`, so editing anything else there (a
+  dev-dependency bump) leaves `dist/treasury.mjs` unchanged.
+- Importing the library unbundled on Node 22.0 to 22.11 prints Node's `ExperimentalWarning` for JSON modules;
+  it works, and Node 22.12 and later print nothing. The CLI is unaffected.
+
 ### Fixed
 - `earn balance` reads the Ethereum public endpoint's range refusal ("query exceeds max block range
   100000") as a 100,000-block window and walks the history in chunks, instead of failing the scan.

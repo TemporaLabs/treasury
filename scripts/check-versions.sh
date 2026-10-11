@@ -1,13 +1,13 @@
 #!/usr/bin/env bash
 # Every place this repository declares its own version must say the same thing.
 #
-# Why this is not bookkeeping: a package.json version is a RUNTIME value, not metadata. The bundled
-# CLI reads `../package.json` at module load and reports what it finds as `treasury --version` and in
-# `earn status`, so the plugin's copy reports plugin/package.json and an npm install reports the root
-# one. The manifests are what the marketplaces and the plugin hosts advertise. When any of them
-# disagree, a user installing "0.1.0" gets a CLI that introduces itself as something else: measured, the
-# identical bundle reported `0.1.1` from one tree and `0.1.0` from another, decided entirely by the
-# package.json beside it.
+# Why this is not bookkeeping: the bundled CLI inlines `package.json` at build time and reports that
+# version as `treasury --version` and in `earn status`, so a bundle built from one version and
+# shipped under manifests that say another introduces itself as something the user did not install.
+# The manifests are what the marketplaces and the plugin hosts advertise. This check is what ties them
+# to the bundle: when any of them disagree, a user installing "0.1.0" gets a CLI that reports something
+# else. (Before the version was inlined, the identical bundle reported `0.1.1` from one tree and `0.1.0`
+# from another, decided by the package.json beside it.)
 #
 # Usage: bash scripts/check-versions.sh            # all declarations must agree
 #        bash scripts/check-versions.sh 0.1.1      # ...and must equal this
