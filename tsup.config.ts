@@ -1,23 +1,22 @@
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { defineConfig } from "tsup";
-import type { Plugin } from "esbuild";
 
 const MANIFEST = resolve(__dirname, "package.json");
 
 /**
- * `src/version.ts` imports the package manifest for its `version`. Inlined whole, the bundle would carry the
- * scripts and devDependencies too, and a dev-only dependency bump (which Dependabot makes without rebuilding
- * anything) would turn the committed bundle stale. This serves that one file as `{ version }`.
+ * `src/version.ts` imports package.json for its version. Bundled as is, the whole manifest would be inlined,
+ * and every edit to it (a dev-dependency bump) would change dist/treasury.mjs. Only the version goes in.
  */
-export const manifestVersionOnly: Plugin = {
-  name: "manifest-version-only",
-  setup: (b) =>
-    b.onLoad({ filter: /package\.json$/ }, (args) =>
-      args.path === MANIFEST
-        ? { contents: `export default ${JSON.stringify({ version: (JSON.parse(readFileSync(MANIFEST, "utf8")) as { version: string }).version })};`, loader: "js" }
-        : undefined,
-    ),
+const versionOnly = {
+  name: "package-json-version-only",
+  setup(b: { onLoad: (o: { filter: RegExp }, cb: (a: { path: string }) => { contents: string; loader: "json" } | undefined) => void }) {
+    b.onLoad({ filter: /package\.json$/ }, ({ path }) => {
+      if (resolve(path) !== MANIFEST) return undefined;
+      const { version } = JSON.parse(readFileSync(path, "utf8")) as { version: string };
+      return { contents: JSON.stringify({ version }), loader: "json" };
+    });
+  },
 };
 
 // One self-contained file so the Claude Code plugin cache — which copies source and runs no
@@ -34,5 +33,5 @@ export default defineConfig({
   splitting: false,
   sourcemap: false,
   minify: false,
-  esbuildPlugins: [manifestVersionOnly],
+  esbuildPlugins: [versionOnly],
 });

@@ -49,6 +49,16 @@ describe("the registry and the version are inside the bundle", () => {
   /** What `earn vaults` prints from the committed bundle run in place: the baseline the copies are compared with. */
   const reference = async (): Promise<string> => (await node([BUNDLE, "earn", "vaults"])).stdout;
 
+  it("the committed CLI embeds the version and nothing else from package.json", () => {
+    // Anything else from the manifest would tie the committed bundle to edits that do not change the CLI: a
+    // dev-dependency bump would make dist/treasury.mjs stale, and CI's bundle check would fail on it.
+    const text = readFileSync(BUNDLE, "utf8");
+    const manifest = JSON.parse(readFileSync(join(pkgRoot, "package.json"), "utf8")) as { version: string; scripts: Record<string, string>; devDependencies: Record<string, string> };
+    expect(text).toContain(JSON.stringify(manifest.version));
+    expect(text).not.toMatch(/\bdevDependencies\b/);
+    for (const script of Object.values(manifest.scripts)) expect(text, `a package.json script is in the bundle: ${script}`).not.toContain(script);
+  });
+
   it("the committed CLI, alone in a folder, reports its own version and the shipped registry", async () => {
     const root = scratch();
     copyFileSync(BUNDLE, join(root, "treasury.mjs"));
@@ -58,16 +68,6 @@ describe("the registry and the version are inside the bundle", () => {
     expect(vaults.code, vaults.stderr).toBe(0);
     expect((JSON.parse(vaults.stdout) as { vaults: unknown[] }).vaults.length).toBeGreaterThan(0);
     expect(vaults.stdout).toBe(await reference());
-  });
-
-  it("the bundle carries the version only, not the manifest's scripts or dependency lists", () => {
-    const manifest = JSON.parse(readFileSync(join(pkgRoot, "package.json"), "utf8")) as { devDependencies: Record<string, string>; scripts: Record<string, string> };
-    const text = readFileSync(BUNDLE, "utf8");
-    // A dev-only dependency bump must not change the committed bundle: nothing from those lists may be in it.
-    expect(Object.keys(manifest.devDependencies).length, "premise: the manifest has devDependencies").toBeGreaterThan(0);
-    expect(text).not.toContain('"devDependencies"');
-    for (const name of Object.keys(manifest.devDependencies)) expect(text, `${name} appears in the bundle`).not.toContain(`"${name}"`);
-    expect(text).not.toContain(manifest.scripts["prepack"]!);
   });
 
   it("the same CLI ignores a registry and a package.json beside it (and beside its parent)", async () => {
