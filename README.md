@@ -11,7 +11,7 @@
 
 
 Open Agent Treasury (OAT) helps agents manage on-chain capital. Its first skill, **Earn**, lets
-agents inspect vaults curated by Tempora Labs on Base, Arbitrum One and Robinhood Chain, track positions, and prepare deposits and
+agents inspect vaults curated by Tempora Labs on Base, Arbitrum One, Robinhood Chain, Ethereum and Monad, track positions, and prepare deposits and
 withdrawals. It ships as an agent plugin, a command-line program, and a TypeScript/JavaScript library.
 
 **OAT prepares transactions. Your wallet executes them.** It never holds private keys or signs: with
@@ -30,8 +30,8 @@ A transaction goes out only from your own wallet, after you approve it there. Yo
 - **Track a position:** see its value, deposits, and earnings from on-chain records.
 - **Prepare a withdrawal:** check how much is withdrawable now and build unsigned calls.
 
-Earn currently supports **USDC in, USDC out** through Tempora Labs' ERC-4626 vaults on Base and
-Arbitrum One, and **USDG in, USDG out** on Robinhood Chain. Base is the default chain, and Test 2B its
+Earn currently supports **USDC in, USDC out** through Tempora Labs' ERC-4626 vaults on Base,
+Arbitrum One, Ethereum and Monad, and **USDG in, USDG out** on Robinhood Chain. Base is the default chain, and Test 2B its
 default vault; the agent asks which chain when you have not said, and the funds have to be on that
 chain already. See [Vaults](#vaults).
 See the [command reference](docs/tools.md), the eight `earn` commands and the five `connect` commands, for inputs, outputs, and limits.
@@ -46,6 +46,8 @@ See the [command reference](docs/tools.md), the eight `earn` commands and the fi
 export TREASURY_RPC_BASE=https://...      # replace with your Base RPC URL
 export TREASURY_RPC_ARBITRUM=https://...  # only if you will use a vault on Arbitrum One
 export TREASURY_RPC_ROBINHOOD=https://... # only if you will use a vault on Robinhood Chain
+export TREASURY_RPC_ETHEREUM=https://...  # only if you will use a vault on Ethereum
+export TREASURY_RPC_MONAD=https://...     # only if you will use a vault on Monad
 claude plugin marketplace add TemporaLabs/treasury@v0.1.2
 claude plugin install treasury@treasury
 ```
@@ -93,6 +95,8 @@ which chain first when you have not said. There are other options, and a demo.
 | **Demo** | **Cash Plus USDC (Test 2)** | Base | `--vault tlCashPlusUSDC2` |
 | Option | **Cash Plus USDC (Test 2C)** | Arbitrum One | `--chain arbitrum` |
 | Option | **Cash Plus USDG (Test 2D)** | Robinhood Chain | `--chain robinhood` |
+| Option | **Cash Plus USDC (Test 2E)** | Ethereum | `--chain ethereum` |
+| Option | **Cash Plus USDC (Test 2F)** | Monad | `--chain monad` |
 | Option | **Cash Plus USDC (Test 2A)** | Base | `--vault tlCashPlusUSDC2A` (whitelist only) |
 
 - **Test 2B, the default.** A Morpho Vault V2 on Base, open to any account. Its first position is a
@@ -109,6 +113,11 @@ which chain first when you have not said. There are other options, and a demo.
 - **Test 2D, Robinhood Chain.** A Morpho Vault V2 over **USDG**, not USDC, open to any account.
   [Blockscout](https://robinhoodchain.blockscout.com/address/0x758f00731943aA88e8C7fB709e0B727903B4F833).
   The USDG has to be on Robinhood Chain already.
+- **Test 2E, Ethereum.** A Morpho Vault V2 over USDC, open to any account.
+  [Etherscan](https://etherscan.io/address/0x2AA9B1F12bbFE1E01dcb4DD52E6836d68416e3B6). Gas on
+  Ethereum costs far more than on the other chains, which matters for a small deposit.
+- **Test 2F, Monad.** A Morpho Vault V2 over USDC, open to any account.
+  [MonadScan](https://monadscan.com/address/0x163295A4d4381745A205DC5E9A436a3f51791593).
 - **Test 2A.** IPOR Fusion, listed so an admitted account can read and exit its position.
 
 When you have not said which chain, the agent shows these and asks before it prepares a deposit.

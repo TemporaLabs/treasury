@@ -6,7 +6,8 @@
  *     [--vault <ticker>] [--amount 0.05] [--out ./roundtrip-out] [--cli dist|src]
  *
  * `--vault` decides the chain: a vault is on one chain, and the run uses that chain's RPC variable
- * (`TREASURY_RPC_ARBITRUM` for a vault on Arbitrum One, `TREASURY_RPC_ROBINHOOD` on Robinhood Chain).
+ * (`TREASURY_RPC_ARBITRUM` for a vault on Arbitrum One, `TREASURY_RPC_ROBINHOOD` on Robinhood Chain, `TREASURY_RPC_ETHEREUM` on Ethereum,
+ * `TREASURY_RPC_MONAD` on Monad).
  *
  * The round-trip harness. Vault and amount default from src/config/earn.ts (`roundTripVault`,
  * `roundTripAmountUsdc`) — the default vault; change `EARN.roundTripVault`, not this script. The

@@ -3,7 +3,7 @@ import { CHAIN_INFO, chainIdForKey, chains, logsFallbackUrlFromEnv, logsRpcUrlFr
 import { createServer } from "node:http";
 
 // TREASURY_LOGS_FALLBACK is restored with the rest, so a test that fails mid-way cannot leak a value into the next.
-const KEYS = ["TREASURY_RPC_BASE", "TREASURY_LOGS_RPC_BASE", "BASE_RPC_URL", "TREASURY_RPC_ARBITRUM", "TREASURY_LOGS_RPC_ARBITRUM", "ARBITRUM_RPC_URL", "TREASURY_LOGS_FALLBACK"] as const;
+const KEYS = ["TREASURY_RPC_BASE", "TREASURY_LOGS_RPC_BASE", "BASE_RPC_URL", "TREASURY_RPC_ARBITRUM", "TREASURY_LOGS_RPC_ARBITRUM", "ARBITRUM_RPC_URL", "TREASURY_RPC_ROBINHOOD", "TREASURY_LOGS_RPC_ROBINHOOD", "ROBINHOOD_RPC_URL", "TREASURY_RPC_ETHEREUM", "TREASURY_LOGS_RPC_ETHEREUM", "ETHEREUM_RPC_URL", "TREASURY_RPC_MONAD", "TREASURY_LOGS_RPC_MONAD", "MONAD_RPC_URL", "TREASURY_LOGS_FALLBACK"] as const;
 const saved: Record<string, string | undefined> = {};
 for (const k of KEYS) saved[k] = process.env[k];
 afterEach(() => {
@@ -305,8 +305,8 @@ describe("each chain resolves its RPC from its OWN variables", () => {
   const ARB_PUBLIC = "https://arb1.arbitrum.io/rpc";
 
   it("the chain table is complete: every supported chain has a key, a name, variables and a public endpoint", () => {
-    expect(supportedChainIds).toEqual([8453, 42161, 4663]);
-    expect(supportedChainIds.map((id) => CHAIN_INFO[id].key)).toEqual(["base", "arbitrum", "robinhood"]);
+    expect(supportedChainIds).toEqual([8453, 42161, 4663, 1, 143]);
+    expect(supportedChainIds.map((id) => CHAIN_INFO[id].key)).toEqual(["base", "arbitrum", "robinhood", "ethereum", "monad"]);
     // The listed order is declared, not derived — so the list must still be exactly the keys of `chains`.
     expect([...supportedChainIds].sort((a, b) => a - b)).toEqual(Object.keys(chains).map(Number).sort((a, b) => a - b));
     for (const id of supportedChainIds) {
@@ -411,6 +411,31 @@ describe("logsFallbackUrlFromEnv on a second chain — TREASURY_LOGS_FALLBACK na
       expect(logsFallbackUrlFromEnv(4663, RH_PRIMARY)).toBeUndefined();
     } finally {
       delete process.env.TREASURY_LOGS_FALLBACK;
+    }
+  });
+  it("Ethereum and Monad: each reads only its own variables, falls back to its own public endpoint, and gets no Base fallback", () => {
+    const cases = [
+      { id: 1 as const, pub: "https://ethereum.reth.rs/rpc", env: "TREASURY_RPC_ETHEREUM", alt: "ETHEREUM_RPC_URL", logs: "TREASURY_LOGS_RPC_ETHEREUM" },
+      { id: 143 as const, pub: "https://rpc.monad.xyz", env: "TREASURY_RPC_MONAD", alt: "MONAD_RPC_URL", logs: "TREASURY_LOGS_RPC_MONAD" },
+    ];
+    for (const c of cases) {
+      clearAll();
+      // Every OTHER chain's variables set: none of them may reach this chain.
+      process.env.TREASURY_RPC_BASE = "https://base.example.invalid/KEY";
+      process.env.TREASURY_RPC_ARBITRUM = "https://arb.example.invalid/KEY";
+      expect(rpcUrlFromEnv(c.id), c.env).toBe(c.pub);
+      expect(rpcSourceForEnv(c.id)).toEqual({ source: "public default", configured: false });
+      process.env[c.alt] = `https://alt-${c.id}.example.invalid/KEY`;
+      expect(rpcUrlFromEnv(c.id)).toBe(`https://alt-${c.id}.example.invalid/KEY`); // the conventional name, when the first is unset
+      process.env[c.env] = `https://own-${c.id}.example.invalid/KEY`;
+      expect(rpcUrlFromEnv(c.id)).toBe(`https://own-${c.id}.example.invalid/KEY`); // the first name wins
+      expect(rpcSourceForEnv(c.id)).toEqual({ source: c.env, configured: true });
+      expect(logsRpcUrlFromEnv(c.id)).toBe(`https://own-${c.id}.example.invalid/KEY`);
+      process.env[c.logs] = `https://logs-${c.id}.example.invalid/KEY`;
+      expect(logsRpcUrlFromEnv(c.id)).toBe(`https://logs-${c.id}.example.invalid/KEY`);
+      expect(logsFallbackUrlFromEnv(c.id, `https://logs-${c.id}.example.invalid/KEY`)).toBe(c.pub);
+      process.env.TREASURY_LOGS_FALLBACK = "https://my-base-archive.invalid/rpc";
+      expect(logsFallbackUrlFromEnv(c.id, `https://logs-${c.id}.example.invalid/KEY`)).toBeUndefined(); // a Base endpoint is never this chain's history
     }
   });
   it("🔴 a URL there is NEVER used for Arbitrum: it is a Base endpoint, and Base's logs are not this chain's history", () => {

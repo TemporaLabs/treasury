@@ -61,7 +61,7 @@ describe("the gate admits exactly the registry's own calls for the connected acc
     ["an approval for more than the deposit", [approve(vault.address, 2_000_000n), deposit()], /must be followed by a deposit of exactly/],
     ["a call to a contract outside the registry", [{ ...deposit(), to: OTHER }], /not a listed vault/],
     ["attached native value", [{ ...deposit(), value: "0x1" }], /native value/],
-    ["an unsupported chain", [{ ...deposit(), chainId: 1 }], /not supported/],
+    ["an unsupported chain", [{ ...deposit(), chainId: 10 }], /not supported/],
     ["a plain token transfer", [{ chainId: vault.chainId, to: usdc, data: ("0xa9059cbb" + "00".repeat(64)) as Hex, value: "0x0" }], /not an approve, deposit, withdraw or redeem/],
     ["nothing at all", [], /nothing to confirm/],
     [

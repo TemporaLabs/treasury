@@ -63,6 +63,9 @@ export TREASURY_LOGS_RPC_BASE=https://...     # optional: a wide-window provider
 export TREASURY_RPC_ARBITRUM=https://...      # a keyed Arbitrum One RPC, if you will use a vault on Arbitrum
 export TREASURY_LOGS_RPC_ARBITRUM=https://... # optional, the same for Arbitrum
 export TREASURY_RPC_ROBINHOOD=https://...     # a keyed Robinhood Chain RPC, if you will use a vault there
+export TREASURY_RPC_ETHEREUM=https://...      # a keyed Ethereum RPC, if you will use a vault there
+export TREASURY_RPC_MONAD=https://...         # a keyed Monad RPC, if you will use a vault there
+export TREASURY_LOGS_RPC_MONAD=https://...    # on Monad, needed for earn_balance's history: the public RPC serves 100 blocks per request
 ```
 
 Each chain reads only its own variable. Unset, a chain falls back to its public RPC, which rate-limits

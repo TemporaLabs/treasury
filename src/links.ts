@@ -28,6 +28,8 @@ const EXPLORER: Record<VaultEntry["chainId"], string> = {
   8453: "https://basescan.org/address/",
   42161: "https://arbiscan.io/address/",
   4663: "https://robinhoodchain.blockscout.com/address/",
+  1: "https://etherscan.io/address/",
+  143: "https://monadscan.com/address/",
 };
 
 /**

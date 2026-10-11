@@ -98,10 +98,12 @@ const ENTRY_POINTS = ["src/index.ts", "src/cli.ts"];
 // TREASURY_LOGS_FALLBACK: the event scan's fallback endpoint, or `off` to forbid the fallback
 // entirely — an operator who may not reach a third party they did not name.
 // One RPC pair and one logs variable PER CHAIN (`CHAIN_INFO` in src/client.ts). A chain reads only its
-// own names — an Arbitrum or Robinhood Chain call never falls back to a Base endpoint.
+// own names — an Arbitrum, Robinhood Chain, Ethereum or Monad call never falls back to a Base endpoint.
 const ENV_READS_ALLOWED = [
   "ARBITRUM_RPC_URL",
   "BASE_RPC_URL",
+  "ETHEREUM_RPC_URL",
+  "MONAD_RPC_URL",
   "ROBINHOOD_RPC_URL",
   // `treasury connect` (src/connect/): its own optional settings, and the four a browser launcher
   // needs to tell whether there is a browser to open at all.
@@ -117,9 +119,13 @@ const ENV_READS_ALLOWED = [
   "TREASURY_LOGS_FALLBACK",
   "TREASURY_LOGS_RPC_ARBITRUM",
   "TREASURY_LOGS_RPC_BASE",
+  "TREASURY_LOGS_RPC_ETHEREUM",
+  "TREASURY_LOGS_RPC_MONAD",
   "TREASURY_LOGS_RPC_ROBINHOOD",
   "TREASURY_RPC_ARBITRUM",
   "TREASURY_RPC_BASE",
+  "TREASURY_RPC_ETHEREUM",
+  "TREASURY_RPC_MONAD",
   "TREASURY_RPC_ROBINHOOD",
 ];
 
@@ -350,6 +356,8 @@ describe("B. the environment surface, statically and at runtime", () => {
       "ARBITRUM_RPC_URL",
       "BASE_RPC_URL",
       "DISPLAY",
+      "ETHEREUM_RPC_URL",
+      "MONAD_RPC_URL",
       "PRIVY_APP_ID",
       "ROBINHOOD_RPC_URL",
       "SSH_CONNECTION",
@@ -360,9 +368,13 @@ describe("B. the environment surface, statically and at runtime", () => {
       "TREASURY_LOGS_FALLBACK",
       "TREASURY_LOGS_RPC_ARBITRUM",
       "TREASURY_LOGS_RPC_BASE",
+      "TREASURY_LOGS_RPC_ETHEREUM",
+      "TREASURY_LOGS_RPC_MONAD",
       "TREASURY_LOGS_RPC_ROBINHOOD",
       "TREASURY_RPC_ARBITRUM",
       "TREASURY_RPC_BASE",
+      "TREASURY_RPC_ETHEREUM",
+      "TREASURY_RPC_MONAD",
       "TREASURY_RPC_ROBINHOOD",
       "WAYLAND_DISPLAY",
     ]);
@@ -371,7 +383,7 @@ describe("B. the environment surface, statically and at runtime", () => {
   it("a fund variable in the environment is not used, WHATEVER it is called — the property, not the prefix", () => {
     const saved = { ...process.env };
     try {
-      for (const k of ["TREASURY_RPC_BASE", "TREASURY_LOGS_RPC_BASE", "TREASURY_LOGS_FALLBACK", "BASE_RPC_URL", "TREASURY_RPC_ARBITRUM", "TREASURY_LOGS_RPC_ARBITRUM", "ARBITRUM_RPC_URL", "TREASURY_RPC_ROBINHOOD", "TREASURY_LOGS_RPC_ROBINHOOD", "ROBINHOOD_RPC_URL"]) delete process.env[k];
+      for (const k of ["TREASURY_RPC_BASE", "TREASURY_LOGS_RPC_BASE", "TREASURY_LOGS_FALLBACK", "BASE_RPC_URL", "TREASURY_RPC_ARBITRUM", "TREASURY_LOGS_RPC_ARBITRUM", "ARBITRUM_RPC_URL", "TREASURY_RPC_ROBINHOOD", "TREASURY_LOGS_RPC_ROBINHOOD", "ROBINHOOD_RPC_URL", "TREASURY_RPC_ETHEREUM", "TREASURY_LOGS_RPC_ETHEREUM", "ETHEREUM_RPC_URL", "TREASURY_RPC_MONAD", "TREASURY_LOGS_RPC_MONAD", "MONAD_RPC_URL"]) delete process.env[k];
       // Three DISTINCT naming conventions, because the title's claim is "whatever it is called". A
       // mechanical rename once collapsed two of these into one line — the test still passed, and
       // proved one convention fewer than it said (caught in review of the public release).

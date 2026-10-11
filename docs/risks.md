@@ -47,6 +47,9 @@ third party. Review every transaction your signer is asked to sign.
   chain. Send it on that chain only, with the vault's asset (USDC; USDG on Robinhood Chain) already
   there: Treasury does not bridge. A transaction sent on a different chain, to an address with no
   contract there, is mined and does nothing — the deposit did not happen and the gas is spent. Check your signer's network first.
+- **Gas on Ethereum is far higher than on the other chains.** The approve, the deposit and the later
+  withdrawal each pay Ethereum gas in ETH, which can be a large share of a small deposit. The other
+  chains here cost a small fraction of that per transaction.
 - **Two addresses, two meanings.** `account` is whose shares; `receiver` is where the money lands.
   They are usually the same. The tool will not assume it, and neither should you — a transposed
   receiver sends the funds to the wrong place, irreversibly.

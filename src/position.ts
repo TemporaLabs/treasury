@@ -136,14 +136,18 @@ type LogEvent = typeof depositEvent | typeof withdrawEvent;
 /**
  * Parses the provider's stated maximum range out of its error, e.g. "limited to a 2,000 range" /
  * "up to a 10 block range" / "range 798952 exceeds limit of 10000" (Infura on Arbitrum One, measured
- * 2026-10-02). `undefined` means the failure is NOT a window refusal — a caller must
- * rethrow rather than narrow, or a dead provider and an empty result become the same answer.
+ * 2026-10-02) / "query exceeds max block range 100000" (Ethereum's public endpoint, measured
+ * 2026-10-11). `undefined` means the failure is NOT a window refusal — a caller must rethrow
+ * rather than narrow, or a dead provider and an empty result become the same answer.
  * Exported for `tests/access.ts`, which walks a different contract's logs and needs the same
  * distinction; NOT re-exported from index.ts.
  */
 export function rangeLimitFromError(e: unknown): bigint | undefined {
   const text = String(e).replace(/,/g, "");
-  const m = text.match(/(?:limited to a|up to a)\s+(\d+)\s*(?:block)?\s*range/i) ?? text.match(/range\s+\d+\s+exceeds limit of\s+(\d+)/i);
+  const m =
+    text.match(/(?:limited to a|up to a)\s+(\d+)\s*(?:block)?\s*range/i) ??
+    text.match(/range\s+\d+\s+exceeds limit of\s+(\d+)/i) ??
+    text.match(/exceeds max block range\s+(\d+)/i);
   return m ? BigInt(m[1]!) : undefined;
 }
 

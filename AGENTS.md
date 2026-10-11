@@ -4,7 +4,7 @@ Instructions for coding agents working in this repository. People should start w
 [`CONTRIBUTING.md`](CONTRIBUTING.md); it is the fuller guide for people, and wins if the two ever
 disagree.
 
-Treasury is a depositor client for ERC-4626 vaults on Base, Arbitrum One and Robinhood Chain: a vault registry, pre-flight checks, and
+Treasury is a depositor client for ERC-4626 vaults on Base, Arbitrum One, Robinhood Chain, Ethereum and Monad: a vault registry, pre-flight checks, and
 builders for **unsigned** deposit and withdraw calls, served as a library and as a command-line program
 (`treasury earn <command>`, one JSON document per run).
 
@@ -59,7 +59,9 @@ npm run registry:check     # reconcile registry/vaults.json against the chain
 ```
 
 Each chain's live and fork tiers run when that chain's RPC variable is set: add
-`TREASURY_RPC_ARBITRUM=https://...` for Arbitrum One, or `TREASURY_RPC_ROBINHOOD=https://...` for Robinhood Chain, to the same commands. `registry:check` reads
+`TREASURY_RPC_ARBITRUM=https://...` for Arbitrum One, `TREASURY_RPC_ROBINHOOD=https://...` for Robinhood Chain,
+`TREASURY_RPC_ETHEREUM=https://...` for Ethereum, or `TREASURY_RPC_MONAD=https://...` for Monad, to the same commands
+(the fork tier covers Base and Arbitrum One only). `registry:check` reads
 each row on its own chain and reports a chain it could not reach as not checked.
 
 ## Things that fail CI if forgotten

@@ -4,6 +4,28 @@ All notable changes to Agent Treasury are recorded here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versions follow [SemVer](https://semver.org/).
 Pre-1.0, minor versions may change tool names, schemas and behaviour.
 
+## [v0.1.3] - Unreleased
+
+### Added — Ethereum and Monad
+- **Two more chains: Ethereum and Monad**, each with its own default vault, so `earn` and `connect`
+  now work on five chains. `--chain ethereum` uses Tempora Labs Cash Plus USDC (Test 2E) and
+  `--chain monad` uses Tempora Labs Cash Plus USDC (Test 2F); both are Morpho Vault V2 vaults over
+  USDC, open to any account, with 18-decimal shares. Base stays the default chain.
+- Each chain reads only its own variables: `TREASURY_RPC_ETHEREUM` (then `ETHEREUM_RPC_URL`, then
+  `https://ethereum.reth.rs/rpc`) and `TREASURY_LOGS_RPC_ETHEREUM`; `TREASURY_RPC_MONAD` (then
+  `MONAD_RPC_URL`, then `https://rpc.monad.xyz`) and `TREASURY_LOGS_RPC_MONAD`.
+- **On Monad, set `TREASURY_LOGS_RPC_MONAD` for position history.** Monad's public endpoint serves
+  `eth_getLogs` over 100 blocks per request, and Monad makes about three blocks a second, so
+  `earn balance` through it covers under an hour and reports the scan as cut short (basis and yield
+  `unknown`). Measured 2026-10-11.
+- The earn skill lists the new chains when it asks which chain, and **tells the operator that
+  Ethereum gas is far higher** when they pick Ethereum for a small amount.
+- Explorer links: Etherscan on Ethereum, MonadScan on Monad. The connect page accepts both chains.
+
+### Fixed
+- `earn balance` reads the Ethereum public endpoint's range refusal ("query exceeds max block range
+  100000") as a 100,000-block window and walks the history in chunks, instead of failing the scan.
+
 ## [v0.1.2] - 2026-10-05
 
 ### Changed — headless: a command line replaces the MCP server

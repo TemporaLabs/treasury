@@ -47,12 +47,20 @@ export const EARN = {
    * `robinhood`: Tempora Labs Cash Plus USDG (Test 2D) — a Morpho Vault V2 on Robinhood Chain over
    * USDG, the first vault whose asset is not USDC. Open to any account by the same measurement.
    *
+   * `ethereum`: Tempora Labs Cash Plus USDC (Test 2E) — a Morpho Vault V2 on Ethereum, open to any
+   * account by the same measurement. Gas there costs far more than on the other chains.
+   *
+   * `monad`: Tempora Labs Cash Plus USDC (Test 2F) — a Morpho Vault V2 on Monad, open to any account
+   * by the same measurement.
+   *
    * `Record<ChainKey, …>`: a chain added to `CHAIN_INFO` without a default here does not compile.
    */
   defaultVaultByChain: {
     base: "tlCashPlusUSDC2B",
     arbitrum: "tlCashPlusUSDC2C",
     robinhood: "tlCashPlusUSDG2D",
+    ethereum: "tlCashPlusUSDC2E",
+    monad: "tlCashPlusUSDC2F",
   } satisfies Record<ChainKey, VaultSymbol>,
 
   /** The round-trip target. The same vault as the default; open, so the fork tier deposits from the whale directly. */

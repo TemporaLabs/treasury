@@ -38292,6 +38292,72 @@ var basePreconf = /* @__PURE__ */ defineChain({
   }
 });
 
+// node_modules/viem/_esm/chains/definitions/mainnet.js
+var mainnet = /* @__PURE__ */ defineChain({
+  id: 1,
+  name: "Ethereum",
+  nativeCurrency: { name: "Ether", symbol: "ETH", decimals: 18 },
+  blockTime: 12e3,
+  rpcUrls: {
+    default: {
+      http: ["https://ethereum.reth.rs/rpc"]
+    }
+  },
+  blockExplorers: {
+    default: {
+      name: "Etherscan",
+      url: "https://etherscan.io",
+      apiUrl: "https://api.etherscan.io/api"
+    }
+  },
+  contracts: {
+    ensUniversalResolver: {
+      address: "0xeeeeeeee14d718c2b47d9923deab1335e144eeee",
+      blockCreated: 23085558
+    },
+    multicall3: {
+      address: "0xca11bde05977b3631167028862be2a173976ca11",
+      blockCreated: 14353601
+    }
+  }
+});
+
+// node_modules/viem/_esm/chains/definitions/monad.js
+var monad = /* @__PURE__ */ defineChain({
+  id: 143,
+  name: "Monad",
+  blockTime: 400,
+  nativeCurrency: {
+    name: "Monad",
+    symbol: "MON",
+    decimals: 18
+  },
+  rpcUrls: {
+    default: {
+      http: ["https://rpc.monad.xyz", "https://rpc1.monad.xyz"],
+      webSocket: ["wss://rpc.monad.xyz", "wss://rpc1.monad.xyz"]
+    }
+  },
+  blockExplorers: {
+    default: {
+      name: "Monadscan",
+      url: "https://monadscan.com",
+      apiUrl: "https://api.etherscan.io/v2/api?chainid=143"
+    },
+    monadvision: {
+      name: "MonadVision",
+      url: "https://monadvision.com"
+    }
+  },
+  testnet: false,
+  contracts: {
+    multicall3: {
+      address: "0xcA11bde05977b3631167028862bE2a173976CA11",
+      blockCreated: 9248132
+    }
+  }
+});
+
 // node_modules/viem/_esm/chains/definitions/robinhood.js
 var robinhood = /* @__PURE__ */ defineChain({
   id: 4663,
@@ -38322,7 +38388,7 @@ var robinhood = /* @__PURE__ */ defineChain({
 });
 
 // src/client.ts
-var chains = { 8453: base, 42161: arbitrum, 4663: robinhood };
+var chains = { 8453: base, 42161: arbitrum, 4663: robinhood, 1: mainnet, 143: monad };
 function isSupportedChainId(id) {
   return id in chains;
 }
@@ -38341,16 +38407,32 @@ var CHAIN_INFO = {
     rpcEnv: ["TREASURY_RPC_ROBINHOOD", "ROBINHOOD_RPC_URL"],
     logsRpcEnv: "TREASURY_LOGS_RPC_ROBINHOOD",
     publicRpc: "https://rpc.mainnet.chain.robinhood.com"
+  },
+  1: {
+    key: "ethereum",
+    name: "Ethereum",
+    rpcEnv: ["TREASURY_RPC_ETHEREUM", "ETHEREUM_RPC_URL"],
+    logsRpcEnv: "TREASURY_LOGS_RPC_ETHEREUM",
+    publicRpc: "https://ethereum.reth.rs/rpc"
+  },
+  143: {
+    key: "monad",
+    name: "Monad",
+    rpcEnv: ["TREASURY_RPC_MONAD", "MONAD_RPC_URL"],
+    logsRpcEnv: "TREASURY_LOGS_RPC_MONAD",
+    publicRpc: "https://rpc.monad.xyz"
   }
 };
-var supportedChainIds = [8453, 42161, 4663];
+var supportedChainIds = [8453, 42161, 4663, 1, 143];
 function chainIdForKey(key) {
   return supportedChainIds.find((id) => CHAIN_INFO[id].key === key);
 }
 var PUBLIC_RPC = {
   8453: CHAIN_INFO[8453].publicRpc,
   42161: CHAIN_INFO[42161].publicRpc,
-  4663: CHAIN_INFO[4663].publicRpc
+  4663: CHAIN_INFO[4663].publicRpc,
+  1: CHAIN_INFO[1].publicRpc,
+  143: CHAIN_INFO[143].publicRpc
 };
 var RATE_LIMIT_WAIT_MS = 15500;
 var RPC_TIMEOUT_MS = 1e4;
@@ -38529,7 +38611,7 @@ var vaultEntrySchema = external_exports.object({
    * 🔴 Adding a chain here also needs its row in `CHAIN_INFO` (a compile error until it has one) and
    * in `links.ts`'s explorer map (which throws on a chain it does not know).
    */
-  chainId: external_exports.union([external_exports.literal(8453), external_exports.literal(42161), external_exports.literal(4663)]),
+  chainId: external_exports.union([external_exports.literal(8453), external_exports.literal(42161), external_exports.literal(4663), external_exports.literal(1), external_exports.literal(143)]),
   address,
   chassis: chassisSchema,
   backend: backendSchema,
@@ -38613,12 +38695,20 @@ var EARN = {
    * `robinhood`: Tempora Labs Cash Plus USDG (Test 2D) — a Morpho Vault V2 on Robinhood Chain over
    * USDG, the first vault whose asset is not USDC. Open to any account by the same measurement.
    *
+   * `ethereum`: Tempora Labs Cash Plus USDC (Test 2E) — a Morpho Vault V2 on Ethereum, open to any
+   * account by the same measurement. Gas there costs far more than on the other chains.
+   *
+   * `monad`: Tempora Labs Cash Plus USDC (Test 2F) — a Morpho Vault V2 on Monad, open to any account
+   * by the same measurement.
+   *
    * `Record<ChainKey, …>`: a chain added to `CHAIN_INFO` without a default here does not compile.
    */
   defaultVaultByChain: {
     base: "tlCashPlusUSDC2B",
     arbitrum: "tlCashPlusUSDC2C",
-    robinhood: "tlCashPlusUSDG2D"
+    robinhood: "tlCashPlusUSDG2D",
+    ethereum: "tlCashPlusUSDC2E",
+    monad: "tlCashPlusUSDC2F"
   },
   /** The round-trip target. The same vault as the default; open, so the fork tier deposits from the whale directly. */
   roundTripVault: "tlCashPlusUSDC2B",
@@ -38714,7 +38804,9 @@ function depositableVaults() {
 var EXPLORER = {
   8453: "https://basescan.org/address/",
   42161: "https://arbiscan.io/address/",
-  4663: "https://robinhoodchain.blockscout.com/address/"
+  4663: "https://robinhoodchain.blockscout.com/address/",
+  1: "https://etherscan.io/address/",
+  143: "https://monadscan.com/address/"
 };
 var MORPHO_APP_CHAIN = { 8453: "base" };
 var MORPHO_LISTED = /* @__PURE__ */ new Set(["0x040fCA12673778FEED5DA7b2ccFbbAb0cc0134Cf"]);
@@ -39047,7 +39139,7 @@ var UNKNOWN_AFTER_SCAN_FAILURE = "unknown \u2014 event scan failed; see scan.not
 var UNKNOWN_INCOMPLETE_SCAN = "unknown \u2014 the scan did not cover this position's history; see scan.note";
 function rangeLimitFromError(e) {
   const text2 = String(e).replace(/,/g, "");
-  const m = text2.match(/(?:limited to a|up to a)\s+(\d+)\s*(?:block)?\s*range/i) ?? text2.match(/range\s+\d+\s+exceeds limit of\s+(\d+)/i);
+  const m = text2.match(/(?:limited to a|up to a)\s+(\d+)\s*(?:block)?\s*range/i) ?? text2.match(/range\s+\d+\s+exceeds limit of\s+(\d+)/i) ?? text2.match(/exceeds max block range\s+(\d+)/i);
   return m ? BigInt(m[1]) : void 0;
 }
 async function scanLogs(client, address2, event, owner, from16, to, maxRequests, refuseIfCapped, deadline, now) {
@@ -39813,7 +39905,7 @@ function buildCommands() {
         chain,
         account: accountArg,
         lookback_blocks: external_exports.number().int().positive().optional().describe("how far back to scan for Deposit/Withdraw events; default: from the vault's deployment block, i.e. the whole history. The EFFECTIVE window is max_log_requests \xD7 the provider's eth_getLogs cap (Alchemy free 10 blocks, Base public 2,000, Infura on Arbitrum 10,000); if the configured RPC cannot cover it, the chain's public endpoint serves the scan and scan.source says so"),
-        max_log_requests: external_exports.number().int().positive().max(400).optional().describe("cap on eth_getLogs calls per event per scan; default 100 (= 1,000 blocks on Alchemy free, 200,000 on Base public). scan.wholeHistory says whether the scan actually covered every block since the vault was deployed \u2014 scan.complete alone is only a reconciliation and can be vacuously true. For an older vault, a provider with a wide eth_getLogs range (TREASURY_LOGS_RPC_BASE; TREASURY_LOGS_RPC_ARBITRUM on Arbitrum One; TREASURY_LOGS_RPC_ROBINHOOD on Robinhood Chain) is what makes it whole")
+        max_log_requests: external_exports.number().int().positive().max(400).optional().describe("cap on eth_getLogs calls per event per scan; default 100 (= 1,000 blocks on Alchemy free, 200,000 on Base public). scan.wholeHistory says whether the scan actually covered every block since the vault was deployed \u2014 scan.complete alone is only a reconciliation and can be vacuously true. For an older vault, a provider with a wide eth_getLogs range (TREASURY_LOGS_RPC_BASE; TREASURY_LOGS_RPC_ARBITRUM on Arbitrum One; TREASURY_LOGS_RPC_ROBINHOOD on Robinhood Chain; TREASURY_LOGS_RPC_ETHEREUM on Ethereum; TREASURY_LOGS_RPC_MONAD on Monad, whose public endpoint serves only 100 blocks per request) is what makes it whole")
       }
     },
     guarded(async ({ vault: symbol2, chain: chain2, account, lookback_blocks, max_log_requests }) => {
@@ -40376,7 +40468,7 @@ async function verifyLanded(client, hash4, call2, account, opts = {}) {
 var addressArg2 = external_exports.string().refine((s) => isAddress(s), "must be an EVM address").transform((s) => getAddress(s));
 var amountArg2 = external_exports.string().regex(/^\d+(\.\d+)?$/, `plain decimal amount of the vault's asset (USDC; USDG on Robinhood Chain), e.g. "25" or "12.5"`);
 var vaultArg2 = external_exports.string().optional().describe("the vault's ERC-20 ticker, as `earn vaults` lists them; omit for the default vault of `chain`");
-var chainArg2 = external_exports.string().optional().describe('which chain: "base", "arbitrum" or "robinhood"; omit for the default chain, or when `vault` names one');
+var chainArg2 = external_exports.string().optional().describe('which chain: "base", "arbitrum", "robinhood", "ethereum" or "monad"; omit for the default chain, or when `vault` names one');
 var receiverArg = addressArg2.describe(
   "where the money lands \u2014 it must be the CONNECTED account (this page pays no one else), and it comes from the operator's own message, never filled in by an agent"
 );

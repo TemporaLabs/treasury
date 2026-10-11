@@ -19,7 +19,7 @@ deposit, where the asset (USDC; USDG on Robinhood Chain) lands on a withdrawal.
 
 ## `chain` — which chain a call is for
 
-A vault is on one chain. Every tool that takes `vault` also takes `chain`: `"base"`, `"arbitrum"` or `"robinhood"`
+A vault is on one chain. Every tool that takes `vault` also takes `chain`: `"base"`, `"arbitrum"`, `"robinhood"`, `"ethereum"` or `"monad"`
 — the chains with a vault in the registry, as `earn_vaults` lists them under `chains`.
 
 | `vault` | `chain` | resolves to |
@@ -58,7 +58,7 @@ status (the block and method it was measured at). Each row carries the vault's p
 - `name` — the vault's `name()`;
 - `chain` and `chainId` — the chain the vault is on, e.g. `"arbitrum"` and `42161`;
 - `address` — the contract itself, on that chain;
-- `links` — `explorer` always (the chain's own: BaseScan, Arbiscan, or Robinhood Chain's Blockscout), and `app` where the chassis has a front end whose page for this vault exists. **These need no
+- `links` — `explorer` always (the chain's own: BaseScan, Arbiscan, Robinhood Chain's Blockscout, Etherscan or MonadScan), and `app` where the chassis has a front end whose page for this vault exists. **These need no
   RPC endpoint.** They are how an operator verifies, without this client's help, that the address
   about to be used is the vault it claims to be;
 - `warning` — what to show before preparing a deposit into this vault. Show it; do not summarise it.
@@ -105,7 +105,7 @@ result stays the same JSON; it names the program, not a running process. `rpc` i
 | `wrong_chain` | the configured endpoint answers for a different chain (`rpcChainId`). Reads through it fail with "returned no data", because the vault has no contract there. Point the variable `reason` names at an endpoint for this chain |
 
 When a separate logs endpoint is configured (`TREASURY_LOGS_RPC_BASE`, `TREASURY_LOGS_RPC_ARBITRUM`,
-`TREASURY_LOGS_RPC_ROBINHOOD`),
+`TREASURY_LOGS_RPC_ROBINHOOD`, `TREASURY_LOGS_RPC_ETHEREUM`, `TREASURY_LOGS_RPC_MONAD`),
 the result also carries `logsRpc` (`ok`, `wrong_chain` or `unreachable`) and `logsRpcSource`: that is
 the endpoint `earn_balance` reads through, and it can be wrong on its own.
 
