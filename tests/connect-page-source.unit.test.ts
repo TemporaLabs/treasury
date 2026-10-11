@@ -45,11 +45,30 @@ describe("the connect page's source", () => {
       /signTypedData/i,
       /eth_signTransaction|signTransaction/,
       /eth_sendRawTransaction/,
-      /useSendTransaction|useSignMessage|useSignTypedData/,
+      /useSendTransaction|useSignTypedData|useSignTransaction/,
       /exportWallet|privateKey|mnemonic|seed ?phrase/i,
     ]) {
       expect(source).not.toMatch(banned);
     }
+  });
+
+  /**
+   * The Solana side signs through Privy's Solana hooks, which is why `useSignMessage` is not banned above by
+   * name. Exactly these come from the Solana entry point, and none of Privy's EVM signing hooks are imported
+   * from the main one, so an EVM path cannot pick up a hook that bypasses the wallet's own provider.
+   */
+  it("imports exactly the Solana hooks it needs, and no EVM signing hook", () => {
+    const imports = (from: string) =>
+      [...source.matchAll(new RegExp(`import\\s*\\{([^}]*)\\}\\s*from\\s*"${from.replace(/[/.]/g, "\\$&")}"`, "g"))]
+        .flatMap((m) => m[1]!.split(","))
+        .map((x) => x.trim().replace(/^type\s+/, "").split(/\s+as\s+/)[0]!)
+        .filter(Boolean);
+    expect(new Set(imports("@privy-io/react-auth/solana"))).toEqual(
+      new Set(["defaultSolanaRpcsPlugin", "toSolanaWalletConnectors", "useSignAndSendTransaction", "useSignMessage", "useWallets", "ConnectedStandardSolanaWallet"]),
+    );
+    for (const name of imports("@privy-io/react-auth")) expect(name, "an EVM signing hook from the main entry").not.toMatch(/^use(Sign|Send)/);
+    // The Solana message the page signs is the sign-in challenge the local process issued, and nothing else.
+    expect([...source.matchAll(/signMessage\(\{\s*message:\s*([^,]+),/g)].map((m) => m[1]!.trim())).toEqual(['new TextEncoder().encode(ch["message"])']);
   });
 
   it("writes no HTML from strings, evaluates no code, and stores nothing in the browser", () => {
@@ -99,7 +118,7 @@ describe("the page's Content-Security-Policy", () => {
       "frame-ancestors": ["'none'"],
       "child-src": ["https://auth.privy.io"],
       "frame-src": ["https://auth.privy.io", "https://challenges.cloudflare.com"],
-      "connect-src": ["'self'", "https://auth.privy.io", "https://*.rpc.privy.systems"],
+      "connect-src": ["'self'", "https://auth.privy.io", "https://*.rpc.privy.systems", "wss://*.rpc.privy.systems"],
       "worker-src": ["'self'"],
       "manifest-src": ["'self'"],
     });

@@ -278,9 +278,14 @@ describe("the test-vault warning travels with money-committing responses, and on
     const src = readFileSync(new URL("../src/earn/commands.ts", import.meta.url), "utf8").replace(/\/\*[\s\S]*?\*\/|\/\/.*$/gm, "");
     const writers = src.split("\n").filter((l) => /\bwarning:/.test(l)).map((l) => l.trim());
     expect(writers).toEqual([
-      "const commitsMoney = (vault: VaultEntry) => ({ warning: vault.warning });",
+      "const commitsMoney = (vault: Pick<VaultEntry, \"warning\">) => ({ warning: vault.warning });",
       "warning: v.warning,",
     ]);
+  });
+
+  it("the Solana handlers write no warning field of their own beyond the vault listing: theirs goes through the same chokepoint", () => {
+    const src = readFileSync(new URL("../src/earn/solana.ts", import.meta.url), "utf8").replace(/\/\*[\s\S]*?\*\/|\/\/.*$/gm, "");
+    expect(src.split("\n").filter((l) => /\bwarning:/.test(l)).map((l) => l.trim())).toEqual(["warning: v.warning,"]);
   });
 
   it("earn_prepare_deposit carries it, before next_step", async () => {

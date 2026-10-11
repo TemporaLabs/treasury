@@ -21,6 +21,7 @@ import { CHAIN_INFO } from "../client.js";
 import { DISCLOSURES } from "../disclosures.js";
 import { linksFor } from "../links.js";
 import type { Admitted } from "./gate.js";
+import type { SolanaVaultEntry } from "../registry-schema.js";
 
 /** How long an acknowledgement stays usable: long enough to read it and answer, not long enough to forget it. */
 export const ACK_TTL_MS = 15 * 60_000;
@@ -38,7 +39,19 @@ export function callsDigest(calls: UnsignedCall[], account: Address): string {
 }
 
 export function issueAck(calls: UnsignedCall[], account: Address, now: Date): PendingAck {
-  const digest = callsDigest(calls, account);
+  return issueAckForDigest(callsDigest(calls, account), now);
+}
+
+/**
+ * What a Solana intent IS: the connected account, the vault, the action and its raw amount. Not the
+ * transaction's bytes — those name a blockhash that expires in about a minute, so the page builds a fresh
+ * transaction for the same intent, and the gate holds every one of them to it.
+ */
+export function solanaIntentDigest(account: string, vault: string, action: "deposit" | "withdraw", raw: bigint): string {
+  return keccak256(stringToHex(JSON.stringify(["solana", account, vault, action, raw.toString()])));
+}
+
+export function issueAckForDigest(digest: string, now: Date): PendingAck {
   const issuedAtIso = now.toISOString();
   return {
     code: keccak256(stringToHex(`${digest}|${issuedAtIso}`)).slice(2, 10),
@@ -50,13 +63,18 @@ export function issueAck(calls: UnsignedCall[], account: Address, now: Date): Pe
 
 /** Throws unless `code` names `pending`, it is unexpired, and it was issued for exactly these calls. */
 export function checkAck(code: string, pending: PendingAck | undefined, calls: UnsignedCall[], account: Address, now: Date): void {
+  checkAckDigest(code, pending, callsDigest(calls, account), now);
+}
+
+/** `checkAck` against a digest computed by the caller (a Solana intent's). */
+export function checkAckDigest(code: string, pending: PendingAck | undefined, digest: string, now: Date): void {
   const again = "run the same command without --ack, post its `acknowledgement` to the operator, and wait for their yes";
   if (!pending) throw new Error(`refused: no acknowledgement is pending; ${again}`);
   if (code.trim().toLowerCase() !== pending.code) throw new Error(`refused: --ack ${code} is not the pending acknowledgement's code; ${again}`);
   const expires = Date.parse(pending.expiresAtIso);
   // A missing or unreadable expiry counts as expired, never as no expiry.
   if (!Number.isFinite(expires) || now.getTime() > expires) throw new Error(`refused: the acknowledgement expired at ${pending.expiresAtIso}; ${again}`);
-  if (callsDigest(calls, account) !== pending.digest) {
+  if (digest !== pending.digest) {
     throw new Error(`refused: these calls are not the ones the operator acknowledged (the amount, vault, chain, receiver or connected account changed); ${again}`);
   }
 }
@@ -67,8 +85,11 @@ export interface AckSummary {
   /** The vault's asset (USDC; USDG on Robinhood Chain): what a withdrawal pays out. */
   asset: string;
   chain: string;
-  chainId: number;
+  /** `null` on Solana, which has no chain id; the text then names the cluster. */
+  chainId: number | null;
   vault: { symbol: string; name: string; address: string; explorer: string };
+  /** What the wallet will ask; the EVM default (approve then deposit, or one withdrawal) when absent. */
+  prompts?: string;
   receiver: string;
   warning: string;
   disclosures: string[];
@@ -111,18 +132,41 @@ export function summarize(action: "deposit" | "withdraw", calls: UnsignedCall[],
   };
 }
 
+/** The summary for a Solana intent: one transaction, no approve, and shares only ever to the account itself. */
+export function summarizeSolana(action: "deposit" | "withdraw", v: SolanaVaultEntry, amountText: string, account: string): AckSummary {
+  return {
+    action,
+    amount: amountText,
+    asset: v.asset.symbol,
+    chain: "Solana",
+    chainId: null,
+    vault: { symbol: v.symbol, name: v.name, address: v.address, explorer: `https://solscan.io/account/${v.address}` },
+    receiver: account,
+    warning: operatorWarning(v.warning, action),
+    prompts:
+      action === "deposit"
+        ? "Your wallet will ask you once, to make the deposit. A first deposit also opens your share account, which takes about 0.002 SOL of rent."
+        : "Your wallet will ask you once, to make the withdrawal. Kamino keeps up to 0.001 USDC of each withdraw instruction in the vault, a charge it sets and can change.",
+    disclosures:
+      action === "deposit"
+        ? [...DISCLOSURES.plain.deposit, ...(v.depositOpen.open ? [] : [DISCLOSURES.plain.gatedDeposit]), ...DISCLOSURES.plain.always]
+        : [...DISCLOSURES.plain.always],
+  };
+}
+
 /** The text the operator reads. Generated, never paraphrased: the same calls always produce the same words. */
 export function acknowledgementText(s: AckSummary): string {
   const lands = s.action === "deposit" ? "Shares go to" : `${s.asset} goes to`;
   const prompts =
-    s.action === "deposit"
+    s.prompts ??
+    (s.action === "deposit"
       ? `Your wallet will ask you twice: first to approve ${s.amount} to the vault, then to make the deposit.`
-      : `Your wallet will ask you once, to make the withdrawal.`;
+      : `Your wallet will ask you once, to make the withdrawal.`);
   return [
     `Confirm before the signing page opens. Nothing has been sent.`,
     ``,
     `  ${s.action === "deposit" ? "Deposit" : "Withdraw"}: ${s.amount}`,
-    `  Chain: ${s.chain} (chainId ${s.chainId})`,
+    s.chainId === null ? `  Chain: ${s.chain} (mainnet-beta)` : `  Chain: ${s.chain} (chainId ${s.chainId})`,
     `  Vault: ${s.vault.name} (${s.vault.symbol})`,
     `         ${s.vault.explorer}`,
     `  ${lands}: ${s.receiver} (the connected wallet)`,

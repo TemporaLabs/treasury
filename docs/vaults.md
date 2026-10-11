@@ -8,8 +8,8 @@ the row is wrong, never the chain.
 
 ## Offered today
 
-Seven vaults on five chains. **A call that names no vault and no chain uses the default: Test 2B on Base.**
-Naming `--chain arbitrum` uses Test 2C, `--chain robinhood` Test 2D, `--chain ethereum` Test 2E and `--chain monad` Test 2F. Test 2 is the demo vault: chosen by naming it. A vault's ticker
+Eight vaults on six chains. **A call that names no vault and no chain uses the default: Test 2B on Base.**
+Naming `--chain arbitrum` uses Test 2C, `--chain robinhood` Test 2D, `--chain ethereum` Test 2E, `--chain monad` Test 2F and `--chain solana` Test 2G. Test 2 is the demo vault: chosen by naming it. A vault's ticker
 names exactly one vault on exactly one chain.
 
 | vault | ticker | chain | role | how to choose it | where to look |
@@ -20,9 +20,10 @@ names exactly one vault on exactly one chain.
 | Cash Plus USDG (Test 2D) | `tlCashPlusUSDG2D` | Robinhood Chain | the default on Robinhood Chain; its asset is **USDG**, not USDC | `--chain robinhood` | [Blockscout](https://robinhoodchain.blockscout.com/address/0x758f00731943aA88e8C7fB709e0B727903B4F833) |
 | Cash Plus USDC (Test 2E) | `tlCashPlusUSDC2E` | Ethereum | the default on Ethereum; gas costs far more there | `--chain ethereum` | [Etherscan](https://etherscan.io/address/0x2AA9B1F12bbFE1E01dcb4DD52E6836d68416e3B6) |
 | Cash Plus USDC (Test 2F) | `tlCashPlusUSDC2F` | Monad | the default on Monad | `--chain monad` | [MonadScan](https://monadscan.com/address/0x163295A4d4381745A205DC5E9A436a3f51791593) |
+| Cash Plus USDC (Test 2G) | `tlCashPlusUSDC2G` | Solana | the default on Solana; a Kamino vault, not ERC-4626 | `--chain solana` | [Solscan](https://solscan.io/account/8qV54zrW2piQgBbVaUUtGajf4KuVDKLUDquHv9VZBfS7) |
 | Cash Plus USDC (Test 2A) | `tlCashPlusUSDC2A` | Base | whitelist-gated; listed so an admitted account can read and exit its position | `--vault tlCashPlusUSDC2A` | [BaseScan](https://basescan.org/address/0x1516D2c082b9cc9af852B1Ebc828f168F27299ef) |
 
-**How the open vaults differ.** Each holds three positions, in three other ERC-4626 vaults (Morpho, Spark, Fluid, Aave, Euler and Curvance vaults), and no
+**How the open EVM vaults differ** (Test 2G on Solana is described in its own section). Each holds three positions, in three other ERC-4626 vaults (Morpho, Spark, Fluid, Aave, Euler and Curvance vaults), and no
 two hold the same three contracts. Read from each vault's adapters on 2026-10-02 (the
 underlying vaults, by address, in adapter order):
 
@@ -146,6 +147,26 @@ open to any account and exercises every path. It is not what an agent uses unles
 | history | Monad's public endpoint serves `eth_getLogs` over at most **100 blocks** per request, and Monad makes about three blocks a second, so `earn_balance`'s history scan through it covers under an hour and says it was cut short. Set `TREASURY_LOGS_RPC_MONAD` to a provider with a wider range for entry basis and yield |
 | positions | three adapters on Monad (listed above) — readable on-chain; Treasury does not model the fund's allocation. Whether any of them lends against a stablecoin whose oracle assumes par is not measured here for this vault (see [`risks.md`](risks.md)). Read the vault's positions on-chain before a first deposit |
 | links | MonadScan only; `earn_vaults` offers no `app` link for it |
+
+### Tempora Labs Cash Plus USDC (Test 2G) — the default on Solana
+
+| | |
+|---|---|
+| ticker | `tlCashPlusUSDC2G` — assigned by this registry: the share mint carries no token metadata, so there is no on-chain ticker. The name below is read from the vault's own state |
+| chain | Solana mainnet-beta |
+| vault | the Kamino vault state [`8qV54zrW2piQgBbVaUUtGajf4KuVDKLUDquHv9VZBfS7`](https://solscan.io/account/8qV54zrW2piQgBbVaUUtGajf4KuVDKLUDquHv9VZBfS7), owned by Kamino's vault program `KvauGMspG5k6rtzrqqn7WNn3oZdyKqLKwK2XWQ8FLjd` |
+| asset | USDC, mint [`EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v`](https://solscan.io/token/EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v), 6 decimals |
+| shares | an SPL token, mint [`pxUHrn6sFsnZiLToD9hQa5p6vXRFx7h8dCjZr7LXp7Z`](https://solscan.io/token/pxUHrn6sFsnZiLToD9hQa5p6vXRFx7h8dCjZr7LXp7Z), **6 decimals**, minted only by the vault's own authority |
+| chassis | Kamino vault (not ERC-4626): `deposit` and `withdraw` instructions, no approve step |
+| deployed | slot 455,493,127 (the transaction that created the vault state, 2026-10-11) |
+| deposits | **open to any account**: the vault's permissioning authority is unset, and a simulated 1 USDC deposit from an unrelated account succeeded at slot 455,531,367. Deposit cap: 1,000 USDC in total |
+| withdrawals | **public while no co-signer is set** (see below). Paid from idle USDC first, then from one named reserve per instruction; a withdrawal needing more is split across reserves, and each leg is limited by its reserve's available liquidity, so while a reserve is highly utilised a large withdrawal can be refused or need more than one transaction — `earn_balance` simulates the exit. **Each withdraw instruction keeps up to 0.001 USDC in the vault**: Kamino's global withdrawal penalty for every vault on its program (`withdrawalPenaltyLamports` = 1000 in the program's global config, read 2026-10-11), not this vault's own setting (0), and Kamino can change it at any time without notice. A withdrawal that needs two reserves is two instructions: measured by simulation, 2,000,000 shares kept 1,000 as one instruction and 1,929 as two. A withdrawal worth 0.001 USDC or less is refused (program error 7049). Quotes report exactly what the account receives |
+| fees | none set: performance and management fees read 0 (2026-10-11). The vault admin can set them, and this vault's own withdrawal penalty, with **no timelock**: a change takes effect in the transaction that makes it. The vault admin or Kamino's global admin can also set a per-reserve crank fee taken from each deposit, and minimum deposit and withdrawal amounts; all read 0 (2026-10-11) |
+| co-signer | Kamino's program can require a co-signer (a permissioning authority) on **every deposit and every withdrawal**; set by Kamino's global admin, with no delay, that is a power to stop exits. Unset (read 2026-10-11); Treasury refuses to build a deposit or withdrawal while one is set |
+| positions | idle USDC, Kamino's main-market USDC reserve [`D6q6wuQSrifJKZYpR1M8R4YawnLDtDsMmWM1NbBmgJ59`](https://solscan.io/account/D6q6wuQSrifJKZYpR1M8R4YawnLDtDsMmWM1NbBmgJ59) and its OnRe-market USDC reserve [`AYL4LMc4ZCVyq3Z7XPJGWDM4H9PiWjqXAAuuHBEGVR2Z`](https://solscan.io/account/AYL4LMc4ZCVyq3Z7XPJGWDM4H9PiWjqXAAuuHBEGVR2Z) — readable on-chain; Treasury does not model the allocation |
+| programs | both Kamino programs are upgradeable by their upgrade authority; a later upgrade can change any behaviour described here. Treasury's decoders refuse an account of the wrong size or type rather than read it |
+| what it needs | a Solana wallet, and SOL for each transaction's fee and, on a first deposit, about 0.002 SOL of rent for the share account |
+| links | Solscan |
 
 ### Tempora Labs Cash Plus USDC (Test 2A)
 

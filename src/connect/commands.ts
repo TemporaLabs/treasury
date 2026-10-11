@@ -23,23 +23,28 @@ import { erc4626Abi } from "../abi/erc4626.js";
 import type { Command } from "../earn/commands.js";
 import { explorerTxUrl, linksFor } from "../links.js";
 import { redactEndpoints } from "../redact.js";
-import { resolveVault } from "../registry.js";
-import { acknowledgementText, checkAck, issueAck, summarize } from "./ack.js";
+import { resolveAnyVault, resolveVault } from "../registry.js";
+import { isAddress as isSolanaAddress } from "@solana/kit";
+import type { SolanaVaultEntry } from "../registry-schema.js";
+import { parseAmount, formatAmount } from "../units.js";
+import { makeSolanaRpc } from "../solana/rpc.js";
+import { readVault } from "../solana/vault.js";
+import { solanaRpcUrlFromEnv } from "../client.js";
+import { runConfirmSolana, runConnectSolana, type SolanaFlowDeps, type SolanaIntent } from "./solana.js";
+import { acknowledgementText, checkAck, checkAckDigest, issueAck, issueAckForDigest, solanaIntentDigest, summarize, summarizeSolana } from "./ack.js";
 import { connectPort, privyAppId } from "./config.js";
 import { admit } from "./gate.js";
 import { serveOnce, type Settled } from "./http.js";
 import { openBrowser } from "./open.js";
 import { PAGE_CSP, readPageBundle, shell } from "./page.js";
-import { clearPendingAck, clearSession, readPendingAck, readSession, writePendingAck, writeSession, type Session } from "./session.js";
+import { clearPendingAck, clearSession, clearSolanaSession, readPendingAck, readSession, readSolanaSession, writePendingAck, writeSession, writeSolanaSession, type Session } from "./session.js";
 import { verifyLanded, type Verdict } from "./verify.js";
 
-const addressArg = z
-  .string()
-  .refine((s) => isAddress(s), "must be an EVM address")
-  .transform((s) => getAddress(s));
+/** An address in either family's form; each command checks the family its vault needs. */
+const addressArg = z.string().refine((s) => isAddress(s) || isSolanaAddress(s), "must be an EVM address (0x…), or a Solana address for a vault on Solana");
 const amountArg = z.string().regex(/^\d+(\.\d+)?$/, 'plain decimal amount of the vault\'s asset (USDC; USDG on Robinhood Chain), e.g. "25" or "12.5"');
 const vaultArg = z.string().optional().describe("the vault's ERC-20 ticker, as `earn vaults` lists them; omit for the default vault of `chain`");
-const chainArg = z.string().optional().describe('which chain: "base", "arbitrum", "robinhood", "ethereum" or "monad"; omit for the default chain, or when `vault` names one');
+const chainArg = z.string().optional().describe('which chain: "base", "arbitrum", "robinhood", "ethereum", "monad" or "solana"; omit for the default chain, or when `vault` names one');
 const receiverArg = addressArg.describe(
   "where the money lands — it must be the CONNECTED account (this page pays no one else), and it comes from the operator's own message, never filled in by an agent",
 );
@@ -92,6 +97,8 @@ export interface ConnectDeps {
   balanceTimeoutMs?: number;
   /** The clock acknowledgements are issued and checked against (tests). */
   now?: () => Date;
+  /** The Solana flows' chain reads (tests). */
+  solanaRpc?: SolanaFlowDeps["rpc"];
 }
 
 export async function runConnect(deps: ConnectDeps = {}): Promise<{ result: Settled<Session>; url: string; opened: boolean }> {
@@ -342,10 +349,23 @@ export function buildConnectCommands(deps: ConnectDeps = {}): Record<string, Com
 
   register(
     "connect_status",
-    { title: "Which wallet is connected", description: "The connected account and how it signed in (`external` browser wallet, or `embedded` Privy wallet from an email or social login), or `disconnected`. Reads a local file only.", inputSchema: {} },
+    {
+      title: "Which wallet is connected",
+      description:
+        "The connected account and how it signed in (`external` browser wallet, or `embedded` Privy wallet from an email or social login), or `disconnected`. `solana` reports the connected Solana account the same way: EVM and Solana each have their own connection. Reads local files only.",
+      inputSchema: {},
+    },
     async () => {
       const s = readSession();
-      return JSON.stringify(s ? { status: "connected", ...s } : { status: "disconnected", next_step: "run `treasury connect wallet` to let the operator sign in" }, null, 2);
+      const sol = readSolanaSession();
+      return JSON.stringify(
+        {
+          ...(s ? { status: "connected", ...s } : { status: "disconnected", next_step: "run `treasury connect wallet` to let the operator sign in" }),
+          solana: sol ? { status: "connected", ...sol } : { status: "disconnected", next_step: "run `treasury connect wallet --chain solana` for a vault on Solana" },
+        },
+        null,
+        2,
+      );
     },
   );
 
@@ -354,10 +374,17 @@ export function buildConnectCommands(deps: ConnectDeps = {}): Record<string, Com
     {
       title: "Connect a wallet",
       description:
-        "Opens the sign-in page in the operator's browser: one Connect button, then Privy's window with email, Google, Apple, X and browser wallets (MetaMask, Rabby, Coinbase Wallet). The operator signs a free sign-in message; nothing is spent. Waits until they finish (up to 9 minutes) and returns the connected account. Replaces any earlier connection.",
-      inputSchema: {},
+        "Opens the sign-in page in the operator's browser: one Connect button, then Privy's window with email, Google, Apple, X and browser wallets (MetaMask, Rabby, Coinbase Wallet). The operator signs a free sign-in message; nothing is spent. Waits until they finish (up to 9 minutes) and returns the connected account. Replaces any earlier connection. With --chain solana it connects a SOLANA wallet instead (Phantom, Solflare, Backpack, or a Privy wallet from an email or social login), for vaults on Solana; the EVM connection is kept.",
+      inputSchema: { chain: z.string().optional().describe('"solana" to connect a Solana wallet; omit for an EVM wallet') },
     },
-    async () => {
+    async ({ chain }) => {
+      if (chain !== undefined && chain !== "" && chain !== "solana") throw new Error(`--chain takes "solana" (a Solana wallet) or nothing (an EVM wallet, used on every EVM chain); got "${chain}"`);
+      if (chain === "solana") {
+        const r = await runConnectSolana(solanaDeps());
+        if (!r.result.ok) return Promise.reject(new Error(`not connected: ${r.result.reason}`));
+        writeSolanaSession(r.result.value);
+        return JSON.stringify({ status: "connected", chain: "solana", ...r.result.value, opened: r.opened }, null, 2);
+      }
       const r = await runConnect(deps);
       if (!r.result.ok) return Promise.reject(new Error(`not connected: ${r.result.reason}`));
       return JSON.stringify({ status: "connected", ...r.result.value, opened: r.opened }, null, 2);
@@ -366,11 +393,99 @@ export function buildConnectCommands(deps: ConnectDeps = {}): Record<string, Com
 
   register(
     "connect_disconnect",
-    { title: "Forget the connected wallet", description: "Deletes the local connection record. It moves nothing and revokes nothing in the wallet itself.", inputSchema: {} },
-    async () => JSON.stringify({ status: "disconnected", hadConnection: clearSession() }, null, 2),
+    {
+      title: "Forget the connected wallet",
+      description: "Deletes the local connection record, the EVM and the Solana one. It moves nothing and revokes nothing in the wallet itself.",
+      inputSchema: {},
+    },
+    async () => JSON.stringify({ status: "disconnected", hadConnection: clearSession(), hadSolanaConnection: clearSolanaSession() }, null, 2),
   );
 
   const now = deps.now ?? (() => new Date());
+
+  /** What the Solana flows need from this file: the same page, port, policy, app and time limits. */
+  const solanaDeps = (): SolanaFlowDeps => ({
+    open: deps.open ?? announce,
+    ttlMs: deps.ttlMs ?? CONFIRM_TTL_MS,
+    ...(deps.cancelGraceMs !== undefined ? { cancelGraceMs: deps.cancelGraceMs } : {}),
+    ...(deps.verifyOpts ? { verifyOpts: deps.verifyOpts } : {}),
+    ...(deps.solanaRpc ? { rpc: deps.solanaRpc } : {}),
+    html: shell,
+    csp: PAGE_CSP,
+    assets: assets(),
+    port: connectPort(),
+    appId: privyAppId(),
+  });
+
+  const notConnectedSolana = () => new Error("no Solana wallet is connected — run `treasury connect wallet --chain solana` first, and let the operator sign in");
+
+  /**
+   * The Solana counterpart of `confirmInWallet`: the same two runs. The acknowledgement covers the INTENT
+   * (account, vault, action, raw amount), because the transaction itself is built when the operator confirms.
+   */
+  const confirmSolana = async (intent: SolanaIntent, amountText: string, session: Session, ack: string | undefined) => {
+    const digest = solanaIntentDigest(session.account, intent.vault.address, intent.kind, intent.raw);
+    if (ack === undefined) {
+      const summary = summarizeSolana(intent.kind, intent.vault, amountText, session.account);
+      const pending = issueAckForDigest(digest, now());
+      writePendingAck(pending);
+      return JSON.stringify(
+        {
+          status: "needs_acknowledgement",
+          opened: false,
+          action: intent.kind,
+          amount: summary.amount,
+          chain: "solana",
+          chainId: null,
+          vault: summary.vault,
+          account: session.account,
+          receiver: session.account,
+          acknowledgement: acknowledgementText(summary),
+          ack: pending.code,
+          expiresAtIso: pending.expiresAtIso,
+          next_step: `Post \`acknowledgement\` to the operator word for word, as it is, and wait for their reply. Only an explicit yes they give after reading it is an acknowledgement: not a "go" from before they saw it, and not your own reading of the conversation. On yes, run this same command again with --ack ${pending.code} added, and the signing page opens. On anything else, stop. The code works once, for exactly this ${intent.kind}, until ${pending.expiresAtIso}.`,
+        },
+        null,
+        2,
+      );
+    }
+    checkAckDigest(ack, readPendingAck(), digest, now());
+    clearPendingAck();
+    const r = await runConfirmSolana(intent, session, solanaDeps());
+    const txs = r.result.ok ? r.result.value : r.done;
+    const all = txs.length === r.total && txs.every((t) => t.verified === "matched" || t.verified === "extra_transfer");
+    const status = r.result.ok ? (all ? "completed" : "stopped") : txs.length ? "stopped" : "not_reported";
+    const reason = (r.result.ok ? r.stopReason : r.result.reason) ?? (status === "stopped" ? "the flow ended before the transaction was confirmed" : undefined);
+    return JSON.stringify(
+      {
+        status,
+        chain: "solana",
+        chainId: null,
+        account: session.account,
+        opened: r.opened,
+        ...(reason ? { reason } : {}),
+        calls_total: r.total,
+        txs,
+        next_step:
+          status === "completed"
+            ? "The transaction landed as confirmed. Report its signature to the operator; any `extra_transfer` is money the wallet moved besides the call — say so."
+            : status === "stopped"
+              ? "Stopped before the transaction landed as confirmed. Do not retry blindly: read `reason` and the transaction's `verified` and `detail`, check the account with `earn balance --chain solana`, and tell the operator."
+              : "No transaction was reported to this command. That is not proof that none was sent: if the wallet showed a confirmation, check the account with `earn balance --chain solana` before any retry. Tell the operator why (reason).",
+      },
+      null,
+      2,
+    );
+  };
+
+  /** A Solana withdrawal's shares: `shares_exact` verbatim, or the shares worth `amount_usdc`, rounded up. */
+  const solanaWithdrawShares = async (vault: SolanaVaultEntry, amount_usdc: string | undefined, shares_exact: string | undefined): Promise<bigint> => {
+    if (shares_exact !== undefined) return parseAmount(shares_exact, vault.shareDecimals, "shares_exact");
+    const v = await readVault(deps.solanaRpc ?? makeSolanaRpc(solanaRpcUrlFromEnv()), vault);
+    const amount = parseAmount(amount_usdc!, vault.asset.decimals, `withdrawal amount (${vault.asset.symbol})`);
+    if (v.holdings.netAum === 0n) throw new Error(`${vault.symbol} holds nothing to withdraw`);
+    return (amount * v.state.sharesIssued + v.holdings.netAum - 1n) / v.holdings.netAum;
+  };
 
   /**
    * Without `ack`: gate-check the calls, record them as pending, and return the acknowledgement for
@@ -419,9 +534,19 @@ export function buildConnectCommands(deps: ConnectDeps = {}): Record<string, Com
         "Builds the approve + deposit for the CONNECTED account and checks every call against the registry. Runs twice. Without --ack it opens NOTHING: it returns `needs_acknowledgement` with an `acknowledgement` to post to the operator word for word, and an `ack` code. Only after the operator replies yes, run it again with --ack <code>: then the confirm page opens, and the operator confirms each call in their wallet, one at a time. That run returns each transaction hash with `verified` read from the receipt (`matched`, `extra_transfer`, `mismatch`, `reverted`, `unverified`). Run `earn quote --direction deposit` first.",
       inputSchema: { vault: vaultArg, chain: chainArg, amount_usdc: amountArg, receiver: receiverArg, ack: ackArg },
     },
-    async ({ vault: symbol, chain, amount_usdc, receiver, ack }) => {
+    async ({ vault: symbol, chain, amount_usdc, receiver: rawReceiver, ack }) => {
+      const target = resolveAnyVault(symbol, chain);
+      if (target.family === "solana") {
+        const session = readSolanaSession();
+        if (!session) throw notConnectedSolana();
+        if (rawReceiver !== session.account) throw new Error(`refused: --receiver ${rawReceiver} is not the connected Solana account ${session.account}; on Solana the shares can only go to the account that deposits`);
+        const raw = parseAmount(amount_usdc, target.vault.asset.decimals, `deposit amount (${target.vault.asset.symbol})`);
+        if (raw === 0n) throw new Error("a deposit of 0");
+        return confirmSolana({ kind: "deposit", vault: target.vault, raw }, `${formatAmount(raw, target.vault.asset.decimals)} ${target.vault.asset.symbol}`, session, ack);
+      }
       const session = readSession();
       if (!session) throw notConnected();
+      const receiver = isAddress(rawReceiver) ? getAddress(rawReceiver) : rawReceiver;
       if (receiver !== session.account) throw new Error(`refused: --receiver ${receiver} is not the connected account ${session.account}; this page pays only the connected account (use \`earn prepare_deposit\` with the operator's own signer for anything else)`);
       const vault = resolveVault(symbol, chain);
       return confirmInWallet("deposit", buildDeposit(vault, { assetsHuman: amount_usdc, receiver: receiver as Address, account: session.account as Address }), session, receiver as Address, ack);
@@ -444,15 +569,27 @@ export function buildConnectCommands(deps: ConnectDeps = {}): Record<string, Com
         ack: ackArg,
       },
     },
-    async ({ vault: symbol, chain, receiver, amount_usdc, all, shares_exact, ack }) => {
+    async ({ vault: symbol, chain, receiver: rawReceiver, amount_usdc, all, shares_exact, ack }) => {
+      if (all && amount_usdc) throw new Error("give --amount_usdc or --all with --shares_exact, not both");
+      if (!all && shares_exact) throw new Error("--shares_exact goes with --all; for an amount in the asset, use --amount_usdc alone");
+      if (all && !shares_exact) throw new Error("--all requires --shares_exact (copy it verbatim from `earn balance`)");
+      if (!all && !amount_usdc) throw new Error("provide --amount_usdc, or --all with --shares_exact");
+      const target = resolveAnyVault(symbol, chain);
+      if (target.family === "solana") {
+        const session = readSolanaSession();
+        if (!session) throw notConnectedSolana();
+        if (rawReceiver !== session.account) throw new Error(`refused: --receiver ${rawReceiver} is not the connected Solana account ${session.account}; on Solana a withdrawal pays only the account whose shares burn`);
+        const raw = await solanaWithdrawShares(target.vault, all ? undefined : amount_usdc, all ? shares_exact : undefined);
+        if (raw === 0n) throw new Error("a withdrawal of 0");
+        return confirmSolana({ kind: "withdraw", vault: target.vault, raw }, `${formatAmount(raw, target.vault.shareDecimals)} ${target.vault.symbol} shares`, session, ack);
+      }
       const session = readSession();
       if (!session) throw notConnected();
+      const receiver = isAddress(rawReceiver) ? getAddress(rawReceiver) : rawReceiver;
       if (receiver !== session.account) throw new Error(`refused: --receiver ${receiver} is not the connected account ${session.account}; this page pays only the connected account`);
       const vault = resolveVault(symbol, chain);
       const owner = session.account as Address;
       let calls: UnsignedCall[];
-      if (all && amount_usdc) throw new Error("give --amount_usdc or --all with --shares_exact, not both");
-      if (!all && shares_exact) throw new Error("--shares_exact goes with --all; for an amount in the asset, use --amount_usdc alone");
       if (all) {
         if (!shares_exact) throw new Error("--all requires --shares_exact (copy it verbatim from `earn balance`)");
         calls = buildWithdraw(vault, { receiver: receiver as Address, owner, all: true, sharesExact: shares_exact });

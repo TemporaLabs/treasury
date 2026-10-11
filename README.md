@@ -11,7 +11,7 @@
 
 
 Open Agent Treasury (OAT) helps agents manage on-chain capital. Its first skill, **Earn**, lets
-agents inspect vaults curated by Tempora Labs on Base, Arbitrum One, Robinhood Chain, Ethereum and Monad, track positions, and prepare deposits and
+agents inspect vaults curated by Tempora Labs on Base, Arbitrum One, Robinhood Chain, Ethereum, Monad and Solana, track positions, and prepare deposits and
 withdrawals. It ships as an agent plugin, a command-line program, and a TypeScript/JavaScript library.
 
 **OAT prepares transactions. Your wallet executes them.** It never holds private keys or signs: with
@@ -31,7 +31,7 @@ A transaction goes out only from your own wallet, after you approve it there. Yo
 - **Prepare a withdrawal:** check how much is withdrawable now and build unsigned calls.
 
 Earn currently supports **USDC in, USDC out** through Tempora Labs' ERC-4626 vaults on Base,
-Arbitrum One, Ethereum and Monad, and **USDG in, USDG out** on Robinhood Chain. Base is the default chain, and Test 2B its
+Arbitrum One, Ethereum and Monad, through a Kamino vault on Solana, and **USDG in, USDG out** on Robinhood Chain. Base is the default chain, and Test 2B its
 default vault; the agent asks which chain when you have not said, and the funds have to be on that
 chain already. See [Vaults](#vaults).
 See the [command reference](docs/tools.md), the eight `earn` commands and the five `connect` commands, for inputs, outputs, and limits.
@@ -48,6 +48,7 @@ export TREASURY_RPC_ARBITRUM=https://...  # only if you will use a vault on Arbi
 export TREASURY_RPC_ROBINHOOD=https://... # only if you will use a vault on Robinhood Chain
 export TREASURY_RPC_ETHEREUM=https://...  # only if you will use a vault on Ethereum
 export TREASURY_RPC_MONAD=https://...     # only if you will use a vault on Monad
+export TREASURY_RPC_SOLANA=https://...    # only if you will use the vault on Solana
 claude plugin marketplace add TemporaLabs/treasury@v0.1.2
 claude plugin install treasury@treasury
 ```
@@ -97,6 +98,7 @@ which chain first when you have not said. There are other options, and a demo.
 | Option | **Cash Plus USDG (Test 2D)** | Robinhood Chain | `--chain robinhood` |
 | Option | **Cash Plus USDC (Test 2E)** | Ethereum | `--chain ethereum` |
 | Option | **Cash Plus USDC (Test 2F)** | Monad | `--chain monad` |
+| Option | **Cash Plus USDC (Test 2G)** | Solana | `--chain solana` |
 | Option | **Cash Plus USDC (Test 2A)** | Base | `--vault tlCashPlusUSDC2A` (whitelist only) |
 
 - **Test 2B, the default.** A Morpho Vault V2 on Base, open to any account. Its first position is a
@@ -118,6 +120,10 @@ which chain first when you have not said. There are other options, and a demo.
   Ethereum costs far more than on the other chains, which matters for a small deposit.
 - **Test 2F, Monad.** A Morpho Vault V2 over USDC, open to any account.
   [MonadScan](https://monadscan.com/address/0x163295A4d4381745A205DC5E9A436a3f51791593).
+- **Test 2G, Solana.** A Kamino vault over USDC, open to any account.
+  [Solscan](https://solscan.io/account/8qV54zrW2piQgBbVaUUtGajf4KuVDKLUDquHv9VZBfS7). It takes a Solana
+  wallet (`treasury connect wallet --chain solana`), the account needs a little SOL for fees, and every
+  withdrawal keeps up to 0.001 USDC in the vault per instruction (a charge Kamino sets for every vault on its program, and can change).
 - **Test 2A.** IPOR Fusion, listed so an admitted account can read and exit its position.
 
 When you have not said which chain, the agent shows these and asks before it prepares a deposit.

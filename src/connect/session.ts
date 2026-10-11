@@ -10,6 +10,7 @@ import { chmodSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:
 import { homedir } from "node:os";
 import { join } from "node:path";
 import { getAddress, isAddress } from "viem";
+import { isAddress as isSolanaAddress } from "@solana/kit";
 import type { PendingAck } from "./ack.js";
 import { connectHome } from "./config.js";
 
@@ -62,6 +63,35 @@ export function clearSession(): boolean {
 }
 
 /** The one acknowledgement waiting for `--ack` (`ack.ts`). Issuing another replaces it. */
+/**
+ * The connected SOLANA account, kept apart from the EVM one: an operator can be connected on both at once,
+ * with different wallets, and a command for a vault on one chain family reads only that family's session.
+ */
+export const solanaSessionPath = () => join(dir(), "connect-session-solana.json");
+
+export function readSolanaSession(): Session | undefined {
+  try {
+    const v = JSON.parse(readFileSync(solanaSessionPath(), "utf8")) as Partial<Session>;
+    if (typeof v.account !== "string" || !isSolanaAddress(v.account)) return undefined;
+    if (v.walletType !== "external" && v.walletType !== "embedded") return undefined;
+    return { account: v.account, walletType: v.walletType, connectedAtIso: String(v.connectedAtIso ?? "") };
+  } catch {
+    return undefined;
+  }
+}
+
+export function writeSolanaSession(s: Session): void {
+  writeOwnerOnly(solanaSessionPath(), s);
+  clearPendingAck();
+}
+
+export function clearSolanaSession(): boolean {
+  const had = readSolanaSession() !== undefined;
+  rmSync(solanaSessionPath(), { force: true });
+  clearPendingAck();
+  return had;
+}
+
 export const pendingAckPath = () => join(dir(), "connect-ack.json");
 
 export function writePendingAck(a: PendingAck): void {

@@ -55,7 +55,8 @@ WalletConnect code, but not attested.
 ## Keys
 
 Nothing in the package reads, derives, logs or transmits a private key. There is no code path for it.
-The fork tier signs by impersonating accounts on a local Anvil fork; the live tier only reads. Who
+The fork tier signs by impersonating accounts on a local Anvil fork, and on Solana with a key generated for
+the run and funded only on a local Surfpool fork; the live tier only reads. Who
 may deposit into a gated vault is discovered from the chain when a test needs it, and never written
 into the repository.
 

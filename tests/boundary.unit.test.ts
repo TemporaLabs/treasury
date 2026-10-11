@@ -98,13 +98,14 @@ const ENTRY_POINTS = ["src/index.ts", "src/cli.ts"];
 // TREASURY_LOGS_FALLBACK: the event scan's fallback endpoint, or `off` to forbid the fallback
 // entirely — an operator who may not reach a third party they did not name.
 // One RPC pair and one logs variable PER CHAIN (`CHAIN_INFO` in src/client.ts). A chain reads only its
-// own names — an Arbitrum, Robinhood Chain, Ethereum or Monad call never falls back to a Base endpoint.
+// own names — an Arbitrum, Robinhood Chain, Ethereum, Monad or Solana call never falls back to a Base endpoint.
 const ENV_READS_ALLOWED = [
   "ARBITRUM_RPC_URL",
   "BASE_RPC_URL",
   "ETHEREUM_RPC_URL",
   "MONAD_RPC_URL",
   "ROBINHOOD_RPC_URL",
+  "SOLANA_RPC_URL",
   // `treasury connect` (src/connect/): its own optional settings, and the four a browser launcher
   // needs to tell whether there is a browser to open at all.
   "DISPLAY",
@@ -127,6 +128,7 @@ const ENV_READS_ALLOWED = [
   "TREASURY_RPC_ETHEREUM",
   "TREASURY_RPC_MONAD",
   "TREASURY_RPC_ROBINHOOD",
+  "TREASURY_RPC_SOLANA",
 ];
 
 /**
@@ -154,15 +156,18 @@ const BUILTINS_ALLOWED_PER_FILE: Record<string, string[]> = {
   "src/connect/session.ts": ["os"], //                     the session file lives under the home directory
   "tests/connect.unit.test.ts": ["os", "net"], //           a temporary session directory; a free local port per test
   "tests/fork.test.ts": ["child_process"], //              spawns anvil; anvil holds the keys, this repo never does
+  "tests/fork-solana.test.ts": ["child_process", "os"], //  spawns surfpool in a temporary directory; the key is generated per run
   "tests/registry-check.chain.test.ts": ["child_process"], // runs scripts/registry-check.ts against a mock chain
   "tests/entrypoint.unit.test.ts": ["child_process", "os"], // runs the committed bundle by symlink and by import; tmpdir for the symlink
   "tests/licence.unit.test.ts": ["crypto"], //             pins the sha256 of the canonical Apache-2.0 text
+  "tests/solana-kvault.unit.test.ts": ["crypto"], //       derives Anchor's instruction discriminators (sha256)
 };
 
 const MAY_SPAWN: Record<string, string[]> = {
   "scripts/roundtrip.ts": ["node", "npx"],
   "src/connect/open.ts": ["open", "cmd", "xdg-open"], //    the platform's own "open this URL" command, nothing else
   "tests/fork.test.ts": ["anvil"],
+  "tests/fork-solana.test.ts": ["surfpool"],
   "tests/registry-check.chain.test.ts": ["npx"],
   "tests/entrypoint.unit.test.ts": ["node"],
 };
@@ -334,8 +339,9 @@ describe("A. the runtime module graph cannot leave this package", () => {
     expect(undeclared).toEqual([]);
   });
 
-  it("the dependency set is EXACTLY these two — membership, so a swap holding the count fails too", () => {
+  it("the dependency set is EXACTLY these three — membership, so a swap holding the count fails too", () => {
     expect(Object.keys(pkg.dependencies ?? {}).sort()).toEqual([
+      "@solana/kit",
       "viem",
       "zod",
     ]);
@@ -360,6 +366,7 @@ describe("B. the environment surface, statically and at runtime", () => {
       "MONAD_RPC_URL",
       "PRIVY_APP_ID",
       "ROBINHOOD_RPC_URL",
+      "SOLANA_RPC_URL",
       "SSH_CONNECTION",
       "SSH_TTY",
       "TREASURY_CONNECT_HOME",
@@ -376,6 +383,7 @@ describe("B. the environment surface, statically and at runtime", () => {
       "TREASURY_RPC_ETHEREUM",
       "TREASURY_RPC_MONAD",
       "TREASURY_RPC_ROBINHOOD",
+      "TREASURY_RPC_SOLANA",
       "WAYLAND_DISPLAY",
     ]);
   });

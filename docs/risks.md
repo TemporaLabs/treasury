@@ -47,6 +47,19 @@ third party. Review every transaction your signer is asked to sign.
   chain. Send it on that chain only, with the vault's asset (USDC; USDG on Robinhood Chain) already
   there: Treasury does not bridge. A transaction sent on a different chain, to an address with no
   contract there, is mined and does nothing — the deposit did not happen and the gas is spent. Check your signer's network first.
+- **On Solana, a prepared transaction expires** about a minute after it was built (it names a recent
+  blockhash). Sign it then or prepare it again; `connect` builds it when you press Confirm. A wallet can
+  report a transaction as expired that in fact landed: check the account before preparing another.
+- **On Solana, each withdraw instruction keeps up to 0.001 USDC in the vault**, a charge Kamino sets for
+  every vault on its program and can change at any time without notice. A withdrawal split across two
+  reserves is two instructions and can pay it twice; one worth 0.001 USDC or less is refused.
+- **On Solana, Kamino can stop deposits and exits.** Its program can require a co-signer on every deposit
+  and every withdrawal of a vault; set by Kamino's global admin, with no delay, that stops exits until it
+  co-signs. Unset today; Treasury refuses to build while one is set.
+- **On Solana, the terms can change with no notice.** The vault admin can set fees and the vault's own
+  withdrawal penalty, and the vault admin or Kamino's global admin can set a per-reserve crank fee on
+  deposits and minimum amounts, each taking effect in the transaction that makes it (all 0 today). Kamino's
+  programs are upgradeable by Kamino. Read the vault's state before a deposit.
 - **Gas on Ethereum is far higher than on the other chains.** The approve, the deposit and the later
   withdrawal each pay Ethereum gas in ETH, which can be a large share of a small deposit. The other
   chains here cost a small fraction of that per transaction.

@@ -4,7 +4,7 @@ Instructions for coding agents working in this repository. People should start w
 [`CONTRIBUTING.md`](CONTRIBUTING.md); it is the fuller guide for people, and wins if the two ever
 disagree.
 
-Treasury is a depositor client for ERC-4626 vaults on Base, Arbitrum One, Robinhood Chain, Ethereum and Monad: a vault registry, pre-flight checks, and
+Treasury is a depositor client for ERC-4626 vaults on Base, Arbitrum One, Robinhood Chain, Ethereum and Monad, and a Kamino vault on Solana: a vault registry, pre-flight checks, and
 builders for **unsigned** deposit and withdraw calls, served as a library and as a command-line program
 (`treasury earn <command>`, one JSON document per run).
 
@@ -46,7 +46,8 @@ post anything, search it for the above. If you are not sure whether something is
 
 ## Commands
 
-Node.js 22 or later. The fork tier also needs [Foundry](https://getfoundry.sh) for `anvil`.
+Node.js 22 or later. The fork tier also needs [Foundry](https://getfoundry.sh) for `anvil`, and
+[Surfpool](https://surfpool.run) on `PATH` for Solana's.
 
 ```bash
 npm ci                     # never `npm install` — CI fails on a stale lockfile
@@ -60,8 +61,8 @@ npm run registry:check     # reconcile registry/vaults.json against the chain
 
 Each chain's live and fork tiers run when that chain's RPC variable is set: add
 `TREASURY_RPC_ARBITRUM=https://...` for Arbitrum One, `TREASURY_RPC_ROBINHOOD=https://...` for Robinhood Chain,
-`TREASURY_RPC_ETHEREUM=https://...` for Ethereum, or `TREASURY_RPC_MONAD=https://...` for Monad, to the same commands
-(the anvil fork tier covers every EVM chain). `registry:check` reads
+`TREASURY_RPC_ETHEREUM=https://...` for Ethereum, `TREASURY_RPC_MONAD=https://...` for Monad, or `TREASURY_RPC_SOLANA=https://...` for Solana, to the same commands
+(the fork tier covers every chain: anvil for the EVM chains, Surfpool for Solana). `registry:check` reads
 each row on its own chain and reports a chain it could not reach as not checked.
 
 ## Things that fail CI if forgotten

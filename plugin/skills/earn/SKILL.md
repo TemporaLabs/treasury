@@ -1,12 +1,12 @@
 ---
 name: earn
-description: Put approved idle USDC, or USDG on Robinhood Chain, to work in supported vaults curated by Tempora Labs on Base, Arbitrum, Robinhood Chain, Ethereum or Monad. Inspect vault terms, quote deposits and withdrawals, check position value and currently withdrawable amounts, prepare unsigned transactions for the operator's own signer, and connect the operator's own wallet (a browser wallet, or an email or social login) to confirm them in a browser page. Use for earning yield on idle USDC or USDG, or managing these vault positions, including withdrawal requests. Not for generating business revenue, paid tasks, swaps, trading, or operating a vault allocator.
+description: Put approved idle USDC, or USDG on Robinhood Chain, to work in supported vaults curated by Tempora Labs on Base, Arbitrum, Robinhood Chain, Ethereum, Monad or Solana. Inspect vault terms, quote deposits and withdrawals, check position value and currently withdrawable amounts, prepare unsigned transactions for the operator's own signer, and connect the operator's own wallet (a browser wallet, or an email or social login) to confirm them in a browser page. Use for earning yield on idle USDC or USDG, or managing these vault positions, including withdrawal requests. Not for generating business revenue, paid tasks, swaps, trading, or operating a vault allocator.
 allowed-tools: Bash(node "${CLAUDE_PLUGIN_ROOT}/dist/treasury.mjs" *)
 ---
 
 # Earn — put idle USDC to work in a Tempora Labs vault
 
-You are the depositor. A Tempora Labs fund is an ERC-4626 vault on Base, Arbitrum One, Robinhood Chain, Ethereum or Monad: you put USDC in (USDG on Robinhood Chain), you hold
+You are the depositor. A Tempora Labs fund is an ERC-4626 vault on Base, Arbitrum One, Robinhood Chain, Ethereum or Monad, or a Kamino vault on Solana: you put USDC in (USDG on Robinhood Chain), you hold
 shares, the shares' USDC value moves with what the vault earns or loses, you redeem when you need
 cash. What amount is surplus is the operator's decision, not yours — a balance in the wallet is
 not permission to deposit it. The
@@ -40,12 +40,12 @@ whole design: a skill that supplies judgement must never hold the gate that supp
 
 **Each chain has its own RPC.** The CLI reads Base through `TREASURY_RPC_BASE`, Arbitrum One
 through `TREASURY_RPC_ARBITRUM`, Robinhood Chain through `TREASURY_RPC_ROBINHOOD`, Ethereum through
-`TREASURY_RPC_ETHEREUM` and Monad through `TREASURY_RPC_MONAD` (and the matching
+`TREASURY_RPC_ETHEREUM`, Monad through `TREASURY_RPC_MONAD` and Solana through `TREASURY_RPC_SOLANA` (and the matching
 `TREASURY_LOGS_RPC_*` variable for the event scans `earn_balance` does), from the shell's environment. A chain never reads
 another chain's variable. Unset, a chain falls back to its public endpoint (`mainnet.base.org`,
-`arb1.arbitrum.io`, `rpc.mainnet.chain.robinhood.com`, `ethereum.reth.rs`, `rpc.monad.xyz`), which rate-limits after a handful of calls — an `RPC Request failed …
+`arb1.arbitrum.io`, `rpc.mainnet.chain.robinhood.com`, `ethereum.reth.rs`, `rpc.monad.xyz`, `api.mainnet-beta.solana.com`), which rate-limits after a handful of calls — an `RPC Request failed …
 over rate limit` error from any tool means set a keyed RPC URL for that chain, not that the vault
-is down. The CLI also accepts `BASE_RPC_URL`, `ARBITRUM_RPC_URL`, `ROBINHOOD_RPC_URL`, `ETHEREUM_RPC_URL` and `MONAD_RPC_URL` as fallbacks. A keyed URL is a
+is down. The CLI also accepts `BASE_RPC_URL`, `ARBITRUM_RPC_URL`, `ROBINHOOD_RPC_URL`, `ETHEREUM_RPC_URL`, `MONAD_RPC_URL` and `SOLANA_RPC_URL` as fallbacks. A keyed URL is a
 secret: command output never repeats it — errors are reported without the endpoint.
 
 `earn_status` with `chain` checks that chain's RPC. 🔴 **`rpc: "wrong_chain"` means the variable for
@@ -91,7 +91,7 @@ amount is USDG: say USDG to the operator there, even though the argument is stil
 and the result field `usdcValue`. A vault's own asset is `asset.symbol` in `earn_vaults`. Vault shares exist only inside `earn_balance` (as an exact
 string you hand back to `earn_prepare_withdraw` unchanged) — you never compute with them.
 
-Every tool that takes `vault` also takes **`chain`** (`"base"`, `"arbitrum"`, `"robinhood"`, `"ethereum"` or `"monad"`). A vault is on one
+Every tool that takes `vault` also takes **`chain`** (`"base"`, `"arbitrum"`, `"robinhood"`, `"ethereum"`, `"monad"` or `"solana"`). A vault is on one
 chain, so naming the vault is enough; naming only the chain selects that chain's default vault; naming
 both when they disagree is refused, and the error says which chain the vault is on. Every result that
 names a vault carries `chain` and `chainId`.
@@ -110,7 +110,7 @@ bridge. **Which chain is the operator's decision. Ask; do not pick.**
 
 - **Before preparing a deposit, if the operator has not said which chain, show them `earn_vaults` →
   `chains` and ask.** Each entry is a chain with its default vault; the first is the default chain.
-  Put it as a choice they can answer in a word: "Base (default), Arbitrum, Robinhood Chain, Ethereum or Monad?"
+  Put it as a choice they can answer in a word: "Base (default), Arbitrum, Robinhood Chain, Ethereum, Monad or Solana?"
 - **Ethereum gas is far higher than on the other chains.** When the operator picks Ethereum for a
   small amount, say so before preparing anything: the approve and the deposit, and later the
   withdrawal, each pay Ethereum gas in ETH, which can be a large share of a small deposit. Offer
@@ -130,12 +130,40 @@ bridge. **Which chain is the operator's decision. Ask; do not pick.**
 - **Say the chain out loud at every money step**: in the quote, when you hand over the calls, and
   when you report the result. The operator's signer must be on that network (below).
 
+## Solana is different
+
+The vault on Solana (`chain: "solana"`) is a Kamino vault, not an ERC-4626 one. The same commands work on it,
+with these differences — say them to the operator where they apply:
+
+- **Addresses are Solana addresses** (base58, no `0x`). An EVM address for a vault on Solana is refused, and the
+  other way round. The operator's Solana address comes from their own message, through the destination check,
+  like any other.
+- **`--receiver` must be the account itself.** The vault mints shares to the depositing account and pays a
+  withdrawal to the account whose shares burn; there is no other receiver, and anything else is refused.
+- **One transaction, and it expires.** `earn prepare_deposit` / `prepare_withdraw` return ONE unsigned
+  transaction (`transaction.wire`, base64), simulated before it is returned, that lands only before
+  `transaction.expiresAfterBlockHeight` — about a minute. Prepare it only when the operator is ready to sign,
+  and if the height has passed, prepare it again; never hand over an expired one. Through `connect`, the page
+  builds it when the operator presses Confirm, so this does not arise there.
+- **The account needs SOL**, for the fee and, on a first deposit, about 0.002 SOL of rent for its share
+  account. `earn status --chain solana --account …` says `NEEDS_FUNDS` when it lacks USDC or SOL.
+- **Each withdraw instruction keeps up to 0.001 USDC in the vault** — Kamino's charge for every vault on its
+  program, which Kamino can change; a withdrawal split across reserves pays it per part — and one worth 0.001
+  USDC or less is refused. Quotes report `receives`, exact and net of it; say so before a
+  small withdrawal.
+- **No history on Solana:** `earn_balance` reports shares, value and what a full exit would pay now, but
+  `entryBasisUsdc` and `accruedYieldUsdc` read `unknown`. Do not present the value as profit.
+- **`connect wallet --chain solana`** connects a Solana wallet (Phantom, Solflare, Backpack, or a Privy wallet
+  from an email or social login), separately from the EVM connection; `connect deposit` / `withdraw` with
+  `--chain solana` then use it, with the same acknowledgement step.
+
 ## Opening an account and depositing
 
 1. **Settle the chain first (above), then the vault.** If the operator names no vault, use that
    chain's default (`earn_vaults` → `chains[].default`; today Tempora Labs Cash Plus USDC (Test 2B) on
    Base, Tempora Labs Cash Plus USDC (Test 2C) on Arbitrum One, Tempora Labs Cash Plus USDG (Test 2D) on Robinhood Chain,
-   Tempora Labs Cash Plus USDC (Test 2E) on Ethereum and Tempora Labs Cash Plus USDC (Test 2F) on Monad, all open to any account; Test 2 on Base is the demo vault, used only when it is named). Every listed vault is a Tempora Labs vault.
+   Tempora Labs Cash Plus USDC (Test 2E) on Ethereum, Tempora Labs Cash Plus USDC (Test 2F) on Monad and Tempora Labs Cash Plus
+   USDC (Test 2G) on Solana, all open to any account; Test 2 on Base is the demo vault, used only when it is named). Every listed vault is a Tempora Labs vault.
    Read that chain's `defaultAccess` (`chains[].defaultAccess`; the top-level one is the default
    chain's): when it is `"whitelist"`, run `earn_status` for the account first, and if
    it returns `WHITELIST_GATED`, **tell the operator the account is not admitted to that vault and that
@@ -373,7 +401,7 @@ destination check, done on something they can actually read.
 **Use the explorer of the call's chain** — BaseScan for chainId 8453, Arbiscan for 42161, Robinhood Chain's Blockscout for 4663, Etherscan for 1, MonadScan for 143. The same
 address on the other chain's explorer is a different contract, or nothing.
 
-One gotcha specific to the approve call: **the asset is a proxy on every listed chain** — USDC as
+One gotcha specific to the approve call on the EVM chains (Solana has no approve step): **the asset is a proxy on every EVM chain listed** — USDC as
 `FiatTokenProxy` on Base, Arbitrum One, Ethereum and Monad, USDG as an EIP-1967 proxy on Robinhood Chain — so `approve`
 does not appear under the plain "Write Contract" tab; it appears only under the explorer's proxy tab
 (**"Write as Proxy"** on BaseScan, Arbiscan, Etherscan and MonadScan, the proxy write tab on Blockscout), which resolves

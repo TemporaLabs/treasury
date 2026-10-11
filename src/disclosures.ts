@@ -3,8 +3,8 @@
  * An agent skill IS a distribution surface, so `earn_terms` returns these verbatim and the
  * skill instructs the agent to show them and get an explicit acknowledgement before building a
  * first deposit. They are written for the vaults this registry actually offers — Tempora Labs test
- * vaults on ERC-4626 chassis, on Base, Arbitrum One, Robinhood Chain, Ethereum and Monad — and say
- * what is true of those, not of a fund that has not launched. Change them when the offering changes,
+ * vaults on ERC-4626 chassis on Base, Arbitrum One, Robinhood Chain, Ethereum and Monad, and a Kamino
+ * vault on Solana — and say what is true of those, not of a fund that has not launched. Change them when the offering changes,
  * and nowhere else.
  */
 export const DISCLOSURES = {
