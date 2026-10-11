@@ -159,6 +159,7 @@ const BUILTINS_ALLOWED_PER_FILE: Record<string, string[]> = {
   "tests/fork-solana.test.ts": ["child_process", "os"], //  spawns surfpool in a temporary directory; the key is generated per run
   "tests/registry-check.chain.test.ts": ["child_process"], // runs scripts/registry-check.ts against a mock chain
   "tests/entrypoint.unit.test.ts": ["child_process", "os"], // runs the committed bundle by symlink and by import; tmpdir for the symlink
+  "tests/embedded.unit.test.ts": ["child_process", "os"], //   runs the committed bundle and a consumer's re-bundle of it from a temporary folder
   "tests/licence.unit.test.ts": ["crypto"], //             pins the sha256 of the canonical Apache-2.0 text
   "tests/solana-kvault.unit.test.ts": ["crypto"], //       derives Anchor's instruction discriminators (sha256)
 };
@@ -170,6 +171,7 @@ const MAY_SPAWN: Record<string, string[]> = {
   "tests/fork-solana.test.ts": ["surfpool"],
   "tests/registry-check.chain.test.ts": ["npx"],
   "tests/entrypoint.unit.test.ts": ["node"],
+  "tests/embedded.unit.test.ts": ["node"],
 };
 
 const parse = (file: string) =>
@@ -236,6 +238,24 @@ const resolveTs = (from: string, spec: string): string | null => {
   return null;
 };
 
+/**
+ * The ONLY data files a module may import, by exact importing file and exact specifier. The registry and the
+ * package version are inlined into the bundle at build time instead of read from beside it, so the bundle
+ * needs nothing next to it. Nothing here is a pattern: a third JSON import, or either of these from another
+ * file, fails until it is added on purpose.
+ */
+const JSON_IMPORTS_ALLOWED: Record<string, string[]> = {
+  "src/registry.ts": ["../registry/vaults.json"],
+  "src/version.ts": ["../package.json"],
+};
+
+/** A `.json` specifier is data, not code: it must be allowlisted for this file and be a real file in this package. */
+function jsonReachProblem(file: string, spec: string): string | null {
+  if (!(JSON_IMPORTS_ALLOWED[rel(file)] ?? []).includes(spec)) return `${rel(file)} → ${spec} (a JSON import this file is not allowed)`;
+  const target = resolve(dirname(file), spec);
+  return existsSync(target) && target.startsWith(pkgRoot + sep) ? null : `${rel(file)} → ${spec} (does not resolve to a file in this package)`;
+}
+
 /** Walk the runtime import graph from the entry points. */
 function reachable(): { files: Set<string>; external: Set<string>; importers: Map<string, Set<string>>; escapes: string[] } {
   const files = new Set<string>();
@@ -254,6 +274,11 @@ function reachable(): { files: Set<string>; external: Set<string>; importers: Ma
       if (!spec.startsWith(".")) {
         external.add(spec);
         importers.set(spec, (importers.get(spec) ?? new Set()).add(rel(file)));
+        continue;
+      }
+      if (spec.endsWith(".json")) {
+        const problem = jsonReachProblem(file, spec);
+        if (problem) escapes.push(problem);
         continue;
       }
       const target = resolveTs(file, spec);
@@ -322,6 +347,16 @@ describe("A. the runtime module graph cannot leave this package", () => {
 
   it("every module reach resolves INSIDE src/, and none is unanalysable", () => {
     expect(escapes).toEqual([]);
+  });
+
+  it("the JSON allowlist is exact: each entry is really imported, and anything else is refused (positive and negative controls)", () => {
+    for (const [file, specs] of Object.entries(JSON_IMPORTS_ALLOWED))
+      for (const spec of specs) expect(moduleReaches(resolve(pkgRoot, file)).specs, `${file} no longer imports ${spec}: drop the entry`).toContain(spec);
+    const registryTs = resolve(srcRoot, "registry.ts");
+    expect(jsonReachProblem(registryTs, "../registry/vaults.json")).toBeNull();
+    expect(jsonReachProblem(registryTs, "../package.json")).toMatch(/not allowed/); // another allowed file's JSON
+    expect(jsonReachProblem(resolve(srcRoot, "build.ts"), "../registry/vaults.json")).toMatch(/not allowed/); // the same JSON, wrong importer
+    expect(jsonReachProblem(registryTs, "../../outside.json")).toMatch(/not allowed/); // outside the package
   });
 
   it("every external import is a DECLARED dependency or a node: builtin", () => {
@@ -511,7 +546,10 @@ describe("E. the AUDITED surface is every .ts under src/, scripts/ and tests/", 
       const { specs, opaque } = moduleReaches(f);
       for (const o of opaque) bad.push(`${rel(f)}: unanalysable module reach — ${o}`);
       for (const spec of specs) {
-        if (spec.startsWith(".")) {
+        if (spec.endsWith(".json")) {
+          const problem = jsonReachProblem(f, spec);
+          if (problem) bad.push(problem);
+        } else if (spec.startsWith(".")) {
           const target = resolveTs(f, spec);
           if (!target || !target.startsWith(pkgRoot + sep)) bad.push(`${rel(f)} → ${spec} (escapes this package)`);
         } else {

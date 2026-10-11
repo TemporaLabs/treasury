@@ -1,18 +1,14 @@
-import { readFileSync, realpathSync } from "node:fs";
-import { fileURLToPath, pathToFileURL } from "node:url";
 import { registrySchema, erc4626Chassis, type Registry, type SolanaVaultEntry, type VaultEntry } from "./registry-schema.js";
+import registryJson from "../registry/vaults.json" with { type: "json" };
 import { EARN } from "./config/earn.js";
 import { CHAIN_INFO, chainIdForKey, SOLANA_INFO, supportedChainIds, type ChainKey, type SupportedChainId } from "./client.js";
-
-// From this file's real path, not a symlink's: see PACKAGE_JSON_URL in version.ts.
-const REGISTRY_URL = new URL("../registry/vaults.json", pathToFileURL(realpathSync(fileURLToPath(import.meta.url))));
 
 let cached: Registry | undefined;
 
 /** Parses and validates the shipped registry. Throws on any schema violation — a registry that does not parse is not a registry. */
 export function loadRegistry(): Registry {
   if (cached) return cached;
-  const raw = JSON.parse(readFileSync(fileURLToPath(REGISTRY_URL), "utf8")) as unknown;
+  const raw: unknown = registryJson;
   const parsed = registrySchema.parse(raw);
   // The schema holds one default per chain THAT HAS A VAULT, so it cannot see a registry with no
   // vault on the default chain at all — and then the discovery call itself is what fails, with an

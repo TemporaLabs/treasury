@@ -9873,8 +9873,8 @@ var init_call = __esm({
 });
 
 // src/cli.ts
-import { realpathSync as realpathSync4 } from "fs";
-import { fileURLToPath as fileURLToPath4 } from "url";
+import { realpathSync as realpathSync2 } from "fs";
+import { fileURLToPath as fileURLToPath2 } from "url";
 import { parseArgs } from "util";
 
 // node_modules/zod/v4/classic/external.js
@@ -43680,15 +43680,71 @@ function formatAmount(raw, decimals) {
   return formatUnits(raw, decimals);
 }
 
-// src/version.ts
-import { readFileSync, realpathSync } from "fs";
-import { fileURLToPath, pathToFileURL } from "url";
-var PACKAGE_JSON_URL = new URL("../package.json", pathToFileURL(realpathSync(fileURLToPath(import.meta.url))));
-var PACKAGE_VERSION = JSON.parse(readFileSync(fileURLToPath(PACKAGE_JSON_URL), "utf8")).version;
+// package.json
+var package_default = {
+  name: "@temporalabs/treasury",
+  version: "0.1.3",
+  license: "Apache-2.0",
+  repository: {
+    type: "git",
+    url: "git+https://github.com/TemporaLabs/treasury.git"
+  },
+  files: [
+    "LICENSE",
+    "NOTICE",
+    "THIRD_PARTY_NOTICES.md",
+    "THIRD_PARTY_NOTICES.connect-page.md",
+    "dist",
+    "registry"
+  ],
+  publishConfig: {
+    access: "public",
+    provenance: true
+  },
+  description: "Agent Treasury by Tempora Labs \u2014 a depositor client for ERC-4626 vaults and a Kamino vault on Solana: registry, pre-flight, and unsigned deposit/withdraw builders. Never signs, never holds a key.",
+  type: "module",
+  main: "./dist/index.js",
+  types: "./dist/index.d.ts",
+  bin: {
+    treasury: "./dist/treasury.mjs"
+  },
+  exports: {
+    ".": {
+      types: "./dist/index.d.ts",
+      import: "./dist/index.js"
+    }
+  },
+  engines: {
+    node: ">=22"
+  },
+  scripts: {
+    prepack: "npm run build && git diff --exit-code -- dist/treasury.mjs THIRD_PARTY_NOTICES.md",
+    build: "tsc -b && tsup && tsx scripts/third-party-notices.ts --write && bash scripts/sync-plugin.sh",
+    typecheck: "tsc -b && tsc -p tsconfig.scripts.json",
+    test: "tsc -b && tsc -p tsconfig.scripts.json && vitest run",
+    "test:fork": "tsc -b && TREASURY_FORK=1 vitest run --testTimeout 300000 tests/fork.test.ts tests/fork-solana.test.ts",
+    cli: "tsx src/cli.ts",
+    "registry:check": "tsx scripts/registry-check.ts",
+    "notices:check": "tsx scripts/third-party-notices.ts",
+    "plugin:check": "bash scripts/sync-plugin.sh --check && bash scripts/check-versions.sh",
+    "lint:skill": "bash scripts/lint-skill.sh"
+  },
+  dependencies: {
+    "@solana/kit": "^8.4.0",
+    viem: "^2.37.0",
+    zod: "^4.1.0"
+  },
+  devDependencies: {
+    "@types/node": "^22.15.0",
+    tsup: "^8.5.0",
+    tsx: "^4.20.0",
+    typescript: "^5.9.0",
+    vitest: "^5.0.0"
+  }
+};
 
-// src/registry.ts
-import { readFileSync as readFileSync2, realpathSync as realpathSync2 } from "fs";
-import { fileURLToPath as fileURLToPath2, pathToFileURL as pathToFileURL2 } from "url";
+// src/version.ts
+var PACKAGE_VERSION = package_default.version;
 
 // src/registry-schema.ts
 var address2 = external_exports.string().refine((s2) => isAddress(s2, { strict: true }), { message: "not a checksummed EVM address" }).transform((s2) => getAddress(s2));
@@ -43850,6 +43906,290 @@ var registrySchema = external_exports.object({
   });
 });
 
+// registry/vaults.json
+var vaults_default = {
+  schemaVersion: 1,
+  reconciledAtIso: "2026-10-04T21:22:04Z",
+  vaults: [
+    {
+      symbol: "tlCashPlusUSDC2",
+      name: "Tempora Labs Cash Plus USDC (Test 2)",
+      warning: "TEST VAULT \u2014 unproven. It exists to exercise this product, not to hold savings. Deposit only an amount you are fully prepared to lose entirely, and do not move significant funds into it. Show this warning before preparing any deposit.",
+      chainId: 8453,
+      address: "0x040fCA12673778FEED5DA7b2ccFbbAb0cc0134Cf",
+      chassis: "morpho-v2",
+      backend: "tempora",
+      isDefault: false,
+      asset: {
+        address: "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913",
+        symbol: "USDC",
+        decimals: 6
+      },
+      shareDecimals: 18,
+      depositOpen: {
+        open: true,
+        method: "simulated-deposit-from-stranger",
+        measuredAtBlock: 51372415,
+        measuredAtIso: "2026-09-16T04:49:00Z",
+        detail: "deposit(1 USDC, 0x\u2026dEaD) from 0x\u2026dEaD reverted 0xe65b7a77 TransferFromReverted at block 51372415 \u2014 it reached the token pull, so access is open; maxDeposit() reads 0 to every caller on this chassis by design and is not consulted."
+      },
+      deployedAtBlock: 51371133,
+      notes: [
+        "18-decimal shares against a 6-decimal asset \u2014 a share amount is never an asset amount here.",
+        "Morpho Vault V2. maxDeposit() and maxWithdraw() return 0 to every caller by protocol design; the pre-flight simulates the real call and earn_balance simulates the exit. Neither reads those views.",
+        "Withdrawals are served from idle USDC, then through the vault's liquidity adapter; a withdrawal larger than that reverts until positions are unwound. earn_balance reports exitableNow by simulating the withdrawal.",
+        "No fee is set: performanceFee() = 0 and managementFee() = 0 at block 51372415. The curator can introduce one, and the vault's fee timelocks are 0 (timelock(setPerformanceFee) = timelock(setManagementFee) = 0 at block 51404161), so a change needs no notice. Read both fees before depositing.",
+        "The DEMO vault. Open to any account and in depositable, but not the default: name it with `--vault tlCashPlusUSDC2`. Its structure is the one Test 2B restores as a sibling."
+      ]
+    },
+    {
+      symbol: "tlCashPlusUSDC2A",
+      name: "Tempora Labs Cash Plus USDC (Test 2A)",
+      warning: "TEST VAULT \u2014 unproven. It exists to exercise this product, not to hold savings. Deposit only an amount you are fully prepared to lose entirely, and do not move significant funds into it. Show this warning before preparing any deposit.",
+      chainId: 8453,
+      address: "0x1516D2c082b9cc9af852B1Ebc828f168F27299ef",
+      chassis: "fusion",
+      backend: "tempora",
+      isDefault: false,
+      asset: {
+        address: "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913",
+        symbol: "USDC",
+        decimals: 6
+      },
+      shareDecimals: 8,
+      depositOpen: {
+        open: false,
+        method: "simulated-deposit-from-stranger",
+        measuredAtBlock: 51361109,
+        measuredAtIso: "2026-09-15T22:32:47Z",
+        reason: "WHITELIST_GATED",
+        detail: "deposit(1 USDC, 0x\u2026dEaD) from 0x\u2026dEaD reverted 0x068ca9d8 AccessManagedUnauthorized at block 51361109. The AccessManager at 0xD76eadf8451eB94df0eADd8BfB01C66EF3182ECC returns getTargetFunctionRole(vault, deposit) = 800; withdraw and redeem are PUBLIC_ROLE (2^64-1), so an account that holds shares can always leave."
+      },
+      deployedAtBlock: 51359816,
+      notes: [
+        "8-decimal shares against a 6-decimal asset \u2014 a share amount is never an asset amount here.",
+        "getInstantWithdrawalFuses() returns three fuses (measured at block 51361109), so a withdrawal is served from the vault's liquid balance and then, in fuse order, by unwinding its positions in the same transaction. A withdrawal larger than what those positions can release in-block still reverts; earn_balance reports exitableNow, which simulates the withdrawal rather than reading maxWithdraw.",
+        "Deposits need role 800 on the AccessManager. An account without it gets WHITELIST_GATED from earn_status and earn_quote. Neither earn prepare_deposit nor connect deposit checks the role: a deposit built for such an account reverts on-chain (AccessManagedUnauthorized), so run earn_status for the account first. Withdrawals are public.",
+        "Whitelist-gated (role 800 on its AccessManager): not in depositable. Listed so that an admitted account's position can be read and exited; a non-member gets WHITELIST_GATED from earn_status before anything is built."
+      ]
+    },
+    {
+      symbol: "tlCashPlusUSDC2B",
+      name: "Tempora Labs Cash Plus USDC (Test 2B)",
+      warning: "TEST VAULT \u2014 unproven. It exists to exercise this product, not to hold savings. Deposit only an amount you are fully prepared to lose entirely, and do not move significant funds into it. Show this warning before preparing any deposit.",
+      chainId: 8453,
+      address: "0x91BcEbA5feCB9E92d80F1845B55cC56621E9352F",
+      chassis: "morpho-v2",
+      backend: "tempora",
+      isDefault: true,
+      asset: {
+        address: "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913",
+        symbol: "USDC",
+        decimals: 6
+      },
+      shareDecimals: 18,
+      depositOpen: {
+        open: true,
+        method: "simulated-deposit-from-stranger",
+        measuredAtBlock: 52097648,
+        measuredAtIso: "2026-10-02T23:44:03Z",
+        detail: "deposit(1 USDC, 0x\u2026dEaD) from 0x\u2026dEaD reverted 0xe65b7a77 TransferFromReverted at block 52097648 \u2014 it reached the token pull, so access is open; maxDeposit() reads 0 to every caller on this chassis by design and is not consulted."
+      },
+      deployedAtBlock: 51436870,
+      notes: [
+        "18-decimal shares against a 6-decimal asset \u2014 a share amount is never an asset amount here.",
+        "Morpho Vault V2. maxDeposit() and maxWithdraw() return 0 to every caller by protocol design; the pre-flight simulates the real call and earn_balance simulates the exit. Neither reads those views.",
+        "Withdrawals are served from idle USDC, then through the vault's liquidity adapter; a withdrawal larger than that reverts until positions are unwound. earn_balance reports exitableNow by simulating the withdrawal.",
+        "No fee is set: performanceFee() = 0 and managementFee() = 0 at block 52097648. The curator can introduce one, and the vault's fee timelocks are 0 (timelock(setPerformanceFee) = timelock(setManagementFee) = 0 at block 52097648), so a change needs no notice. Read both fees before depositing.",
+        "Three configured adapters (measured at block 52097648); Treasury does not model the fund's allocation across them \u2014 read the vault's positions on-chain before a first deposit.",
+        "Morpho's own app has no page for this vault (app.morpho.org answered 404 for it on 2026-10-02, and Morpho's API does not list it), unlike Test 2. Positions cannot be cross-checked there; verify on-chain or on BaseScan instead.",
+        "The DEFAULT vault on Base, and open to any account: it is in depositable."
+      ]
+    },
+    {
+      symbol: "tlCashPlusUSDC2C",
+      name: "Tempora Labs Cash Plus USDC (Test 2C)",
+      warning: "TEST VAULT \u2014 unproven. It exists to exercise this product, not to hold savings. Deposit only an amount you are fully prepared to lose entirely, and do not move significant funds into it. Show this warning before preparing any deposit.",
+      chainId: 42161,
+      address: "0x4057a63953142Ac2b3E5dB1954Fc14d578662587",
+      chassis: "morpho-v2",
+      backend: "tempora",
+      isDefault: true,
+      asset: {
+        address: "0xaf88d065e77c8cC2239327C5EDb3A432268e5831",
+        symbol: "USDC",
+        decimals: 6
+      },
+      shareDecimals: 18,
+      depositOpen: {
+        open: true,
+        method: "simulated-deposit-from-stranger",
+        measuredAtBlock: 511070816,
+        measuredAtIso: "2026-10-02T18:43:33Z",
+        detail: "deposit(1 USDC, 0x\u2026dEaD) from 0x\u2026dEaD reverted 0xe65b7a77 TransferFromReverted at block 511070816 \u2014 it reached the token pull, so access is open; maxDeposit() reads 0 to every caller on this chassis by design and is not consulted."
+      },
+      deployedAtBlock: 510270114,
+      notes: [
+        "On Arbitrum One (chain 42161). Calls for this vault are sent on Arbitrum, and its RPC is TREASURY_RPC_ARBITRUM.",
+        "The asset is native USDC on Arbitrum One, not bridged USDC.e, which is a different token this vault does not take.",
+        "18-decimal shares against a 6-decimal asset \u2014 a share amount is never an asset amount here.",
+        "Morpho Vault V2. maxDeposit() and maxWithdraw() return 0 to every caller by protocol design; the pre-flight simulates the real call and earn_balance simulates the exit. Neither reads those views.",
+        "Withdrawals are served from idle USDC, then through the vault's liquidity adapter; a withdrawal larger than that reverts until positions are unwound. earn_balance reports exitableNow by simulating the withdrawal.",
+        "No fee is set: performanceFee() = 0 and managementFee() = 0 at block 511070816. The curator can introduce one, and the vault's fee timelocks are 0 (timelock(setPerformanceFee) = timelock(setManagementFee) = 0 at block 511070816), so a change needs no notice. Read both fees before depositing.",
+        "The default vault on Arbitrum One, and open to any account: it is in depositable."
+      ]
+    },
+    {
+      symbol: "tlCashPlusUSDG2D",
+      name: "Tempora Labs Cash Plus USDG (Test 2D)",
+      warning: "TEST VAULT \u2014 unproven. It exists to exercise this product, not to hold savings. Deposit only an amount you are fully prepared to lose entirely, and do not move significant funds into it. Show this warning before preparing any deposit.",
+      chainId: 4663,
+      address: "0x758f00731943aA88e8C7fB709e0B727903B4F833",
+      chassis: "morpho-v2",
+      backend: "tempora",
+      isDefault: true,
+      asset: {
+        address: "0x5fc5360D0400a0Fd4f2af552ADD042D716F1d168",
+        symbol: "USDG",
+        decimals: 6
+      },
+      shareDecimals: 18,
+      depositOpen: {
+        open: true,
+        method: "simulated-deposit-from-stranger",
+        measuredAtBlock: 79974900,
+        measuredAtIso: "2026-10-04T13:35:53Z",
+        detail: "deposit(1 USDG, 0x\u2026dEaD) from 0x\u2026dEaD reverted 0xe65b7a77 TransferFromReverted at block 79974900 \u2014 it reached the token pull, so access is open; maxDeposit() reads 0 to every caller on this chassis by design and is not consulted."
+      },
+      deployedAtBlock: 79381803,
+      notes: [
+        "On Robinhood Chain (chain 4663). Calls for this vault are sent on Robinhood Chain, and its RPC is TREASURY_RPC_ROBINHOOD.",
+        "The asset is USDG (Global Dollar), not USDC: the first vault in this registry whose asset is not USDC. Amounts in and out of this vault are USDG, in USDG's own 6 decimals; a tool argument or result field named for USDC (amount_usdc, usdcValue) carries USDG here.",
+        "18-decimal shares against a 6-decimal asset \u2014 a share amount is never an asset amount here.",
+        "Morpho Vault V2. maxDeposit() and maxWithdraw() return 0 to every caller by protocol design; the pre-flight simulates the real call and earn_balance simulates the exit. Neither reads those views.",
+        "Withdrawals are served from idle USDG, then through the vault's liquidity adapter; a withdrawal larger than that reverts until positions are unwound. earn_balance reports exitableNow by simulating the withdrawal.",
+        "No fee is set: performanceFee() = 0 and managementFee() = 0 at block 79974900. The curator can introduce one, and the vault's fee timelocks are 0 (timelock(setPerformanceFee) = timelock(setManagementFee) = 0 at block 79974900), so a change needs no notice. Read both fees before depositing.",
+        "Three configured adapters (measured at block 79974900); Treasury does not model the fund's allocation across them \u2014 read the vault's positions on-chain before a first deposit.",
+        "The public Robinhood Chain endpoint answered a single eth_getLogs over 674,901 blocks (79,300,000 to 79,974,900, on 2026-10-04), which covers this vault's whole history; it does not serve state at past blocks, which nothing in this client reads.",
+        "The default vault on Robinhood Chain, and open to any account: it is in depositable."
+      ]
+    },
+    {
+      symbol: "tlCashPlusUSDC2E",
+      name: "Tempora Labs Cash Plus USDC (Test 2E)",
+      warning: "TEST VAULT \u2014 unproven. It exists to exercise this product, not to hold savings. Deposit only an amount you are fully prepared to lose entirely, and do not move significant funds into it. Show this warning before preparing any deposit.",
+      chainId: 1,
+      address: "0x2AA9B1F12bbFE1E01dcb4DD52E6836d68416e3B6",
+      chassis: "morpho-v2",
+      backend: "tempora",
+      isDefault: true,
+      asset: {
+        address: "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48",
+        symbol: "USDC",
+        decimals: 6
+      },
+      shareDecimals: 18,
+      depositOpen: {
+        open: true,
+        method: "simulated-deposit-from-stranger",
+        measuredAtBlock: 26166799,
+        measuredAtIso: "2026-10-11T04:24:35Z",
+        detail: "deposit(1 USDC, 0x\u2026dEaD) from 0x\u2026dEaD reverted 0xe65b7a77 TransferFromReverted at block 26166799 \u2014 it reached the token pull, so access is open; maxDeposit() reads 0 to every caller on this chassis by design and is not consulted."
+      },
+      deployedAtBlock: 26164268,
+      notes: [
+        "On Ethereum (chain 1). Calls for this vault are sent on Ethereum, and its RPC is TREASURY_RPC_ETHEREUM.",
+        "Gas on Ethereum costs far more than on Base, Arbitrum One, Robinhood Chain or Monad: the approve, deposit and withdrawal each pay Ethereum gas in ETH, which can be a large share of a small deposit. Say so before preparing a small deposit here.",
+        "The asset is Circle's USDC on Ethereum (0xA0b8\u2026eB48).",
+        "18-decimal shares against a 6-decimal asset \u2014 a share amount is never an asset amount here.",
+        "Morpho Vault V2. maxDeposit() and maxWithdraw() return 0 to every caller by protocol design; the pre-flight simulates the real call and earn_balance simulates the exit. Neither reads those views.",
+        "Withdrawals are served from idle USDC, then through the vault's liquidity adapter; a withdrawal larger than that reverts until positions are unwound. earn_balance reports exitableNow by simulating the withdrawal.",
+        "No fee is set: performanceFee() = 0 and managementFee() = 0 at block 26166799. The curator can introduce one, and the vault's fee timelocks are 0 (timelock(setPerformanceFee) = timelock(setManagementFee) = 0 at block 26166799), so a change needs no notice. Read both fees before depositing.",
+        "Three configured adapters (measured at block 26166799); Treasury does not model the fund's allocation across them \u2014 read the vault's positions on-chain before a first deposit.",
+        "The public Ethereum endpoint (ethereum.reth.rs) serves eth_getLogs over up to 100,000 blocks per request (measured 2026-10-11), so earn_balance reads this vault's whole history from it in a few requests.",
+        "The default vault on Ethereum, and open to any account: it is in depositable."
+      ]
+    },
+    {
+      symbol: "tlCashPlusUSDC2F",
+      name: "Tempora Labs Cash Plus USDC (Test 2F)",
+      warning: "TEST VAULT \u2014 unproven. It exists to exercise this product, not to hold savings. Deposit only an amount you are fully prepared to lose entirely, and do not move significant funds into it. Show this warning before preparing any deposit.",
+      chainId: 143,
+      address: "0x163295A4d4381745A205DC5E9A436a3f51791593",
+      chassis: "morpho-v2",
+      backend: "tempora",
+      isDefault: true,
+      asset: {
+        address: "0x754704Bc059F8C67012fEd69BC8A327a5aafb603",
+        symbol: "USDC",
+        decimals: 6
+      },
+      shareDecimals: 18,
+      depositOpen: {
+        open: true,
+        method: "simulated-deposit-from-stranger",
+        measuredAtBlock: 112372495,
+        measuredAtIso: "2026-10-11T04:24:45Z",
+        detail: "deposit(1 USDC, 0x\u2026dEaD) from 0x\u2026dEaD reverted 0xe65b7a77 TransferFromReverted at block 112372495 \u2014 it reached the token pull, so access is open; maxDeposit() reads 0 to every caller on this chassis by design and is not consulted."
+      },
+      deployedAtBlock: 112273210,
+      notes: [
+        "On Monad (chain 143). Calls for this vault are sent on Monad, and its RPC is TREASURY_RPC_MONAD.",
+        "The asset is the USDC token at 0x7547\u2026b603 on Monad (name and symbol USDC, 6 decimals, read on chain 2026-10-11).",
+        "18-decimal shares against a 6-decimal asset \u2014 a share amount is never an asset amount here.",
+        "Morpho Vault V2. maxDeposit() and maxWithdraw() return 0 to every caller by protocol design; the pre-flight simulates the real call and earn_balance simulates the exit. Neither reads those views.",
+        "Withdrawals are served from idle USDC, then through the vault's liquidity adapter; a withdrawal larger than that reverts until positions are unwound. earn_balance reports exitableNow by simulating the withdrawal.",
+        "No fee is set: performanceFee() = 0 and managementFee() = 0 at block 112372495. The curator can introduce one, and the vault's fee timelocks are 0 (timelock(setPerformanceFee) = timelock(setManagementFee) = 0 at block 112372495), so a change needs no notice. Read both fees before depositing.",
+        "Three configured adapters (measured at block 112372495); Treasury does not model the fund's allocation across them \u2014 read the vault's positions on-chain before a first deposit.",
+        "The public Monad endpoint (rpc.monad.xyz) serves eth_getLogs over at most 100 blocks per request (measured 2026-10-11), and Monad makes a block about every 0.3 seconds, so from it earn_balance's history scan covers under an hour and reports itself cut short. For entry basis and yield, set TREASURY_LOGS_RPC_MONAD to a provider with a wider eth_getLogs range.",
+        "The default vault on Monad, and open to any account: it is in depositable."
+      ]
+    }
+  ],
+  solanaVaults: [
+    {
+      family: "solana",
+      symbol: "tlCashPlusUSDC2G",
+      name: "Tempora Labs Cash Plus USDC (Test 2G)",
+      warning: "TEST VAULT \u2014 unproven. It exists to exercise this product, not to hold savings. Deposit only an amount you are fully prepared to lose entirely, and do not move significant funds into it. Show this warning before preparing any deposit.",
+      chain: "solana",
+      address: "8qV54zrW2piQgBbVaUUtGajf4KuVDKLUDquHv9VZBfS7",
+      chassis: "kamino-vault",
+      backend: "tempora",
+      isDefault: true,
+      asset: {
+        address: "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v",
+        symbol: "USDC",
+        decimals: 6
+      },
+      sharesMint: "pxUHrn6sFsnZiLToD9hQa5p6vXRFx7h8dCjZr7LXp7Z",
+      shareDecimals: 6,
+      depositOpen: {
+        open: true,
+        method: "simulated-deposit-from-stranger",
+        measuredAtSlot: 455531367,
+        measuredAtIso: "2026-10-11T05:12:46Z",
+        detail: "a simulated 1 USDC deposit from an unrelated account holding USDC and SOL succeeded at slot 455531367 (0.999999 shares minted); the vault's permissioning authority is unset, so no account needs admission."
+      },
+      deployedAtSlot: 455493127,
+      notes: [
+        "On Solana mainnet-beta. Every call for this vault is a Solana transaction, signed by a Solana wallet; its RPC is TREASURY_RPC_SOLANA.",
+        "A Kamino vault (program KvauGMspG5k6rtzrqqn7WNn3oZdyKqLKwK2XWQ8FLjd) over Kamino lending reserves. It is not an ERC-4626 vault: shares are an SPL token (6 decimals), and there is no approve step.",
+        "The ticker tlCashPlusUSDC2G is assigned by this registry: the share mint carries no token metadata, so there is no on-chain ticker to read. The name is read from the vault's own state.",
+        "Shares always land in the depositing account, and a withdrawal always pays the account that holds the shares: there is no separate receiver.",
+        "Each withdraw instruction keeps up to 0.001 USDC in the vault: Kamino's GLOBAL withdrawal penalty for every vault on its program (the program's global config holds withdrawalPenaltyLamports = 1000, read 2026-10-11), not this vault's own setting (0), and Kamino can change it at any time without notice. A withdrawal that needs more than one reserve is more than one instruction: measured by simulation 2026-10-11, 2,000,000 shares kept 1,000 as one instruction and 1,929 as two; a withdrawal worth 0.001 USDC or less is refused (program error 7049). Quotes and positions report the exact amount, net of it.",
+        "A first deposit creates the account's share token account, whose rent (about 0.002 SOL) the account pays and gets back if it ever closes that account. Every transaction also needs SOL for its fee.",
+        "A prepared transaction names a recent blockhash and lands only within about a minute of being prepared: prepare it when the operator is ready to sign.",
+        "No fee is set: performance and management fees read 0 at slot 455529733. The vault admin can set them, and this vault's own withdrawal penalty, with no timelock: a change takes effect in the transaction that makes it. The vault admin or Kamino's global admin can also set a per-reserve crank fee taken from each deposit and minimum deposit and withdrawal amounts (all 0, read 2026-10-11).",
+        "Kamino's program can require a co-signer (a permissioning authority) on every deposit AND every withdrawal of this vault; set by Kamino's global admin with no delay, that is a power to stop exits. It is unset (read 2026-10-11), and this client refuses to build while one is set.",
+        "Each withdrawal leg is limited by its reserve's available liquidity: while a reserve is highly utilised, a large withdrawal can be refused or need more than one transaction. earn_balance's exit simulates it.",
+        "Deposit cap: 1,000 USDC in total (read 2026-10-11). Two reserves are configured: Kamino's main-market USDC reserve and its OnRe-market USDC reserve; idle USDC is the rest.",
+        "The default vault on Solana, and open to any account: it is in depositable."
+      ]
+    }
+  ]
+};
+
 // src/config/earn.ts
 var EARN = {
   /** The chain used when a caller names neither a chain nor a vault. */
@@ -43909,11 +44249,10 @@ var EARN = {
 };
 
 // src/registry.ts
-var REGISTRY_URL = new URL("../registry/vaults.json", pathToFileURL2(realpathSync2(fileURLToPath2(import.meta.url))));
 var cached2;
 function loadRegistry() {
   if (cached2) return cached2;
-  const raw = JSON.parse(readFileSync2(fileURLToPath2(REGISTRY_URL), "utf8"));
+  const raw = vaults_default;
   const parsed = registrySchema.parse(raw);
   const chainId = defaultChainId();
   if (!parsed.vaults.some((v) => v.chainId === chainId)) {
@@ -46632,8 +46971,8 @@ function openBrowser(url2) {
 }
 
 // src/connect/page.ts
-import { readFileSync as readFileSync3, realpathSync as realpathSync3 } from "fs";
-import { fileURLToPath as fileURLToPath3, pathToFileURL as pathToFileURL3 } from "url";
+import { readFileSync, realpathSync } from "fs";
+import { fileURLToPath, pathToFileURL } from "url";
 var PAGE_CSP = [
   "default-src 'self'",
   "script-src 'self' https://challenges.cloudflare.com",
@@ -46650,11 +46989,11 @@ var PAGE_CSP = [
   "worker-src 'self'",
   "manifest-src 'self'"
 ].join("; ");
-var here = pathToFileURL3(realpathSync3(fileURLToPath3(import.meta.url)));
+var here = pathToFileURL(realpathSync(fileURLToPath(import.meta.url)));
 function readPageBundle() {
   for (const rel of ["./connect-page.js", "../../dist/connect-page.js"]) {
     try {
-      return readFileSync3(new URL(rel, here));
+      return readFileSync(new URL(rel, here));
     } catch {
     }
   }
@@ -46688,7 +47027,7 @@ function shell(secret, title) {
 }
 
 // src/connect/session.ts
-import { chmodSync, mkdirSync, readFileSync as readFileSync4, rmSync, writeFileSync } from "fs";
+import { chmodSync, mkdirSync, readFileSync as readFileSync2, rmSync, writeFileSync } from "fs";
 import { homedir } from "os";
 import { join } from "path";
 var dir = () => connectHome() ?? join(homedir(), ".config", "treasury");
@@ -46696,7 +47035,7 @@ var sessionPath = () => join(dir(), "connect-session.json");
 function readSession() {
   let raw;
   try {
-    raw = readFileSync4(sessionPath(), "utf8");
+    raw = readFileSync2(sessionPath(), "utf8");
   } catch {
     return void 0;
   }
@@ -46728,7 +47067,7 @@ function clearSession() {
 var solanaSessionPath = () => join(dir(), "connect-session-solana.json");
 function readSolanaSession() {
   try {
-    const v = JSON.parse(readFileSync4(solanaSessionPath(), "utf8"));
+    const v = JSON.parse(readFileSync2(solanaSessionPath(), "utf8"));
     if (typeof v.account !== "string" || !isAddress2(v.account)) return void 0;
     if (v.walletType !== "external" && v.walletType !== "embedded") return void 0;
     return { account: v.account, walletType: v.walletType, connectedAtIso: String(v.connectedAtIso ?? "") };
@@ -46752,7 +47091,7 @@ function writePendingAck(a) {
 }
 function readPendingAck() {
   try {
-    const v = JSON.parse(readFileSync4(pendingAckPath(), "utf8"));
+    const v = JSON.parse(readFileSync2(pendingAckPath(), "utf8"));
     if (typeof v.code !== "string" || typeof v.digest !== "string" || typeof v.issuedAtIso !== "string" || typeof v.expiresAtIso !== "string") return void 0;
     return { code: v.code, digest: v.digest, issuedAtIso: v.issuedAtIso, expiresAtIso: v.expiresAtIso };
   } catch {
@@ -47403,7 +47742,7 @@ function isEntryPoint() {
   const invoked = process.argv[1];
   if (!invoked) return false;
   try {
-    return realpathSync4(invoked) === realpathSync4(fileURLToPath4(import.meta.url));
+    return realpathSync2(invoked) === realpathSync2(fileURLToPath2(import.meta.url));
   } catch {
     return false;
   }
