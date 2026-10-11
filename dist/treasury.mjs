@@ -43681,67 +43681,7 @@ function formatAmount(raw, decimals) {
 }
 
 // package.json
-var package_default = {
-  name: "@temporalabs/treasury",
-  version: "0.1.3",
-  license: "Apache-2.0",
-  repository: {
-    type: "git",
-    url: "git+https://github.com/TemporaLabs/treasury.git"
-  },
-  files: [
-    "LICENSE",
-    "NOTICE",
-    "THIRD_PARTY_NOTICES.md",
-    "THIRD_PARTY_NOTICES.connect-page.md",
-    "dist",
-    "registry"
-  ],
-  publishConfig: {
-    access: "public",
-    provenance: true
-  },
-  description: "Agent Treasury by Tempora Labs \u2014 a depositor client for ERC-4626 vaults and a Kamino vault on Solana: registry, pre-flight, and unsigned deposit/withdraw builders. Never signs, never holds a key.",
-  type: "module",
-  main: "./dist/index.js",
-  types: "./dist/index.d.ts",
-  bin: {
-    treasury: "./dist/treasury.mjs"
-  },
-  exports: {
-    ".": {
-      types: "./dist/index.d.ts",
-      import: "./dist/index.js"
-    }
-  },
-  engines: {
-    node: ">=22"
-  },
-  scripts: {
-    prepack: "npm run build && git diff --exit-code -- dist/treasury.mjs THIRD_PARTY_NOTICES.md",
-    build: "tsc -b && tsup && tsx scripts/third-party-notices.ts --write && bash scripts/sync-plugin.sh",
-    typecheck: "tsc -b && tsc -p tsconfig.scripts.json",
-    test: "tsc -b && tsc -p tsconfig.scripts.json && vitest run",
-    "test:fork": "tsc -b && TREASURY_FORK=1 vitest run --testTimeout 300000 tests/fork.test.ts tests/fork-solana.test.ts",
-    cli: "tsx src/cli.ts",
-    "registry:check": "tsx scripts/registry-check.ts",
-    "notices:check": "tsx scripts/third-party-notices.ts",
-    "plugin:check": "bash scripts/sync-plugin.sh --check && bash scripts/check-versions.sh",
-    "lint:skill": "bash scripts/lint-skill.sh"
-  },
-  dependencies: {
-    "@solana/kit": "^8.4.0",
-    viem: "^2.37.0",
-    zod: "^4.1.0"
-  },
-  devDependencies: {
-    "@types/node": "^22.15.0",
-    tsup: "^8.5.0",
-    tsx: "^4.20.0",
-    typescript: "^5.9.0",
-    vitest: "^5.0.0"
-  }
-};
+var package_default = { "version": "0.1.3" };
 
 // src/version.ts
 var PACKAGE_VERSION = package_default.version;

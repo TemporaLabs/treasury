@@ -5,6 +5,7 @@ import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { pathToFileURL } from "node:url";
 import { build } from "tsup";
+import { manifestVersionOnly } from "../tsup.config.js";
 
 /**
  * The bundle runs the CLI only when it IS the file Node was asked to run — decided by resolved-path
@@ -103,7 +104,7 @@ describe("the bundle runs the CLI only when it is the entry file", () => {
  * dies before printing anything leaves an agent nothing to report, while one that runs can say which
  * registry rule was broken. The registry is inlined at build time, so the broken one is fed in by
  * bundling the CLI from source with the registry import pointed at a broken copy: the same source and the same
- * bundler settings as `tsup.config.ts`, a different embedded registry.
+ * bundler settings and manifest plugin as `tsup.config.ts`, a different embedded registry.
  */
 describe("a registry that does not parse is reported by the commands, not by the CLI failing to start", () => {
   const roots: string[] = [];
@@ -122,7 +123,7 @@ describe("a registry that does not parse is reported by the commands, not by the
       target: "node22",
       noExternal: [/.*/],
       silent: true,
-      esbuildPlugins: [{ name: "embedded-registry", setup: (b) => b.onResolve({ filter: /registry\/vaults\.json$/ }, () => ({ path: registryFile })) }],
+      esbuildPlugins: [manifestVersionOnly, { name: "embedded-registry", setup: (b) => b.onResolve({ filter: /registry\/vaults\.json$/ }, () => ({ path: registryFile })) }],
     });
     return join(root, "out/treasury.mjs");
   };

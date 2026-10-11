@@ -50,6 +50,8 @@ Pre-1.0, minor versions may change tool names, schemas and behaviour.
   whatever it found there. A registry change now also changes `dist/treasury.mjs`.
 - A bundler that builds on this package must accept JSON import attributes (`with { type: "json" }`);
   esbuild, webpack 5 and Rollup with its JSON plugin do.
+  On Node 22.0 to 22.11, importing the library prints an `ExperimentalWarning` about JSON modules to stderr; it
+  still works, and the CLI bundle does not print it.
 
 ### Fixed
 - `earn balance` reads the Ethereum public endpoint's range refusal ("query exceeds max block range

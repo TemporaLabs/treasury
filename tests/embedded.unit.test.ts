@@ -60,6 +60,16 @@ describe("the registry and the version are inside the bundle", () => {
     expect(vaults.stdout).toBe(await reference());
   });
 
+  it("the bundle carries the version only, not the manifest's scripts or dependency lists", () => {
+    const manifest = JSON.parse(readFileSync(join(pkgRoot, "package.json"), "utf8")) as { devDependencies: Record<string, string>; scripts: Record<string, string> };
+    const text = readFileSync(BUNDLE, "utf8");
+    // A dev-only dependency bump must not change the committed bundle: nothing from those lists may be in it.
+    expect(Object.keys(manifest.devDependencies).length, "premise: the manifest has devDependencies").toBeGreaterThan(0);
+    expect(text).not.toContain('"devDependencies"');
+    for (const name of Object.keys(manifest.devDependencies)) expect(text, `${name} appears in the bundle`).not.toContain(`"${name}"`);
+    expect(text).not.toContain(manifest.scripts["prepack"]!);
+  });
+
   it("the same CLI ignores a registry and a package.json beside it (and beside its parent)", async () => {
     const root = scratch();
     mkdirSync(join(root, "dist"));
