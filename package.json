@@ -39,7 +39,7 @@
     "build": "tsc -b && tsup && tsx scripts/third-party-notices.ts --write && bash scripts/sync-plugin.sh",
     "typecheck": "tsc -b && tsc -p tsconfig.scripts.json",
     "test": "tsc -b && tsc -p tsconfig.scripts.json && vitest run",
-    "test:fork": "tsc -b && TREASURY_FORK=1 vitest run --testTimeout 300000 tests/fork.test.ts",
+    "test:fork": "tsc -b && TREASURY_FORK=1 vitest run --testTimeout 300000 tests/fork.test.ts tests/fork-solana.test.ts",
     "cli": "tsx src/cli.ts",
     "registry:check": "tsx scripts/registry-check.ts",
     "notices:check": "tsx scripts/third-party-notices.ts",
