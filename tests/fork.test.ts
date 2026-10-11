@@ -1,6 +1,6 @@
 /**
- * Acceptance: a full deposit → redeem round trip on a fork of each chain against that chain's
- * default vault, using ONLY the calls this package builds. Gated behind TREASURY_FORK=1 because it
+ * Acceptance: a full deposit → redeem round trip on a fork of each chain against EVERY vault this
+ * client can deposit into on that chain, using ONLY the calls this package builds. Gated behind TREASURY_FORK=1 because it
  * spawns anvil, and per chain behind that chain's RPC variable: a chain with no upstream configured
  * skips, and says so in the runner's summary. The forks run one after another, never together.
  *
@@ -13,13 +13,13 @@
 import { describe, it, expect, beforeAll, afterAll } from "vitest";
 import { spawn, type ChildProcess } from "node:child_process";
 import { createPublicClient, createTestClient, createWalletClient, erc20Abi, formatUnits, http, parseUnits, type Address } from "viem";
-import { arbitrum, base } from "viem/chains";
+import { arbitrum, base, mainnet, monad, robinhood } from "viem/chains";
 import { erc4626Abi } from "../src/abi/erc4626.js";
 import { buildDeposit, buildWithdraw } from "../src/build.js";
 import { getPosition, UNKNOWN_INCOMPLETE_SCAN } from "../src/position.js";
 import { quoteWithdraw } from "../src/quote.js";
 import { preflightDeposit, extractRevert } from "../src/preflight.js";
-import { getVault } from "../src/registry.js";
+import { depositableVaults, getVault } from "../src/registry.js";
 import { EARN } from "../src/config/earn.js";
 import { findRoleHolder } from "./access.js";
 
@@ -38,7 +38,6 @@ const NETS = [
     upstream: process.env["TREASURY_RPC_BASE"] || process.env["BASE_RPC_URL"],
     port: 18545 + (process.pid % 1000),
     whale: EARN.fixtures.usdcWhale as Address,
-    roundTrip: EARN.roundTripVault as string,
     gated: "tlCashPlusUSDC2A" as string | undefined,
     /** ~16 s behind head at Base's 2 s blocks. */
     pinBehind: 8n,
@@ -49,10 +48,39 @@ const NETS = [
     upstream: process.env["TREASURY_RPC_ARBITRUM"] || process.env["ARBITRUM_RPC_URL"],
     port: 19545 + (process.pid % 1000),
     whale: EARN.fixtures.usdcWhaleArbitrum as Address,
-    roundTrip: EARN.defaultVaultByChain.arbitrum as string,
     gated: undefined as string | undefined,
     /** The same ~16 s at Arbitrum One's ~0.25 s blocks: 8 blocks there is two seconds, inside replica lag. */
     pinBehind: 64n,
+  },
+  {
+    key: "robinhood",
+    chain: robinhood,
+    upstream: process.env["TREASURY_RPC_ROBINHOOD"] || process.env["ROBINHOOD_RPC_URL"],
+    port: 20545 + (process.pid % 1000),
+    whale: EARN.fixtures.usdgWhaleRobinhood as Address,
+    gated: undefined as string | undefined,
+    /** Robinhood Chain is an Arbitrum Orbit chain with sub-second blocks, so the same margin as Arbitrum One. */
+    pinBehind: 64n,
+  },
+  {
+    key: "ethereum",
+    chain: mainnet,
+    upstream: process.env["TREASURY_RPC_ETHEREUM"] || process.env["ETHEREUM_RPC_URL"],
+    port: 21545 + (process.pid % 1000),
+    whale: EARN.fixtures.usdcWhaleEthereum as Address,
+    gated: undefined as string | undefined,
+    /** ~24 s behind head at 12 s blocks. */
+    pinBehind: 2n,
+  },
+  {
+    key: "monad",
+    chain: monad,
+    upstream: process.env["TREASURY_RPC_MONAD"] || process.env["MONAD_RPC_URL"],
+    port: 22545 + (process.pid % 1000),
+    whale: EARN.fixtures.usdcWhaleMonad as Address,
+    gated: undefined as string | undefined,
+    /** ~16 s behind head at Monad's ~0.4 s blocks. */
+    pinBehind: 40n,
   },
 ] as const;
 
@@ -60,7 +88,8 @@ for (const net of NETS) {
 const upstream = net.upstream;
 const fork = enabled && upstream ? describe : describe.skip;
 const WHALE: Address = net.whale;
-const ROUND_TRIP = net.roundTrip;
+/** Every vault this client can deposit into on this chain: the registry's rule, not a list kept here. */
+const ROUND_TRIPS = depositableVaults().filter((v) => v.chainId === net.chain.id).map((v) => v.symbol);
 const GATED = net.gated;
 /**
  * The account holding the gated vault's deposit role, DISCOVERED FROM THE CHAIN in `beforeAll` and
@@ -122,10 +151,8 @@ async function sendBuffered(to: Address, data: `0x${string}`, from: Address = WH
     // The round-trip target is OPEN (measured), so the whale deposits directly. WHO may deposit into
     // the gated sibling is read from its AccessManager, not from this repository; a stale address
     // would produce an AccessManagedUnauthorized that reads like a broken test.
-    expect(getVault(ROUND_TRIP).depositOpen.open, `${ROUND_TRIP} is the round-trip target and must be measured open`).toBe(true);
-    // The fork must be OF the chain the target vault is on — a round trip through a vault's address
-    // on another chain's fork deposits into nothing.
-    expect(getVault(ROUND_TRIP).chainId, `${ROUND_TRIP} is not on ${net.key}`).toBe(net.chain.id);
+    // A chain whose registry offers nothing to deposit into would pass by running nothing.
+    expect(ROUND_TRIPS.length, `no depositable vault on ${net.key}`).toBeGreaterThan(0);
     expect(await pub.getChainId(), `the upstream for ${net.key} answers for a different chain`).toBe(net.chain.id);
     gatedMember = GATED === undefined ? undefined : await findRoleHolder(pub as never, getVault(GATED));
     if (gatedMember && gatedMember !== WHALE) {
@@ -165,22 +192,22 @@ async function sendBuffered(to: Address, data: `0x${string}`, from: Address = WH
     expect(open.canDeposit).toBe(true);
   }, 120_000);
 
-  // The round trip runs on the DEFAULT, which is open: the whale deposits directly, no member needed.
+  // The round trip runs on every OPEN vault on the chain: the whale deposits directly, no member needed.
   // The chassis coverage the unit tiers give is in `tests/fixtures/registry.ts`; what only a fork can
   // prove is the round trip through the real contracts, and the pair above proves the gate is read.
-  it.each([[`${ROUND_TRIP} (the round-trip target and the DEFAULT, open — the whale deposits)`, ROUND_TRIP]])(
+  it.each(ROUND_TRIPS.map((s) => [`${s} (open — the whale deposits)`, s]))(
     "%s: preflight NEEDS_APPROVAL → approve+deposit mint shares → OPEN_READY → redeem returns the USDC",
     async (_label, symbol) => {
       const depositor = WHALE;
     const vault = getVault(symbol);
     const amount = EARN.fixtures.forkDepositUsdc;
     const usdcBefore = await pub.readContract({ address: vault.asset.address, abi: erc4626Abi, functionName: "balanceOf", args: [depositor] });
-    expect(usdcBefore).toBeGreaterThan(parseUnits(amount, 6));
+    expect(usdcBefore).toBeGreaterThan(parseUnits(amount, vault.asset.decimals));
     // A depositor may already hold shares on mainnet (the discovered member held 10.01 USDC, measured
     // 2026-09-13; the fork inherits that). Every position assertion below is a DELTA against this, so the
     // test is correct for a fresh depositor and for one with history the event window cannot see.
     const sharesBefore = await pub.readContract({ address: vault.address, abi: erc4626Abi, functionName: "balanceOf", args: [depositor] });
-    const valueBefore = Number(formatUnits(await pub.readContract({ address: vault.address, abi: erc4626Abi, functionName: "convertToAssets", args: [sharesBefore] }), 6));
+    const valueBefore = Number(formatUnits(await pub.readContract({ address: vault.address, abi: erc4626Abi, functionName: "convertToAssets", args: [sharesBefore] }), vault.asset.decimals));
 
     const pre = await preflightDeposit({ vault, depositor: depositor, assetsHuman: amount, client: pub as never });
     expect(pre.status, JSON.stringify(pre, null, 2)).toBe("NEEDS_APPROVAL");
@@ -251,6 +278,8 @@ async function sendBuffered(to: Address, data: `0x${string}`, from: Address = WH
     const remaining = formatUnits(await pub.readContract({ address: vault.address, abi: erc4626Abi, functionName: "convertToAssets", args: [sharesNow] }), vault.asset.decimals);
     const qAll = await quoteWithdraw({ vault, owner: depositor, assetsHuman: remaining, client: pub as never });
     const [redeem] = buildWithdraw(vault, { receiver: depositor, owner: depositor, all: true, sharesExact: pos2.sharesExact });
+    // Which exit this run measured: a full redeem, or a quote that refused it (the two branches below).
+    console.info(`${symbol} on ${net.key}: full-exit quote ${qAll.simulated}`);
 
     if (qAll.simulated === "REVERTED" && vault.chassis !== "fusion") {
       // A Morpho Vault V2 pays out of its markets, not from idle balance, so the quote must show the
@@ -278,7 +307,7 @@ async function sendBuffered(to: Address, data: `0x${string}`, from: Address = WH
       expect(lr.status, `withdraw the liquid ${liquid}`).toBe("success");
       const usdcAfter = await pub.readContract({ address: vault.asset.address, abi: erc4626Abi, functionName: "balanceOf", args: [depositor] });
       // Recovered: 50 + the liquid amount; the rest is still in the vault, deployed — not lost, not liquid.
-      expect(Number(formatUnits(usdcAfter - usdcBefore, 6))).toBeCloseTo(-100 + 50 + Number(liquid), 1);
+      expect(Number(formatUnits(usdcAfter - usdcBefore, vault.asset.decimals))).toBeCloseTo(-100 + 50 + Number(liquid), 1);
       return;
     }
 
@@ -303,7 +332,7 @@ async function sendBuffered(to: Address, data: `0x${string}`, from: Address = WH
     // Redeem-all also returns any PRE-EXISTING position, so the loss bound is offset by that value.
     // (Only a LOSS is bounded: a Morpho V2 vault paid a 100-USDC round trip back 100.90 on the fork,
     // 2026-09-13 — a vault-side observation, not a client property to assert here.)
-    expect(Number(formatUnits(usdcBefore - usdcAfter, 6)) + valueBefore).toBeLessThan(0.01);
+    expect(Number(formatUnits(usdcBefore - usdcAfter, vault.asset.decimals)) + valueBefore).toBeLessThan(0.01);
     // Dust bound in the vault's OWN share decimals (1e-6 share): the old literal 10n**12n was 1e-6 of an
     // 18-decimal share and would have accepted 10,000 whole 8-decimal Fusion shares as "dust".
     expect(sharesAfter).toBeLessThan(10n ** BigInt(vault.shareDecimals - 6));
