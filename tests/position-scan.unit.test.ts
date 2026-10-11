@@ -25,6 +25,10 @@ const ALCHEMY_FREE = "Under the Free tier plan, you can make eth_getLogs request
 const BASE_PUBLIC = "eth_getLogs is limited to a 2,000 range";
 /** Infura on Arbitrum One, returned on 2026-10-02 for an 798,952-block eth_getLogs range. */
 const INFURA_ARBITRUM = "range 798952 exceeds limit of 10000";
+/** Ethereum's public endpoint (ethereum.reth.rs), returned on 2026-10-11 for a 150,000-block range. */
+const RETH_ETHEREUM = "query exceeds max block range 100000";
+/** Monad's public endpoint (rpc.monad.xyz), returned on 2026-10-11 for a 1,000-block range. */
+const MONAD_PUBLIC = "eth_getLogs is limited to a 100 range";
 
 type GetLogsArgs = { fromBlock: bigint; toBlock: bigint; event: { name: string } };
 
@@ -371,6 +375,12 @@ describe("getPosition on a vault that is not on Base", () => {
     expect(rangeLimitFromError(new Error(ALCHEMY_FREE))).toBe(10n);
     expect(rangeLimitFromError(new Error(PUBLICNODE_ARCHIVE))).toBeUndefined();
     expect(rangeLimitFromError(new Error("execution reverted: exceeds limit of 10000"))).toBeUndefined(); // "limit of N" alone is not a range refusal
+  });
+
+  it("reads the Ethereum and Monad public endpoints' range refusals as WINDOWS", () => {
+    expect(rangeLimitFromError(new Error(RETH_ETHEREUM))).toBe(100_000n);
+    expect(rangeLimitFromError(new Error(MONAD_PUBLIC))).toBe(100n);
+    expect(rangeLimitFromError(new Error("execution reverted: max block 100000"))).toBeUndefined(); // a number near "block" is not a range refusal
   });
 
   it("walks the vault's whole history in 10,000-block windows on that provider, with no fallback needed", async () => {

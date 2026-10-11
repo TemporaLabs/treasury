@@ -1,7 +1,7 @@
 import { createPublicClient, http, type HttpTransport, type PublicClient } from "viem";
-import { arbitrum, base, robinhood } from "viem/chains";
+import { arbitrum, base, mainnet, monad, robinhood } from "viem/chains";
 
-export const chains = { 8453: base, 42161: arbitrum, 4663: robinhood } as const;
+export const chains = { 8453: base, 42161: arbitrum, 4663: robinhood, 1: mainnet, 143: monad } as const;
 export type SupportedChainId = keyof typeof chains;
 
 export function isSupportedChainId(id: number): id is SupportedChainId {
@@ -45,18 +45,32 @@ export const CHAIN_INFO = {
     logsRpcEnv: "TREASURY_LOGS_RPC_ROBINHOOD",
     publicRpc: "https://rpc.mainnet.chain.robinhood.com",
   },
+  1: {
+    key: "ethereum",
+    name: "Ethereum",
+    rpcEnv: ["TREASURY_RPC_ETHEREUM", "ETHEREUM_RPC_URL"],
+    logsRpcEnv: "TREASURY_LOGS_RPC_ETHEREUM",
+    publicRpc: "https://ethereum.reth.rs/rpc",
+  },
+  143: {
+    key: "monad",
+    name: "Monad",
+    rpcEnv: ["TREASURY_RPC_MONAD", "MONAD_RPC_URL"],
+    logsRpcEnv: "TREASURY_LOGS_RPC_MONAD",
+    publicRpc: "https://rpc.monad.xyz",
+  },
 } as const satisfies Record<SupportedChainId, ChainInfo>;
 
-/** The name a tool caller uses for a chain: `"base"`, `"arbitrum"`, `"robinhood"`. */
+/** The name a tool caller uses for a chain: `"base"`, `"arbitrum"`, `"robinhood"`, `"ethereum"`, `"monad"`. */
 export type ChainKey = (typeof CHAIN_INFO)[SupportedChainId]["key"];
 
 /**
- * Every supported chain, in the order chains were added: Base first, then Arbitrum One, then Robinhood
- * Chain. Listed rather than read from `Object.keys(chains)`, whose integer keys enumerate in numeric
- * order and would put Robinhood Chain (4663) ahead of Base everywhere a list of chains is shown.
+ * Every supported chain, in the order chains were added: Base first, then Arbitrum One, Robinhood
+ * Chain, Ethereum and Monad. Listed rather than read from `Object.keys(chains)`, whose integer keys
+ * enumerate in numeric order and would put Ethereum (1) ahead of Base everywhere a list of chains is shown.
  * `client.unit.test.ts` holds this list equal to the keys of `chains`.
  */
-export const supportedChainIds: SupportedChainId[] = [8453, 42161, 4663];
+export const supportedChainIds: SupportedChainId[] = [8453, 42161, 4663, 1, 143];
 
 /** `"arbitrum"` → 42161. `undefined` for a name this client does not know — the caller says so. */
 export function chainIdForKey(key: string): SupportedChainId | undefined {
@@ -75,6 +89,8 @@ export const PUBLIC_RPC: Record<SupportedChainId, string> = {
   8453: CHAIN_INFO[8453].publicRpc,
   42161: CHAIN_INFO[42161].publicRpc,
   4663: CHAIN_INFO[4663].publicRpc,
+  1: CHAIN_INFO[1].publicRpc,
+  143: CHAIN_INFO[143].publicRpc,
 };
 
 /**
@@ -177,9 +193,11 @@ export function rpcUrlFromEnvValue(v: string | undefined): string | undefined {
  * never appear in tool output — every error crossing the tool boundary goes through `redactEndpoints`
  * (`src/redact.ts`), which strips endpoints. The names come from `CHAIN_INFO`: on Base,
  * `TREASURY_RPC_BASE` then `BASE_RPC_URL`; on Arbitrum One, `TREASURY_RPC_ARBITRUM` then
- * `ARBITRUM_RPC_URL`; on Robinhood Chain, `TREASURY_RPC_ROBINHOOD` then `ROBINHOOD_RPC_URL`. The CLI inherits its shell's whole environment, so on every path, the plugin's
+ * `ARBITRUM_RPC_URL`; on Robinhood Chain, `TREASURY_RPC_ROBINHOOD` then `ROBINHOOD_RPC_URL`; on Ethereum,
+ * `TREASURY_RPC_ETHEREUM` then `ETHEREUM_RPC_URL`; on Monad, `TREASURY_RPC_MONAD` then `MONAD_RPC_URL`.
+ * The CLI inherits its shell's whole environment, so on every path, the plugin's
  * included, the second name of each pair is used when the first is unset.
- * The chain's logs variable (`TREASURY_LOGS_RPC_BASE`, `TREASURY_LOGS_RPC_ARBITRUM`, `TREASURY_LOGS_RPC_ROBINHOOD`), if set, is
+ * The chain's logs variable (`TREASURY_LOGS_RPC_<CHAIN>`: BASE, ARBITRUM, ROBINHOOD, ETHEREUM, MONAD), if set, is
  * preferred for log scans (providers cap eth_getLogs ranges very differently: Alchemy free 10 blocks,
  * Base public 2,000, Infura 10,000 on Arbitrum) — see `position.ts`.
  *
@@ -207,7 +225,7 @@ export function rpcUrlFromEnv(chainId: SupportedChainId): string {
  * cannot serve the scan — it would answer for the wrong chain — so a SET variable means no fallback
  * on that chain, whatever it holds: either the operator opted out, or they named a Base endpoint and
  * so constrained where this process talks. An operator who wants history on another chain points that
- * chain's logs variable (`TREASURY_LOGS_RPC_ARBITRUM`, `TREASURY_LOGS_RPC_ROBINHOOD`) at a provider with a wide eth_getLogs range.
+ * chain's logs variable (`TREASURY_LOGS_RPC_ARBITRUM`, `TREASURY_LOGS_RPC_MONAD`, …) at a provider with a wide eth_getLogs range.
  */
 export function logsFallbackUrlFromEnv(chainId: SupportedChainId, logsUrl: string): string | undefined {
   const raw = (process.env["TREASURY_LOGS_FALLBACK"] ?? "").trim();

@@ -4,6 +4,16 @@ All notable changes to the Agent Treasury plugin are recorded here. The format f
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versions follow [SemVer](https://semver.org/).
 The product's own changes are in the repository's [`CHANGELOG.md`](../CHANGELOG.md).
 
+## [v0.1.3] - Unreleased
+
+Carries `@temporalabs/treasury` v0.1.3.
+
+### Added
+- **The `earn` skill works on Ethereum and Monad**, with Tempora Labs Cash Plus USDC (Test 2E) and
+  (Test 2F) as their defaults. When it asks which chain, it lists all five; when the operator picks
+  Ethereum for a small amount, it says that Ethereum gas is far higher first. On Monad, set
+  `TREASURY_LOGS_RPC_MONAD` for position history (the public endpoint serves 100 blocks per request).
+
 ## [v0.1.2] - 2026-10-05
 
 Carries `@temporalabs/treasury` v0.1.2.

@@ -11,15 +11,15 @@ sends no telemetry; the optional sign-in page loads Privy, whose script sends it
 
 ## The first skill: Earn
 
-Earn puts idle USDC to work in vaults curated by Tempora Labs on Base and Arbitrum One, and idle USDG on Robinhood Chain. With it, an agent can:
+Earn puts idle USDC to work in vaults curated by Tempora Labs on Base, Arbitrum One, Ethereum and Monad, and idle USDG on Robinhood Chain. With it, an agent can:
 
 - **Inspect vaults:** assets, fees, deposit access, and links to verify each contract independently.
 - **Prepare a deposit:** review the terms, simulate access, then build unsigned calls.
 - **Track a position:** its value, deposits and earnings, read from on-chain records.
 - **Prepare a withdrawal:** check what is withdrawable right now, then build unsigned calls.
 
-Earn takes the vault's own asset in and pays it out: USDC on Base and Arbitrum One, USDG on Robinhood
-Chain. It runs as a command line: eight `earn` commands, READ commands that
+Earn takes the vault's own asset in and pays it out: USDC on Base, Arbitrum One, Ethereum and Monad,
+USDG on Robinhood Chain. It runs as a command line: eight `earn` commands, READ commands that
 return facts from the chain and PREPARE commands that return unsigned calls, and five `connect`
 commands that hand calls to the operator's own wallet for approval. CI asserts both command lists on
 every build, so a signing command cannot slip in.
@@ -27,7 +27,7 @@ every build, so a signing command cannot slip in.
 ## The default vault
 
 Earn deposits into **Tempora Labs Cash Plus USDC (Test 2B)** by default, a Morpho Vault V2 on Base
-that any account can deposit into. Arbitrum One and Robinhood Chain each have their own default, and
+that any account can deposit into. Arbitrum One, Robinhood Chain, Ethereum and Monad each have their own default, and
 the agent asks which chain when the operator has not said.
 
 Vault: https://basescan.org/address/0x91BcEbA5feCB9E92d80F1845B55cC56621E9352F

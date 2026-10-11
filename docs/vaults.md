@@ -8,8 +8,8 @@ the row is wrong, never the chain.
 
 ## Offered today
 
-Five vaults on three chains. **A call that names no vault and no chain uses the default: Test 2B on Base.**
-Naming `--chain arbitrum` uses Test 2C, and `--chain robinhood` uses Test 2D. Test 2 is the demo vault: chosen by naming it. A vault's ticker
+Seven vaults on five chains. **A call that names no vault and no chain uses the default: Test 2B on Base.**
+Naming `--chain arbitrum` uses Test 2C, `--chain robinhood` Test 2D, `--chain ethereum` Test 2E and `--chain monad` Test 2F. Test 2 is the demo vault: chosen by naming it. A vault's ticker
 names exactly one vault on exactly one chain.
 
 | vault | ticker | chain | role | how to choose it | where to look |
@@ -18,10 +18,12 @@ names exactly one vault on exactly one chain.
 | Cash Plus USDC (Test 2) | `tlCashPlusUSDC2` | Base | **the demo** | `--vault tlCashPlusUSDC2` | [Morpho app](https://app.morpho.org/base/vault/0x040fCA12673778FEED5DA7b2ccFbbAb0cc0134Cf/tempora-labs-cash-plus-usdc-test-2#overview), [BaseScan](https://basescan.org/address/0x040fCA12673778FEED5DA7b2ccFbbAb0cc0134Cf) |
 | Cash Plus USDC (Test 2C) | `tlCashPlusUSDC2C` | Arbitrum One | the default on Arbitrum One | `--chain arbitrum` | [Arbiscan](https://arbiscan.io/address/0x4057a63953142Ac2b3E5dB1954Fc14d578662587). Morpho's app has no page for it |
 | Cash Plus USDG (Test 2D) | `tlCashPlusUSDG2D` | Robinhood Chain | the default on Robinhood Chain; its asset is **USDG**, not USDC | `--chain robinhood` | [Blockscout](https://robinhoodchain.blockscout.com/address/0x758f00731943aA88e8C7fB709e0B727903B4F833) |
+| Cash Plus USDC (Test 2E) | `tlCashPlusUSDC2E` | Ethereum | the default on Ethereum; gas costs far more there | `--chain ethereum` | [Etherscan](https://etherscan.io/address/0x2AA9B1F12bbFE1E01dcb4DD52E6836d68416e3B6) |
+| Cash Plus USDC (Test 2F) | `tlCashPlusUSDC2F` | Monad | the default on Monad | `--chain monad` | [MonadScan](https://monadscan.com/address/0x163295A4d4381745A205DC5E9A436a3f51791593) |
 | Cash Plus USDC (Test 2A) | `tlCashPlusUSDC2A` | Base | whitelist-gated; listed so an admitted account can read and exit its position | `--vault tlCashPlusUSDC2A` | [BaseScan](https://basescan.org/address/0x1516D2c082b9cc9af852B1Ebc828f168F27299ef) |
 
-**How the four open vaults differ.** Each holds three positions, in three other ERC-4626 vaults (Morpho, Spark and Fluid vaults), and the
-four differ in **all three positions**, not in one. Read from each vault's adapters on 2026-10-02 (the
+**How the open vaults differ.** Each holds three positions, in three other ERC-4626 vaults (Morpho, Spark, Fluid, Aave, Euler and Curvance vaults), and no
+two hold the same three contracts. Read from each vault's adapters on 2026-10-02 (the
 underlying vaults, by address, in adapter order):
 
 | vault | position 1 | position 2 | position 3 |
@@ -30,8 +32,11 @@ underlying vaults, by address, in adapter order):
 | Test 2 (Base) | Steakhouse High Yield USDC v1.1 `0xBEEFA7B88064FeEF0cEe02AAeBBd95D30df3878F` | Gauntlet USDC Prime `0xeE8F4eC5672F09119b96Ab6fB59C27E1b7e44b61` | Spark USDC Vault `0x7BfA7C4f149E7415b73bdeDfe609237e29CBF34A` (a lending vault) |
 | Test 2C (Arbitrum One) | Spark USDC Vault `0x940098b108fB7D0a7E374f6eDED7760787464609` (sUSDC) | Gauntlet USDC Prime `0x610D151aE40662AE148cdBaaE1Ea5904b6AFAE78` | Fluid USD Coin `0x1A996cb54bb95462040408C06122D45D6Cdb6096` |
 | Test 2D (Robinhood Chain), read 2026-10-04 | Spark Savings USDG `0xde770c84FE66E063336b31737cFE9790f18c4087` (spUSDG) | Steakhouse USDG `0xBeEff033F34C046626B8D0A041844C5d1A5409dd` | Grove x Steakhouse USDG `0xBEEff039907422219Fb367e525954DDC092854d9` |
+| Test 2E (Ethereum), read 2026-10-11 | Spark USDC Vault `0xBc65ad17c5C0a2A4D159fa5a503f4992c7B545FE` (sUSDC) | Steakhouse Prime USDC `0xbeef088055857739C12CD3765F20b7679Def0f51` | Gauntlet USDC Frontier `0x9a1D6bd5b8642C41F25e0958129B85f8E1176F3e` |
+| Test 2F (Monad), read 2026-10-11 | Wrapped Aave Monad USDC `0xC554aFfE2f581F5E0811e0D42D484ECaC5c6B8e2` (waMonUSDC) | EVK Vault eUSDC-12 `0x1905EDDF5943ef6C92Ccf1469bd40fC2cB4A77b0` (Euler) | Curvance USDC `0x9891178A1178E4C740Fa61Fd6e30A9D92D897590` (cUSDC) |
 
-The same rule allocates all four; Test 2C is that rule over Arbitrum One's vaults, and Test 2D over Robinhood Chain's USDG vaults. The most visible
+The same rule allocates the first four; Test 2C is that rule over Arbitrum One's vaults, and Test 2D over Robinhood Chain's USDG vaults. Test 2E
+holds Ethereum's counterparts of Test 2B's three positions (same names, different contracts), and Test 2F holds Monad lending vaults. The most visible
 difference between Test 2B and Test 2 is their Spark position: Test 2B's (its first) is the
 savings-rate token, and Test 2's (its third) is a lending vault, which carries that book's credit risk. The two Base anchors have the same
 name on-chain (`Spark USDC Vault`) and are different contracts, so Treasury names them by address.
@@ -105,6 +110,42 @@ open to any account and exercises every path. It is not what an agent uses unles
 | fees | none set: `performanceFee()` and `managementFee()` read `0` at block 79,974,900. The curator can introduce one, and the vault's fee timelocks are **0** (`timelock(setPerformanceFee)` and `timelock(setManagementFee)` both read `0` at that block), so a change needs no notice; Morpho Vault V2's protocol constants cap them at 50% performance and 5%/yr management. Read both fees on-chain before depositing |
 | positions | through the vault's three adapters on Robinhood Chain — readable on-chain; Treasury does not model the fund's allocation. Whether any of them lends against a stablecoin whose oracle assumes par is not measured here for this vault (see [`risks.md`](risks.md)). Read the vault's positions on-chain before a first deposit |
 | links | Blockscout only; `earn_vaults` offers no `app` link for it |
+
+### Tempora Labs Cash Plus USDC (Test 2E) — the default on Ethereum
+
+| | |
+|---|---|
+| ticker | `tlCashPlusUSDC2E` |
+| chain | Ethereum (1) |
+| vault | [`0x2AA9B1F12bbFE1E01dcb4DD52E6836d68416e3B6`](https://etherscan.io/address/0x2AA9B1F12bbFE1E01dcb4DD52E6836d68416e3B6) |
+| asset | USDC [`0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48`](https://etherscan.io/address/0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48), 6 decimals |
+| shares | `tlCashPlusUSDC2E`, **18 decimals** — a share amount is never an asset amount |
+| chassis | Morpho Vault V2 (ERC-4626) |
+| deployed | block 26,164,268 (first block with code) |
+| deposits | **open to any account**. A stranger's simulated `deposit()` reaches the USDC pull and reverts `TransferFromReverted` only for lack of an allowance (measured at block 26,166,799). `maxDeposit()` reads `0` to every caller on this chassis by design and is not consulted |
+| withdrawals | **public**. Served from idle USDC, then through the vault's liquidity adapter; a withdrawal larger than that reverts until positions are unwound — `earn_balance` reports `exit.exitableNow` by simulating it. `maxWithdraw()` also reads `0` by design |
+| fees | none set: `performanceFee()` and `managementFee()` read `0` at block 26,166,799. The curator can introduce one, and the vault's fee timelocks are **0** (`timelock(setPerformanceFee)` and `timelock(setManagementFee)` both read `0` at that block), so a change needs no notice; Morpho Vault V2's protocol constants cap them at 50% performance and 5%/yr management. Read both fees on-chain before depositing |
+| gas | **far higher than on the other chains.** The approve, the deposit and a later withdrawal each pay Ethereum gas in ETH, which can be a large share of a small deposit; the skill says so when an operator picks Ethereum for a small amount |
+| positions | three adapters on Ethereum (listed above) — readable on-chain; Treasury does not model the fund's allocation. Whether any of them lends against a stablecoin whose oracle assumes par is not measured here for this vault (see [`risks.md`](risks.md)). Read the vault's positions on-chain before a first deposit |
+| links | Etherscan only; `earn_vaults` offers no `app` link for it |
+
+### Tempora Labs Cash Plus USDC (Test 2F) — the default on Monad
+
+| | |
+|---|---|
+| ticker | `tlCashPlusUSDC2F` |
+| chain | Monad (143) |
+| vault | [`0x163295A4d4381745A205DC5E9A436a3f51791593`](https://monadscan.com/address/0x163295A4d4381745A205DC5E9A436a3f51791593) |
+| asset | USDC [`0x754704Bc059F8C67012fEd69BC8A327a5aafb603`](https://monadscan.com/address/0x754704Bc059F8C67012fEd69BC8A327a5aafb603), 6 decimals |
+| shares | `tlCashPlusUSDC2F`, **18 decimals** — a share amount is never an asset amount |
+| chassis | Morpho Vault V2 (ERC-4626) |
+| deployed | block 112,273,210 (first block with code) |
+| deposits | **open to any account**. A stranger's simulated `deposit()` reaches the USDC pull and reverts `TransferFromReverted` only for lack of an allowance (measured at block 112,372,495). `maxDeposit()` reads `0` to every caller on this chassis by design and is not consulted |
+| withdrawals | **public**. Served from idle USDC, then through the vault's liquidity adapter; a withdrawal larger than that reverts until positions are unwound — `earn_balance` reports `exit.exitableNow` by simulating it. `maxWithdraw()` also reads `0` by design |
+| fees | none set: `performanceFee()` and `managementFee()` read `0` at block 112,372,495. The curator can introduce one, and the vault's fee timelocks are **0** (`timelock(setPerformanceFee)` and `timelock(setManagementFee)` both read `0` at that block), so a change needs no notice; Morpho Vault V2's protocol constants cap them at 50% performance and 5%/yr management. Read both fees on-chain before depositing |
+| history | Monad's public endpoint serves `eth_getLogs` over at most **100 blocks** per request, and Monad makes about three blocks a second, so `earn_balance`'s history scan through it covers under an hour and says it was cut short. Set `TREASURY_LOGS_RPC_MONAD` to a provider with a wider range for entry basis and yield |
+| positions | three adapters on Monad (listed above) — readable on-chain; Treasury does not model the fund's allocation. Whether any of them lends against a stablecoin whose oracle assumes par is not measured here for this vault (see [`risks.md`](risks.md)). Read the vault's positions on-chain before a first deposit |
+| links | MonadScan only; `earn_vaults` offers no `app` link for it |
 
 ### Tempora Labs Cash Plus USDC (Test 2A)
 

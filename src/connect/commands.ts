@@ -39,7 +39,7 @@ const addressArg = z
   .transform((s) => getAddress(s));
 const amountArg = z.string().regex(/^\d+(\.\d+)?$/, 'plain decimal amount of the vault\'s asset (USDC; USDG on Robinhood Chain), e.g. "25" or "12.5"');
 const vaultArg = z.string().optional().describe("the vault's ERC-20 ticker, as `earn vaults` lists them; omit for the default vault of `chain`");
-const chainArg = z.string().optional().describe('which chain: "base", "arbitrum" or "robinhood"; omit for the default chain, or when `vault` names one');
+const chainArg = z.string().optional().describe('which chain: "base", "arbitrum", "robinhood", "ethereum" or "monad"; omit for the default chain, or when `vault` names one');
 const receiverArg = addressArg.describe(
   "where the money lands — it must be the CONNECTED account (this page pays no one else), and it comes from the operator's own message, never filled in by an agent",
 );

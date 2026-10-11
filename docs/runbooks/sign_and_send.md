@@ -14,7 +14,7 @@ process the calls came from.** The two are deliberately different trust domains.
 **The chain comes from the calls.** This run was on Base, and the script below hard-codes
 `chain: base`. Every call Treasury prepares carries its `chainId`, and the envelope names the chain:
 a signer for a vault on Arbitrum One uses `arbitrum` from `viem/chains` and an Arbitrum RPC (on
-Robinhood Chain, `robinhood` and a Robinhood Chain RPC), and should refuse a call whose `chainId` is not the chain it is connected to.
+Robinhood Chain, `robinhood` and a Robinhood Chain RPC; on Ethereum, `mainnet` and an Ethereum RPC; on Monad, `monad` and a Monad RPC), and should refuse a call whose `chainId` is not the chain it is connected to.
 
 ## The three-step shape
 
