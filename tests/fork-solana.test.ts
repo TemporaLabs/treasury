@@ -109,7 +109,10 @@ for (const vault of listSolanaVaults()) {
       // Surfpool writes its logs under its working directory: a scratch one, never the checkout.
       workDir = mkdtempSync(join(tmpdir(), "treasury-surfpool-"));
       surfpool = spawn("surfpool", ["start", "--rpc-url", upstream!, "--port", String(PORT), "--ws-port", String(PORT + 1), "--no-tui", "--no-studio", "--no-deploy", "-y", "--log-level", "warn"], { stdio: "ignore", cwd: workDir });
-      await waitForRpc(60_000);
+      // A missing binary is an 'error' event, not a throw: name it rather than leave an unhandled ENOENT.
+      const spawnFailed = new Promise<never>((_, reject) => surfpool!.once("error", (e) => reject(new Error(`could not start surfpool (is it on PATH?): ${e.message}`))));
+      spawnFailed.catch(() => {});
+      await Promise.race([waitForRpc(60_000), spawnFailed]);
       // The package's own earn commands resolve their RPC from the environment: point them at the fork.
       savedEnv = process.env["TREASURY_RPC_SOLANA"];
       process.env["TREASURY_RPC_SOLANA"] = RPC_URL;
@@ -160,7 +163,11 @@ for (const vault of listSolanaVaults()) {
         expect(depV.verified, depV.detail).toBe("matched");
         const shares = (await tokenBalance(rpc, sharesAta)).amount;
         expect(shares).toBeGreaterThan(0n);
-        expect((await tokenBalance(rpc, usdcAta)).amount).toBe(usdcStart - depositRaw);
+        // The program takes only the assets that back the shares it mints, so at some share prices it takes a
+        // few base units less than asked (measured: 1,999,999 of 2,000,000). Never more.
+        const debited = usdcStart - (await tokenBalance(rpc, usdcAta)).amount;
+        expect(debited).toBeLessThanOrEqual(depositRaw);
+        expect(debited).toBeGreaterThanOrEqual(depositRaw - 10n);
         expect(`${formatAmount(shares, vault.shareDecimals)} ${vault.symbol}`).toBe(dep.expected);
 
         // The position reads back through `earn balance`, worth the deposit less rounding.

@@ -46,7 +46,8 @@ post anything, search it for the above. If you are not sure whether something is
 
 ## Commands
 
-Node.js 22 or later. The fork tier also needs [Foundry](https://getfoundry.sh) for `anvil`.
+Node.js 22 or later. The fork tier also needs [Foundry](https://getfoundry.sh) for `anvil`, and
+[Surfpool](https://surfpool.run) on `PATH` for Solana's.
 
 ```bash
 npm ci                     # never `npm install` — CI fails on a stale lockfile
