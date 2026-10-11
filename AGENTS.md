@@ -61,7 +61,7 @@ npm run registry:check     # reconcile registry/vaults.json against the chain
 Each chain's live and fork tiers run when that chain's RPC variable is set: add
 `TREASURY_RPC_ARBITRUM=https://...` for Arbitrum One, `TREASURY_RPC_ROBINHOOD=https://...` for Robinhood Chain,
 `TREASURY_RPC_ETHEREUM=https://...` for Ethereum, or `TREASURY_RPC_MONAD=https://...` for Monad, to the same commands
-(the fork tier covers Base and Arbitrum One only). `registry:check` reads
+(the anvil fork tier covers every EVM chain). `registry:check` reads
 each row on its own chain and reports a chain it could not reach as not checked.
 
 ## Things that fail CI if forgotten
