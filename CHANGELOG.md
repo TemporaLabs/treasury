@@ -59,6 +59,10 @@ Pre-1.0, minor versions may change tool names, schemas and behaviour.
 - `earn balance` reads the Ethereum public endpoint's range refusal ("query exceeds max block range
   100000") as a 100,000-block window and walks the history in chunks, instead of failing the scan.
 
+### Dependencies
+- viem 2.57.3, inlined in the CLI bundle. It includes a fix to `waitForTransactionReceipt`, which no longer
+  treats the awaited transaction as its own replacement when its receipt is not yet available.
+
 ## [v0.1.2] - 2026-10-05
 
 ### Changed — headless: a command line replaces the MCP server
