@@ -5229,10 +5229,10 @@ function invert(number4, modulo2) {
 }
 function sqrt3mod4(Fp, n) {
   const p1div4 = (Fp.ORDER + _1n3) / _4n;
-  const root = Fp.pow(n, p1div4);
-  if (!Fp.eql(Fp.sqr(root), n))
+  const root2 = Fp.pow(n, p1div4);
+  if (!Fp.eql(Fp.sqr(root2), n))
     throw new Error("Cannot find square root");
-  return root;
+  return root2;
 }
 function sqrt5mod8(Fp, n) {
   const p5div8 = (Fp.ORDER - _5n) / _8n;
@@ -5240,10 +5240,10 @@ function sqrt5mod8(Fp, n) {
   const v = Fp.pow(n2, p5div8);
   const nv = Fp.mul(n, v);
   const i = Fp.mul(Fp.mul(nv, _2n2), v);
-  const root = Fp.mul(nv, Fp.sub(i, Fp.ONE));
-  if (!Fp.eql(Fp.sqr(root), n))
+  const root2 = Fp.mul(nv, Fp.sub(i, Fp.ONE));
+  if (!Fp.eql(Fp.sqr(root2), n))
     throw new Error("Cannot find square root");
-  return root;
+  return root2;
 }
 function tonelliShanks(P2) {
   if (P2 < BigInt(3))
@@ -6916,10 +6916,10 @@ function sqrtMod(y) {
   const b223 = pow2(b220, _3n3, P2) * b3 % P2;
   const t1 = pow2(b223, _23n, P2) * b22 % P2;
   const t2 = pow2(t1, _6n, P2) * b2 % P2;
-  const root = pow2(t2, _2n4, P2);
-  if (!Fpk1.eql(Fpk1.sqr(root), y))
+  const root2 = pow2(t2, _2n4, P2);
+  if (!Fpk1.eql(Fpk1.sqr(root2), y))
     throw new Error("Cannot find square root");
-  return root;
+  return root2;
 }
 function taggedHash(tag, ...messages) {
   let tagP = TAGGED_HASH_PREFIXES[tag];
@@ -9189,13 +9189,13 @@ var init_getCallError = __esm({
 
 // node_modules/viem/_esm/utils/promise/withResolvers.js
 function withResolvers() {
-  let resolve = () => void 0;
+  let resolve2 = () => void 0;
   let reject = () => void 0;
   const promise2 = new Promise((resolve_, reject_) => {
-    resolve = resolve_;
+    resolve2 = resolve_;
     reject = reject_;
   });
-  return { promise: promise2, resolve, reject };
+  return { promise: promise2, resolve: resolve2, reject };
 }
 var init_withResolvers = __esm({
   "node_modules/viem/_esm/utils/promise/withResolvers.js"() {
@@ -9215,8 +9215,8 @@ function createBatchScheduler({ fn, id, shouldSplitBatch, wait: wait2 = 0, sort 
       if (sort && Array.isArray(data))
         data.sort(sort);
       for (let i = 0; i < scheduler.length; i++) {
-        const { resolve } = scheduler[i];
-        resolve?.([data[i], data]);
+        const { resolve: resolve2 } = scheduler[i];
+        resolve2?.([data[i], data]);
       }
     }).catch((err) => {
       for (let i = 0; i < scheduler.length; i++) {
@@ -9232,16 +9232,16 @@ function createBatchScheduler({ fn, id, shouldSplitBatch, wait: wait2 = 0, sort 
   return {
     flush,
     async schedule(args) {
-      const { promise: promise2, resolve, reject } = withResolvers();
+      const { promise: promise2, resolve: resolve2, reject } = withResolvers();
       const split2 = shouldSplitBatch?.([...getBatchedArgs(), args]);
       if (split2)
         exec();
       const hasActiveScheduler = getScheduler().length > 0;
       if (hasActiveScheduler) {
-        setScheduler({ args, resolve, reject });
+        setScheduler({ args, resolve: resolve2, reject });
         return promise2;
       }
-      setScheduler({ args, resolve, reject });
+      setScheduler({ args, resolve: resolve2, reject });
       setTimeout(exec, wait2);
       return promise2;
     }
@@ -9873,8 +9873,8 @@ var init_call = __esm({
 });
 
 // src/cli.ts
-import { realpathSync as realpathSync2 } from "fs";
-import { fileURLToPath as fileURLToPath2 } from "url";
+import { realpathSync as realpathSync3 } from "fs";
+import { fileURLToPath as fileURLToPath3 } from "url";
 import { parseArgs } from "util";
 
 // node_modules/zod/v4/classic/external.js
@@ -14903,7 +14903,7 @@ var recursive = /* @__PURE__ */ new WeakMap();
 var NONE = 0;
 var ASSUMED = 1;
 var PROVEN = 2;
-function isRecursive(inst, stack, resolve) {
+function isRecursive(inst, stack, resolve2) {
   const cached3 = recursive.get(inst);
   if (cached3 !== void 0)
     return cached3 ? PROVEN : NONE;
@@ -14913,7 +14913,7 @@ function isRecursive(inst, stack, resolve) {
   let result = NONE;
   const check2 = (child) => {
     if (result !== PROVEN && child?._zod) {
-      const answer = isRecursive(child, stack, resolve);
+      const answer = isRecursive(child, stack, resolve2);
       if (answer > result)
         result = answer;
     }
@@ -14924,7 +14924,7 @@ function isRecursive(inst, stack, resolve) {
       const desc = Object.getOwnPropertyDescriptor(sh, key);
       if (spread && !desc.enumerable)
         continue;
-      const child = desc.get ? ASSUMED : desc.value?._zod ? isRecursive(desc.value, stack, resolve) : NONE;
+      const child = desc.get ? ASSUMED : desc.value?._zod ? isRecursive(desc.value, stack, resolve2) : NONE;
       if (child > answer)
         answer = child;
     }
@@ -14988,7 +14988,7 @@ function isRecursive(inst, stack, resolve) {
       break;
     // `$ZodLazy` caches its inner on the def, so a resolved edge is followed exactly
     case "lazy": {
-      const inner = def._cachedInner ?? (resolve ? inst._zod.innerType : void 0);
+      const inner = def._cachedInner ?? (resolve2 ? inst._zod.innerType : void 0);
       merge2(inner ? isRecursive(inner, stack, false) : ASSUMED);
       break;
     }
@@ -25544,8 +25544,8 @@ function encodeJSONPointerSegment(segment) {
   return segment.replace(/~/g, "~0").replace(/\//g, "~1");
 }
 function extractDefs(ctx, schema) {
-  const root = ctx.seen.get(schema);
-  if (!root)
+  const root2 = ctx.seen.get(schema);
+  if (!root2)
     throw new Error("Unprocessed schema. This is a bug in Zod.");
   if (ctx.external && ctx.sharedDefsExtractedFor === ctx.external)
     return;
@@ -25574,7 +25574,7 @@ function extractDefs(ctx, schema) {
     }
     const uriPrefix = `#`;
     const defUriPrefix = `${uriPrefix}/${defsSegment}/`;
-    if (entry[1] === root && !entry[1].schema.id) {
+    if (entry[1] === root2 && !entry[1].schema.id) {
       return { ref: uriPrefix };
     }
     const defId = entry[1].schema.id ?? `__schema${ctx.counter++}`;
@@ -25745,8 +25745,8 @@ function foldIntersection(json2) {
   assignProps(json2, folded);
 }
 function finalize(ctx, schema) {
-  const root = ctx.seen.get(schema);
-  if (!root)
+  const root2 = ctx.seen.get(schema);
+  if (!root2)
     throw new Error("Unprocessed schema. This is a bug in Zod.");
   const flattenRef = (zodSchema) => {
     const seen = ctx.seen.get(zodSchema);
@@ -25857,7 +25857,7 @@ function finalize(ctx, schema) {
       throw new Error("Schema is missing an `id` property");
     result.$id = ctx.external.uri(id);
   }
-  assignProps(result, root.defId ? root.schema : root.def ?? root.schema);
+  assignProps(result, root2.defId ? root2.schema : root2.def ?? root2.schema);
   const rootMetaId = ctx.metadataRegistry.get(schema)?.id;
   if (rootMetaId !== void 0 && result.id === rootMetaId)
     delete result.id;
@@ -31370,7 +31370,7 @@ function observe(observerId, callbacks, fn) {
 // node_modules/viem/_esm/utils/wait.js
 init_utils3();
 async function wait(time3, { signal } = {}) {
-  return new Promise((resolve, reject) => {
+  return new Promise((resolve2, reject) => {
     if (signal?.aborted) {
       reject(getAbortError(signal));
       return;
@@ -31378,7 +31378,7 @@ async function wait(time3, { signal } = {}) {
     const cleanup = () => signal?.removeEventListener("abort", onAbort);
     const timeout = setTimeout(() => {
       cleanup();
-      resolve();
+      resolve2();
     }, time3);
     const onAbort = () => {
       clearTimeout(timeout);
@@ -31695,7 +31695,7 @@ async function sendRawTransaction(client, { serializedTransaction }) {
 // node_modules/viem/_esm/utils/promise/withRetry.js
 init_utils3();
 function withRetry(fn, { delay: delay_ = 100, retryCount = 2, shouldRetry: shouldRetry2 = () => true, signal } = {}) {
-  return new Promise((resolve, reject) => {
+  return new Promise((resolve2, reject) => {
     const attemptRetry = async ({ count = 0 } = {}) => {
       if (signal?.aborted) {
         reject(getAbortError(signal));
@@ -31715,7 +31715,7 @@ function withRetry(fn, { delay: delay_ = 100, retryCount = 2, shouldRetry: shoul
       };
       try {
         const data = await fn();
-        resolve(data);
+        resolve2(data);
       } catch (err) {
         if (signal?.aborted) {
           reject(getAbortError(signal));
@@ -32102,13 +32102,13 @@ async function isImageUri(uri) {
     }
     if (!Object.hasOwn(globalThis, "Image"))
       return false;
-    return new Promise((resolve) => {
+    return new Promise((resolve2) => {
       const img = new Image();
       img.onload = () => {
-        resolve(true);
+        resolve2(true);
       };
       img.onerror = () => {
-        resolve(false);
+        resolve2(false);
       };
       img.src = uri;
     });
@@ -33376,7 +33376,7 @@ init_utils3();
 // node_modules/viem/_esm/utils/promise/withTimeout.js
 init_utils3();
 function withTimeout(fn, { errorInstance = new Error("timed out"), timeout, signal }) {
-  return new Promise((resolve, reject) => {
+  return new Promise((resolve2, reject) => {
     ;
     (async () => {
       let timeoutId;
@@ -33391,7 +33391,7 @@ function withTimeout(fn, { errorInstance = new Error("timed out"), timeout, sign
             }
           }, timeout);
         }
-        resolve(await fn({ signal: controller?.signal || null }));
+        resolve2(await fn({ signal: controller?.signal || null }));
       } catch (err) {
         if (controller?.signal.aborted && isAbortError(err)) {
           reject(errorInstance);
@@ -37028,13 +37028,13 @@ async function waitForTransactionReceipt(client, parameters) {
   let retrying = false;
   let _unobserve;
   let _unwatch;
-  const { promise: promise2, resolve, reject } = withResolvers();
+  const { promise: promise2, resolve: resolve2, reject } = withResolvers();
   const timer = timeout ? setTimeout(() => {
     _unwatch?.();
     _unobserve?.();
     reject(new WaitForTransactionReceiptTimeoutError({ hash: hash4 }));
   }, timeout) : void 0;
-  _unobserve = observe(observerId, { onReplaced, resolve, reject }, async (emit) => {
+  _unobserve = observe(observerId, { onReplaced, resolve: resolve2, reject }, async (emit) => {
     receipt = await getAction(client, getTransactionReceipt, "getTransactionReceipt")({ hash: hash4 }).catch(() => void 0);
     if (receipt && confirmations <= 1) {
       clearTimeout(timer);
@@ -42227,8 +42227,8 @@ function addRaceContender(contender) {
   const record2 = { deferreds, settled: false };
   Promise.resolve(contender).then(
     (value) => {
-      for (const { resolve } of deferreds) {
-        resolve(value);
+      for (const { resolve: resolve2 } of deferreds) {
+        resolve2(value);
       }
       deferreds.clear();
       record2.settled = true;
@@ -42246,11 +42246,11 @@ function addRaceContender(contender) {
 var wm = /* @__PURE__ */ new WeakMap();
 async function safeRace(contenders) {
   let deferred;
-  const result = new Promise((resolve, reject) => {
-    deferred = { reject, resolve };
+  const result = new Promise((resolve2, reject) => {
+    deferred = { reject, resolve: resolve2 };
     for (const contender of contenders) {
       if (!isObject2(contender)) {
-        Promise.resolve(contender).then(resolve, reject);
+        Promise.resolve(contender).then(resolve2, reject);
         continue;
       }
       let record2 = wm.get(contender);
@@ -42259,7 +42259,7 @@ async function safeRace(contenders) {
         record2.deferreds.add(deferred);
         wm.set(contender, record2);
       } else if (record2.settled) {
-        Promise.resolve(contender).then(resolve, reject);
+        Promise.resolve(contender).then(resolve2, reject);
       } else {
         record2.deferreds.add(deferred);
       }
@@ -43602,7 +43602,7 @@ function getRpcTransportWithRequestCoalescing(transport, getDeduplicationKey) {
     coalescedRequest.numConsumers++;
     if (signal) {
       const responsePromise = coalescedRequest.responsePromise;
-      return await new Promise((resolve, reject) => {
+      return await new Promise((resolve2, reject) => {
         const handleAbort = () => {
           signal.removeEventListener("abort", handleAbort);
           coalescedRequest.numConsumers -= 1;
@@ -43615,7 +43615,7 @@ function getRpcTransportWithRequestCoalescing(transport, getDeduplicationKey) {
           reject(signal.reason);
         };
         signal.addEventListener("abort", handleAbort);
-        responsePromise.then(resolve).catch(reject).finally(() => {
+        responsePromise.then(resolve2).catch(reject).finally(() => {
           signal.removeEventListener("abort", handleAbort);
         });
       });
@@ -44499,8 +44499,8 @@ async function solanaCluster(rpc, ms = 3e3) {
   try {
     const hash4 = await Promise.race([
       rpc.getGenesisHash().send(),
-      new Promise((resolve) => {
-        timer = setTimeout(() => resolve(void 0), ms);
+      new Promise((resolve2) => {
+        timer = setTimeout(() => resolve2(void 0), ms);
       })
     ]);
     if (hash4 === void 0) return void 0;
@@ -46395,7 +46395,7 @@ async function serveOnce(flow) {
     res.writeHead(code, { "content-type": "application/json", "cache-control": "no-store", "x-content-type-options": "nosniff" });
     res.end(JSON.stringify(body));
   };
-  const readBody = (req) => new Promise((resolve, reject) => {
+  const readBody = (req) => new Promise((resolve2, reject) => {
     let size5 = 0;
     const chunks = [];
     req.on("data", (c) => {
@@ -46411,7 +46411,7 @@ async function serveOnce(flow) {
       try {
         const v = JSON.parse(Buffer.concat(chunks).toString("utf8"));
         if (v === null || typeof v !== "object" || Array.isArray(v)) throw new Error("not an object");
-        resolve(v);
+        resolve2(v);
       } catch {
         reject(new Error("body is not a JSON object"));
       }
@@ -46507,15 +46507,15 @@ async function serveOnce(flow) {
     deferred = r;
     setTimeout(() => finish(r), flow.cancelGraceMs ?? CANCEL_GRACE_MS).unref();
   };
-  const listen = (server, host, optional2) => new Promise((resolve, reject) => {
+  const listen = (server, host, optional2) => new Promise((resolve2, reject) => {
     server.once("error", (e4) => {
       if (e4.code === "EADDRINUSE") {
         return reject(new Error(`port ${flow.port} is in use on ${host} \u2014 another sign-in or confirmation page is probably still open; finish or close it, then retry`));
       }
-      if (optional2 && (e4.code === "EADDRNOTAVAIL" || e4.code === "EAFNOSUPPORT")) return resolve();
+      if (optional2 && (e4.code === "EADDRNOTAVAIL" || e4.code === "EAFNOSUPPORT")) return resolve2();
       reject(e4);
     });
-    server.listen({ port: flow.port, host, ipv6Only: host === "::1" }, () => resolve());
+    server.listen({ port: flow.port, host, ipv6Only: host === "::1" }, () => resolve2());
   });
   try {
     await listen(servers[0], "127.0.0.1", false);
@@ -47558,6 +47558,29 @@ function buildConnectCommands(deps = {}) {
   return commands;
 }
 
+// src/guide.ts
+import { existsSync, realpathSync as realpathSync2 } from "fs";
+import { dirname, resolve } from "path";
+import { fileURLToPath as fileURLToPath2 } from "url";
+var GUIDE_URL = "https://raw.githubusercontent.com/TemporaLabs/treasury/main/llms.txt";
+function root() {
+  try {
+    return resolve(dirname(realpathSync2(fileURLToPath2(import.meta.url))), "..");
+  } catch {
+    return void 0;
+  }
+}
+function guidePointer() {
+  const base2 = root();
+  if (base2 !== void 0 && (existsSync(resolve(base2, ".claude-plugin/plugin.json")) || existsSync(resolve(base2, ".codex-plugin/plugin.json")))) return void 0;
+  const file2 = base2 !== void 0 && existsSync(resolve(base2, "llms.txt")) ? resolve(base2, "llms.txt") : void 0;
+  return {
+    read_first: `Read the guide before you run any command: it carries the rules for using treasury safely (which questions to ask the operator, what to show before a first deposit, what to post word for word). ${file2 ? `It is the file at "file" below, or at "url".` : `It is at "url".`}`,
+    ...file2 ? { file: file2 } : {},
+    url: GUIDE_URL
+  };
+}
+
 // src/cli.ts
 var SKILLS = { earn: buildCommands, connect: () => buildConnectCommands() };
 function kindOf(schema) {
@@ -47639,13 +47662,17 @@ function parseFlags(c, argv) {
   }
   return checked.data;
 }
+var guideField = () => {
+  const guide = guidePointer();
+  return guide ? { guide } : {};
+};
 async function run(argv) {
   registerSecretSource(resolvedRpcSecrets);
   const fail = (message) => ({ stderr: JSON.stringify({ error: redactEndpoints(message) }, null, 2), code: 1 });
   const [first, second, ...rest] = argv;
   if (first === "--version" || first === "-v") return { stdout: PACKAGE_VERSION, code: 0 };
   if (first === void 0 || first === "--help" || first === "-h") {
-    return { stdout: JSON.stringify({ usage: "treasury <skill> <command> [--flag value \u2026]", version: PACKAGE_VERSION, skills: Object.keys(SKILLS) }, null, 2), code: 0 };
+    return { stdout: JSON.stringify({ usage: "treasury <skill> <command> [--flag value \u2026]", version: PACKAGE_VERSION, skills: Object.keys(SKILLS), ...guideField() }, null, 2), code: 0 };
   }
   const build = Object.hasOwn(SKILLS, first) ? SKILLS[first] : void 0;
   if (!build) return fail(`unknown skill ${JSON.stringify(first)}; this CLI carries: ${Object.keys(SKILLS).join(", ")}`);
@@ -47658,7 +47685,7 @@ async function run(argv) {
   }
   const mine = Object.entries(commands).filter(([name2]) => name2.startsWith(`${skill}_`));
   if (second === void 0 || second === "--help" || second === "-h") {
-    return { stdout: JSON.stringify({ usage: `treasury ${skill} <command> [--flag value \u2026]`, version: PACKAGE_VERSION, commands: mine.map(([n, c]) => describe3(skill, n, c)) }, null, 2), code: 0 };
+    return { stdout: JSON.stringify({ usage: `treasury ${skill} <command> [--flag value \u2026]`, version: PACKAGE_VERSION, ...guideField(), commands: mine.map(([n, c]) => describe3(skill, n, c)) }, null, 2), code: 0 };
   }
   const name = `${skill}_${second.replaceAll("-", "_")}`;
   const command = Object.hasOwn(commands, name) ? commands[name] : void 0;
@@ -47682,7 +47709,7 @@ function isEntryPoint() {
   const invoked = process.argv[1];
   if (!invoked) return false;
   try {
-    return realpathSync2(invoked) === realpathSync2(fileURLToPath2(import.meta.url));
+    return realpathSync3(invoked) === realpathSync3(fileURLToPath3(import.meta.url));
   } catch {
     return false;
   }
