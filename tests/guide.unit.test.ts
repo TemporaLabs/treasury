@@ -1,6 +1,6 @@
 import { describe, it, expect, afterAll } from "vitest";
 import { spawnSync } from "node:child_process";
-import { copyFileSync, mkdirSync, mkdtempSync, readFileSync, rmSync } from "node:fs";
+import { copyFileSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { run } from "../src/cli.js";
@@ -79,5 +79,24 @@ describe("--help names the guide", () => {
     const alone = JSON.parse(bundle(root, [join(root, "dist/treasury.mjs"), "earn", "--help"]).stdout) as { guide: { file?: string; url: string } };
     expect(alone.guide.file).toBeUndefined();
     expect(alone.guide.url).toBe(GUIDE_URL);
+  });
+
+  it("the plugin's copy carries no pointer: its Earn skill is the guide and is already loaded", () => {
+    const plugin = join(pkgRoot, "plugin/dist/treasury.mjs");
+    for (const args of [["--help"], ["earn", "--help"], ["connect", "--help"]]) {
+      const doc = JSON.parse(bundle(pkgRoot, [plugin, ...args]).stdout) as Record<string, unknown>;
+      expect(doc, `plugin ${args.join(" ")}`).not.toHaveProperty("guide");
+      expect(doc).toHaveProperty("version");
+    }
+    // The rule is the plugin folder's own manifest beside the CLI's parent, for either host.
+    for (const host of [".claude-plugin", ".codex-plugin"]) {
+      const root = mkdtempSync(join(tmpdir(), "treasury-guide-plugin-"));
+      roots.push(root);
+      mkdirSync(join(root, "dist"));
+      mkdirSync(join(root, host));
+      writeFileSync(join(root, host, "plugin.json"), "{}");
+      copyFileSync(BUNDLE, join(root, "dist/treasury.mjs"));
+      expect(JSON.parse(bundle(root, [join(root, "dist/treasury.mjs"), "--help"]).stdout), host).not.toHaveProperty("guide");
+    }
   });
 });

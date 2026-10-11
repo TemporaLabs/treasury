@@ -15,7 +15,7 @@ here="$(cd "$(dirname "$0")" && pwd)"; script="$here/../../scripts/sync-plugin.s
 tmp="$(mktemp -d)"; trap 'rm -rf "$tmp"' EXIT
 t="$tmp/tree"; pass=0
 
-COPIES=(dist/treasury.mjs dist/connect-page.js registry/vaults.json LICENSE NOTICE THIRD_PARTY_NOTICES.md THIRD_PARTY_NOTICES.connect-page.md llms.txt)
+COPIES=(dist/treasury.mjs dist/connect-page.js registry/vaults.json LICENSE NOTICE THIRD_PARTY_NOTICES.md THIRD_PARTY_NOTICES.connect-page.md)
 
 tree() { # tree [version] — a repository whose plugin/ is up to date, built by the script's own write mode
   local v="${1:-0.1.2}"

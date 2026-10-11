@@ -132,6 +132,12 @@ function parseFlags(c: Command, argv: string[]): Record<string, unknown> {
   return checked.data as Record<string, unknown>;
 }
 
+/** `{ guide }` for the help documents, or nothing when the pointer does not apply (the plugin's copy). */
+const guideField = (): { guide?: NonNullable<ReturnType<typeof guidePointer>> } => {
+  const guide = guidePointer();
+  return guide ? { guide } : {};
+};
+
 /** Runs one invocation. Returns what to print and the exit status; never calls `process.exit` itself, so tests can drive it. */
 export async function run(argv: string[]): Promise<{ stdout?: string; stderr?: string; code: 0 | 1 }> {
   // Registered before anything can be printed: a usage error echoes what was typed, and what was typed
@@ -141,7 +147,7 @@ export async function run(argv: string[]): Promise<{ stdout?: string; stderr?: s
   const [first, second, ...rest] = argv;
   if (first === "--version" || first === "-v") return { stdout: PACKAGE_VERSION, code: 0 };
   if (first === undefined || first === "--help" || first === "-h") {
-    return { stdout: JSON.stringify({ usage: "treasury <skill> <command> [--flag value …]", version: PACKAGE_VERSION, skills: Object.keys(SKILLS), guide: guidePointer() }, null, 2), code: 0 };
+    return { stdout: JSON.stringify({ usage: "treasury <skill> <command> [--flag value …]", version: PACKAGE_VERSION, skills: Object.keys(SKILLS), ...guideField() }, null, 2), code: 0 };
   }
   const build = Object.hasOwn(SKILLS, first) ? SKILLS[first] : undefined;
   if (!build) return fail(`unknown skill ${JSON.stringify(first)}; this CLI carries: ${Object.keys(SKILLS).join(", ")}`);
@@ -155,7 +161,7 @@ export async function run(argv: string[]): Promise<{ stdout?: string; stderr?: s
   }
   const mine = Object.entries(commands).filter(([name]) => name.startsWith(`${skill}_`));
   if (second === undefined || second === "--help" || second === "-h") {
-    return { stdout: JSON.stringify({ usage: `treasury ${skill} <command> [--flag value …]`, version: PACKAGE_VERSION, guide: guidePointer(), commands: mine.map(([n, c]) => describe(skill, n, c)) }, null, 2), code: 0 };
+    return { stdout: JSON.stringify({ usage: `treasury ${skill} <command> [--flag value …]`, version: PACKAGE_VERSION, ...guideField(), commands: mine.map(([n, c]) => describe(skill, n, c)) }, null, 2), code: 0 };
   }
   const name = `${skill}_${second.replaceAll("-", "_")}`;
   // Own keys only: `commands` is a plain object, so `earn constructor` must not reach anything inherited.

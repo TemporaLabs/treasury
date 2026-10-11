@@ -62,6 +62,7 @@ Pre-1.0, minor versions may change tool names, schemas and behaviour.
 - **`treasury --help` and `treasury <skill> --help` carry a `guide` field** that tells the agent to read it first, with the
   file's path when it sits beside the CLI and the URL. Measured on 0.1.2: with no pointer in `--help` an agent read the guide
   0 times in 9; with one, 9 times in 9, and showed all of the first-deposit terms instead of about a third.
+  The plugin's copy of the CLI carries no `guide`: its Earn skill is the same text and is already loaded.
 
 ### Fixed
 - `earn balance` reads the Ethereum public endpoint's range refusal ("query exceeds max block range
