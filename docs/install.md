@@ -66,6 +66,7 @@ export TREASURY_RPC_ROBINHOOD=https://...     # a keyed Robinhood Chain RPC, if 
 export TREASURY_RPC_ETHEREUM=https://...      # a keyed Ethereum RPC, if you will use a vault there
 export TREASURY_RPC_MONAD=https://...         # a keyed Monad RPC, if you will use a vault there
 export TREASURY_LOGS_RPC_MONAD=https://...    # on Monad, needed for earn_balance's history: the public RPC serves 100 blocks per request
+export TREASURY_RPC_SOLANA=https://...        # a keyed Solana RPC, if you will use the vault on Solana
 ```
 
 Each chain reads only its own variable. Unset, a chain falls back to its public RPC, which rate-limits

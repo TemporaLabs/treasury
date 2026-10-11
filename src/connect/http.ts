@@ -31,6 +31,11 @@ export interface Flow<T> {
   assets: Record<string, { type: string; body: string | Buffer }>;
   info: () => Record<string, unknown>;
   challenge?: (address: string, origin: string, nonce: string) => string;
+  /**
+   * Reads the address a sign-in challenge is for, or `undefined` for one that is not an address. An EVM
+   * address (checksummed) unless the flow says otherwise; the Solana sign-in takes a base58 one.
+   */
+  challengeAddress?: (a: unknown) => string | undefined;
   accept: (body: Record<string, unknown>, ctx: { nonce: string; origin: string; message?: string; challengedAddress?: string }) => Promise<Accepted<T>>;
   /** Called with the page's body when it reports a rejection, before the flow ends. */
   onReject?: (body: Record<string, unknown>) => void;
@@ -136,8 +141,8 @@ export async function serveOnce<T>(flow: Flow<T>): Promise<Handle<T>> {
           if (url.pathname === "/challenge") {
             if (!flow.challenge) return json(res, 404, { ok: false, reason: "not found" });
             const a = body["address"];
-            if (typeof a !== "string" || !isAddress(a)) return json(res, 400, { ok: false, reason: "not an address" });
-            const address = getAddress(a);
+            const address = flow.challengeAddress ? flow.challengeAddress(a) : typeof a === "string" && isAddress(a) ? getAddress(a) : undefined;
+            if (address === undefined) return json(res, 400, { ok: false, reason: "not an address" });
             const message = flow.challenge(address, origin, secret);
             issued = { address, message };
             return json(res, 200, { ok: true, message });

@@ -19,7 +19,7 @@ deposit, where the asset (USDC; USDG on Robinhood Chain) lands on a withdrawal.
 
 ## `chain` — which chain a call is for
 
-A vault is on one chain. Every tool that takes `vault` also takes `chain`: `"base"`, `"arbitrum"`, `"robinhood"`, `"ethereum"` or `"monad"`
+A vault is on one chain. Every tool that takes `vault` also takes `chain`: `"base"`, `"arbitrum"`, `"robinhood"`, `"ethereum"`, `"monad"` or `"solana"`
 — the chains with a vault in the registry, as `earn_vaults` lists them under `chains`.
 
 | `vault` | `chain` | resolves to |
@@ -58,7 +58,7 @@ status (the block and method it was measured at). Each row carries the vault's p
 - `name` — the vault's `name()`;
 - `chain` and `chainId` — the chain the vault is on, e.g. `"arbitrum"` and `42161`;
 - `address` — the contract itself, on that chain;
-- `links` — `explorer` always (the chain's own: BaseScan, Arbiscan, Robinhood Chain's Blockscout, Etherscan or MonadScan), and `app` where the chassis has a front end whose page for this vault exists. **These need no
+- `links` — `explorer` always (the chain's own: BaseScan, Arbiscan, Robinhood Chain's Blockscout, Etherscan, MonadScan, or Solscan on Solana), and `app` where the chassis has a front end whose page for this vault exists. **These need no
   RPC endpoint.** They are how an operator verifies, without this client's help, that the address
   about to be used is the vault it claims to be;
 - `warning` — what to show before preparing a deposit into this vault. Show it; do not summarise it.
@@ -180,6 +180,25 @@ objects worth reading carefully:
   caveat as the basis: they are the events **inside the scanned window**, which is the whole history
   only when `wholeHistory` is true. Each list holds at most 100 entries, the most recent; `deposits`
   and `withdrawals` remain the totals, so a truncated list is visible by comparing the two.
+
+## On Solana
+
+The vault on Solana is a Kamino vault, and the same commands answer for it with these differences:
+
+- Every result carries `chain: "solana"`, `chainId: null`, `cluster: "mainnet-beta"` and the cluster's
+  `genesisHash`; an endpoint whose genesis hash differs is reported as `wrong_chain`.
+- `account` and `receiver` are Solana addresses, and `receiver` must equal `account`.
+- `earn_prepare_deposit` and `earn_prepare_withdraw` return ONE unsigned transaction, not a list of calls:
+  `transaction` carries `wire` (base64, every signature slot empty), `feePayer`, `blockhash`,
+  `preparedAtBlockHeight` and `expiresAfterBlockHeight`. It is simulated before it is returned, and a
+  transaction the program would refuse is not returned at all. `expected` and `simulated` say what the
+  simulation minted or paid.
+- `earn_quote --direction withdraw` reports `receives`, the USDC the account's balance would rise by: each
+  withdrawal keeps 0.001 USDC in the vault.
+- `earn_balance` reports shares, `usdcValue` and `exit` (a simulated full withdrawal); `entryBasisUsdc`,
+  `accruedYieldUsdc` and `scan.wholeHistory` say the history was not read.
+- `earn_status` with `account` returns `OPEN_READY`, `NEEDS_FUNDS` (no USDC, or no SOL for the fee),
+  `REVERTED_OTHER` or `UNRESOLVED`.
 
 ## `earn_prepare_deposit` — PREPARE
 

@@ -61,6 +61,46 @@ export const CHAIN_INFO = {
   },
 } as const satisfies Record<SupportedChainId, ChainInfo>;
 
+/**
+ * Solana — the one chain here that is not an EVM chain. It has no chain id, no `viem` chain and no
+ * `eth_getLogs`, so it is not a row of `CHAIN_INFO`; everything else about it follows the same rules:
+ * its own variables only, then its public endpoint. An endpoint is checked for the right cluster by its
+ * genesis hash (`src/solana/rpc.ts`), the counterpart of an EVM endpoint's chain id.
+ */
+export const SOLANA_INFO = {
+  key: "solana",
+  name: "Solana",
+  rpcEnv: ["TREASURY_RPC_SOLANA", "SOLANA_RPC_URL"],
+  publicRpc: "https://api.mainnet-beta.solana.com",
+} as const;
+
+/** The Solana RPC URL: `TREASURY_RPC_SOLANA`, then `SOLANA_RPC_URL`, then the public mainnet endpoint. */
+export function solanaRpcUrlFromEnv(): string {
+  for (const k of SOLANA_INFO.rpcEnv) {
+    const v = rpcUrlFromEnvValue(process.env[k]);
+    if (v) return v;
+  }
+  return SOLANA_INFO.publicRpc;
+}
+
+/** Which variable supplied the Solana RPC URL — the NAME only, never the value. */
+export function solanaRpcSourceForEnv(): { source: string; configured: boolean } {
+  for (const k of SOLANA_INFO.rpcEnv) {
+    if (rpcUrlFromEnvValue(process.env[k])) return { source: k, configured: true };
+  }
+  return { source: "public default", configured: false };
+}
+
+/** `publicRpcHint` for Solana: the sentence for a failure on the unconfigured public endpoint. */
+export function solanaPublicRpcHint(): string | undefined {
+  if (solanaRpcSourceForEnv().configured) return undefined;
+  return (
+    `No RPC was configured for Solana, so this used the public endpoint (${new URL(SOLANA_INFO.publicRpc).hostname}), which rate-limits ` +
+    "after a handful of calls — that is the most likely cause of the failure above, not the vault. " +
+    `Set ${SOLANA_INFO.rpcEnv[0]} to a keyed Solana RPC URL (Helius, QuickNode, Alchemy or your own node) and retry.`
+  );
+}
+
 /** The name a tool caller uses for a chain: `"base"`, `"arbitrum"`, `"robinhood"`, `"ethereum"`, `"monad"`. */
 export type ChainKey = (typeof CHAIN_INFO)[SupportedChainId]["key"];
 
@@ -287,7 +327,7 @@ export function resolvedRpcSecrets(): string[] {
   // or first host label of 8+ characters is registered below. "arbitrum" is exactly 8, so with such a
   // URL configured every refusal that names the chain read `chains with a vault: base, <redacted>`
   // (measured in review). "base" is 4 characters, which is why one chain never showed it.
-  const chainWords = new Set<string>(supportedChainIds.map((id) => CHAIN_INFO[id].key));
+  const chainWords = new Set<string>([...supportedChainIds.map((id) => CHAIN_INFO[id].key), SOLANA_INFO.key]);
   const add = (v: string | undefined) => {
     if (!v || v.length < 8) return;
     if (chainWords.has(v.toLowerCase())) return;
@@ -305,7 +345,7 @@ export function resolvedRpcSecrets(): string[] {
   // real client, and a provider's error body can echo its key exactly as the primary's (measured in
   // review; dormant until describeError began reporting the body).
   // Derived from the chain table, so a chain added there cannot be left out of the redactor.
-  const names = [...supportedChainIds.flatMap((id) => [...CHAIN_INFO[id].rpcEnv, CHAIN_INFO[id].logsRpcEnv]), "TREASURY_LOGS_FALLBACK"];
+  const names = [...supportedChainIds.flatMap((id) => [...CHAIN_INFO[id].rpcEnv, CHAIN_INFO[id].logsRpcEnv]), ...SOLANA_INFO.rpcEnv, "TREASURY_LOGS_FALLBACK"];
   for (const k of names) {
     const v = rpcUrlFromEnvValue(process.env[k]);
     if (v) urls.add(v);

@@ -6,7 +6,7 @@ the chain, and four optional ones for `treasury connect`. A test pins the exact 
 browser launcher checks to see whether there is a browser to open (`DISPLAY`, `WAYLAND_DISPLAY`,
 `SSH_CONNECTION`, `SSH_TTY`) — so a variable read anywhere else in the package fails the build.
 
-**Each chain has its own variables, and a chain reads only its own.** An Arbitrum, Robinhood Chain, Ethereum or Monad
+**Each chain has its own variables, and a chain reads only its own.** An Arbitrum, Robinhood Chain, Ethereum, Monad or Solana
 call never falls back to a Base endpoint: a vault's address has no contract on the other chain, so reads there fail
 with "returned no data", which looks like a broken vault, not like a misconfiguration.
 
@@ -27,6 +27,8 @@ with "returned no data", which looks like a broken vault, not like a misconfigur
 | `TREASURY_RPC_MONAD` | the Monad RPC every tool reads through for a vault on Monad | falls back to `MONAD_RPC_URL`, then to Monad's public endpoint `https://rpc.monad.xyz` |
 | `TREASURY_LOGS_RPC_MONAD` | the RPC `earn_balance` scans events through on Monad. **Set it for any history on Monad**: the public endpoint's window is 100 blocks (below) | uses `TREASURY_RPC_MONAD` |
 | `MONAD_RPC_URL` | a conventional alias, used when `TREASURY_RPC_MONAD` is unset — through the plugin too | — |
+| `TREASURY_RPC_SOLANA` | the Solana RPC every tool reads through for the vault on Solana. An endpoint whose genesis hash is not mainnet-beta's is reported as `wrong_chain` | falls back to `SOLANA_RPC_URL`, then to Solana's public endpoint `https://api.mainnet-beta.solana.com`, which rate-limits after a handful of requests |
+| `SOLANA_RPC_URL` | a conventional alias, used when `TREASURY_RPC_SOLANA` is unset — through the plugin too | — |
 | `TREASURY_LOGS_FALLBACK` | where a scan goes when the configured RPC cannot cover the range: an `http(s)` URL for a Base endpoint, or anything that is not a URL (`off`, `disabled`, …) to forbid a fallback on every chain | the chain's own public endpoint |
 | `PRIVY_APP_ID` | the Privy app the `treasury connect` sign-in page uses. A Privy app ID is public — it ships in the page — so a fork can point at its own app | Tempora Labs' own app |
 | `TREASURY_CONNECT_PORT` | the local port the connect page is served on. Privy accepts sign-in only from origins its dashboard lists exactly, so change it only together with that list | `53682` |

@@ -47,6 +47,10 @@ third party. Review every transaction your signer is asked to sign.
   chain. Send it on that chain only, with the vault's asset (USDC; USDG on Robinhood Chain) already
   there: Treasury does not bridge. A transaction sent on a different chain, to an address with no
   contract there, is mined and does nothing — the deposit did not happen and the gas is spent. Check your signer's network first.
+- **On Solana, a prepared transaction expires** about a minute after it was built (it names a recent
+  blockhash). Sign it then or prepare it again; `connect` builds it when you press Confirm. A wallet can
+  report a transaction as expired that in fact landed: check the account before preparing another.
+- **On Solana, each withdrawal keeps 0.001 USDC in the vault**, which matters for a small one.
 - **Gas on Ethereum is far higher than on the other chains.** The approve, the deposit and the later
   withdrawal each pay Ethereum gas in ETH, which can be a large share of a small deposit. The other
   chains here cost a small fraction of that per transaction.

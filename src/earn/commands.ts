@@ -30,8 +30,11 @@
 import { z } from "zod";
 import { redactEndpoints, registerSecretSource } from "../redact.js";
 import { isAddress, getAddress } from "viem";
+import { solanaPublicRpcHint } from "../client.js";
+import { isAddress as isSolanaAddress } from "@solana/kit";
+import { onSolana, solanaBalance, solanaHealth, solanaPrepareDeposit, solanaPrepareWithdraw, solanaPreflight, solanaQuoteDeposit, solanaQuoteWithdraw, solanaVaultRow } from "./solana.js";
 import { CHAIN_INFO, isSupportedChainId, makePublicClient, rpcUrlFromEnv, logsRpcUrlFromEnv, rpcSourceForEnv, logsRpcSourceForEnv, resolvedRpcSecrets, publicRpcHint, logsFallbackUrlFromEnv, endpointChainId, firstEndpointOnWrongChain, supportedChainIds, type Endpoint, type SupportedChainId } from "../client.js";
-import { defaultChainId, defaultVault, depositableVaults, listVaults, loadRegistry, offeredChains, resolveVault } from "../registry.js";
+import { defaultChainId, defaultVault, depositableSolanaVaults, depositableVaults, listSolanaVaults, listVaults, loadRegistry, offeredChainKeys, offeredChains, resolveAnyVault, resolveVault } from "../registry.js";
 import { linksFor } from "../links.js";
 import type { VaultEntry } from "../registry-schema.js";
 import { PACKAGE_VERSION } from "../version.js";
@@ -41,10 +44,18 @@ import { quoteDeposit, quoteWithdraw } from "../quote.js";
 import { buildDeposit, buildWithdraw, type UnsignedCall } from "../build.js";
 import { DISCLOSURES } from "../disclosures.js";
 
-const addressArg = z
-  .string()
-  .refine((s) => isAddress(s), "must be an EVM address")
-  .transform((s) => getAddress(s));
+/**
+ * An address, in either family's form: `0x…` for a vault on an EVM chain, base58 for a vault on Solana. Which
+ * one a command needs depends on the vault, which is resolved after the arguments parse, so each handler checks
+ * the family it got (`evm` below, `solanaAccount` in ./solana.ts) and refuses the other.
+ */
+const addressArg = z.string().refine((s) => isAddress(s) || isSolanaAddress(s), "must be an EVM address (0x…), or a Solana address for a vault on Solana");
+
+/** The EVM form of an address argument, checksummed; a Solana address here is refused, naming the slot. */
+function evm(v: string, what: string) {
+  if (!isAddress(v)) throw new Error(`${what} must be an EVM address (0x…) for a vault on an EVM chain; got ${v}`);
+  return getAddress(v);
+}
 const amountArg = z.string().regex(/^\d+(\.\d+)?$/, 'plain decimal amount of the vault\'s asset (USDC; USDG on Robinhood Chain), e.g. "25" or "12.5"');
 const vaultArg = z.string().optional().describe("the vault's ERC-20 ticker, e.g. tlCashPlusUSDC2 (`earn vaults` lists them); omit for the default vault of `chain`, or of the default chain when `chain` is omitted too");
 const accountArg = addressArg.describe("the account whose shares these are — the depositor, the owner, the holder");
@@ -67,7 +78,7 @@ const accountArg = addressArg.describe("the account whose shares these are — t
 const chainArg = () => {
   let offered: string[];
   try {
-    offered = offeredChains().map((c) => c.key);
+    offered = offeredChainKeys();
   } catch {
     offered = supportedChainIds.map((id) => CHAIN_INFO[id].key);
   }
@@ -131,14 +142,18 @@ const onChain = (vault: VaultEntry) => ({ chain: CHAIN_INFO[vault.chainId].key, 
  * and never throwing: a call that failed BECAUSE its vault or chain did not resolve falls back to
  * the default chain, which is what the hint named before there was more than one.
  */
-function hintChain(args: unknown): SupportedChainId {
+function hintChain(args: unknown): SupportedChainId | "solana" {
   try {
     const a = (args ?? {}) as { vault?: unknown; chain?: unknown };
-    return resolveVault(typeof a.vault === "string" ? a.vault : undefined, typeof a.chain === "string" ? a.chain : undefined).chainId;
+    const t = resolveAnyVault(typeof a.vault === "string" ? a.vault : undefined, typeof a.chain === "string" ? a.chain : undefined);
+    return t.family === "solana" ? "solana" : t.vault.chainId;
   } catch {
     return defaultChainId();
   }
 }
+
+/** The setup sentence for a transport failure on the chain's unconfigured public endpoint. */
+const hintFor = (chain: SupportedChainId | "solana") => (chain === "solana" ? solanaPublicRpcHint() : publicRpcHint(chain));
 
 /** Shapes that mean "the transport failed", as opposed to a verdict about the vault. */
 const RPC_FAILURE = /RPC Request failed|HTTP request failed|reads failed|over rate limit|rate.?limit|"unreachable"|fetch failed|ETIMEDOUT|ECONNREFUSED/i;
@@ -148,10 +163,10 @@ const RPC_FAILURE = /RPC Request failed|HTTP request failed|reads failed|over ra
  * configured, attach the one sentence that turns "this is broken" into "set this variable".
  * Attached as a FIELD rather than appended to prose, so a consumer can branch on it.
  */
-const text = (v: unknown, chainId: SupportedChainId = defaultChainId()) => {
+const text = (v: unknown, chainId: SupportedChainId | "solana" = defaultChainId()) => {
   let body = typeof v === "string" ? v : JSON.stringify(v, null, 2);
   if (RPC_FAILURE.test(body)) {
-    const hint = publicRpcHint(chainId);
+    const hint = hintFor(chainId);
     if (hint) {
       body =
         typeof v === "string"
@@ -184,7 +199,7 @@ const text = (v: unknown, chainId: SupportedChainId = defaultChainId()) => {
  * it, and a disclosure repeated where it does not apply is what teaches a reader to skip the one
  * that does. That absence is asserted too.
  */
-const commitsMoney = (vault: VaultEntry) => ({ warning: vault.warning });
+const commitsMoney = (vault: Pick<VaultEntry, "warning">) => ({ warning: vault.warning });
 
 const unsigned = (calls: UnsignedCall[], vault: VaultEntry, kind: "deposit" | "withdraw") =>
   text(
@@ -232,7 +247,7 @@ const guarded =
       const msg = e instanceof Error ? e.message : String(e);
       const redacted = redactEndpoints(msg);
       // A thrown transport error on the public endpoint gets the same sentence a returned one does.
-      const hint = RPC_FAILURE.test(redacted) ? publicRpcHint(hintChain(a[0])) : undefined;
+      const hint = RPC_FAILURE.test(redacted) ? hintFor(hintChain(a[0])) : undefined;
       throw new Error(hint ? `${redacted}\n\n${hint}` : redacted);
     }
   };
@@ -276,8 +291,9 @@ export function buildCommands(): Record<string, Command> {
         defaultChain: CHAIN_INFO[defaultChainId()].key,
         default: defaultVault().symbol,
         defaultAccess: defaultVault().depositOpen.open ? "open" : "whitelist",
-        depositable: depositableVaults().map((v) => v.symbol),
-        chains: offeredChains().map((c) => {
+        depositable: [...depositableVaults().map((v) => v.symbol), ...depositableSolanaVaults().map((v) => v.symbol)],
+        chains: [
+          ...offeredChains().map((c) => {
           const d = defaultVault(c.chainId);
           return {
             chain: c.key,
@@ -287,8 +303,23 @@ export function buildCommands(): Record<string, Command> {
             defaultAccess: d.depositOpen.open ? "open" : "whitelist",
             depositable: depositableVaults().filter((v) => v.chainId === c.chainId).map((v) => v.symbol),
           };
-        }),
-        vaults: listVaults().map((v) => ({
+          }),
+          // Solana, when the registry has a vault there: no chain id; the cluster is in each Solana row.
+          ...(listSolanaVaults().length === 0
+            ? []
+            : [
+                {
+                  chain: onSolana.chain,
+                  chainId: null,
+                  name: "Solana",
+                  default: listSolanaVaults().find((v) => v.isDefault)!.symbol,
+                  defaultAccess: "open",
+                  depositable: depositableSolanaVaults().map((v) => v.symbol),
+                },
+              ]),
+        ],
+        vaults: [
+          ...listVaults().map((v) => ({
           symbol: v.symbol,
           name: v.name,
           warning: v.warning,
@@ -304,6 +335,8 @@ export function buildCommands(): Record<string, Command> {
           depositOpen: v.depositOpen,
           notes: v.notes,
         })),
+          ...listSolanaVaults().map(solanaVaultRow),
+        ],
       });
     }),
   );
@@ -327,9 +360,18 @@ export function buildCommands(): Record<string, Command> {
       inputSchema: { vault: vaultArg, chain, account: accountArg.optional(), amount_usdc: amountArg.optional() },
     },
     guarded(async ({ vault: symbol, chain, account, amount_usdc }) => {
+      const target = resolveAnyVault(symbol, chain);
+      if (target.family === "solana") {
+        const v = target.vault;
+        if (account !== undefined) {
+          return text({ ...(await solanaPreflight(v, account, amount_usdc)), mode: "preflight", account, ...onSolana, ...commitsMoney(v) }, "solana");
+        }
+        return text(await solanaHealth(v, symbol !== undefined ? { requested: "preflight", missing: ["account"] } : {}), "solana");
+      }
       if (account !== undefined) {
         const { vault, client, endpoints } = clientFor(symbol, chain);
-        const args = amount_usdc === undefined ? { vault, depositor: account, client } : { vault, depositor: account, client, assetsHuman: amount_usdc };
+        const depositor = evm(account, "account");
+        const args = amount_usdc === undefined ? { vault, depositor, client } : { vault, depositor, client, assetsHuman: amount_usdc };
         const verdict = await onItsChain(vault, endpoints, () => preflightDeposit(args));
         // spread FIRST so the discriminant cannot be overwritten by a field of the same name
         return text({ ...verdict, mode: "preflight", account, ...onChain(vault), ...commitsMoney(vault) }, vault.chainId);
@@ -426,7 +468,14 @@ export function buildCommands(): Record<string, Command> {
         direction: z.enum(["deposit", "withdraw"]).describe("which side to quote — required, there is no default"),
       },
     },
-    guarded(async ({ vault: symbol, chain, account, amount_usdc, direction }) => {
+    guarded(async ({ vault: symbol, chain, account: rawAccount, amount_usdc, direction }) => {
+      const target = resolveAnyVault(symbol, chain);
+      if (target.family === "solana") {
+        const v = target.vault;
+        if (direction === "deposit") return text({ direction: "deposit" as const, ...onSolana, ...commitsMoney(v), ...(await solanaQuoteDeposit(v, rawAccount, amount_usdc)) }, "solana");
+        return text({ direction: "withdraw" as const, ...onSolana, ...(await solanaQuoteWithdraw(v, rawAccount, amount_usdc)) }, "solana");
+      }
+      const account = evm(rawAccount, "account");
       const { vault, client, endpoints } = clientFor(symbol, chain);
       // 🔴 The tag is emitted from INSIDE each branch, beside the fields that branch produces —
       // never `{ direction, ...quote }` from the input argument. Measured in review: with the tag
@@ -466,8 +515,14 @@ export function buildCommands(): Record<string, Command> {
       },
     },
     guarded(async ({ vault: symbol, chain, account, amount_usdc, receiver }) => {
+      const target = resolveAnyVault(symbol, chain);
+      if (target.family === "solana") {
+        // The warning before `next_step`, through the chokepoint, exactly as on EVM.
+        const { requires_signature, status, ...rest } = await solanaPrepareDeposit(target.vault, account, amount_usdc, receiver);
+        return text({ requires_signature, status, ...onSolana, ...commitsMoney(target.vault), ...rest }, "solana");
+      }
       const vault = supportedVault(symbol, chain);
-      return unsigned(buildDeposit(vault, { assetsHuman: amount_usdc, receiver, account }), vault, "deposit");
+      return unsigned(buildDeposit(vault, { assetsHuman: amount_usdc, receiver: evm(receiver, "receiver"), account: evm(account, "account") }), vault, "deposit");
     }),
   );
 
@@ -487,8 +542,18 @@ export function buildCommands(): Record<string, Command> {
         shares_exact: z.string().regex(/^\d+(\.\d+)?$/).optional(),
       },
     },
-    guarded(async ({ vault: symbol, chain, receiver, account, amount_usdc, all, shares_exact }) => {
+    guarded(async ({ vault: symbol, chain, receiver: rawReceiver, account: rawAccount, amount_usdc, all, shares_exact }) => {
+      const target = resolveAnyVault(symbol, chain);
+      if (all && amount_usdc) throw new Error("give --amount_usdc or --all with --shares_exact, not both");
+      if (!all && shares_exact) throw new Error("--shares_exact goes with --all; for an amount in the asset, use --amount_usdc alone");
+      if (all && !shares_exact) throw new Error("--all requires --shares_exact (copy sharesExact from `earn balance` verbatim)");
+      if (!all && !amount_usdc) throw new Error("provide --amount_usdc, or --all with --shares_exact");
+      if (target.family === "solana") {
+        return text(await solanaPrepareWithdraw(target.vault, rawAccount, rawReceiver, all ? { sharesExact: shares_exact! } : { amountHuman: amount_usdc! }), "solana");
+      }
       const vault = supportedVault(symbol, chain);
+      const receiver = evm(rawReceiver, "receiver");
+      const account = evm(rawAccount, "account");
       // ⚠️ `receiver` and `account` are DIFFERENT slots and both are addresses, so a transposition
       // here type-checks. `account` is the owner whose shares burn; `receiver` is the payee.
       if (all && amount_usdc) throw new Error("give --amount_usdc or --all with --shares_exact, not both");
@@ -516,7 +581,10 @@ export function buildCommands(): Record<string, Command> {
         max_log_requests: z.number().int().positive().max(400).optional().describe("cap on eth_getLogs calls per event per scan; default 100 (= 1,000 blocks on Alchemy free, 200,000 on Base public). scan.wholeHistory says whether the scan actually covered every block since the vault was deployed — scan.complete alone is only a reconciliation and can be vacuously true. For an older vault, a provider with a wide eth_getLogs range (TREASURY_LOGS_RPC_BASE; TREASURY_LOGS_RPC_ARBITRUM on Arbitrum One; TREASURY_LOGS_RPC_ROBINHOOD on Robinhood Chain; TREASURY_LOGS_RPC_ETHEREUM on Ethereum; TREASURY_LOGS_RPC_MONAD on Monad, whose public endpoint serves only 100 blocks per request) is what makes it whole"),
       },
     },
-    guarded(async ({ vault: symbol, chain, account, lookback_blocks, max_log_requests }) => {
+    guarded(async ({ vault: symbol, chain, account: rawAccount, lookback_blocks, max_log_requests }) => {
+      const target = resolveAnyVault(symbol, chain);
+      if (target.family === "solana") return text({ ...onSolana, ...(await solanaBalance(target.vault, rawAccount)) }, "solana");
+      const account = evm(rawAccount, "account");
       const vault = supportedVault(symbol, chain);
       const logsUrl = logsRpcUrlFromEnv(vault.chainId);
       const client = makePublicClient(vault.chainId, logsUrl);

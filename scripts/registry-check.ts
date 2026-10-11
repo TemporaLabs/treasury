@@ -1,7 +1,7 @@
 /**
  * Registry reconciliation: does every row agree with the CHAIN?
  *
- *   TREASURY_RPC_BASE=https://... TREASURY_RPC_ARBITRUM=https://... TREASURY_RPC_ROBINHOOD=https://... TREASURY_RPC_ETHEREUM=https://... TREASURY_RPC_MONAD=https://... npx tsx scripts/registry-check.ts
+ *   TREASURY_RPC_BASE=https://... TREASURY_RPC_ARBITRUM=https://... TREASURY_RPC_ROBINHOOD=https://... TREASURY_RPC_ETHEREUM=https://... TREASURY_RPC_MONAD=https://... TREASURY_RPC_SOLANA=https://... npx tsx scripts/registry-check.ts
  *
  * Each row is checked on ITS chain, through that chain's endpoint (`rpcUrlFromEnv`: the chain's
  * variable, else its public endpoint). A row whose chain's endpoint did not answer, or answered for
@@ -35,6 +35,9 @@ import { createPublicClient, http, type PublicClient } from "viem";
 import { erc4626Abi } from "../src/abi/erc4626.js";
 import { CHAIN_INFO, chains, rpcSourceForEnv, rpcUrlFromEnv, type SupportedChainId } from "../src/client.js";
 import { loadRegistry } from "../src/registry.js";
+import { solanaRpcUrlFromEnv } from "../src/client.js";
+import { makeSolanaRpc } from "../src/solana/rpc.js";
+import { readVault } from "../src/solana/vault.js";
 import { describeError } from "../src/redact.js";
 
 const reg = loadRegistry();
@@ -176,6 +179,22 @@ for (const v of reg.vaults) {
   }
 }
 
+// Solana rows: the vault's own state, read with this client's decoder, names the row's token mint, share
+// mint, decimals and name; and the vault-state account exists at all, on the endpoint `TREASURY_RPC_SOLANA`
+// names (else Solana's public one). The ticker is the registry's label, which the chain does not carry.
+for (const v of reg.solanaVaults) {
+  try {
+    const read = await readVault(makeSolanaRpc(solanaRpcUrlFromEnv()), v);
+    ok(`${v.symbol}: token mint, share mint and both decimals agree with the vault state at slot ${read.slot}`);
+    if (read.state.name === v.name) ok(`${v.symbol}: name = ${v.name}`);
+    else fail(`${v.symbol}: registry name "${v.name}" != the vault state's "${read.state.name}"`);
+  } catch (e) {
+    const msg = describeError(e);
+    if (/disagrees with the chain|no account at/.test(msg)) fail(`${v.symbol}: ${msg}`);
+    else cannotCheck(`${v.symbol}: vault state`, msg);
+  }
+}
+
 // The per-row lines above are ✓ / ✗ / ?, and a reader who stops there can carry away the wrong
 // verdict: an all-✓ run with three ? lines LOOKS complete. Say it in words at the point the rows
 // end, not only in the summary further down, which is what a skimmer skips.
@@ -193,7 +212,7 @@ if (unresolved) {
   console.error(
     `\n${unresolved} check(s) COULD NOT BE MADE — the endpoint failed, which says nothing about the registry.` +
       `\nThis is not a disagreement. Retry, or point the chain's variable at an endpoint with headroom:` +
-      `\n  TREASURY_RPC_BASE=https://... TREASURY_RPC_ARBITRUM=https://... TREASURY_RPC_ROBINHOOD=https://... TREASURY_RPC_ETHEREUM=https://... TREASURY_RPC_MONAD=https://... npx tsx scripts/registry-check.ts`,
+      `\n  TREASURY_RPC_BASE=https://... TREASURY_RPC_ARBITRUM=https://... TREASURY_RPC_ROBINHOOD=https://... TREASURY_RPC_ETHEREUM=https://... TREASURY_RPC_MONAD=https://... TREASURY_RPC_SOLANA=https://... npx tsx scripts/registry-check.ts`,
   );
 }
 if (failures || unresolved) process.exit(1);

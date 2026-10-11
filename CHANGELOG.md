@@ -22,6 +22,23 @@ Pre-1.0, minor versions may change tool names, schemas and behaviour.
   Ethereum gas is far higher** when they pick Ethereum for a small amount.
 - Explorer links: Etherscan on Ethereum, MonadScan on Monad. The connect page accepts both chains.
 
+### Added — Solana
+- **A Kamino vault on Solana: Tempora Labs Cash Plus USDC (Test 2G), `--chain solana`.** The earn commands
+  read, quote and prepare for it; `treasury connect wallet --chain solana` connects a Solana wallet (Phantom,
+  Solflare, Backpack, or a Privy wallet from an email or social login), and `connect deposit` / `withdraw`
+  confirm through it, with the same acknowledgement step. Base stays the default chain.
+- On Solana a prepared deposit or withdrawal is ONE unsigned transaction (`transaction.wire`, base64), simulated
+  before it is returned, that lands only before `transaction.expiresAfterBlockHeight` (about a minute). The
+  confirm page builds it when the operator presses Confirm, and a gate admits it only if every instruction is
+  a compute-unit limit, the account's own token-account creation, or this vault's deposit or withdrawal for the
+  connected account.
+- Quotes and positions are read from simulated transactions: each withdrawal keeps 0.001 USDC in the vault
+  (measured 2026-10-11), and `receives` is net of it. Entry basis and yield are not read on Solana.
+- `TREASURY_RPC_SOLANA` (then `SOLANA_RPC_URL`, then `https://api.mainnet-beta.solana.com`). A new runtime
+  dependency, `@solana/kit`. The instruction builders and account decoders are pinned byte for byte to
+  Kamino's own SDK by committed fixtures (`vendor/kamino/`); that SDK is not a dependency.
+- `registry:check` reconciles the Solana row against the vault's own state.
+
 ### Fixed
 - `earn balance` reads the Ethereum public endpoint's range refusal ("query exceeds max block range
   100000") as a 100,000-block window and walks the history in chunks, instead of failing the scan.

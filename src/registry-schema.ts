@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { getAddress, isAddress } from "viem";
+import { isAddress as isSolanaAddress } from "@solana/kit";
 
 // `strict: true` refuses a lowercase or otherwise mis-cased address — the registry is a hand-edited
 // artifact and a checksum is the one typo detector an address carries.
@@ -107,6 +108,65 @@ export const vaultEntrySchema = z
 
 export type VaultEntry = z.infer<typeof vaultEntrySchema>;
 
+/** A Solana account address: base58, exactly as written — base58 is case-sensitive, so it is never normalised. */
+const solanaAddress = z.string().refine((s) => isSolanaAddress(s), { message: "not a Solana address" });
+
+/**
+ * A vault on Solana. Not an EVM row with different values: there is no chain id, no ERC-4626, no
+ * checksummed address, and the depositor's shares are an SPL token of their own (`sharesMint`). So it is a
+ * schema of its own, in its own list (`solanaVaults`), and `family` says so in the file as well.
+ *
+ * `depositOpen` is measured the same way as on EVM — a stranger's SIMULATED deposit, here
+ * `simulateTransaction` — and stamped with the slot it was taken at.
+ */
+export const solanaVaultEntrySchema = z
+  .object({
+    family: z.literal("solana"),
+    /**
+     * The ticker every tool takes as `vault`. A Kamino vault's share mint carries no token metadata, so
+     * there is no on-chain ticker to read: this one is ASSIGNED here, in the same form as the EVM rows'.
+     * `name` IS read on chain (the vault state stores it), and `scripts/registry-check.ts` reconciles it.
+     */
+    symbol: z.string().min(1).regex(/^[A-Za-z0-9][A-Za-z0-9._-]*$/),
+    name: z.string().min(1),
+    warning: z.string().min(1),
+    chain: z.literal("solana"),
+    /** The vault's state account: the address every instruction names, and the one an explorer opens. */
+    address: solanaAddress,
+    chassis: z.literal("kamino-vault"),
+    backend: backendSchema,
+    isDefault: z.boolean().default(false),
+    /** The SPL mint the vault takes and pays (`tokenMint` in the vault state). */
+    asset: z.object({ address: solanaAddress, symbol: z.string().min(1), decimals: z.number().int().min(0).max(36) }),
+    /** The vault's share mint, a PDA of the vault (`sharesMint` in the vault state). */
+    sharesMint: solanaAddress,
+    shareDecimals: z.number().int().min(0).max(36),
+    depositOpen: z
+      .object({
+        open: z.boolean(),
+        method: z.literal("simulated-deposit-from-stranger"),
+        measuredAtSlot: z.number().int().positive(),
+        measuredAtIso: z.string().datetime(),
+        reason: z.enum(["PERMISSIONED", "REVERTED_OTHER"]).optional(),
+        detail: z.string().optional(),
+      })
+      .strict(),
+    /** The slot of the transaction that created the vault state. */
+    deployedAtSlot: z.number().int().positive(),
+    notes: z.array(z.string()).default([]),
+  })
+  .strict()
+  .superRefine((v, ctx) => {
+    if (!v.depositOpen.open && !v.depositOpen.reason) {
+      ctx.addIssue({ code: "custom", path: ["depositOpen", "reason"], message: "a closed vault must say why" });
+    }
+    if (v.depositOpen.open && v.depositOpen.reason) {
+      ctx.addIssue({ code: "custom", path: ["depositOpen", "reason"], message: "an open vault carries no reason" });
+    }
+  });
+
+export type SolanaVaultEntry = z.infer<typeof solanaVaultEntrySchema>;
+
 export const registrySchema = z
   .object({
     schemaVersion: z.literal(1),
@@ -116,6 +176,8 @@ export const registrySchema = z
      */
     reconciledAtIso: z.string().datetime(),
     vaults: z.array(vaultEntrySchema).min(1),
+    /** Vaults on Solana; see `solanaVaultEntrySchema`. One default among them, like any chain. */
+    solanaVaults: z.array(solanaVaultEntrySchema).default([]),
   })
   .strict()
   .superRefine((r, ctx) => {
@@ -138,6 +200,21 @@ export const registrySchema = z
         }
       }
     }
+    if (r.solanaVaults.length > 0) {
+      const defaults = r.solanaVaults.filter((v) => v.isDefault);
+      if (defaults.length !== 1) {
+        ctx.addIssue({ code: "custom", path: ["solanaVaults"], message: `exactly one vault per chain must be isDefault; chain solana has ${defaults.length}` });
+      }
+      for (const d of defaults) {
+        if (!d.depositOpen.open) ctx.addIssue({ code: "custom", path: ["solanaVaults"], message: `the default vault (${d.symbol}) on solana must be measured open` });
+      }
+    }
+    r.solanaVaults.forEach((v, i) => {
+      if (symbols.has(v.symbol)) ctx.addIssue({ code: "custom", path: ["solanaVaults", i, "symbol"], message: `duplicate symbol ${v.symbol}` });
+      if (addrs.has(v.address)) ctx.addIssue({ code: "custom", path: ["solanaVaults", i, "address"], message: `duplicate address ${v.address}` });
+      symbols.add(v.symbol);
+      addrs.add(v.address);
+    });
     r.vaults.forEach((v, i) => {
       if (symbols.has(v.symbol)) ctx.addIssue({ code: "custom", path: ["vaults", i, "symbol"], message: `duplicate symbol ${v.symbol}` });
       if (addrs.has(v.address)) ctx.addIssue({ code: "custom", path: ["vaults", i, "address"], message: `duplicate address ${v.address}` });
