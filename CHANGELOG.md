@@ -64,6 +64,10 @@ Pre-1.0, minor versions may change tool names, schemas and behaviour.
   0 times in 9; with one, 9 times in 9, and showed all of the first-deposit terms instead of about a third.
   The plugin's copy of the CLI carries no `guide`: its Earn skill is the same text and is already loaded.
 
+### Documentation
+- The README names the two ways to use the vaults: in a browser at app.temporalabs.com, or with an agent
+  through OAT.
+
 ### Fixed
 - `earn balance` reads the Ethereum public endpoint's range refusal ("query exceeds max block range
   100000") as a 100,000-block window and walks the history in chunks, instead of failing the scan.
