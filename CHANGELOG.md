@@ -8,7 +8,7 @@ Pre-1.0, minor versions may change tool names, schemas and behaviour.
 
 ### Added — Ethereum and Monad
 - **Two more chains: Ethereum and Monad**, each with its own default vault, so `earn` and `connect`
-  now work on five chains. `--chain ethereum` uses Tempora Labs Cash Plus USDC (Test 2E) and
+  now work on Ethereum and Monad too. `--chain ethereum` uses Tempora Labs Cash Plus USDC (Test 2E) and
   `--chain monad` uses Tempora Labs Cash Plus USDC (Test 2F); both are Morpho Vault V2 vaults over
   USDC, open to any account, with 18-decimal shares. Base stays the default chain.
 - Each chain reads only its own variables: `TREASURY_RPC_ETHEREUM` (then `ETHEREUM_RPC_URL`, then

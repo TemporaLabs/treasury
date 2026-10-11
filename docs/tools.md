@@ -194,7 +194,7 @@ The vault on Solana is a Kamino vault, and the same commands answer for it with 
   transaction the program would refuse is not returned at all. `expected` and `simulated` say what the
   simulation minted or paid.
 - `earn_quote --direction withdraw` reports `receives`, the USDC the account's balance would rise by: each
-  withdrawal keeps 0.001 USDC in the vault.
+  withdraw instruction keeps up to 0.001 USDC in the vault (Kamino's charge, which it can change).
 - `earn_balance` reports shares, `usdcValue` and `exit` (a simulated full withdrawal); `entryBasisUsdc`,
   `accruedYieldUsdc` and `scan.wholeHistory` say the history was not read.
 - `earn_status` with `account` returns `OPEN_READY`, `NEEDS_FUNDS` (no USDC, or no SOL for the fee),
