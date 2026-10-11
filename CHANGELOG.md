@@ -32,8 +32,11 @@ Pre-1.0, minor versions may change tool names, schemas and behaviour.
   confirm page builds it when the operator presses Confirm, and a gate admits it only if every instruction is
   a compute-unit limit, the account's own token-account creation, or this vault's deposit or withdrawal for the
   connected account.
-- Quotes and positions are read from simulated transactions: each withdrawal keeps 0.001 USDC in the vault
-  (measured 2026-10-11), and `receives` is net of it. Entry basis and yield are not read on Solana.
+- Quotes and positions are read from simulated transactions. Each withdraw instruction keeps up to 0.001 USDC in
+  the vault — Kamino's global withdrawal penalty for every vault on its program, which Kamino can change; a
+  withdrawal split across reserves pays it per part — and one worth 0.001 USDC or less is refused; `receives`
+  is exact and net of it. Kamino's program can require a co-signer on every deposit and withdrawal; the client
+  refuses to build while one is set (none is today). Entry basis and yield are not read on Solana.
 - `TREASURY_RPC_SOLANA` (then `SOLANA_RPC_URL`, then `https://api.mainnet-beta.solana.com`). A new runtime
   dependency, `@solana/kit`. The instruction builders and account decoders are pinned byte for byte to
   Kamino's own SDK by committed fixtures (`vendor/kamino/`); that SDK is not a dependency.

@@ -123,7 +123,7 @@ which chain first when you have not said. There are other options, and a demo.
 - **Test 2G, Solana.** A Kamino vault over USDC, open to any account.
   [Solscan](https://solscan.io/account/8qV54zrW2piQgBbVaUUtGajf4KuVDKLUDquHv9VZBfS7). It takes a Solana
   wallet (`treasury connect wallet --chain solana`), the account needs a little SOL for fees, and every
-  withdrawal keeps 0.001 USDC in the vault.
+  withdrawal keeps up to 0.001 USDC in the vault per instruction (a charge Kamino sets for every vault on its program, and can change).
 - **Test 2A.** IPOR Fusion, listed so an admitted account can read and exit its position.
 
 When you have not said which chain, the agent shows these and asks before it prepares a deposit.

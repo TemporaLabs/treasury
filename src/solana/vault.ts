@@ -4,9 +4,13 @@
  * Every verdict here comes from the chain. Amounts out of a quote, a pre-flight or a position's exit are
  * read from a SIMULATED transaction's post-state — the token balance the user's account would hold after
  * it — never computed from a rule this client restates. That matters on this program in particular:
- * measured on mainnet on 2026-10-11, each withdrawal keeps 0.001 USDC in the vault (10,000 base units
- * paid 9,000; 1,000,000 paid 999,000), while the vault's own withdrawal-penalty settings read 0. A
- * computed quote would have missed it; a simulated one cannot.
+ * measured on mainnet on 2026-10-11, each `withdraw` INSTRUCTION keeps up to 0.001 USDC in the vault (one
+ * instruction: 10,000 base units paid 9,000, 2,000,000 kept 1,000; the same 2,000,000 as two instructions
+ * kept 1,929; a two-leg full exit kept 1,000), and one worth 0.001 USDC or less is refused (error 7049). The
+ * cause is the vault program's GLOBAL withdrawal penalty — its global config account
+ * (BKyTcUe6daNG8HbgBix2ugdRHbykG2dK9hPBBqhUyoEX) holds `withdrawalPenaltyLamports` = 1000 and
+ * `withdrawalPenaltyBps` = 0 — while this vault's own penalty settings read 0. Kamino can change the global
+ * value, and how it combines across legs is not a rule this client restates: a simulated quote is exact.
  */
 import { address, type Base64EncodedWireTransaction, type Instruction } from "@solana/kit";
 import type { SolanaVaultEntry } from "../registry-schema.js";
@@ -24,7 +28,7 @@ import {
   type ReserveAccounts,
   type VaultAccounts,
 } from "./kvault.js";
-import { MAX_COMPUTE_UNITS, MAX_TRANSACTION_BYTES } from "./constants.js";
+import { DEFAULT_PUBKEY, MAX_COMPUTE_UNITS, MAX_TRANSACTION_BYTES } from "./constants.js";
 import type { SolanaRpc } from "./rpc.js";
 
 /** The vault and every reserve it allocates to, read at (about) one slot. */
@@ -100,15 +104,30 @@ function splAmount(data: Uint8Array): bigint {
 /* ─────────────────────────── building ─────────────────────────── */
 
 /**
- * Compute-unit limits. Measured by simulation on mainnet, 2026-10-11, with two reserves: a deposit used
- * about 115,000 units and a one-reserve withdrawal about 137,000. A withdrawal that disinvests from a
- * reserve does more work; the limits leave room for that and cost nothing unless a priority fee is set.
+ * Compute-unit limits. Measured by simulation on mainnet, 2026-10-11, with two funded reserves: a deposit
+ * used about 115,000 units; a withdrawal about 144,000 paid from idle, 186,000 when it disinvests from one
+ * reserve, and 346,000 for a two-leg exit. The limits (400,000 per leg) leave room and cost nothing unless a
+ * priority fee is set.
  */
 export const DEPOSIT_COMPUTE_UNITS = 400_000;
 export const WITHDRAW_COMPUTE_UNITS_PER_RESERVE = 400_000;
 
+/**
+ * Refuses while the vault requires a co-signer. Kamino's program lets a "permissioning authority" be set on a
+ * vault, after which it must co-sign every deposit AND every withdrawal; this client builds single-signer
+ * transactions only, so it cannot move money in or out while one is set. Unset today; checked on every build.
+ */
+export function assertNoCoSigner(v: VaultRead): void {
+  if (v.state.permissioningAuthority !== DEFAULT_PUBKEY) {
+    throw new Error(
+      `refused: ${v.entry.symbol} now requires a co-signer (permissioning authority ${v.state.permissioningAuthority}) for every deposit and withdrawal, and this client builds single-signer transactions only. Nothing was prepared.`,
+    );
+  }
+}
+
 /** The deposit: create the user's share account if it is missing, then deposit `amount` base units. */
 export async function depositInstructions(v: VaultRead, user: string, amount: bigint): Promise<Instruction[]> {
+  assertNoCoSigner(v);
   return [
     setComputeUnitLimitIx(DEPOSIT_COMPUTE_UNITS),
     await createAtaIdempotentIx(user, v.state.sharesMint),
@@ -133,8 +152,14 @@ function reserveAccounts(v: VaultRead, reserve: string): ReserveAccounts {
  * first and then from its named reserve, so the shares are split across reserves in order of what each can
  * release now (the vault's position in it, capped by the reserve's own available liquidity). A vault with no
  * reserves cannot be withdrawn from by this program's instruction, and is refused.
+ *
+ * ⚠️ The program CAPS a leg that asks for more than it can pay rather than reverting it (measured: a leg
+ * oversized by 500,000 shares succeeded, paid the leg's maximum and left the excess shares with the user).
+ * So if a reserve's state moves between the quote and the send, the transaction can land paying less than
+ * quoted, with no error; `verifySolanaLanded` reports that as a partial withdrawal.
  */
 export async function withdrawInstructions(v: VaultRead, user: string, shares: bigint): Promise<Instruction[]> {
+  assertNoCoSigner(v);
   if (v.state.allocations.length === 0) throw new Error(`${v.entry.symbol} has no reserve, and a withdrawal names one`);
   if (shares <= 0n) throw new Error("a withdrawal of 0 shares");
   const userTokenAta = await associatedTokenAccount(user, v.state.tokenMint);

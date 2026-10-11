@@ -146,7 +146,7 @@ export function summarizeSolana(action: "deposit" | "withdraw", v: SolanaVaultEn
     prompts:
       action === "deposit"
         ? "Your wallet will ask you once, to make the deposit. A first deposit also opens your share account, which takes about 0.002 SOL of rent."
-        : "Your wallet will ask you once, to make the withdrawal. The vault keeps 0.001 USDC of every withdrawal.",
+        : "Your wallet will ask you once, to make the withdrawal. Kamino keeps up to 0.001 USDC of each withdraw instruction in the vault, a charge it sets and can change.",
     disclosures:
       action === "deposit"
         ? [...DISCLOSURES.plain.deposit, ...(v.depositOpen.open ? [] : [DISCLOSURES.plain.gatedDeposit]), ...DISCLOSURES.plain.always]

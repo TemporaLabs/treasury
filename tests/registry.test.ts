@@ -26,7 +26,7 @@ describe("the shipped registry", () => {
     expect(reg.vaults.length).toBeGreaterThan(0);
   });
 
-  it("offers THREE Tempora Labs vaults on Base and ONE each on Arbitrum One, Robinhood Chain, Ethereum and Monad; with nothing named, the default is Cash Plus USDC (Test 2B) on Base — open to any account", () => {
+  it("offers THREE Tempora Labs EVM vaults on Base and ONE each on Arbitrum One, Robinhood Chain, Ethereum and Monad (Solana's is in its own list); with nothing named, the default is Cash Plus USDC (Test 2B) on Base — open to any account", () => {
     const d = defaultVault();
     expect(listVaults().map((v) => `${v.symbol}@${v.chainId}`)).toEqual(["tlCashPlusUSDC2@8453", "tlCashPlusUSDC2A@8453", "tlCashPlusUSDC2B@8453", "tlCashPlusUSDC2C@42161", "tlCashPlusUSDG2D@4663", "tlCashPlusUSDC2E@1", "tlCashPlusUSDC2F@143"]);
     expect(d.symbol).toBe("tlCashPlusUSDC2B");
@@ -308,7 +308,7 @@ describe("the registry schema refuses the mistakes a hand-edit would make", () =
     const arb = r.vaults.filter((v) => v.chainId === 42161);
     expect(arb.length, "premise: the fixture registry carries a vault on a second chain").toBeGreaterThan(0);
     for (const v of arb) v.isDefault = false;
-    expect(r.vaults.filter((v) => v.isDefault)).toHaveLength(4); // Base, Robinhood Chain, Ethereum and Monad still have theirs
+    expect(r.vaults.filter((v) => v.isDefault)).toHaveLength(4); // Base, Robinhood Chain, Ethereum and Monad still have theirs (Solana's default is in its own list, unaffected)
     expect(() => registrySchema.parse(r)).toThrow(/exactly one vault per chain must be isDefault; chain 42161 has 0/);
   });
 

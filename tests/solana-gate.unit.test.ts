@@ -57,6 +57,14 @@ describe("the Solana gate admits what the confirm flow builds", () => {
   });
 });
 
+describe("a vault that requires a co-signer", () => {
+  it("is refused at build time, for a deposit and for a withdrawal: this client builds single-signer transactions", async () => {
+    const cosigned: VaultRead = { ...read, state: { ...read.state, permissioningAuthority: key(90) } };
+    await expect(depositInstructions(cosigned, ACCOUNT, 1_000_000n)).rejects.toThrow(/requires a co-signer/);
+    await expect(withdrawInstructions(cosigned, ACCOUNT, 1_000_000n)).rejects.toThrow(/requires a co-signer/);
+  });
+});
+
 describe("the Solana gate refuses", () => {
   const deposit = () => depositInstructions(read, ACCOUNT, 1_000_000n);
   const refused = async (ixs: Instruction[], why: RegExp, payer?: string) => expect(admitSolana(wire(ixs, payer), ACCOUNT)).rejects.toThrow(why);
@@ -101,6 +109,21 @@ describe("the Solana gate refuses", () => {
     const [cu, ata, dep] = await deposit();
     const forged = { ...dep!, accounts: dep!.accounts!.map((m, i) => (i === 6 ? { ...m, address: address(key(78)) } : m)) };
     await refused([cu!, ata!, forged], /not the connected account's own/);
+  });
+
+  it("a token vault or vault authority that is not the vault's own PDA", async () => {
+    const [cu, ata, dep] = await deposit();
+    for (const i of [2, 4]) {
+      const forged = { ...dep!, accounts: dep!.accounts!.map((m, j) => (j === i ? { ...m, address: address(key(79)) } : m)) };
+      await refused([cu!, ata!, forged], /token vault or vault authority/);
+    }
+  });
+
+  it("a withdrawal whose second vault state is not the vault", async () => {
+    const w = await withdrawInstructions(read, ACCOUNT, 1_000_000n);
+    const leg = w[2]!;
+    const forged = { ...leg, accounts: leg.accounts!.map((m, j) => (j === 14 ? { ...m, address: address(key(80)) } : m)) };
+    await refused([w[0]!, w[1]!, forged], /second vault state/);
   });
 
   it("a deposit and a withdrawal together, and two deposits", async () => {

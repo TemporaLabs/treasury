@@ -104,6 +104,6 @@ describe("the acknowledgement for a Solana intent", () => {
     expect(text).toMatch(/Your wallet will ask you once/);
     expect(text).toMatch(new RegExp(`Shares go to: ${ACCOUNT}`));
     expect(text).toMatch(/WARNING: TEST VAULT/);
-    expect(acknowledgementText(summarizeSolana("withdraw", vault, "1 tlCashPlusUSDC2G shares", ACCOUNT))).toMatch(/keeps 0\.001 USDC of every withdrawal/);
+    expect(acknowledgementText(summarizeSolana("withdraw", vault, "1 tlCashPlusUSDC2G shares", ACCOUNT))).toMatch(/keeps up to 0\.001 USDC of each withdraw instruction/);
   });
 });

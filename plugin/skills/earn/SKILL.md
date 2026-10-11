@@ -147,7 +147,9 @@ with these differences — say them to the operator where they apply:
   builds it when the operator presses Confirm, so this does not arise there.
 - **The account needs SOL**, for the fee and, on a first deposit, about 0.002 SOL of rent for its share
   account. `earn status --chain solana --account …` says `NEEDS_FUNDS` when it lacks USDC or SOL.
-- **Every withdrawal keeps 0.001 USDC in the vault.** Quotes report `receives`, net of it; say so before a
+- **Each withdraw instruction keeps up to 0.001 USDC in the vault** — Kamino's charge for every vault on its
+  program, which Kamino can change; a withdrawal split across reserves pays it per part — and one worth 0.001
+  USDC or less is refused. Quotes report `receives`, exact and net of it; say so before a
   small withdrawal.
 - **No history on Solana:** `earn_balance` reports shares, value and what a full exit would pay now, but
   `entryBasisUsdc` and `accruedYieldUsdc` read `unknown`. Do not present the value as profit.
@@ -399,7 +401,7 @@ destination check, done on something they can actually read.
 **Use the explorer of the call's chain** — BaseScan for chainId 8453, Arbiscan for 42161, Robinhood Chain's Blockscout for 4663, Etherscan for 1, MonadScan for 143. The same
 address on the other chain's explorer is a different contract, or nothing.
 
-One gotcha specific to the approve call: **the asset is a proxy on every listed chain** — USDC as
+One gotcha specific to the approve call on the EVM chains (Solana has no approve step): **the asset is a proxy on every EVM chain listed** — USDC as
 `FiatTokenProxy` on Base, Arbitrum One, Ethereum and Monad, USDG as an EIP-1967 proxy on Robinhood Chain — so `approve`
 does not appear under the plain "Write Contract" tab; it appears only under the explorer's proxy tab
 (**"Write as Proxy"** on BaseScan, Arbiscan, Etherscan and MonadScan, the proxy write tab on Blockscout), which resolves

@@ -18,7 +18,7 @@
     "access": "public",
     "provenance": true
   },
-  "description": "Agent Treasury by Tempora Labs — a depositor client for ERC-4626 vaults: registry, pre-flight, and unsigned deposit/withdraw builders. Never signs, never holds a key.",
+  "description": "Agent Treasury by Tempora Labs — a depositor client for ERC-4626 vaults and a Kamino vault on Solana: registry, pre-flight, and unsigned deposit/withdraw builders. Never signs, never holds a key.",
   "type": "module",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",

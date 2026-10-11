@@ -75,7 +75,7 @@ And, once per response:
 - `default` — the vault used in that case: the default chain's default;
 - `defaultAccess` — `"open"` if the default takes deposits from any account, `"whitelist"` if only
   admitted ones;
-- `depositable` — those any account can put money into today, across all chains: ERC-4626 chassis and measured open.
+- `depositable` — those any account can put money into today, across all chains: an ERC-4626 chassis (or the Kamino vault on Solana) and measured open.
   **May be empty.** An empty set is a state of the offering, not a fault.
 
 ## `earn_terms` — READ

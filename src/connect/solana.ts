@@ -139,7 +139,10 @@ export async function verifySolanaLanded(rpc: SolanaRpc, signature: string, inte
         }
         return { verified: "matched", detail: `received ${formatAmount(shares, intent.vault.shareDecimals)} ${intent.vault.symbol}` };
       }
-      if (-shares !== intent.raw) return { verified: "mismatch", detail: `the transaction landed but burned ${formatAmount(-shares, intent.vault.shareDecimals)} shares, not the ${formatAmount(intent.raw, intent.vault.shareDecimals)} acknowledged` };
+      if (-shares !== intent.raw) {
+        // The program pays what a leg can and leaves the rest of the shares with the account, without an error.
+        return { verified: "mismatch", detail: `a PARTIAL withdrawal: it burned ${formatAmount(-shares, intent.vault.shareDecimals)} of the ${formatAmount(intent.raw, intent.vault.shareDecimals)} shares acknowledged and paid ${formatAmount(asset > 0n ? asset : 0n, intent.vault.asset.decimals)} ${intent.vault.asset.symbol}; the rest of the shares are still in the account. Check \`earn balance --chain solana\` before withdrawing again.` };
+      }
       if (asset <= 0n) return { verified: "mismatch", detail: `the shares burned but the account's ${a.symbol} did not rise` };
       return { verified: "matched", detail: `received ${formatAmount(asset, a.decimals)} ${a.symbol}` };
     }

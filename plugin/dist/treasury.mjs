@@ -44069,6 +44069,14 @@ async function pda(program, seeds) {
   });
   return found;
 }
+async function vaultPdas(vaultState) {
+  const [tokenVault, baseVaultAuthority, sharesMint] = await Promise.all([
+    pda(KVAULT_PROGRAM_ID, [{ text: SEEDS.tokenVault }, vaultState]),
+    pda(KVAULT_PROGRAM_ID, [{ text: SEEDS.baseVaultAuthority }, vaultState]),
+    pda(KVAULT_PROGRAM_ID, [{ text: SEEDS.shares }, vaultState])
+  ]);
+  return { tokenVault, baseVaultAuthority, sharesMint };
+}
 var ctokenVaultPda = (vaultState, reserve) => pda(KVAULT_PROGRAM_ID, [{ text: SEEDS.ctokenVault }, vaultState, reserve]);
 var kvaultGlobalConfigPda = () => pda(KVAULT_PROGRAM_ID, [{ text: SEEDS.globalConfig }]);
 var kvaultEventAuthorityPda = () => pda(KVAULT_PROGRAM_ID, [{ text: SEEDS.eventAuthority }]);
@@ -44431,7 +44439,15 @@ function splAmount(data) {
 }
 var DEPOSIT_COMPUTE_UNITS = 4e5;
 var WITHDRAW_COMPUTE_UNITS_PER_RESERVE = 4e5;
+function assertNoCoSigner(v) {
+  if (v.state.permissioningAuthority !== DEFAULT_PUBKEY) {
+    throw new Error(
+      `refused: ${v.entry.symbol} now requires a co-signer (permissioning authority ${v.state.permissioningAuthority}) for every deposit and withdrawal, and this client builds single-signer transactions only. Nothing was prepared.`
+    );
+  }
+}
 async function depositInstructions(v, user, amount) {
+  assertNoCoSigner(v);
   return [
     setComputeUnitLimitIx(DEPOSIT_COMPUTE_UNITS),
     await createAtaIdempotentIx(user, v.state.sharesMint),
@@ -44449,6 +44465,7 @@ function reserveAccounts(v, reserve) {
   return { reserve, lendingMarket: r.lendingMarket, liquiditySupplyVault: r.liquiditySupplyVault, collateralMint: r.collateralMint };
 }
 async function withdrawInstructions(v, user, shares) {
+  assertNoCoSigner(v);
   if (v.state.allocations.length === 0) throw new Error(`${v.entry.symbol} has no reserve, and a withdrawal names one`);
   if (shares <= 0n) throw new Error("a withdrawal of 0 shares");
   const userTokenAta = await associatedTokenAccount(user, v.state.tokenMint);
@@ -44685,7 +44702,7 @@ async function solanaQuoteWithdraw(vault, account, amountHuman) {
       canWithdraw: true,
       receives: `${formatAmount(received, vault.asset.decimals)} ${vault.asset.symbol}`,
       measuredAtSlot: Number(sim.slot),
-      note: "simulated withdrawal succeeds at this slot. `receives` is what the account's USDC balance would rise by \u2014 net of the 0.001 USDC this vault keeps on every withdrawal."
+      note: "simulated withdrawal succeeds at this slot. `receives` is what the account's USDC balance would rise by \u2014 net of the 0.001 USDC Kamino keeps on every withdrawal."
     };
   });
 }
@@ -44702,7 +44719,7 @@ async function solanaBalance(vault, account) {
     } else {
       try {
         const { sim, received } = await simulateWithdraw(rpc, v, owner, held.amount);
-        exit = received === void 0 ? { exitableNow: "unknown", measuredAs: "refused", note: `a full withdrawal was refused at this slot: ${describeSimulation(sim)}` } : { exitableNow: `${formatAmount(received, vault.asset.decimals)} ${vault.asset.symbol}`, measuredAs: "a simulated full withdrawal", note: "net of the 0.001 USDC this vault keeps on every withdrawal" };
+        exit = received === void 0 ? { exitableNow: "unknown", measuredAs: "refused", note: `a full withdrawal was refused at this slot: ${describeSimulation(sim)}` } : { exitableNow: `${formatAmount(received, vault.asset.decimals)} ${vault.asset.symbol}`, measuredAs: "a simulated full withdrawal", note: "net of the 0.001 USDC Kamino keeps on every withdrawal" };
       } catch (e4) {
         exit = { exitableNow: "unknown", measuredAs: "not measured", note: describeError(e4) };
       }
@@ -44795,7 +44812,7 @@ async function solanaPrepareWithdraw(vault, account, receiver, args) {
     const { sim, received } = await simulateWithdraw(rpc, v, user, shares);
     if (received === void 0) throw new Error(`not prepared: the simulated withdrawal fails at slot ${sim.slot}: ${describeSimulation(sim)}`);
     const got = `${formatAmount(received, vault.asset.decimals)} ${vault.asset.symbol}`;
-    return envelope(rpc, v, user, "withdraw", `burn ${formatAmount(shares, vault.shareDecimals)} ${vault.symbol}; the simulation at slot ${sim.slot} paid ${got} (net of the 0.001 USDC this vault keeps on every withdrawal)`, ixs, got);
+    return envelope(rpc, v, user, "withdraw", `burn ${formatAmount(shares, vault.shareDecimals)} ${vault.symbol}; the simulation at slot ${sim.slot} paid ${got} (net of the 0.001 USDC Kamino keeps on every withdrawal)`, ixs, got);
   });
 }
 
@@ -45689,7 +45706,7 @@ function buildCommands() {
     "earn_vaults",
     {
       title: "List vaults",
-      description: "Every vault in the registry, on every chain. `symbol` is the vault's own on-chain ERC-20 ticker \u2014 the value every other tool takes as `vault` \u2014 and `name` its `name()`; `chain` is the chain it is on, the value every other tool takes as `chain`; `links` are openable without any RPC endpoint, so an operator can verify the contract independently. SHOW `warning` TO THE DEPOSITOR \u2014 every vault offered today is a test vault. Each row also carries its backend, chassis, decimals and MEASURED deposit-open status. `chains` lists the chains a deposit can go to, the default chain first, each with its own default vault: if the operator has not said which chain, show them these and ASK before preparing a deposit. `default` is used when a tool is called with neither `vault` nor `chain`, and is on `defaultChain`; `depositable` is the subset any account can put money into today, across all chains: ERC-4626 chassis + measured open. `defaultAccess` says whether a default takes deposits from any account (`open`) or only whitelisted ones (`whitelist`); for `whitelist`, run `earn status` for the account before preparing a deposit.",
+      description: "Every vault in the registry, on every chain. `symbol` is the vault's own on-chain ERC-20 ticker \u2014 the value every other tool takes as `vault` \u2014 and `name` its `name()`; `chain` is the chain it is on, the value every other tool takes as `chain`; `links` are openable without any RPC endpoint, so an operator can verify the contract independently. SHOW `warning` TO THE DEPOSITOR \u2014 every vault offered today is a test vault. Each row also carries its backend, chassis, decimals and MEASURED deposit-open status. `chains` lists the chains a deposit can go to, the default chain first, each with its own default vault: if the operator has not said which chain, show them these and ASK before preparing a deposit. `default` is used when a tool is called with neither `vault` nor `chain`, and is on `defaultChain`; `depositable` is the subset any account can put money into today, across all chains: an ERC-4626 chassis (or the Kamino vault on Solana) + measured open. `defaultAccess` says whether a default takes deposits from any account (`open`) or only whitelisted ones (`whitelist`); for `whitelist`, run `earn status` for the account before preparing a deposit.",
       inputSchema: {}
     },
     guarded(async () => {
@@ -46043,7 +46060,11 @@ async function admitSolana(wireBase64, account) {
         if (!v) refuse(`${at} names ${state}, which is not a vault in the registry`);
         if (vault && vault.address !== v.address) refuse("two different vaults in one transaction");
         vault = v;
-        const [tokenAta, sharesAta] = await Promise.all([associatedTokenAccount(account, v.asset.address), associatedTokenAccount(account, v.sharesMint)]);
+        const [tokenAta, sharesAta, pdas] = await Promise.all([associatedTokenAccount(account, v.asset.address), associatedTokenAccount(account, v.sharesMint), vaultPdas(v.address)]);
+        const tokenVault = accts[isDeposit2 ? 2 : 3]?.address;
+        const authority = accts[4]?.address;
+        if (tokenVault !== pdas.tokenVault || authority !== pdas.baseVaultAuthority) refuse(`${at} names a token vault or vault authority that is not ${v.symbol}'s`);
+        if (isWithdraw && accts[14]?.address !== state) refuse(`${at} names a second vault state ${accts[14]?.address}, not ${state}`);
         const userToken = accts[isDeposit2 ? 6 : 5]?.address;
         const userShares = accts[isDeposit2 ? 7 : 7]?.address;
         const mint = accts[isDeposit2 ? 3 : 6]?.address;
@@ -46303,7 +46324,9 @@ async function verifySolanaLanded(rpc, signature, intent, account, opts) {
         }
         return { verified: "matched", detail: `received ${formatAmount(shares, intent.vault.shareDecimals)} ${intent.vault.symbol}` };
       }
-      if (-shares !== intent.raw) return { verified: "mismatch", detail: `the transaction landed but burned ${formatAmount(-shares, intent.vault.shareDecimals)} shares, not the ${formatAmount(intent.raw, intent.vault.shareDecimals)} acknowledged` };
+      if (-shares !== intent.raw) {
+        return { verified: "mismatch", detail: `a PARTIAL withdrawal: it burned ${formatAmount(-shares, intent.vault.shareDecimals)} of the ${formatAmount(intent.raw, intent.vault.shareDecimals)} shares acknowledged and paid ${formatAmount(asset > 0n ? asset : 0n, intent.vault.asset.decimals)} ${intent.vault.asset.symbol}; the rest of the shares are still in the account. Check \`earn balance --chain solana\` before withdrawing again.` };
+      }
       if (asset <= 0n) return { verified: "mismatch", detail: `the shares burned but the account's ${a.symbol} did not rise` };
       return { verified: "matched", detail: `received ${formatAmount(asset, a.decimals)} ${a.symbol}` };
     }
@@ -46471,7 +46494,7 @@ function summarizeSolana(action, v, amountText, account) {
     vault: { symbol: v.symbol, name: v.name, address: v.address, explorer: `https://solscan.io/account/${v.address}` },
     receiver: account,
     warning: operatorWarning(v.warning, action),
-    prompts: action === "deposit" ? "Your wallet will ask you once, to make the deposit. A first deposit also opens your share account, which takes about 0.002 SOL of rent." : "Your wallet will ask you once, to make the withdrawal. The vault keeps 0.001 USDC of every withdrawal.",
+    prompts: action === "deposit" ? "Your wallet will ask you once, to make the deposit. A first deposit also opens your share account, which takes about 0.002 SOL of rent." : "Your wallet will ask you once, to make the withdrawal. Kamino keeps up to 0.001 USDC of each withdraw instruction in the vault, a charge it sets and can change.",
     disclosures: action === "deposit" ? [...DISCLOSURES.plain.deposit, ...v.depositOpen.open ? [] : [DISCLOSURES.plain.gatedDeposit], ...DISCLOSURES.plain.always] : [...DISCLOSURES.plain.always]
   };
 }

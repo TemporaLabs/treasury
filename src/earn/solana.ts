@@ -174,7 +174,7 @@ export async function solanaQuoteWithdraw(vault: SolanaVaultEntry, account: stri
       canWithdraw: true,
       receives: `${formatAmount(received, vault.asset.decimals)} ${vault.asset.symbol}`,
       measuredAtSlot: Number(sim.slot),
-      note: "simulated withdrawal succeeds at this slot. `receives` is what the account's USDC balance would rise by — net of the 0.001 USDC this vault keeps on every withdrawal.",
+      note: "simulated withdrawal succeeds at this slot. `receives` is what the account's USDC balance would rise by — net of the 0.001 USDC Kamino keeps on every withdrawal.",
     };
   });
 }
@@ -196,7 +196,7 @@ export async function solanaBalance(vault: SolanaVaultEntry, account: string) {
         exit =
           received === undefined
             ? { exitableNow: "unknown", measuredAs: "refused", note: `a full withdrawal was refused at this slot: ${describeSimulation(sim)}` }
-            : { exitableNow: `${formatAmount(received, vault.asset.decimals)} ${vault.asset.symbol}`, measuredAs: "a simulated full withdrawal", note: "net of the 0.001 USDC this vault keeps on every withdrawal" };
+            : { exitableNow: `${formatAmount(received, vault.asset.decimals)} ${vault.asset.symbol}`, measuredAs: "a simulated full withdrawal", note: "net of the 0.001 USDC Kamino keeps on every withdrawal" };
       } catch (e) {
         exit = { exitableNow: "unknown", measuredAs: "not measured", note: describeError(e) };
       }
@@ -305,6 +305,6 @@ export async function solanaPrepareWithdraw(vault: SolanaVaultEntry, account: st
     const { sim, received } = await simulateWithdraw(rpc, v, user, shares);
     if (received === undefined) throw new Error(`not prepared: the simulated withdrawal fails at slot ${sim.slot}: ${describeSimulation(sim)}`);
     const got = `${formatAmount(received, vault.asset.decimals)} ${vault.asset.symbol}`;
-    return envelope(rpc, v, user, "withdraw", `burn ${formatAmount(shares, vault.shareDecimals)} ${vault.symbol}; the simulation at slot ${sim.slot} paid ${got} (net of the 0.001 USDC this vault keeps on every withdrawal)`, ixs, got);
+    return envelope(rpc, v, user, "withdraw", `burn ${formatAmount(shares, vault.shareDecimals)} ${vault.symbol}; the simulation at slot ${sim.slot} paid ${got} (net of the 0.001 USDC Kamino keeps on every withdrawal)`, ixs, got);
   });
 }

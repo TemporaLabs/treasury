@@ -11,6 +11,12 @@
  *                                               paying from and into the account's own token accounts
  *   Kamino vault `withdraw`                     one or more, the same checks
  *
+ * Within a deposit or withdrawal, every account the registry determines is pinned: the vault state (both
+ * places a withdrawal names it), the vault's token vault and authority (PDAs of the vault), its token and
+ * share mints, and the connected account's own token and share accounts. The reserve, market and program
+ * accounts a withdrawal lists are NOT pinned here: they are left to the vault program's own account
+ * constraints, which refuse a reserve the vault does not allocate to.
+ *
  * The fee payer and the only signer must be the connected account. Anything else — another program, a
  * transfer, a second signer, a deposit and a withdrawal together, a vault not in the registry — is refused
  * before any page opens. It checks the bytes, not the builder that made them: a builder bug, or a transaction
@@ -27,7 +33,7 @@ import {
 import { listSolanaVaults } from "../registry.js";
 import type { SolanaVaultEntry } from "../registry-schema.js";
 import { ASSOCIATED_TOKEN_PROGRAM_ID, COMPUTE_BUDGET_PROGRAM_ID, KVAULT_PROGRAM_ID, SPL_TOKEN_PROGRAM_ID, SYSTEM_PROGRAM_ID } from "../solana/constants.js";
-import { associatedTokenAccount, DISCRIMINATORS } from "../solana/kvault.js";
+import { associatedTokenAccount, DISCRIMINATORS, vaultPdas } from "../solana/kvault.js";
 
 export interface AdmittedSolana {
   kind: "deposit" | "withdraw";
@@ -100,7 +106,13 @@ export async function admitSolana(wireBase64: string, account: string): Promise<
         if (!v) refuse(`${at} names ${state}, which is not a vault in the registry`);
         if (vault && vault.address !== v!.address) refuse("two different vaults in one transaction");
         vault = v!;
-        const [tokenAta, sharesAta] = await Promise.all([associatedTokenAccount(account, v!.asset.address), associatedTokenAccount(account, v!.sharesMint)]);
+        const [tokenAta, sharesAta, pdas] = await Promise.all([associatedTokenAccount(account, v!.asset.address), associatedTokenAccount(account, v!.sharesMint), vaultPdas(v!.address)]);
+        // The vault's own token vault and authority are PDAs of the vault: pinned, not left to the program.
+        const tokenVault = accts[isDeposit ? 2 : 3]?.address;
+        const authority = accts[4]?.address;
+        if (tokenVault !== pdas.tokenVault || authority !== pdas.baseVaultAuthority) refuse(`${at} names a token vault or vault authority that is not ${v!.symbol}'s`);
+        // A withdrawal names the vault state twice (its reserve-accounts group repeats it): both must be the vault.
+        if (isWithdraw && accts[14]?.address !== state) refuse(`${at} names a second vault state ${accts[14]?.address}, not ${state}`);
         // The fixed account positions, as `src/solana/kvault.ts` builds them and Kamino's SDK does.
         const userToken = accts[isDeposit ? 6 : 5]?.address;
         const userShares = accts[isDeposit ? 7 : 7]?.address;
