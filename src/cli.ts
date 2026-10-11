@@ -28,6 +28,7 @@ import { buildConnectCommands } from "./connect/commands.js";
 import { resolvedRpcSecrets } from "./client.js";
 import { redactEndpoints, registerSecretSource } from "./redact.js";
 import { PACKAGE_VERSION } from "./version.js";
+import { guidePointer } from "./guide.js";
 
 /**
  * The skills this CLI carries: a word on the command line, and the commands it opens. A command's name
@@ -140,7 +141,7 @@ export async function run(argv: string[]): Promise<{ stdout?: string; stderr?: s
   const [first, second, ...rest] = argv;
   if (first === "--version" || first === "-v") return { stdout: PACKAGE_VERSION, code: 0 };
   if (first === undefined || first === "--help" || first === "-h") {
-    return { stdout: JSON.stringify({ usage: "treasury <skill> <command> [--flag value …]", version: PACKAGE_VERSION, skills: Object.keys(SKILLS) }, null, 2), code: 0 };
+    return { stdout: JSON.stringify({ usage: "treasury <skill> <command> [--flag value …]", version: PACKAGE_VERSION, skills: Object.keys(SKILLS), guide: guidePointer() }, null, 2), code: 0 };
   }
   const build = Object.hasOwn(SKILLS, first) ? SKILLS[first] : undefined;
   if (!build) return fail(`unknown skill ${JSON.stringify(first)}; this CLI carries: ${Object.keys(SKILLS).join(", ")}`);
@@ -154,7 +155,7 @@ export async function run(argv: string[]): Promise<{ stdout?: string; stderr?: s
   }
   const mine = Object.entries(commands).filter(([name]) => name.startsWith(`${skill}_`));
   if (second === undefined || second === "--help" || second === "-h") {
-    return { stdout: JSON.stringify({ usage: `treasury ${skill} <command> [--flag value …]`, version: PACKAGE_VERSION, commands: mine.map(([n, c]) => describe(skill, n, c)) }, null, 2), code: 0 };
+    return { stdout: JSON.stringify({ usage: `treasury ${skill} <command> [--flag value …]`, version: PACKAGE_VERSION, guide: guidePointer(), commands: mine.map(([n, c]) => describe(skill, n, c)) }, null, 2), code: 0 };
   }
   const name = `${skill}_${second.replaceAll("-", "_")}`;
   // Own keys only: `commands` is a plain object, so `earn constructor` must not reach anything inherited.

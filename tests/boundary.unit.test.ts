@@ -159,6 +159,7 @@ const BUILTINS_ALLOWED_PER_FILE: Record<string, string[]> = {
   "tests/fork-solana.test.ts": ["child_process", "os"], //  spawns surfpool in a temporary directory; the key is generated per run
   "tests/registry-check.chain.test.ts": ["child_process"], // runs scripts/registry-check.ts against a mock chain
   "tests/entrypoint.unit.test.ts": ["child_process", "os"], // runs the committed bundle by symlink and by import; tmpdir for the symlink
+  "tests/guide.unit.test.ts": ["child_process", "os"], //     runs the committed bundle in place and alone in a temporary folder
   "tests/embedded.unit.test.ts": ["child_process", "os"], //   runs the committed bundle and a consumer's re-bundle of it from a temporary folder
   "tests/licence.unit.test.ts": ["crypto"], //             pins the sha256 of the canonical Apache-2.0 text
   "tests/solana-kvault.unit.test.ts": ["crypto"], //       derives Anchor's instruction discriminators (sha256)
@@ -171,6 +172,7 @@ const MAY_SPAWN: Record<string, string[]> = {
   "tests/fork-solana.test.ts": ["surfpool"],
   "tests/registry-check.chain.test.ts": ["npx"],
   "tests/entrypoint.unit.test.ts": ["node"],
+  "tests/guide.unit.test.ts": ["node"],
   "tests/embedded.unit.test.ts": ["node"],
 };
 

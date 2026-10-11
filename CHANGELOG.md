@@ -55,6 +55,14 @@ Pre-1.0, minor versions may change tool names, schemas and behaviour.
 - Importing the library unbundled on Node 22.0 to 22.11 prints Node's `ExperimentalWarning` for JSON modules;
   it works, and Node 22.12 and later print nothing. The CLI is unaffected.
 
+### Added — a guide for agents without the plugin
+- **`llms.txt`**, in the npm package and at `https://raw.githubusercontent.com/TemporaLabs/treasury/main/llms.txt`: the Earn skill's
+  rules and every command with its flags, for an agent that runs `treasury` without the plugin. It is generated from the skill and
+  the command descriptions, and CI fails when the committed file differs from what they produce.
+- **`treasury --help` and `treasury <skill> --help` carry a `guide` field** that tells the agent to read it first, with the
+  file's path when it sits beside the CLI and the URL. Measured on 0.1.2: with no pointer in `--help` an agent read the guide
+  0 times in 9; with one, 9 times in 9, and showed all of the first-deposit terms instead of about a third.
+
 ### Fixed
 - `earn balance` reads the Ethereum public endpoint's range refusal ("query exceeds max block range
   100000") as a 100,000-block window and walks the history in chunks, instead of failing the scan.

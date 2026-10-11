@@ -70,6 +70,9 @@ npx --no-install treasury earn --help     # every command and flag, as JSON
 ```
 
 Each command prints one JSON document; a refusal exits 1 with `{ "error": … }` on stderr.
+`treasury --help` points to [`llms.txt`](llms.txt), the guide an agent without the plugin should read first: the rules the
+plugin's Earn skill carries (which questions to ask the operator, what to show before a first deposit) and every command with its flags.
+It is generated from that skill and the command descriptions, and CI fails when it drifts.
 For library usage, other hosts, and troubleshooting, see [installation](docs/install.md).
 
 ### Try it

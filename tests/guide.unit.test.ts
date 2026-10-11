@@ -1,0 +1,83 @@
+import { describe, it, expect, afterAll } from "vitest";
+import { spawnSync } from "node:child_process";
+import { copyFileSync, mkdirSync, mkdtempSync, readFileSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join, resolve } from "node:path";
+import { run } from "../src/cli.js";
+import { GUIDE_URL } from "../src/guide.js";
+import { EDITS, expectedGuide } from "../scripts/llms-txt.js";
+
+/**
+ * `llms.txt` is the guide an agent without the plugin is pointed to by `--help`. It is generated, so the
+ * tests pin the three ways it can go wrong: it drifts from its sources, `--help` stops naming it, or it says
+ * something the skill does not. (What the repository may not publish is checked by its own scan of every file,
+ * this one included.)
+ */
+
+const pkgRoot = resolve(__dirname, "..");
+const BUNDLE = join(pkgRoot, "dist/treasury.mjs");
+const GUIDE = readFileSync(join(pkgRoot, "llms.txt"), "utf8");
+const SKILL = readFileSync(join(pkgRoot, "plugin/skills/earn/SKILL.md"), "utf8");
+
+const roots: string[] = [];
+afterAll(() => {
+  for (const r of roots) rmSync(r, { recursive: true, force: true });
+});
+
+const bundle = (cwd: string, args: string[]) => spawnSync("node", args, { cwd, encoding: "utf8" });
+
+describe("llms.txt is what the skill and the commands produce", () => {
+  it("the committed file equals the generated one (run `npm run build` to refresh it)", async () => {
+    expect(GUIDE).toBe(await expectedGuide());
+  });
+
+  it("it carries the skill's rules and every command of both skills", async () => {
+    // The skill's body, with only the launch line rewritten: pick lines from three different sections.
+    for (const line of ["## Choosing the chain", "## Opening an account and depositing", "## What this skill will not do"]) expect(GUIDE).toContain(line);
+    for (const skill of ["earn", "connect"]) {
+      const help = JSON.parse((await run([skill, "--help"])).stdout!) as { commands: { command: string }[] };
+      expect(help.commands.length).toBeGreaterThan(4);
+      for (const c of help.commands) expect(GUIDE, `${c.command} is missing from the reference`).toContain(`## treasury ${c.command}`);
+    }
+  });
+
+  it("it adds no rule of its own: undoing the script's few rewrites gives back the skill's body exactly", () => {
+    let body = GUIDE.slice(GUIDE.indexOf("# The earn skill") + "# The earn skill".length, GUIDE.indexOf("# Command reference")).trim();
+    for (const [from, to] of EDITS) {
+      expect(body.split(to).length - 1, `the rewrite to ${JSON.stringify(to.slice(0, 40))} is not in the guide exactly once`).toBe(1);
+      body = body.replace(to, () => from);
+    }
+    const skillBody = SKILL.slice(SKILL.indexOf("\n---\n", 4) + 5).trim();
+    expect(body).toBe(skillBody);
+  });
+
+  it("it is for an agent without the plugin: no launch line that only the plugin can run", () => {
+    expect(GUIDE).not.toContain("CLAUDE_PLUGIN_ROOT");
+    expect(GUIDE).toContain("treasury earn <command> --flag value");
+  });
+});
+
+describe("--help names the guide", () => {
+  it("at the top level and on each skill's command list", async () => {
+    const top = JSON.parse((await run(["--help"])).stdout!) as { guide: { read_first: string; url: string } };
+    expect(top.guide.url).toBe(GUIDE_URL);
+    expect(top.guide.read_first).toMatch(/^Read the guide before you run any command/);
+    for (const skill of ["earn", "connect"]) {
+      const help = JSON.parse((await run([skill, "--help"])).stdout!) as { guide: { url: string } };
+      expect(help.guide.url, `${skill} --help`).toBe(GUIDE_URL);
+    }
+  });
+
+  it("the committed bundle names the file beside it when it exists, and only the URL when it does not", () => {
+    const inPlace = JSON.parse(bundle(pkgRoot, [BUNDLE, "--help"]).stdout) as { guide: { file?: string; url: string } };
+    expect(inPlace.guide.file).toBe(join(pkgRoot, "llms.txt"));
+    // Alone in a bare folder there is no llms.txt beside it: the pointer must not name a file that is not there.
+    const root = mkdtempSync(join(tmpdir(), "treasury-guide-"));
+    roots.push(root);
+    mkdirSync(join(root, "dist"));
+    copyFileSync(BUNDLE, join(root, "dist/treasury.mjs"));
+    const alone = JSON.parse(bundle(root, [join(root, "dist/treasury.mjs"), "earn", "--help"]).stdout) as { guide: { file?: string; url: string } };
+    expect(alone.guide.file).toBeUndefined();
+    expect(alone.guide.url).toBe(GUIDE_URL);
+  });
+});
