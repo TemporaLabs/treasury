@@ -43896,6 +43896,12 @@ var EARN = {
     usdcWhale: "0xBBBBBbbBBb9cC5e90e3b3Af64bdAF62C37EEFFCb",
     /** Aave V3's aArbUSDCn token on Arbitrum One — held ~1.7e13 native-USDC base units when probed 2026-10-02. Impersonated on the fork, never keyed. */
     usdcWhaleArbitrum: "0x724dc807b04555b71ed48a6896b6F41593b8C637",
+    /** Morpho Blue on Ethereum — held ~1.2e14 USDC base units when probed 2026-10-11. Impersonated on the fork, never keyed. */
+    usdcWhaleEthereum: "0xBBBBBbbBBb9cC5e90e3b3Af64bdAF62C37EEFFCb",
+    /** The largest USDC holder among recent transfers on Monad — ~1.3e13 base units when probed 2026-10-11. Impersonated on the fork, never keyed. */
+    usdcWhaleMonad: "0x188d586Ddcf52439676Ca21A244753fA19F9Ea8e",
+    /** The largest USDG holder among recent transfers on Robinhood Chain — ~1.0e14 base units when probed 2026-10-11. Impersonated on the fork, never keyed. */
+    usdgWhaleRobinhood: "0x94bAB9693Ba2f6358507eFfcbd372b0660AFfF9d",
     /** USDC the fork round trip deposits, and what it seeds a discovered depositor with beforehand. */
     forkDepositUsdc: "100",
     forkSeedUsdc: "1000"

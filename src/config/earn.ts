@@ -11,7 +11,8 @@
  *                         config/registry disagreement — and the schema allows a WHITELIST_GATED
  *                         default, because the pre-flight re-measures access live on every call and
  *                         refuses a non-member before anything is built.
- *   `roundTripVault`      what the deposit → redeem tiers exercise. The Base default today.
+ *   `roundTripVault`      what `scripts/roundtrip.ts` exercises by default. The Base default today. (The fork
+ *                         tier round-trips every depositable vault on each chain, from the registry.)
  *
  * Addresses live in the registry (`registry/vaults.json`, schema-validated, block-stamped) — a
  * ticker here resolves through it.
@@ -77,6 +78,12 @@ export const EARN = {
     usdcWhale: "0xBBBBBbbBBb9cC5e90e3b3Af64bdAF62C37EEFFCb" as const,
     /** Aave V3's aArbUSDCn token on Arbitrum One — held ~1.7e13 native-USDC base units when probed 2026-10-02. Impersonated on the fork, never keyed. */
     usdcWhaleArbitrum: "0x724dc807b04555b71ed48a6896b6F41593b8C637" as const,
+    /** Morpho Blue on Ethereum — held ~1.2e14 USDC base units when probed 2026-10-11. Impersonated on the fork, never keyed. */
+    usdcWhaleEthereum: "0xBBBBBbbBBb9cC5e90e3b3Af64bdAF62C37EEFFCb" as const,
+    /** The largest USDC holder among recent transfers on Monad — ~1.3e13 base units when probed 2026-10-11. Impersonated on the fork, never keyed. */
+    usdcWhaleMonad: "0x188d586Ddcf52439676Ca21A244753fA19F9Ea8e" as const,
+    /** The largest USDG holder among recent transfers on Robinhood Chain — ~1.0e14 base units when probed 2026-10-11. Impersonated on the fork, never keyed. */
+    usdgWhaleRobinhood: "0x94bAB9693Ba2f6358507eFfcbd372b0660AFfF9d" as const,
     /** USDC the fork round trip deposits, and what it seeds a discovered depositor with beforehand. */
     forkDepositUsdc: "100",
     forkSeedUsdc: "1000",
