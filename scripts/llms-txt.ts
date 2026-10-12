@@ -94,6 +94,11 @@ export async function expectedGuide(): Promise<string> {
   return `${out.join("\n")}\n`;
 }
 
+/** Whether the committed `llms.txt` text is the generated one, whatever line ends the checkout gave it. */
+export function isCurrent(committed: string, want: string): boolean {
+  return lf(committed) === want;
+}
+
 async function main(): Promise<void> {
   const want = await expectedGuide();
   if (process.argv.includes("--write")) {
@@ -101,13 +106,13 @@ async function main(): Promise<void> {
     console.log("✓ llms.txt written");
     return;
   }
-  let have = "";
+  let have: string | undefined;
   try {
-    have = lf(readFileSync(OUT, "utf8"));
+    have = readFileSync(OUT, "utf8");
   } catch {
     /* missing is stale */
   }
-  if (have !== want) {
+  if (have === undefined || !isCurrent(have, want)) {
     console.log("✗ llms.txt is stale: run npx tsx scripts/llms-txt.ts --write");
     process.exit(1);
   }

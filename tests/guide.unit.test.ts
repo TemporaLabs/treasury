@@ -5,7 +5,7 @@ import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { run } from "../src/cli.js";
 import { GUIDE_URL } from "../src/guide.js";
-import { EDITS, expectedGuide, skillBody as generatedSkillBody } from "../scripts/llms-txt.js";
+import { EDITS, expectedGuide, isCurrent, skillBody as generatedSkillBody } from "../scripts/llms-txt.js";
 
 /**
  * `llms.txt` is the guide an agent without the plugin is pointed to by `--help`. It is generated, so the
@@ -55,8 +55,15 @@ describe("llms.txt is what the skill and the commands produce", () => {
 
   it("the same skill checked out with \\r\\n line ends (Windows, core.autocrlf) gives the same guide text", () => {
     // Run on every OS: the CRLF copy is made here, so this does not depend on how the runner checked out.
-    expect(SKILL).not.toContain("\r");
-    expect(generatedSkillBody(SKILL.replace(/\n/g, "\r\n"))).toBe(generatedSkillBody(SKILL));
+    const crlf = SKILL.replace(/\n/g, "\r\n");
+    expect(crlf.startsWith("---\r\n")).toBe(true);
+    expect(generatedSkillBody(crlf)).toBe(generatedSkillBody(SKILL));
+  });
+
+  it("the check reads a \\r\\n checkout of llms.txt as current, and a changed one as stale", async () => {
+    const want = await expectedGuide();
+    expect(isCurrent(GUIDE.replace(/\n/g, "\r\n"), want)).toBe(true);
+    expect(isCurrent(`${GUIDE}x`, want)).toBe(false);
   });
 
   it("it is for an agent without the plugin: no launch line that only the plugin can run", () => {
