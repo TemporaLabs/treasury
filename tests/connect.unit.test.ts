@@ -1137,4 +1137,16 @@ describe("a Solana withdrawal by amount: the acknowledgement survives the vault'
     const first = JSON.parse(await withdraw({ amount_usdc: "25" })) as { ack: string };
     await expect(withdraw({ amount_usdc: "26", ack: first.ack })).rejects.toThrow(/acknowledged/);
   });
+
+  // Solana shares and USDC both have 6 decimals, so 25 shares and 25 USDC are the same raw number: only the
+  // action in the acknowledgement keeps a withdrawal of one from being confirmed as a withdrawal of the other.
+  it("refuses an --ack run for 25 USDC with an acknowledgement given for 25 shares", async () => {
+    const first = JSON.parse(await withdraw({ all: true, shares_exact: "25" })) as { ack: string };
+    await expect(withdraw({ amount_usdc: "25", ack: first.ack })).rejects.toThrow(/acknowledged/);
+  });
+
+  it("refuses an --ack run for 25 shares with an acknowledgement given for 25 USDC", async () => {
+    const first = JSON.parse(await withdraw({ amount_usdc: "25" })) as { ack: string };
+    await expect(withdraw({ all: true, shares_exact: "25", ack: first.ack })).rejects.toThrow(/acknowledged/);
+  });
 });
