@@ -44805,12 +44805,13 @@ async function simulateWithdrawal(rpc, v, user, ixs) {
   const sharesAta = await associatedTokenAccount(user, v.state.sharesMint);
   const [token, held] = await Promise.all([tokenBalance(rpc, tokenAta), tokenBalance(rpc, sharesAta)]);
   const sim = await simulate(rpc, ixs, user, [tokenAta, sharesAta]);
+  const legs = ixs.filter((ix) => ix.programAddress === KVAULT_PROGRAM_ID && ix.data !== void 0 && DISCRIMINATORS.withdraw.every((x, i) => ix.data[i] === x)).length;
   const tokenAfter = sim.after.get(tokenAta);
-  if (!sim.ok || tokenAfter === null || tokenAfter === void 0) return { sim };
-  return { sim, received: tokenAfter - token.amount, burned: held.amount - (sim.after.get(sharesAta) ?? 0n) };
+  if (!sim.ok || tokenAfter === null || tokenAfter === void 0) return { sim, legs };
+  return { sim, received: tokenAfter - token.amount, burned: held.amount - (sim.after.get(sharesAta) ?? 0n), legs };
 }
-function partialWithdrawal(asked, burned, shareDecimals, slot) {
-  if (burned === asked) return void 0;
+function partialWithdrawal(asked, burned, legs, shareDecimals, slot) {
+  if (burned + BigInt(legs) >= asked) return void 0;
   return `the simulated withdrawal at slot ${slot} burns ${formatAmount(burned, shareDecimals)} of the ${formatAmount(asked, shareDecimals)} shares asked for: a reserve cannot pay its full part now, so it would land as a partial withdrawal. Try a smaller amount, or again later`;
 }
 function describeSimulation(s2) {
@@ -44990,9 +44991,9 @@ async function solanaQuoteWithdraw(vault, account, amountHuman) {
     if (shares > held.amount) {
       return { ...base2, canWithdraw: false, note: `the account holds ${formatAmount(held.amount, vault.shareDecimals)} shares, fewer than the ${formatAmount(shares, vault.shareDecimals)} this amount needs` };
     }
-    const { sim, received, burned } = await simulateWithdraw(rpc, v, owner, shares);
+    const { sim, received, burned, legs } = await simulateWithdraw(rpc, v, owner, shares);
     if (received === void 0 || burned === void 0) return { ...base2, canWithdraw: false, measuredAtSlot: Number(sim.slot), note: `the simulated withdrawal failed: ${describeSimulation(sim)}` };
-    const partial2 = partialWithdrawal(shares, burned, vault.shareDecimals, sim.slot);
+    const partial2 = partialWithdrawal(shares, burned, legs, vault.shareDecimals, sim.slot);
     if (partial2) return { ...base2, canWithdraw: false, measuredAtSlot: Number(sim.slot), note: partial2 };
     return {
       ...base2,
@@ -45106,9 +45107,9 @@ async function solanaPrepareWithdraw(vault, account, receiver, args) {
     const held = await tokenBalance(rpc, await associatedTokenAccount(user, v.state.sharesMint));
     if (shares > held.amount) throw new Error(`the account holds ${formatAmount(held.amount, vault.shareDecimals)} shares, fewer than the ${formatAmount(shares, vault.shareDecimals)} this withdrawal burns`);
     const ixs = await withdrawInstructions(v, user, shares);
-    const { sim, received, burned } = await simulateWithdraw(rpc, v, user, shares);
+    const { sim, received, burned, legs } = await simulateWithdraw(rpc, v, user, shares);
     if (received === void 0 || burned === void 0) throw new Error(`not prepared: the simulated withdrawal fails at slot ${sim.slot}: ${describeSimulation(sim)}`);
-    const partial2 = partialWithdrawal(shares, burned, vault.shareDecimals, sim.slot);
+    const partial2 = partialWithdrawal(shares, burned, legs, vault.shareDecimals, sim.slot);
     if (partial2) throw new Error(`not prepared: ${partial2}`);
     const got = `${formatAmount(received, vault.asset.decimals)} ${vault.asset.symbol}`;
     return envelope(rpc, v, user, "withdraw", `burn ${formatAmount(shares, vault.shareDecimals)} ${vault.symbol}; the simulation at slot ${sim.slot} paid ${got} (net of the up to 0.001 USDC Kamino keeps per withdraw instruction)`, ixs, got);
@@ -46644,9 +46645,9 @@ async function buildForIntent(rpc, intent, account) {
     const sim = await simulate(rpc, ixs, account, []);
     if (!sim.ok) throw new Error(`the simulated deposit fails at slot ${sim.slot}: ${describeSimulation(sim)}`);
   } else {
-    const { sim, burned } = await simulateWithdrawal(rpc, v, account, ixs);
+    const { sim, burned, legs } = await simulateWithdrawal(rpc, v, account, ixs);
     if (burned === void 0) throw new Error(`the simulated withdraw fails at slot ${sim.slot}: ${describeSimulation(sim)}`);
-    const partial2 = partialWithdrawal(intent.raw, burned, intent.vault.shareDecimals, sim.slot);
+    const partial2 = partialWithdrawal(intent.raw, burned, legs, intent.vault.shareDecimals, sim.slot);
     if (partial2) throw new Error(`refused: ${partial2}`);
   }
   return { wire, expiresAfterBlockHeight: life.lastValidBlockHeight.toString() };

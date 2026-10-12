@@ -12,7 +12,8 @@ import { readFileSync } from "node:fs";
 import { SOLANA_INFO } from "../src/client.js";
 import { listSolanaVaults } from "../src/registry.js";
 import { associatedTokenAccount } from "../src/solana/kvault.js";
-import { readVault } from "../src/solana/vault.js";
+import { readVault, withdrawInstructions } from "../src/solana/vault.js";
+import { DISCRIMINATORS } from "../src/solana/kvault.js";
 import type { SolanaRpc } from "../src/solana/rpc.js";
 
 const fx = JSON.parse(readFileSync(new URL("./fixtures/solana/vault-snapshot.json", import.meta.url), "utf8")) as {
@@ -30,8 +31,8 @@ const tokenAccount = (amount: bigint) => {
   return [b.toString("base64"), "base64"];
 };
 
-/** What the next simulation reports: the shares it burns and the USDC it pays. */
-let simulated: { burns: bigint; pays: bigint };
+/** What the next simulation reports: the shares it burns and the USDC it pays, or the program's error. */
+let simulated: { burns: bigint; pays: bigint; err?: unknown };
 let sharesAta = "";
 let tokenAta = "";
 
@@ -50,7 +51,7 @@ const rpc = {
     send: async () => ({
       context: { slot: BigInt(fx.slot) },
       value: {
-        err: null,
+        err: simulated.err ?? null,
         logs: [],
         unitsConsumed: 100_000n,
         accounts: cfg.accounts.addresses.map((a) => ({ data: String(a) === sharesAta ? tokenAccount(HELD - simulated.burns) : tokenAccount(simulated.pays) })),
@@ -70,6 +71,13 @@ async function sharesFor(amountHuman: string): Promise<bigint> {
   return (amount * v.state.sharesIssued + v.holdings.netAum - 1n) / v.holdings.netAum;
 }
 
+/** The withdraw instructions a withdrawal of `shares` is split into at the snapshot. */
+async function legsFor(shares: bigint): Promise<bigint> {
+  const v = await readVault(rpc as unknown as SolanaRpc, vault);
+  const ixs = await withdrawInstructions(v, ACCOUNT, shares);
+  return BigInt(ixs.filter((ix) => ix.data !== undefined && DISCRIMINATORS.withdraw.every((x, i) => ix.data![i] === x)).length);
+}
+
 beforeEach(async () => {
   for (const k of SOLANA_INFO.rpcEnv) delete process.env[k];
   sharesAta = await associatedTokenAccount(ACCOUNT, vault.sharesMint);
@@ -87,9 +95,14 @@ describe("a Solana withdrawal whose simulation burns fewer shares than asked for
     await expect(solanaPrepareWithdraw(vault, ACCOUNT, ACCOUNT, { sharesExact: "10" })).rejects.toThrow(/not prepared: .*burns 9 of the 10 shares asked for.*partial withdrawal/);
   });
 
-  it("earn prepare_withdraw by amount: refused when the simulation burns one share unit short", async () => {
+  it("earn prepare_withdraw by amount: one share unit short per withdraw instruction is rounding; one more is a capped leg", async () => {
     const shares = await sharesFor("5");
-    simulated = { burns: shares - 1n, pays: 5_000_000n };
+    const legs = await legsFor(shares);
+    expect(legs).toBeGreaterThan(0n);
+    simulated = { burns: shares - legs, pays: 5_000_000n };
+    const env = (await solanaPrepareWithdraw(vault, ACCOUNT, ACCOUNT, { amountHuman: "5" })) as { kind: string };
+    expect(env.kind).toBe("withdraw");
+    simulated = { burns: shares - legs - 1n, pays: 5_000_000n };
     await expect(solanaPrepareWithdraw(vault, ACCOUNT, ACCOUNT, { amountHuman: "5" })).rejects.toThrow(/partial withdrawal/);
   });
 
@@ -113,7 +126,18 @@ describe("a Solana withdrawal whose simulation burns fewer shares than asked for
     const built = await buildForIntent(rpc as unknown as SolanaRpc, intent, ACCOUNT);
     expect(built.wire.length).toBeGreaterThan(0);
 
-    simulated = { burns: 9_999_999n, pays: 10_199_999n };
+    const legs = await legsFor(intent.raw);
+    simulated = { burns: intent.raw - legs, pays: 10_199_999n };
+    expect((await buildForIntent(rpc as unknown as SolanaRpc, intent, ACCOUNT)).wire.length).toBeGreaterThan(0);
+    simulated = { burns: intent.raw - legs - 1n, pays: 10_199_998n };
     await expect(buildForIntent(rpc as unknown as SolanaRpc, intent, ACCOUNT)).rejects.toThrow(/refused: .*partial withdrawal/);
+  });
+
+  it("connect deposit: built when the simulation succeeds, refused when it fails, with no share check", async () => {
+    const intent = { kind: "deposit" as const, vault, raw: 1_000_000n };
+    simulated = { burns: 0n, pays: 0n };
+    expect((await buildForIntent(rpc as unknown as SolanaRpc, intent, ACCOUNT)).wire.length).toBeGreaterThan(0);
+    simulated = { burns: 0n, pays: 0n, err: { InstructionError: [2, { Custom: 1 }] } };
+    await expect(buildForIntent(rpc as unknown as SolanaRpc, intent, ACCOUNT)).rejects.toThrow(/the simulated deposit fails/);
   });
 });

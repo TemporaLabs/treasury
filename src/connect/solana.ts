@@ -167,9 +167,9 @@ export async function buildForIntent(rpc: SolanaRpc, intent: SolanaIntent, accou
   } else {
     // A leg the program caps would land as a partial withdrawal with no error, so the shares it burns are
     // checked here, before the page opens, rather than only after it lands.
-    const { sim, burned } = await simulateWithdrawal(rpc, v, account, ixs);
+    const { sim, burned, legs } = await simulateWithdrawal(rpc, v, account, ixs);
     if (burned === undefined) throw new Error(`the simulated withdraw fails at slot ${sim.slot}: ${describeSimulation(sim)}`);
-    const partial = partialWithdrawal(intent.raw, burned, intent.vault.shareDecimals, sim.slot);
+    const partial = partialWithdrawal(intent.raw, burned, legs, intent.vault.shareDecimals, sim.slot);
     if (partial) throw new Error(`refused: ${partial}`);
   }
   return { wire, expiresAfterBlockHeight: life.lastValidBlockHeight.toString() };

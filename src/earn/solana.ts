@@ -163,9 +163,9 @@ export async function solanaQuoteWithdraw(vault: SolanaVaultEntry, account: stri
     if (shares > held.amount) {
       return { ...base, canWithdraw: false, note: `the account holds ${formatAmount(held.amount, vault.shareDecimals)} shares, fewer than the ${formatAmount(shares, vault.shareDecimals)} this amount needs` };
     }
-    const { sim, received, burned } = await simulateWithdraw(rpc, v, owner, shares);
+    const { sim, received, burned, legs } = await simulateWithdraw(rpc, v, owner, shares);
     if (received === undefined || burned === undefined) return { ...base, canWithdraw: false, measuredAtSlot: Number(sim.slot), note: `the simulated withdrawal failed: ${describeSimulation(sim)}` };
-    const partial = partialWithdrawal(shares, burned, vault.shareDecimals, sim.slot);
+    const partial = partialWithdrawal(shares, burned, legs, vault.shareDecimals, sim.slot);
     if (partial) return { ...base, canWithdraw: false, measuredAtSlot: Number(sim.slot), note: partial };
     return {
       ...base,
@@ -300,9 +300,9 @@ export async function solanaPrepareWithdraw(vault: SolanaVaultEntry, account: st
     const held = await tokenBalance(rpc, await associatedTokenAccount(user, v.state.sharesMint));
     if (shares > held.amount) throw new Error(`the account holds ${formatAmount(held.amount, vault.shareDecimals)} shares, fewer than the ${formatAmount(shares, vault.shareDecimals)} this withdrawal burns`);
     const ixs = await withdrawInstructions(v, user, shares);
-    const { sim, received, burned } = await simulateWithdraw(rpc, v, user, shares);
+    const { sim, received, burned, legs } = await simulateWithdraw(rpc, v, user, shares);
     if (received === undefined || burned === undefined) throw new Error(`not prepared: the simulated withdrawal fails at slot ${sim.slot}: ${describeSimulation(sim)}`);
-    const partial = partialWithdrawal(shares, burned, vault.shareDecimals, sim.slot);
+    const partial = partialWithdrawal(shares, burned, legs, vault.shareDecimals, sim.slot);
     if (partial) throw new Error(`not prepared: ${partial}`);
     const got = `${formatAmount(received, vault.asset.decimals)} ${vault.asset.symbol}`;
     return envelope(rpc, v, user, "withdraw", `burn ${formatAmount(shares, vault.shareDecimals)} ${vault.symbol}; the simulation at slot ${sim.slot} paid ${got} (net of the up to 0.001 USDC Kamino keeps per withdraw instruction)`, ixs, got);
