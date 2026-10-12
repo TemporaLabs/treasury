@@ -206,6 +206,24 @@ function isEntryPoint(): boolean {
   }
 }
 
+/** How long Windows waits for open handles to finish before it ends the process anyway. */
+const WINDOWS_EXIT_BACKSTOP_MS = 2_000;
+
+/**
+ * Ends the process with `code` once the answer is written. Elsewhere this is an immediate
+ * `process.exit`. On Windows it is not (#122): Node 24 (24.0.0 and 24.19.0 measured) aborts with
+ * 0xC0000409, on the libuv assertion `!(handle->flags & UV_HANDLE_CLOSING)`, when `process.exit` runs
+ * right after the health check's request — it printed a correct answer and then crashed. There the
+ * exit code is set and Node ends on its own once nothing is left open; a backstop that holds
+ * nothing open ends it after WINDOWS_EXIT_BACKSTOP_MS if a request is still pending, as the
+ * slow-endpoint case leaves one.
+ */
+function exitWith(code: number): void {
+  if (process.platform !== "win32") process.exit(code);
+  process.exitCode = code;
+  setTimeout(() => process.exit(code), WINDOWS_EXIT_BACKSTOP_MS).unref();
+}
+
 if (isEntryPoint()) {
   run(process.argv.slice(2)).then(
     ({ stdout, stderr, code }) => {
@@ -214,12 +232,12 @@ if (isEntryPoint()) {
       // the agent's shell call would wait it out. The callbacks wait for each stream to flush first.
       const out = stdout === undefined ? Promise.resolve() : new Promise<void>((done) => process.stdout.write(`${stdout}\n`, () => done()));
       const err = stderr === undefined ? Promise.resolve() : new Promise<void>((done) => process.stderr.write(`${stderr}\n`, () => done()));
-      void Promise.all([out, err]).then(() => process.exit(code));
+      void Promise.all([out, err]).then(() => exitWith(code));
     },
     (e: unknown) => {
       // Defence-in-depth: `run` catches everything it calls, so this is reached only by a defect in
       // `run` itself. Masked anyway, so that stays true if `run` ever grows.
-      process.stderr.write(`${JSON.stringify({ error: redactEndpoints(String(e)) })}\n`, () => process.exit(1));
+      process.stderr.write(`${JSON.stringify({ error: redactEndpoints(String(e)) })}\n`, () => exitWith(1));
     },
   );
 }

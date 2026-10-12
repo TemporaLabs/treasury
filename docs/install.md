@@ -26,6 +26,11 @@ per command. `plugin/` carries a version-only `package.json` and no lockfile, so
 copies files and runs no dependency install. **Node 22 or later is required and must be on `PATH`** —
 without it every command fails with the shell's own `node: command not found`.
 
+**Windows with Node 24, before v0.1.3:** the health check (`earn status`) prints its answer and then
+exits with `3221226505` (`0xC0000409`), so a caller that trusts the exit code reads success as a
+failure (#122). Measured on Node 24.0.0 and 24.19.0; Node 24.21.0, Node 22, macOS and Linux did not
+crash. v0.1.3 fixes it. On v0.1.2 or earlier, use Node 22 on Windows.
+
 **Codex is not supported as a plugin host in this release.** The skill names the CLI through
 `${CLAUDE_PLUGIN_ROOT}`, which Claude Code substitutes and Codex did not (measured on Codex 0.155.1, for
 the launch path of the earlier server). With Codex, install the package as in

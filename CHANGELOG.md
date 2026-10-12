@@ -88,6 +88,12 @@ Pre-1.0, minor versions may change tool names, schemas and behaviour.
   through OAT.
 
 ### Fixed
+- **Windows with Node 24: the health check no longer exits `3221226505` (`0xC0000409`) after a
+  correct answer** (#122). Node aborted on an internal assertion about a closing handle
+  (`!(handle->flags & UV_HANDLE_CLOSING)`, `src\win\async.c`) when the CLI called `process.exit` right
+  after the health check's request. On Windows the CLI now sets the exit code and lets Node end on its
+  own, with a two-second backstop for a request that is still pending; macOS and Linux exit exactly as
+  before. Measured on Windows, a command now takes about 0.1 s longer to end.
 - `earn balance` reads the Ethereum public endpoint's range refusal ("query exceeds max block range
   100000") as a 100,000-block window and walks the history in chunks, instead of failing the scan.
 
