@@ -76,7 +76,7 @@ import { readFileSync, existsSync, readdirSync } from "node:fs";
 import { dirname, resolve, relative, sep } from "node:path";
 import { fileURLToPath } from "node:url";
 import ts from "typescript";
-import { rpcUrlFromEnv } from "../src/client.js";
+import { rpcUrlFromEnv, solanaRpcUrlFromEnv } from "../src/client.js";
 import { loadRegistry, getVault, depositableVaults } from "../src/registry.js";
 import { buildDeposit, buildWithdraw } from "../src/build.js";
 import { buildCommands } from "../src/earn/commands.js";
@@ -444,8 +444,18 @@ describe("B. the environment surface, statically and at runtime", () => {
       const arb = rpcUrlFromEnv(42161);
       expect(arb).toBe("https://arb1.arbitrum.io/rpc");
       expect(arb).not.toMatch(/sibling|fund|generic/i);
+      // And on Solana, which reads its own two variables through a separate function: look-alikes of both.
+      delete process.env["TREASURY_RPC_SOLANA"];
+      delete process.env["SOLANA_RPC_URL"];
+      process.env["SIBLING_RPC_SOLANA"] = "https://sibling.example/KEY";
+      process.env["FUND_RPC_SOLANA"] = "https://fund.example/KEY";
+      process.env["TREASURY_SOLANA_RPC"] = "https://fund.example/KEY";
+      process.env["SOLANA_RPC"] = "https://generic.example/KEY";
+      const sol = solanaRpcUrlFromEnv();
+      expect(sol).toBe("https://api.mainnet-beta.solana.com");
+      expect(sol).not.toMatch(/sibling|fund|generic/i);
     } finally {
-      for (const k of ["SIBLING_RPC_BASE", "FUND_RPC_BASE", "RPC_URL", "SIBLING_RPC_ARBITRUM", "FUND_RPC_ARBITRUM"]) delete process.env[k];
+      for (const k of ["SIBLING_RPC_BASE", "FUND_RPC_BASE", "RPC_URL", "SIBLING_RPC_ARBITRUM", "FUND_RPC_ARBITRUM", "SIBLING_RPC_SOLANA", "FUND_RPC_SOLANA", "TREASURY_SOLANA_RPC", "SOLANA_RPC"]) delete process.env[k];
       Object.assign(process.env, saved);
     }
   });

@@ -97,6 +97,17 @@ Pre-1.0, minor versions may change tool names, schemas and behaviour.
   before. Measured on Windows, a command now takes about 0.1 s longer to end.
 - `earn balance` reads the Ethereum public endpoint's range refusal ("query exceeds max block range
   100000") as a 100,000-block window and walks the history in chunks, instead of failing the scan.
+- **Solana pre-flight verdicts.** An account with no SOL for the fee is `NEEDS_FUNDS` with `canDeposit: false`:
+  the simulation stopped before the vault, so it says nothing about whether the vault takes the deposit. A
+  deposit over the vault's cap is not `canDeposit` either. A vault that requires a co-signer is
+  `REVERTED_OTHER` with the whole reason, instead of `UNRESOLVED` with a shortened one.
+- A Solana withdrawal split across reserves gives the rest to the last reserve in order. When an earlier reserve
+  could release nothing, the rest became a second instruction on the first reserve.
+- A Solana call refused with `HTTP error (429)` or a 5xx on the public endpoint now carries the
+  `setup_required` hint naming `TREASURY_RPC_SOLANA`.
+- `earn status --account` on an EVM chain echoes the account checksummed.
+- `npm run registry:check` reports a Solana endpoint on another cluster as not checked, instead of
+  as a registry row that disagrees with the chain.
 
 ### Dependencies
 - viem 2.57.3, inlined in the CLI bundle. Treasury does not call `waitForTransactionReceipt`, the function

@@ -303,6 +303,14 @@ describe("the test-vault warning travels with money-committing responses, and on
     expect(out.warning, "earn_status preflight must carry the warning").toBe(defaultVault().warning);
   });
 
+  it("earn_status's pre-flight echoes the account checksummed, as it was read", async () => {
+    process.env["TREASURY_RPC_BASE"] = "http://127.0.0.1:9/v2/K";
+    const mixed = "0x5aaeb6053f3e94c9b9a09f33669435e7ef1beaed"; // EIP-55's own example, lowercased
+    const out = payload(await tools()["earn_status"]!.handler({ account: mixed }, {})) as { account?: string; depositor?: string };
+    expect(out.account).toBe("0x5aAeb6053F3E94C9b9A09f33669435E7Ef1BeAed");
+    expect(out.account).toBe(out.depositor);
+  });
+
   it("earn_quote carries it on the deposit side and NOT on the withdraw side", async () => {
     const rpc = await startRpc();
     process.env["TREASURY_RPC_BASE"] = rpc.url;

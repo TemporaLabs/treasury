@@ -37,7 +37,7 @@ import { CHAIN_INFO, chains, rpcSourceForEnv, rpcUrlFromEnv, type SupportedChain
 import { loadRegistry } from "../src/registry.js";
 import { solanaRpcUrlFromEnv } from "../src/client.js";
 import { makeSolanaRpc } from "../src/solana/rpc.js";
-import { readVault } from "../src/solana/vault.js";
+import { checkSolanaRow } from "./solana-row.js";
 import { describeError } from "../src/redact.js";
 
 const reg = loadRegistry();
@@ -181,17 +181,13 @@ for (const v of reg.vaults) {
 
 // Solana rows: the vault's own state, read with this client's decoder, names the row's token mint, share
 // mint, decimals and name; and the vault-state account exists at all, on the endpoint `TREASURY_RPC_SOLANA`
-// names (else Solana's public one). The ticker is the registry's label, which the chain does not carry.
+// names (else Solana's public one), proven to be mainnet first. The ticker is the registry's label, which the
+// chain does not carry.
 for (const v of reg.solanaVaults) {
-  try {
-    const read = await readVault(makeSolanaRpc(solanaRpcUrlFromEnv()), v);
-    ok(`${v.symbol}: token mint, share mint and both decimals agree with the vault state at slot ${read.slot}`);
-    if (read.state.name === v.name) ok(`${v.symbol}: name = ${v.name}`);
-    else fail(`${v.symbol}: registry name "${v.name}" != the vault state's "${read.state.name}"`);
-  } catch (e) {
-    const msg = describeError(e);
-    if (/disagrees with the chain|no account at/.test(msg)) fail(`${v.symbol}: ${msg}`);
-    else cannotCheck(`${v.symbol}: vault state`, msg);
+  for (const r of await checkSolanaRow(makeSolanaRpc(solanaRpcUrlFromEnv()), v)) {
+    if (r.verdict === "ok") ok(r.message);
+    else if (r.verdict === "fail") fail(r.message);
+    else cannotCheck(r.message, r.why);
   }
 }
 

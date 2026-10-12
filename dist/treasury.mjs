@@ -44726,11 +44726,12 @@ function splAmount(data) {
 var DEPOSIT_COMPUTE_UNITS = 4e5;
 var WITHDRAW_COMPUTE_UNITS_PER_RESERVE = 4e5;
 function assertNoCoSigner(v) {
-  if (v.state.permissioningAuthority !== DEFAULT_PUBKEY) {
-    throw new Error(
-      `refused: ${v.entry.symbol} now requires a co-signer (permissioning authority ${v.state.permissioningAuthority}) for every deposit and withdrawal, and this client builds single-signer transactions only. Nothing was prepared.`
-    );
-  }
+  const refusal = coSignerRefusal(v);
+  if (refusal) throw new Error(`refused: ${refusal} Nothing was prepared.`);
+}
+function coSignerRefusal(v) {
+  if (v.state.permissioningAuthority === DEFAULT_PUBKEY) return void 0;
+  return `${v.entry.symbol} now requires a co-signer (permissioning authority ${v.state.permissioningAuthority}) for every deposit and withdrawal, and this client builds single-signer transactions only.`;
 }
 async function depositInstructions(v, user, amount) {
   assertNoCoSigner(v);
@@ -44767,11 +44768,11 @@ async function withdrawInstructions(v, user, shares) {
   const legs = [];
   let left = shares;
   let idle = v.holdings.idle;
-  for (const reserve of order) {
+  for (const [i, reserve] of order.entries()) {
     if (left === 0n) break;
     const tokens = idle + capacity(reserve);
     const fits = perShareNum === 0n ? left : tokens * perShareDen / perShareNum;
-    const take = legs.length === order.length - 1 || fits >= left ? left : fits;
+    const take = i === order.length - 1 || fits >= left ? left : fits;
     if (take > 0n) legs.push({ reserve, shares: take });
     left -= take;
     idle = 0n;
@@ -44831,6 +44832,8 @@ async function preflightDepositSolana(rpc, entry, account, amountHuman) {
     return { vault: entry.symbol, depositor: account, status: "UNRESOLVED", canDeposit: false, findings: [`vault read failed: ${describeError(e4)}`] };
   }
   findings.push(`identity OK at slot ${v.slot}: token mint ${v.state.tokenMint}, share mint ${v.state.sharesMint}, ${v.state.allocations.length} reserve(s)`);
+  const coSigner = coSignerRefusal(v);
+  if (coSigner) return { vault: entry.symbol, depositor: account, status: "REVERTED_OTHER", canDeposit: false, findings: [...findings, coSigner] };
   const tokenAta = await associatedTokenAccount(account, v.state.tokenMint);
   const sharesAta = await associatedTokenAccount(account, v.state.sharesMint);
   let held;
@@ -44841,7 +44844,8 @@ async function preflightDepositSolana(rpc, entry, account, amountHuman) {
     return { vault: entry.symbol, depositor: account, status: "UNRESOLVED", canDeposit: false, findings: [...findings, `balance reads failed: ${describeError(e4)}`] };
   }
   const cap = v.state.depositCap;
-  if (cap !== 0n && v.holdings.aumIncludingFees + amount > cap) {
+  const overCap = cap !== 0n && v.holdings.aumIncludingFees + amount > cap;
+  if (overCap) {
     findings.push(`the vault's deposit cap is ${formatAmount(cap, entry.asset.decimals)} ${entry.asset.symbol} and it holds ${formatAmount(v.holdings.aumIncludingFees, entry.asset.decimals)}: this deposit would exceed it`);
   }
   if (!held.exists) findings.push(`the account has no ${entry.asset.symbol} token account yet, so it holds no ${entry.asset.symbol} on Solana`);
@@ -44862,12 +44866,16 @@ async function preflightDepositSolana(rpc, entry, account, amountHuman) {
   const why = describeSimulation(sim);
   const text2 = `${why} ${sim.logs.join(" ")}`;
   if (NO_FEE_ACCOUNT.test(text2)) {
-    findings.push(`the account cannot pay a transaction fee: it holds no SOL (${why}). It needs SOL for the fee and for its share account's rent, about 0.003 SOL in all`);
-    return { ...base2, status: "NEEDS_FUNDS", canDeposit: true, findings };
+    findings.push(
+      `the account cannot pay a transaction fee: it holds no SOL (${why}). It needs SOL for the fee and for its share account's rent, about 0.003 SOL in all. The simulation stopped there, before the vault, so whether the vault takes this deposit was not checked`
+    );
+    return { ...base2, status: "NEEDS_FUNDS", canDeposit: false, findings };
   }
   if (NO_TOKENS.test(text2)) {
-    findings.push(`the deposit stopped at the account's own ${entry.asset.symbol} (${why}): the vault did not refuse the account; it needs ${entry.asset.symbol} on Solana`);
-    return { ...base2, status: "NEEDS_FUNDS", canDeposit: true, findings };
+    findings.push(
+      overCap ? `the deposit stopped at the account's own ${entry.asset.symbol} (${why}), and it is over the vault's deposit cap, so the vault would refuse it once funded` : `the deposit stopped at the account's own ${entry.asset.symbol} (${why}): the vault did not refuse the account; it needs ${entry.asset.symbol} on Solana`
+    );
+    return { ...base2, status: "NEEDS_FUNDS", canDeposit: !overCap, findings };
   }
   findings.push(`simulated deposit reverted: ${why}`);
   return { ...base2, status: "REVERTED_OTHER", canDeposit: false, findings };
@@ -45947,7 +45955,7 @@ function hintChain(args) {
   }
 }
 var hintFor = (chain) => chain === "solana" ? solanaPublicRpcHint() : publicRpcHint(chain);
-var RPC_FAILURE = /RPC Request failed|HTTP request failed|reads failed|over rate limit|rate.?limit|"unreachable"|fetch failed|ETIMEDOUT|ECONNREFUSED/i;
+var RPC_FAILURE = /RPC Request failed|HTTP request failed|HTTP error \((?:429|5\d\d)\)|reads failed|over rate limit|rate.?limit|"unreachable"|fetch failed|ETIMEDOUT|ECONNREFUSED/i;
 var text = (v, chainId = defaultChainId()) => {
   let body = typeof v === "string" ? v : JSON.stringify(v, null, 2);
   if (RPC_FAILURE.test(body)) {
@@ -46093,7 +46101,7 @@ function buildCommands() {
         const depositor = evm(account, "account");
         const args = amount_usdc === void 0 ? { vault: vault2, depositor, client } : { vault: vault2, depositor, client, assetsHuman: amount_usdc };
         const verdict = await onItsChain(vault2, endpoints, () => preflightDeposit(args));
-        return text({ ...verdict, mode: "preflight", account, ...onChain(vault2), ...commitsMoney(vault2) }, vault2.chainId);
+        return text({ ...verdict, mode: "preflight", account: depositor, ...onChain(vault2), ...commitsMoney(vault2) }, vault2.chainId);
       }
       const partial2 = symbol2 !== void 0 ? { requested: "preflight", missing: ["account"] } : {};
       const vault = supportedVault(symbol2, chain2);

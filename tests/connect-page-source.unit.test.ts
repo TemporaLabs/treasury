@@ -67,6 +67,12 @@ describe("the connect page's source", () => {
       new Set(["defaultSolanaRpcsPlugin", "toSolanaWalletConnectors", "useSignAndSendTransaction", "useSignMessage", "useWallets", "ConnectedStandardSolanaWallet"]),
     );
     for (const name of imports("@privy-io/react-auth")) expect(name, "an EVM signing hook from the main entry").not.toMatch(/^use(Sign|Send)/);
+    // The named-import list above is the only way a Privy hook reaches the page: no namespace or default
+    // import, no dynamic import or require of a Privy module, and no hook reached as a property
+    // (`P.useSignMessage`), each of which would bring a signing hook in without appearing in that list.
+    expect(source).not.toMatch(/import\s+(\*\s*as\s+\w+|(?!type\b)\w+\s*,?)\s*(\{[^}]*\}\s*)?from\s*["']@privy-io\//);
+    expect(source).not.toMatch(/\b(import|require)\s*\(\s*["'`]@privy-io\//);
+    expect(source).not.toMatch(/\.\s*use(Sign|Send)\w*/);
     // The Solana message the page signs is the sign-in challenge the local process issued, and nothing else.
     expect([...source.matchAll(/signMessage\(\{\s*message:\s*([^,]+),/g)].map((m) => m[1]!.trim())).toEqual(['new TextEncoder().encode(ch["message"])']);
   });

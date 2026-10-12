@@ -155,8 +155,11 @@ function hintChain(args: unknown): SupportedChainId | "solana" {
 /** The setup sentence for a transport failure on the chain's unconfigured public endpoint. */
 const hintFor = (chain: SupportedChainId | "solana") => (chain === "solana" ? solanaPublicRpcHint() : publicRpcHint(chain));
 
-/** Shapes that mean "the transport failed", as opposed to a verdict about the vault. */
-const RPC_FAILURE = /RPC Request failed|HTTP request failed|reads failed|over rate limit|rate.?limit|"unreachable"|fetch failed|ETIMEDOUT|ECONNREFUSED/i;
+/**
+ * Shapes that mean "the transport failed", as opposed to a verdict about the vault. `HTTP error (429)` and
+ * `HTTP error (5xx)` are how the Solana client reports a rate limit or a failing endpoint.
+ */
+const RPC_FAILURE = /RPC Request failed|HTTP request failed|HTTP error \((?:429|5\d\d)\)|reads failed|over rate limit|rate.?limit|"unreachable"|fetch failed|ETIMEDOUT|ECONNREFUSED/i;
 
 /**
  * Serialise a tool result, and when the payload shows a TRANSPORT failure while no RPC is
@@ -374,7 +377,8 @@ export function buildCommands(): Record<string, Command> {
         const args = amount_usdc === undefined ? { vault, depositor, client } : { vault, depositor, client, assetsHuman: amount_usdc };
         const verdict = await onItsChain(vault, endpoints, () => preflightDeposit(args));
         // spread FIRST so the discriminant cannot be overwritten by a field of the same name
-        return text({ ...verdict, mode: "preflight", account, ...onChain(vault), ...commitsMoney(vault) }, vault.chainId);
+        // `account` is echoed checksummed, as every other result names an address.
+        return text({ ...verdict, mode: "preflight", account: depositor, ...onChain(vault), ...commitsMoney(vault) }, vault.chainId);
       }
       // Health. A partial call (a vault but no account) is answered here too, and says so in
       // STRUCTURE rather than in prose — a note is exactly what a consumer skips, and the risk is
