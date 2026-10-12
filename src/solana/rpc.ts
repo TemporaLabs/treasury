@@ -15,7 +15,13 @@ const RATE_LIMIT_WAIT_MS = 15_000;
  * after a handful of requests (measured 2026-10-11: a burst of about twenty reads answered 429), and one
  * command makes several. Up to five retries, backing off from half a second, never past the limit above.
  */
-export function withRateLimitRetry(base: RpcTransport, sleep: (ms: number) => Promise<void> = (ms) => new Promise((r) => setTimeout(r, ms).unref?.())): RpcTransport {
+/**
+ * The wait between retries. The timer keeps the process alive: while a command waits out a 429 nothing else
+ * may be pending, and an unref'd timer let Node end mid-retry — exit 0 with no output at all.
+ */
+export const retrySleep = (ms: number): Promise<void> => new Promise((r) => setTimeout(r, ms));
+
+export function withRateLimitRetry(base: RpcTransport, sleep: (ms: number) => Promise<void> = retrySleep): RpcTransport {
   return (async (req: Parameters<RpcTransport>[0]) => {
     let waited = 0;
     for (let attempt = 0; ; attempt++) {
