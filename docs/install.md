@@ -7,14 +7,14 @@ front of an agent.
 ## Claude Code — the plugin
 
 ```bash
-claude plugin marketplace add TemporaLabs/treasury@v0.1.2
+claude plugin marketplace add TemporaLabs/treasury@v0.1.3
 claude plugin install treasury@treasury
 ```
 
 `@<ref>` pins the marketplace to a tag or a branch, and is recorded with the marketplace entry, so
 `claude plugin marketplace update` refreshes *that* ref rather than moving the install onto another
 branch; `#<ref>` is equivalent. Prefer a tag — it is immutable. Before a release is tagged, pin its
-release branch instead (`TemporaLabs/treasury@release/v0.1.2`); dropping the suffix entirely tracks
+release branch instead (`TemporaLabs/treasury@release/v0.1.3`); dropping the suffix entirely tracks
 this repository's default branch.
 
 The plugin is the [`plugin/`](../plugin/) folder of this repository: its manifests, the `earn` skill,
@@ -41,7 +41,7 @@ marketplace also uninstalls the plugin, so upgrade in three steps:
 
 ```bash
 claude plugin marketplace remove treasury
-claude plugin marketplace add TemporaLabs/treasury@v0.1.2
+claude plugin marketplace add TemporaLabs/treasury@v0.1.3
 claude plugin install treasury@treasury
 ```
 
@@ -87,7 +87,7 @@ version — a published version is immutable, and `--save-exact` keeps a later `
 to another one:
 
 ```bash
-npm install --save-exact @temporalabs/treasury@0.1.2
+npm install --save-exact @temporalabs/treasury@0.1.3
 npx --no-install treasury earn --help     # every command and flag, as JSON
 npx --no-install treasury earn vaults     # or: node <project>/node_modules/@temporalabs/treasury/dist/treasury.mjs earn vaults
 ```
@@ -123,6 +123,8 @@ Wallet entry (the Coinbase SDK, for its mobile app or a smart wallet) is unteste
 browser extension, which, like any installed wallet, is listed on the first screen. Signing in costs
 nothing. After that, `treasury connect deposit` and `treasury connect withdraw` first return an
 acknowledgement for the operator to answer, and on their yes open a confirm page for each transaction. See [`tools.md`](tools.md#the-connect-commands--treasury-connect-command).
+`treasury connect wallet --chain solana` connects a Solana wallet instead (Phantom, Solflare, Backpack, or a
+Privy wallet from an email or social login), for the vault on Solana; the two connections are kept apart.
 
 - It needs a browser on the machine running the agent. Over SSH, on Linux with no display, or with
   `TREASURY_CONNECT_NO_OPEN` set, the command prints the URL instead of opening it; it prints the URL
@@ -133,7 +135,7 @@ acknowledgement for the operator to answer, and on their yes open a confirm page
 
 ## As a library
 
-`@temporalabs/treasury` — the same package, `npm install @temporalabs/treasury@0.1.2` — also exports
+`@temporalabs/treasury` — the same package, `npm install @temporalabs/treasury@0.1.3` — also exports
 the builders, the pre-flight, the position scan and the registry as plain functions. ⚠️ The library returns bare `UnsignedCall[]` arrays; the
 `{ requires_signature: true, status: "unsigned", calls }` envelope is a property of the command
 boundary, not of the functions. If you consume the library directly, you are the boundary.

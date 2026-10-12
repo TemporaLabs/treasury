@@ -15,8 +15,8 @@ builders for **unsigned** deposit and withdraw calls, served as a library and as
    commands prepare unsigned calls and never send. The wallet connection (`treasury connect`,
    `src/connect/`) may hand a call to the operator's connected wallet — a browser wallet, or a
    Privy embedded wallet with its own confirmation — which shows it and asks for approval every
-   time. That relay builds calls only through `src/build.ts`, and its gate (`src/connect/gate.ts`)
-   refuses any call whose destination is not a vault in `registry/vaults.json` or that vault's asset
+   time. That relay builds calls only through `src/build.ts`, and its gates (`src/connect/gate.ts`, and
+   `src/connect/gate-solana.ts` on Solana) refuse any call whose destination is not a vault in `registry/vaults.json` or that vault's asset
    (the approval to it, for exactly the deposit's amount), and any receiver or owner other than the
    connected account. Do not add a private-key variable, a local signer, a tool that signs, or a
    relay that accepts an arbitrary destination: that is a design change, not a pull request. CI runs
@@ -74,6 +74,8 @@ each row on its own chain and reports a chain it could not reach as not checked.
   separately: after any change under `connect-page/`, run `npm ci && npm run build` in `connect-page/`,
   then `npm run build` at the root to refresh the `plugin/` copy, and commit all of it. CI rebuilds
   the page and fails on a difference.
+- **`llms.txt` is generated** from the Earn skill and the command descriptions. After a change to
+  either, run `npm run build` and commit it; CI fails on a difference.
 - **Every commit carries a `Signed-off-by` trailer** matching its author (`git commit -s`). See
   [`DCO.md`](DCO.md).
 - **Every relative link in `docs/` must resolve.**

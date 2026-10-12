@@ -59,11 +59,11 @@ export TREASURY_RPC_ROBINHOOD=https://... # only if you will use a vault on Robi
 export TREASURY_RPC_ETHEREUM=https://...  # only if you will use a vault on Ethereum
 export TREASURY_RPC_MONAD=https://...     # only if you will use a vault on Monad
 export TREASURY_RPC_SOLANA=https://...    # only if you will use the vault on Solana
-claude plugin marketplace add TemporaLabs/treasury@v0.1.2
+claude plugin marketplace add TemporaLabs/treasury@v0.1.3
 claude plugin install treasury@treasury
 ```
 
-Start a new Claude Code session after installing so the Earn skill loads. Keep the `TemporaLabs/treasury@v0.1.2` ref
+Start a new Claude Code session after installing so the Earn skill loads. Keep the `TemporaLabs/treasury@v0.1.3` ref
 explicit so the install stays on a release rather than tracking the default branch. Upgrading an
 earlier install? Run `claude plugin marketplace remove treasury` first, then the two `claude plugin` lines above
 ([details](docs/install.md#upgrading-an-earlier-install)).
@@ -75,7 +75,7 @@ command at a time; nothing stays running.
 ### Any agent with a shell
 
 ```bash
-npm install --save-exact @temporalabs/treasury@0.1.2
+npm install --save-exact @temporalabs/treasury@0.1.3
 npx --no-install treasury earn --help     # every command and flag, as JSON
 ```
 

@@ -1,7 +1,7 @@
 # Configuration
 
-Treasury reads the environment variables below and nothing else that an operator can set: ten for
-the chain, and four optional ones for `treasury connect`. A test pins the exact set — these, plus
+Treasury reads the environment variables below and nothing else that an operator can set: eighteen
+for the chains, and four optional ones for `treasury connect`. A test pins the exact set — these, plus
 `TREASURY_FORK` (a switch only the fork test tier reads, never the shipped code) and the four a
 browser launcher checks to see whether there is a browser to open (`DISPLAY`, `WAYLAND_DISPLAY`,
 `SSH_CONNECTION`, `SSH_TTY`) — so a variable read anywhere else in the package fails the build.

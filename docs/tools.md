@@ -285,11 +285,11 @@ confirm it in the wallet. Nothing here signs. See [`security-model.md`](security
 
 | command | flags | does |
 |---|---|---|
-| `connect status` | — | the connected account and how it signed in (`external` / `embedded`), or `disconnected`; reads a local file only |
-| `connect wallet` | — | opens the sign-in page: one Connect button, then Privy's window. The wallet signs a free sign-in message; waits up to 9 minutes and returns `{ status: "connected", account, walletType, connectedAtIso, opened }`. If the sign-in does not finish, it exits 1 with `not connected: <reason>` |
+| `connect status` | — | the connected account and how it signed in (`external` / `embedded`), or `disconnected`, with the connected Solana account under `solana`; reads a local file only |
+| `connect wallet` | `--chain` (optional; `solana` connects a Solana wallet: Phantom, Solflare, Backpack, or a Privy wallet) | opens the sign-in page: one Connect button, then Privy's window. The wallet signs a free sign-in message; waits up to 9 minutes and returns `{ status: "connected", account, walletType, connectedAtIso, opened }`. If the sign-in does not finish, it exits 1 with `not connected: <reason>` |
 | `connect deposit` | `--amount_usdc`, `--receiver`, optional `--vault`, `--chain`, `--ack` | builds approve + deposit for the connected account and checks them against the registry. Without `--ack`, opens nothing and returns the operator's acknowledgement; with its code, hands each call to the wallet in turn |
 | `connect withdraw` | `--receiver`, then `--amount_usdc` or `--all --shares_exact`, optional `--vault`, `--chain`, `--ack` | the same for a withdrawal |
-| `connect disconnect` | — | forgets the connected account; moves nothing |
+| `connect disconnect` | — | forgets the connected accounts, EVM and Solana; moves nothing |
 
 `--receiver` must be the connected account: this page pays no one else. It comes from the operator's
 own message, never from the agent. To pay a different address, use `earn prepare_deposit` /

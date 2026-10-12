@@ -1,7 +1,8 @@
 # Design note: embed the registry and the version at build time
 
-Status: proposal, for decision. Tracks issue #59. Nothing here is implemented; the measurements
-below come from a throwaway spike that was not committed.
+Status: implemented in v0.1.3 (#129), as option B: the CLI bundle carries the registry and only the
+`version` field of `package.json`. Tracks issue #59. The measurements below come from the throwaway
+spike that preceded it.
 
 ## The problem
 

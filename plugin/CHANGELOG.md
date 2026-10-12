@@ -15,8 +15,8 @@ Carries `@temporalabs/treasury` v0.1.3.
   `TREASURY_LOGS_RPC_MONAD` for position history (the public endpoint serves 100 blocks per request).
 - **And on Solana**, with Tempora Labs Cash Plus USDC (Test 2G), a Kamino vault. `connect wallet --chain
   solana` connects a Solana wallet. The skill says what differs there: Solana addresses, the receiver is
-  always the account, one transaction that expires in about a minute, SOL for fees, and 0.001 USDC kept on
-  every withdrawal.
+  always the account, one transaction that expires in about a minute, SOL for fees, and up to 0.001 USDC kept
+  per withdraw instruction.
 
 ## [v0.1.2] - 2026-10-05
 
