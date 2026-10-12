@@ -15,7 +15,7 @@ builders for **unsigned** deposit and withdraw calls, served as a library and as
    commands prepare unsigned calls and never send. The wallet connection (`treasury connect`,
    `src/connect/`) may hand a call to the operator's connected wallet — a browser wallet, or a
    Privy embedded wallet with its own confirmation — which shows it and asks for approval every
-   time. That relay builds calls only through `src/build.ts`, and its gates (`src/connect/gate.ts`, and
+   time. That relay builds calls only through `src/build.ts` (on Solana, `src/solana/vault.ts`), and its gates (`src/connect/gate.ts`, and
    `src/connect/gate-solana.ts` on Solana) refuse any call whose destination is not a vault in `registry/vaults.json` or that vault's asset
    (the approval to it, for exactly the deposit's amount), and any receiver or owner other than the
    connected account. Do not add a private-key variable, a local signer, a tool that signs, or a
