@@ -1,65 +1,165 @@
-// Runs the BUILT CLI the way a caller does — `node dist/treasury.mjs …` as a child process — and checks
-// the exit code, how long the call took, and that the answer came from the chain. Issue #122: on
-// Windows with Node 24 the health check printed a correct answer and still exited non-zero.
+// Runs the BUILT CLI the way callers do and checks how it exits: the exit code, how long the call took,
+// and that the answer came from the chain. Issue #122: on Windows with Node 24 the health check printed
+// a correct answer and still exited non-zero.
 //
-// Every case is checked and reported before the verdict, so a red run shows each command's real exit
-// code, signal, duration and output rather than stopping at the first mismatch.
-import { spawnSync } from "node:child_process";
+// Subjects: this tree's bundle, and optionally the published v0.1.2 package (where the failure was
+// first seen), given as `--subject name=<install prefix>`. Each is run directly (`node dist/treasury.mjs`)
+// and through the `treasury` bin npm installs: from cmd and PowerShell on Windows, from sh elsewhere.
+// Every call is reported before the verdict, so a red run shows each one's real exit code (with its hex
+// form, which names a Windows crash), duration and output instead of stopping at the first mismatch.
+import { spawn } from "node:child_process";
+import { createServer } from "node:http";
+import { existsSync } from "node:fs";
+import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 
-const CLI = fileURLToPath(new URL("../../dist/treasury.mjs", import.meta.url));
-const ACCOUNT = "0xBBBBBbbBBb9cC5e90e3b3Af64bdAF62C37EEFFCb"; // a Base address that holds USDC; read only
-// Far longer than any of these calls takes when it exits at once, and far shorter than the request
-// timer a lost race can leave behind, so a fix that waits for open handles shows up here.
+const WIN = process.platform === "win32";
+const ROOT = fileURLToPath(new URL("../..", import.meta.url));
 const MAX_MS = Number(process.env.CLI_EXIT_MAX_MS ?? 20000);
+const BASE_RPC = "https://mainnet.base.org";
+const EVM_ACCOUNT = "0xBBBBBbbBBb9cC5e90e3b3Af64bdAF62C37EEFFCb"; // a Base address that holds USDC; read only
+const SOLANA_ACCOUNT = "4Nd1mBQtrMJVYVfKf2PJy9NZUZdTAsp7D4xWLs4gDB4T"; // an unfunded Solana address; read only
+const VAULT_2B = "0x91BcEbA5feCB9E92d80F1845B55cC56621E9352F";
+const SLOW_MS = 15000;
+
+async function rpc(method, params) {
+  const r = await fetch(BASE_RPC, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ jsonrpc: "2.0", id: 1, method, params }) });
+  return (await r.json()).result;
+}
+
+// An account with real history on the default vault: whoever the chain says owns it (it deposited).
+const owner = `0x${(await rpc("eth_call", [{ to: VAULT_2B, data: "0x8da5cb5b" }, "latest"])).slice(-40)}`;
+
+// A Base endpoint that forwards every request but holds `eth_chainId` back for SLOW_MS: the health
+// check answers without it, so the CLI exits while a request to this endpoint is still open. That is
+// the case its immediate exit exists for, and the one most likely to trip an exit-time defect.
+const slow = createServer((req, res) => {
+  let body = "";
+  req.on("data", (c) => (body += c));
+  req.on("end", async () => {
+    try {
+      if (/"eth_chainId"/.test(body)) await new Promise((r) => setTimeout(r, SLOW_MS));
+      const up = await fetch(BASE_RPC, { method: "POST", headers: { "content-type": "application/json" }, body });
+      res.writeHead(up.status, { "content-type": "application/json" }).end(await up.text());
+    } catch {
+      res.destroy();
+    }
+  });
+});
+await new Promise((r) => slow.listen(0, "127.0.0.1", r));
+const SLOW_URL = `http://127.0.0.1:${slow.address().port}`;
 
 const cases = [
-  {
-    name: "health check",
-    args: ["earn", "status"],
-    code: 0,
-    // `latestBlock` comes from the RPC; a command that never reached the network has no block number.
-    proof: (out) => out.rpc === "ok" && /^\d+$/.test(out.latestBlock ?? ""),
-  },
+  { name: "health check", args: ["earn", "status"], code: 0, proof: (o) => o.rpc === "ok" && /^\d+$/.test(o.latestBlock ?? "") },
   {
     name: "deposit quote",
-    args: ["earn", "quote", "--direction", "deposit", "--account", ACCOUNT, "--amount_usdc", "1"],
+    args: ["earn", "quote", "--direction", "deposit", "--account", EVM_ACCOUNT, "--amount_usdc", "1"],
     code: 0,
-    // The share price and the pre-flight verdict are read from the vault and a simulated deposit.
-    proof: (out) => /USDC per share$/.test(out.sharePriceInAssets ?? "") && out.preflight !== undefined,
+    proof: (o) => /USDC per share$/.test(o.sharePriceInAssets ?? "") && o.preflight !== undefined,
   },
   {
-    name: "refused argument",
-    args: ["earn", "quote", "--direction", "sideways"],
-    code: 1,
-    // A real failure must still exit 1, with its error on stderr.
-    proof: (_out, stderr) => typeof JSON.parse(stderr).error === "string",
+    name: "Solana quote",
+    args: ["earn", "quote", "--chain", "solana", "--direction", "deposit", "--account", SOLANA_ACCOUNT, "--amount_usdc", "1"],
+    code: 0,
+    since: "0.1.3",
+    proof: (o) => o.chain === "solana" && JSON.stringify(o).includes("slot"),
   },
+  {
+    name: "balance with history",
+    args: ["earn", "balance", "--account", owner],
+    code: 0,
+    // The event-log scan: many requests, and it may stop at its time budget on a public endpoint.
+    // A failed or partial scan on the public endpoint is fine: the point is that it ran and the CLI exited.
+    proof: (o) => o.scan !== undefined && /^\d+(\.\d+)?$/.test(o.sharesExact ?? "") && Number.isInteger(o.measuredAtBlock),
+  },
+  {
+    name: "health, slow endpoint",
+    args: ["earn", "status"],
+    env: { TREASURY_RPC_BASE: SLOW_URL },
+    code: 0,
+    proof: (o) => o.rpc === "ok" && /^\d+$/.test(o.latestBlock ?? ""),
+  },
+  { name: "refused argument", args: ["earn", "quote", "--direction", "sideways"], code: 1, proof: (_o, err) => typeof JSON.parse(err).error === "string" },
 ];
 
-const rows = [];
-for (const c of cases) {
-  const started = Date.now();
-  const r = spawnSync(process.execPath, [CLI, ...c.args], { encoding: "utf8", timeout: 120000 });
-  const ms = Date.now() - started;
-  let proved = false;
-  try {
-    proved = Boolean(c.proof(r.stdout.trim() ? JSON.parse(r.stdout) : {}, r.stderr));
-  } catch {
-    proved = false;
-  }
-  const ok = r.status === c.code && proved && ms <= MAX_MS;
-  rows.push({ case: c.name, expected: c.code, status: r.status, signal: r.signal, ms, proved, ok });
-  console.log(`--- ${c.name}: exit ${r.status}${r.signal ? ` (signal ${r.signal})` : ""}, ${ms} ms, expected ${c.code}, answer proved: ${proved}`);
-  if (r.stdout.trim()) console.log(`stdout:\n${r.stdout.trim().slice(0, 1500)}`);
-  if (r.stderr.trim()) console.log(`stderr:\n${r.stderr.trim().slice(0, 3000)}`);
-  if (r.error) console.log(`spawn error: ${r.error.message}`);
+// Subjects: this tree, plus any `--subject name=<prefix>` (an npm install prefix holding the package).
+const subjects = [{ name: "this tree", version: "0.1.3", file: join(ROOT, "dist", "treasury.mjs"), prefix: process.env.CLI_EXIT_PREFIX }];
+for (const a of process.argv.slice(2)) {
+  const m = /^--subject=([^=]+)=(.+)$/.exec(a);
+  if (m) subjects.push({ name: m[1], version: m[1].replace(/^v/, ""), file: join(m[2], "node_modules", "@temporalabs", "treasury", "dist", "treasury.mjs"), prefix: m[2] });
 }
-console.log(`\n${process.platform} ${process.version}`);
+
+function launches(s) {
+  const out = [{ how: "node", cmd: process.execPath, pre: [s.file], shell: false }];
+  if (!s.prefix) return out;
+  const bin = join(s.prefix, "node_modules", ".bin");
+  if (WIN) {
+    out.push({ how: "cmd + npm bin", cmd: join(bin, "treasury.cmd"), pre: [], shell: true });
+    out.push({ how: "PowerShell + npm bin", cmd: "pwsh", pre: ["-NoProfile", "-Command"], shell: false, ps1: join(bin, "treasury.ps1") });
+  } else {
+    out.push({ how: "sh + npm bin", cmd: join(bin, "treasury"), pre: [], shell: true });
+  }
+  return out;
+}
+
+function call(l, args, env) {
+  return new Promise((resolve) => {
+    const started = Date.now();
+    // PowerShell takes one command string: the npm shim, each argument single-quoted, then its exit code.
+    const argv = l.ps1 ? [...l.pre, `& '${l.ps1}' ${args.map((a) => `'${a}'`).join(" ")}; exit $LASTEXITCODE`] : [...l.pre, ...args];
+    const child = spawn(l.cmd, l.shell ? argv.map((a) => (/[\s"]/.test(a) ? `"${a}"` : a)) : argv, {
+      env: { ...process.env, ...env },
+      shell: l.shell,
+      windowsHide: true,
+    });
+    let stdout = "";
+    let stderr = "";
+    child.stdout.on("data", (d) => (stdout += d));
+    child.stderr.on("data", (d) => (stderr += d));
+    const kill = setTimeout(() => child.kill(), 120000);
+    child.on("error", (e) => (stderr += `\nspawn error: ${e.message}`));
+    child.on("close", (status, signal) => {
+      clearTimeout(kill);
+      resolve({ status, signal, ms: Date.now() - started, stdout, stderr });
+    });
+  });
+}
+
+const rows = [];
+for (const s of subjects) {
+  if (!existsSync(s.file)) {
+    console.log(`subject ${s.name}: ${s.file} is missing`);
+    rows.push({ subject: s.name, launch: "-", case: "installed", ok: false });
+    continue;
+  }
+  for (const l of launches(s)) {
+    for (const c of cases) {
+      if (c.since && s.version < c.since) continue;
+      const r = await call(l, c.args, c.env);
+      let proved = false;
+      try {
+        proved = Boolean(c.proof(r.stdout.trim() ? JSON.parse(r.stdout) : {}, r.stderr));
+      } catch {
+        proved = false;
+      }
+      const hex = typeof r.status === "number" && r.status > 255 ? ` (0x${(r.status >>> 0).toString(16).toUpperCase()})` : "";
+      const ok = r.status === c.code && proved && r.ms <= MAX_MS;
+      rows.push({ subject: s.name, launch: l.how, case: c.name, expected: c.code, exit: `${r.status}${hex}`, signal: r.signal, ms: r.ms, proved, ok });
+      console.log(`--- [${s.name} | ${l.how}] ${c.name}: exit ${r.status}${hex}${r.signal ? ` signal ${r.signal}` : ""}, ${r.ms} ms, expected ${c.code}, answer proved: ${proved}`);
+      if (!ok) {
+        if (r.stdout.trim()) console.log(`stdout:\n${r.stdout.trim().slice(0, 1500)}`);
+        if (r.stderr.trim()) console.log(`stderr:\n${r.stderr.trim().slice(0, 3000)}`);
+      }
+    }
+  }
+}
+slow.close();
+slow.closeAllConnections?.();
+console.log(`\n${process.platform} ${process.arch} ${process.version}`);
 console.table(rows);
 const bad = rows.filter((r) => !r.ok);
 if (bad.length) {
-  console.log(`FAILED: ${bad.map((r) => r.case).join(", ")}`);
+  console.log(`FAILED: ${bad.map((r) => `${r.subject} | ${r.launch} | ${r.case}`).join("; ")}`);
   process.exit(1);
 }
-console.log("every case exited as expected, in time, with an answer read from the chain");
+console.log("every call exited as expected, in time, with an answer read from the chain");
