@@ -212,10 +212,11 @@ const WINDOWS_EXIT_BACKSTOP_MS = 2_000;
 /**
  * Ends the process with `code` once the answer is written. Elsewhere this is an immediate
  * `process.exit`. On Windows it is not (#122): Node 24 (24.0.0 and 24.19.0 measured) aborts with
- * 0xC0000409 when `process.exit` runs while a just-finished request's connection is still closing —
- * the health check printed a correct answer and then crashed. There the exit code is set and Node
- * ends on its own once the connection has closed; a backstop that holds nothing open ends it after
- * WINDOWS_EXIT_BACKSTOP_MS if a request is still pending, as the slow-endpoint case leaves one.
+ * 0xC0000409, on the libuv assertion `!(handle->flags & UV_HANDLE_CLOSING)`, when `process.exit` runs
+ * right after the health check's request — it printed a correct answer and then crashed. There the
+ * exit code is set and Node ends on its own once nothing is left open; a backstop that holds
+ * nothing open ends it after WINDOWS_EXIT_BACKSTOP_MS if a request is still pending, as the
+ * slow-endpoint case leaves one.
  */
 function exitWith(code: number): void {
   if (process.platform !== "win32") process.exit(code);
