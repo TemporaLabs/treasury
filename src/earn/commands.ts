@@ -57,7 +57,7 @@ function evm(v: string, what: string) {
   return getAddress(v);
 }
 const amountArg = z.string().regex(/^\d+(\.\d+)?$/, 'plain decimal amount of the vault\'s asset (USDC; USDG on Robinhood Chain), e.g. "25" or "12.5"');
-const vaultArg = z.string().optional().describe("the vault's ERC-20 ticker, e.g. tlCashPlusUSDC2 (`earn vaults` lists them); omit for the default vault of `chain`, or of the default chain when `chain` is omitted too");
+const vaultArg = z.string().optional().describe("the vault's ticker, e.g. tlCashPlusUSDC2 (`earn vaults` lists them); omit for the default vault of `chain`, or of the default chain when `chain` is omitted too");
 const accountArg = addressArg.describe("the account whose shares these are — the depositor, the owner, the holder");
 
 /**
@@ -281,7 +281,7 @@ export function buildCommands(): Record<string, Command> {
     {
       title: "List vaults",
       description:
-        "Every vault in the registry, on every chain. `symbol` is the vault's own on-chain ERC-20 ticker — the value every other tool takes as `vault` — and `name` its `name()`; `chain` is the chain it is on, the value every other tool takes as `chain`; `links` are openable without any RPC endpoint, so an operator can verify the contract independently. SHOW `warning` TO THE DEPOSITOR — every vault offered today is a test vault. Each row also carries its backend, chassis, decimals and MEASURED deposit-open status. `chains` lists the chains a deposit can go to, the default chain first, each with its own default vault: if the operator has not said which chain, show them these and ASK before preparing a deposit. `default` is used when a tool is called with neither `vault` nor `chain`, and is on `defaultChain`; `depositable` is the subset any account can put money into today, across all chains: an ERC-4626 chassis (or the Kamino vault on Solana) + measured open. `defaultAccess` says whether a default takes deposits from any account (`open`) or only whitelisted ones (`whitelist`); for `whitelist`, run `earn status` for the account before preparing a deposit.",
+        "Every vault in the registry, on every chain. `symbol` is the vault's ticker — its own on-chain ERC-20 ticker on the EVM chains, one the registry assigns on Solana — the value every other tool takes as `vault`, and `name` its name; `chain` is the chain it is on, the value every other tool takes as `chain`; `links` are openable without any RPC endpoint, so an operator can verify the contract independently. SHOW `warning` TO THE DEPOSITOR — every vault offered today is a test vault. Each row also carries its backend, chassis, decimals and MEASURED deposit-open status. `chains` lists the chains a deposit can go to, the default chain first, each with its own default vault: if the operator has not said which chain, show them these and ASK before preparing a deposit. `default` is used when a tool is called with neither `vault` nor `chain`, and is on `defaultChain`; `depositable` is the subset any account can put money into today, across all chains: an ERC-4626 chassis (or the Kamino vault on Solana) + measured open. `defaultAccess` says whether a default takes deposits from any account (`open`) or only whitelisted ones (`whitelist`); for `whitelist`, run `earn status` for the account before preparing a deposit.",
       inputSchema: {},
     },
     guarded(async () => {
@@ -356,7 +356,7 @@ export function buildCommands(): Record<string, Command> {
     {
       title: "Health check, or a deposit pre-flight verdict",
       description:
-        "With NO `account`: is the CLI working and the chain's RPC reachable — chain, chain id, latest block, registry version, and which env var supplied the RPC (never the URL). Each chain has its own RPC, so pass `chain` to check the one you are about to use; `rpc` is `ok`, `unreachable`, or `wrong_chain` when the configured endpoint answers for a different chain. `chainVerified: false` beside `ok` means the endpoint answered but did not say which chain it is. When a separate logs RPC is set, `logsRpc` reports it the same way. With `account`: simulates deposit() from that address and reports OPEN_READY, NEEDS_APPROVAL, WHITELIST_GATED, REVERTED_OTHER, REFUSED_BY_CLIENT or UNRESOLVED, never trusting maxDeposit(). The `mode` field says which answer you got.",
+        "With NO `account`: is the CLI working and the chain's RPC reachable — chain, chain id, latest block, registry version, and which env var supplied the RPC (never the URL). Each chain has its own RPC, so pass `chain` to check the one you are about to use; `rpc` is `ok`, `unreachable`, or `wrong_chain` when the configured endpoint answers for a different chain. `chainVerified: false` beside `ok` means the endpoint answered but did not say which chain it is. When a separate logs RPC is set, `logsRpc` reports it the same way. With `account`: simulates deposit() from that address and reports OPEN_READY, NEEDS_APPROVAL, WHITELIST_GATED, REVERTED_OTHER, REFUSED_BY_CLIENT or UNRESOLVED, never trusting maxDeposit(); on Solana it simulates the deposit transaction and reports OPEN_READY, NEEDS_FUNDS (the account lacks the USDC, or SOL for fees and rent), REVERTED_OTHER or UNRESOLVED. The `mode` field says which answer you got.",
       inputSchema: { vault: vaultArg, chain, account: accountArg.optional(), amount_usdc: amountArg.optional() },
     },
     guarded(async ({ vault: symbol, chain, account, amount_usdc }) => {
@@ -505,7 +505,7 @@ export function buildCommands(): Record<string, Command> {
     {
       title: "Prepare an unsigned deposit",
       description:
-        "Returns the UNSIGNED calls for a deposit — [approve(asset → vault), deposit(assets, receiver)] — inside an envelope with requires_signature: true. Amount is in the vault's asset — USDC, or USDG on Robinhood Chain; `amount_usdc` keeps its name for every asset. The envelope names the `chain` and `chainId` the calls are for: say which chain to the operator, and if they have not chosen one, ask before calling this. NOTHING IS SUBMITTED: hand the calls to a signer in order. This tool cannot sign or send, and the deposit has not happened until the signer's transactions confirm. Each call also carries `function` and `args` — the same call `data` encodes, decoded, e.g. `approve(address spender, uint256 value)` with `{ spender, value }` — so an operator without a CLI signer can fill a block explorer's Write Contract form directly. `args` values are RAW contract units, which is what the form takes; `description` is the human sentence.",
+        "Returns the UNSIGNED calls for a deposit — [approve(asset → vault), deposit(assets, receiver)] on the EVM chains, ONE unsigned transaction (`transaction.wire`) on Solana — inside an envelope with requires_signature: true. Amount is in the vault's asset — USDC, or USDG on Robinhood Chain; `amount_usdc` keeps its name for every asset. The envelope names the `chain` and `chainId` the calls are for: say which chain to the operator, and if they have not chosen one, ask before calling this. NOTHING IS SUBMITTED: hand the calls to a signer in order. This tool cannot sign or send, and the deposit has not happened until the signer's transactions confirm. On the EVM chains each call also carries `function` and `args` — the same call `data` encodes, decoded, e.g. `approve(address spender, uint256 value)` with `{ spender, value }` — so an operator without a CLI signer can fill a block explorer's Write Contract form directly. `args` values are RAW contract units, which is what the form takes; `description` is the human sentence.",
       inputSchema: {
         vault: vaultArg,
         chain,
@@ -531,7 +531,7 @@ export function buildCommands(): Record<string, Command> {
     {
       title: "Prepare an unsigned withdrawal",
       description:
-        "Returns the UNSIGNED call for a withdrawal in asset terms — withdraw(assets, receiver, owner) — inside an envelope with requires_signature: true, which names the `chain` the call is for: a position is withdrawn on the chain it is on, so name the vault (or its chain) and never ask the operator to choose one. To empty the account pass --all (a switch: it takes no value) with shares_exact copied verbatim from sharesExact from `earn balance` (redeem of the exact balance; never a rounded number). NOTHING IS SUBMITTED and no funds have moved until a signer confirms. Each call also carries `function` and `args` — the same call `data` encodes, decoded, e.g. `withdraw(uint256 assets, address receiver, address owner)` with `{ assets, receiver, owner }` — so an operator without a CLI signer can fill a block explorer's Write Contract form directly. `args` values are RAW contract units, which is what the form takes; `description` is the human sentence.",
+        "Returns the UNSIGNED call for a withdrawal in asset terms — withdraw(assets, receiver, owner) on the EVM chains, ONE unsigned transaction (`transaction.wire`) on Solana — inside an envelope with requires_signature: true, which names the `chain` the call is for: a position is withdrawn on the chain it is on, so name the vault (or its chain) and never ask the operator to choose one. To empty the account pass --all (a switch: it takes no value) with shares_exact copied verbatim from sharesExact from `earn balance` (redeem of the exact balance; never a rounded number). NOTHING IS SUBMITTED and no funds have moved until a signer confirms. On the EVM chains each call also carries `function` and `args` — the same call `data` encodes, decoded, e.g. `withdraw(uint256 assets, address receiver, address owner)` with `{ assets, receiver, owner }` — so an operator without a CLI signer can fill a block explorer's Write Contract form directly. `args` values are RAW contract units, which is what the form takes; `description` is the human sentence.",
       inputSchema: {
         vault: vaultArg,
         chain,
@@ -556,8 +556,6 @@ export function buildCommands(): Record<string, Command> {
       const account = evm(rawAccount, "account");
       // ⚠️ `receiver` and `account` are DIFFERENT slots and both are addresses, so a transposition
       // here type-checks. `account` is the owner whose shares burn; `receiver` is the payee.
-      if (all && amount_usdc) throw new Error("give --amount_usdc or --all with --shares_exact, not both");
-      if (!all && shares_exact) throw new Error("--shares_exact goes with --all; for an amount in the asset, use --amount_usdc alone");
       if (all) {
         if (!shares_exact) throw new Error("--all requires --shares_exact (copy sharesExact from `earn balance` verbatim)");
         return unsigned(buildWithdraw(vault, { receiver, owner: account, all: true, sharesExact: shares_exact }), vault, "withdraw");

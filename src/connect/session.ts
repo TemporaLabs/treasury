@@ -62,7 +62,6 @@ export function clearSession(): boolean {
   return had;
 }
 
-/** The one acknowledgement waiting for `--ack` (`ack.ts`). Issuing another replaces it. */
 /**
  * The connected SOLANA account, kept apart from the EVM one: an operator can be connected on both at once,
  * with different wallets, and a command for a vault on one chain family reads only that family's session.
@@ -92,6 +91,7 @@ export function clearSolanaSession(): boolean {
   return had;
 }
 
+/** The one acknowledgement waiting for `--ack` (`ack.ts`). Issuing another replaces it. */
 export const pendingAckPath = () => join(dir(), "connect-ack.json");
 
 export function writePendingAck(a: PendingAck): void {

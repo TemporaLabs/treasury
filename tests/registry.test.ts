@@ -198,7 +198,7 @@ describe("the shipped registry", () => {
     expect(() => resolveVault("tlCashPlusUSDC2C", "base")).toThrow(/"tlCashPlusUSDC2C" is on arbitrum, not base.*tlCashPlusUSDC2B/s);
     expect(() => resolveVault("tlCashPlusUSDG2D", "arbitrum")).toThrow(/"tlCashPlusUSDG2D" is on robinhood, not arbitrum.*tlCashPlusUSDC2C/s);
     // an unknown chain names the ones that exist, and is never read as "the default chain"
-    expect(() => resolveVault(undefined, "solana")).toThrow(/unknown chain "solana"; chains with a vault: base, arbitrum, robinhood, ethereum, monad/);
+    expect(() => resolveVault(undefined, "solana")).toThrow(/chain "solana" has no ERC-4626 vault; this resolves the EVM vaults only/);
     expect(() => resolveVault("tlCashPlusUSDC2", "Base")).toThrow(/unknown chain "Base"/); // exact keys, no case-folding guess
     expect(() => resolveVault(undefined, " arbitrum")).toThrow(/unknown chain " arbitrum"/);
     // exact keys: a prefix or a longer name is not the chain

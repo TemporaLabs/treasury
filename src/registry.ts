@@ -149,6 +149,7 @@ export function resolveVault(symbol?: string, chain?: string): VaultEntry {
   // An EMPTY string is an omitted argument, for `chain` exactly as for `vault` (`!symbol` below):
   // a host that sends "" for every optional it did not fill must get the default, not a refusal.
   if (chain) {
+    if (chain === SOLANA_INFO.key) throw new Error(`chain "${chain}" has no ERC-4626 vault; this resolves the EVM vaults only, and the Solana vault is reached through the CLI (\`treasury earn … --chain solana\`)`);
     chainId = chainIdForKey(chain);
     const offered = offeredChains();
     if (chainId === undefined || !offered.some((c) => c.chainId === chainId)) {
