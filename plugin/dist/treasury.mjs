@@ -1011,7 +1011,7 @@ var version3;
 var init_version2 = __esm({
   "node_modules/viem/_esm/errors/version.js"() {
     "use strict";
-    version3 = "2.57.2";
+    version3 = "2.57.3";
   }
 });
 
@@ -29708,7 +29708,7 @@ init_request();
 init_rpc();
 var EXECUTION_REVERTED_ERROR_CODE = 3;
 function getContractError(err, { abi: abi2, address: address3, args, docsPath: docsPath8, functionName, sender }) {
-  const error62 = err instanceof RawContractError ? err : err instanceof BaseError2 ? err.walk((err2) => "data" in err2) || err.walk() : {};
+  const error62 = err instanceof RawContractError ? err : err instanceof BaseError2 ? err.walk((err2) => typeof err2 === "object" && err2 !== null && "data" in err2) || err.walk() : {};
   const { code, data, details, message, shortMessage } = error62;
   const cause = (() => {
     if (err instanceof AbiDecodingZeroDataError)
@@ -37098,7 +37098,7 @@ async function waitForTransactionReceipt(client, parameters) {
                 shouldRetry: ({ error: error62 }) => error62 instanceof BlockNotFoundError
               });
               retrying = false;
-              const replacementTransaction = block.transactions.find(({ from: from16, nonce }) => from16 === replacedTransaction.from && nonce === replacedTransaction.nonce);
+              const replacementTransaction = block.transactions.find(({ from: from16, hash: hash5, nonce }) => from16 === replacedTransaction.from && hash5 !== replacedTransaction.hash && nonce === replacedTransaction.nonce);
               if (!replacementTransaction)
                 return;
               receipt = await getAction(client, getTransactionReceipt, "getTransactionReceipt")({
