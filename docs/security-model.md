@@ -132,9 +132,14 @@ open for nothing but the calls that text described.
 - **What landed is read from the receipt.** A smart-account wallet relays a call inside a batch, so the
   transaction's own `from`/`to` name a relayer. The check is the vault's or token's own event for the
   connected account and the exact amount; any other movement of the asset out of the account in the
-  same transaction is reported as `extra_transfer`, never folded into a match. On Solana the check reads
-  the transaction's token-balance changes for the account's asset and share accounts. The next call is
-  offered only after the previous one is confirmed this way.
+  same transaction is reported as `extra_transfer`, never folded into a match. On Solana the landed
+  transaction must name a blockhash the page was handed (each transaction is built when the operator
+  confirms, and its blockhash recorded) and be paid for by the connected account; anything else is
+  `mismatch`, whatever its balances show. Its token-balance changes must then match: a deposit takes
+  exactly the acknowledged amount of the asset and mints shares (more taken is `extra_transfer`), and a
+  withdrawal burns exactly the acknowledged shares and pays the asset. A wallet that rebuilt the
+  transaction with a newer blockhash would be reported as `mismatch` rather than matched. The next call
+  is offered only after the previous one is confirmed this way.
 - **No WalletConnect code ships.** The page bundle stubs out every `@walletconnect` / `@reown` module
   (some are under a licence that is not open source) and its build fails if one returns; the page's CSP also blocks
   WalletConnect's servers. The Privy app ID in the page is a public identifier; no Privy secret

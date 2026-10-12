@@ -89,6 +89,12 @@ async function signAndSend(wire: string, signer: KeyPairSigner): Promise<string>
 }
 
 /** The number of kVault withdraw instructions in a wire transaction — what Kamino's per-instruction charge counts. */
+/** The blockhash a built transaction names: what the confirm page records, so the landing check can bind to it. */
+function blockhashOf(wire: string): string {
+  const tx = getTransactionDecoder().decode(Buffer.from(wire, "base64"));
+  return getCompiledTransactionMessageDecoder().decode(tx.messageBytes).lifetimeToken;
+}
+
 function withdrawInstructionCount(wire: string): number {
   const tx = getTransactionDecoder().decode(Buffer.from(wire, "base64"));
   const msg = getCompiledTransactionMessageDecoder().decode(tx.messageBytes);
@@ -103,7 +109,7 @@ for (const vault of listSolanaVaults()) {
     let signer: KeyPairSigner;
     let savedEnv: string | undefined;
     let workDir: string | undefined;
-    const opts = () => ({ attempts: 30, delayMs: 500, deadline: Date.now() + 60_000 });
+    const opts = (wire: string) => ({ attempts: 30, delayMs: 500, deadline: Date.now() + 60_000, built: new Set([blockhashOf(wire)]) });
 
     beforeAll(async () => {
       // Surfpool writes its logs under its working directory: a scratch one, never the checkout.
@@ -159,7 +165,7 @@ for (const vault of listSolanaVaults()) {
         const admitted = await admitSolana(dep.transaction.wire, account);
         expect(admitted).toMatchObject({ kind: "deposit", amount: depositRaw });
         const depSig = await signAndSend(dep.transaction.wire, signer);
-        const depV = await verifySolanaLanded(rpc, depSig, { kind: "deposit", vault, raw: depositRaw }, account, opts());
+        const depV = await verifySolanaLanded(rpc, depSig, { kind: "deposit", vault, raw: depositRaw }, account, opts(dep.transaction.wire));
         expect(depV.verified, depV.detail).toBe("matched");
         const shares = (await tokenBalance(rpc, sharesAta)).amount;
         expect(shares).toBeGreaterThan(0n);
@@ -181,7 +187,7 @@ for (const vault of listSolanaVaults()) {
         const partialIxs = withdrawInstructionCount(built.wire);
         const usdcBeforePartial = (await tokenBalance(rpc, usdcAta)).amount;
         const wSig = await signAndSend(built.wire, signer);
-        const wV = await verifySolanaLanded(rpc, wSig, { kind: "withdraw", vault, raw: half }, account, opts());
+        const wV = await verifySolanaLanded(rpc, wSig, { kind: "withdraw", vault, raw: half }, account, opts(built.wire));
         expect(wV.verified, wV.detail).toBe("matched");
         expect((await tokenBalance(rpc, sharesAta)).amount).toBe(shares - half);
         const paidPartial = (await tokenBalance(rpc, usdcAta)).amount - usdcBeforePartial;
@@ -193,7 +199,7 @@ for (const vault of listSolanaVaults()) {
         const restIxs = withdrawInstructionCount(rest.transaction.wire);
         const restRaw = parseAmount(bal2.sharesExact, vault.shareDecimals, "shares");
         const rSig = await signAndSend(rest.transaction.wire, signer);
-        const rV = await verifySolanaLanded(rpc, rSig, { kind: "withdraw", vault, raw: restRaw }, account, opts());
+        const rV = await verifySolanaLanded(rpc, rSig, { kind: "withdraw", vault, raw: restRaw }, account, opts(rest.transaction.wire));
         expect(rV.verified, rV.detail).toBe("matched");
         expect((await tokenBalance(rpc, sharesAta)).amount).toBe(0n);
 

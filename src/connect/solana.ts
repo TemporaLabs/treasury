@@ -119,7 +119,13 @@ type TokenBal = { owner?: string; mint: string; uiTokenAmount: { amount: string 
  * signature's status and the transaction's token-balance records — not from the wallet's word, and not from
  * a blockhash-expiry wait: a wallet can report "block height exceeded" for a transaction that in fact landed.
  */
-export async function verifySolanaLanded(rpc: SolanaRpc, signature: string, intent: SolanaIntent, account: string, opts: { attempts?: number; delayMs?: number; deadline: number }): Promise<Verdict> {
+export async function verifySolanaLanded(
+  rpc: SolanaRpc,
+  signature: string,
+  intent: SolanaIntent,
+  account: string,
+  opts: { attempts?: number; delayMs?: number; deadline: number; built: ReadonlySet<string> },
+): Promise<Verdict> {
   const sig = signature as Signature;
   for (let i = 0; i < (opts.attempts ?? 45) && Date.now() < opts.deadline; i++) {
     const st = (await rpc.getSignatureStatuses([sig], { searchTransactionHistory: true }).send()).value[0];
@@ -129,11 +135,24 @@ export async function verifySolanaLanded(rpc: SolanaRpc, signature: string, inte
       if (!tx || !tx.meta) return { verified: "unverified", detail: "the signature is confirmed but its transaction could not be read; look it up before retrying anything" };
       const meta = tx.meta as unknown as { err: unknown; preTokenBalances?: TokenBal[]; postTokenBalances?: TokenBal[] };
       if (meta.err) return { verified: "reverted", detail: `the transaction failed on chain: ${JSON.stringify(meta.err)}` };
+      // Bound to what this flow built: the page is handed a transaction with a fresh blockhash, recorded in
+      // `built`. A signature for any other transaction — an older one of the same shape, or a share transfer
+      // — names another blockhash, and its balances say nothing about this deposit or withdrawal.
+      const message = (tx as unknown as { transaction?: { message?: { recentBlockhash?: string; accountKeys?: readonly string[] } } }).transaction?.message;
+      if (!message?.recentBlockhash || !opts.built.has(message.recentBlockhash)) {
+        return { verified: "mismatch", detail: `${signature} is not the transaction this page built (its blockhash is not one handed to the page); check \`earn balance --chain solana\` before retrying anything` };
+      }
+      if (message.accountKeys?.[0] !== account) {
+        return { verified: "mismatch", detail: `${signature} was paid for by ${message.accountKeys?.[0] ?? "an unknown account"}, not the connected account` };
+      }
       const shares = tokenDelta(meta, account, intent.vault.sharesMint);
       const asset = tokenDelta(meta, account, intent.vault.asset.address);
       const a = intent.vault.asset;
       if (intent.kind === "deposit") {
         if (shares <= 0n) return { verified: "mismatch", detail: `the transaction landed but the account received no ${intent.vault.symbol} shares` };
+        if (-asset < intent.raw) {
+          return { verified: "mismatch", detail: `the transaction landed, but the account's ${a.symbol} fell by ${formatAmount(-asset > 0n ? -asset : 0n, a.decimals)} ${a.symbol}, not the ${formatAmount(intent.raw, a.decimals)} ${a.symbol} acknowledged` };
+        }
         if (-asset > intent.raw) {
           return { verified: "extra_transfer", detail: `the deposit landed, and the account's ${a.symbol} fell by ${formatAmount(-asset, a.decimals)}, more than the ${formatAmount(intent.raw, a.decimals)} deposited. Tell the operator.`, alsoMoved: [{ to: "unknown", amountRaw: (-asset - intent.raw).toString() }] };
         }
@@ -152,7 +171,7 @@ export async function verifySolanaLanded(rpc: SolanaRpc, signature: string, inte
 }
 
 /** Builds the intent's transaction now, holds it to the intent through the gate, and simulates it. */
-export async function buildForIntent(rpc: SolanaRpc, intent: SolanaIntent, account: string): Promise<{ wire: string; expiresAfterBlockHeight: string }> {
+export async function buildForIntent(rpc: SolanaRpc, intent: SolanaIntent, account: string): Promise<{ wire: string; expiresAfterBlockHeight: string; blockhash: string }> {
   const v = await readVault(rpc, intent.vault);
   const ixs = intent.kind === "deposit" ? await depositInstructions(v, account, intent.raw) : await withdrawInstructions(v, account, intent.raw);
   const life = await freshLifetime(rpc);
@@ -172,7 +191,7 @@ export async function buildForIntent(rpc: SolanaRpc, intent: SolanaIntent, accou
     const partial = partialWithdrawal(intent.raw, burned, legs, intent.vault.shareDecimals, sim.slot);
     if (partial) throw new Error(`refused: ${partial}`);
   }
-  return { wire, expiresAfterBlockHeight: life.lastValidBlockHeight.toString() };
+  return { wire, expiresAfterBlockHeight: life.lastValidBlockHeight.toString(), blockhash: life.blockhash };
 }
 
 export async function runConfirmSolana(intent: SolanaIntent, session: Session, deps: SolanaFlowDeps): Promise<{ result: Settled<SolanaTxOutcome[]>; url: string; opened: boolean; done: SolanaTxOutcome[]; total: number; stopReason?: string }> {
@@ -181,6 +200,8 @@ export async function runConfirmSolana(intent: SolanaIntent, session: Session, d
   // The gate runs before any page opens, on a transaction built for exactly this intent.
   await buildForIntent(rpc, intent, account);
   const done: SolanaTxOutcome[] = [];
+  // Every blockhash a transaction handed to the page was built with: the landed one must name one of them.
+  const built = new Set<string>();
   let stopReason: string | undefined;
   const deadline = Date.now() + deps.ttlMs;
   const a = intent.vault.asset;
@@ -231,7 +252,9 @@ export async function runConfirmSolana(intent: SolanaIntent, session: Session, d
       if (body["build"] === true) {
         if (done.length > 0) return { ok: false, reason: "the transaction was already sent" };
         try {
-          return { ok: true, final: false, reply: await buildForIntent(rpc, intent, account) };
+          const reply = await buildForIntent(rpc, intent, account);
+          built.add(reply.blockhash);
+          return { ok: true, final: false, reply };
         } catch (e) {
           return { ok: false, reason: redactEndpoints(e instanceof Error ? e.message : String(e)) };
         }
@@ -243,7 +266,7 @@ export async function runConfirmSolana(intent: SolanaIntent, session: Session, d
       done.push(entry);
       let verdict: Verdict;
       try {
-        verdict = await verifySolanaLanded(rpc, sig, intent, account, { ...deps.verifyOpts, deadline });
+        verdict = await verifySolanaLanded(rpc, sig, intent, account, { ...deps.verifyOpts, deadline, built });
       } catch (e) {
         verdict = { verified: "unverified", detail: `could not check ${sig}: ${redactEndpoints(e instanceof Error ? e.message : String(e))}; look it up before retrying anything` };
       }

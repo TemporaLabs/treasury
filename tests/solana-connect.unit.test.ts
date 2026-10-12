@@ -35,11 +35,26 @@ describe("the Solana sign-in", () => {
   });
 });
 
-/** A scripted RPC: the signature's status, then the transaction's token balances. */
-function rpc(status: { err?: unknown; confirmationStatus?: string } | null, tx?: { err?: unknown; pre: Bal[]; post: Bal[] }) {
+/** The blockhash the page was handed, and one it was not. */
+const BUILT = "4sGjMW1sUnHzSxGspuhpqLDx6wiyjNtZAMdL4VZHirAn";
+const OTHER_BLOCKHASH = "GHtXQBsoZHVnNFa9YevAzFr17DJjgHXk3ycTKD5xD3Zi";
+
+/** A scripted RPC: the signature's status, then the transaction's message and token balances. */
+function rpc(
+  status: { err?: unknown; confirmationStatus?: string } | null,
+  tx?: { err?: unknown; pre: Bal[]; post: Bal[]; blockhash?: string; feePayer?: string },
+) {
   return {
     getSignatureStatuses: () => ({ send: async () => ({ value: [status] }) }),
-    getTransaction: () => ({ send: async () => (tx ? { meta: { err: tx.err ?? null, preTokenBalances: tx.pre, postTokenBalances: tx.post } } : null) }),
+    getTransaction: () => ({
+      send: async () =>
+        tx
+          ? {
+              transaction: { message: { recentBlockhash: tx.blockhash ?? BUILT, accountKeys: [tx.feePayer ?? ACCOUNT] } },
+              meta: { err: tx.err ?? null, preTokenBalances: tx.pre, postTokenBalances: tx.post },
+            }
+          : null,
+    }),
   } as never;
 }
 type Bal = { owner: string; mint: string; uiTokenAmount: { amount: string } };
@@ -48,7 +63,7 @@ const bal = (mint: string, amount: string): Bal => ({ owner: ACCOUNT, mint, uiTo
 const SIG = getBase58Decoder().decode(new Uint8Array(64).fill(7));
 const deposit: SolanaIntent = { kind: "deposit", vault, raw: 2_000_000n };
 const withdraw: SolanaIntent = { kind: "withdraw", vault, raw: 1_000_000n };
-const opts = { attempts: 2, delayMs: 1, deadline: Date.now() + 60_000 };
+const opts = { attempts: 2, delayMs: 1, deadline: Date.now() + 60_000, built: new Set([BUILT]) };
 
 describe("whether a Solana transaction landed as acknowledged", () => {
   it("a deposit that minted shares and took exactly the amount: matched", async () => {
@@ -74,6 +89,38 @@ describe("whether a Solana transaction landed as acknowledged", () => {
   it("a withdrawal that burned exactly the shares and paid the asset: matched", async () => {
     const v = await verifySolanaLanded(rpc({ confirmationStatus: "confirmed" }, { pre: [bal(vault.sharesMint, "3000000")], post: [bal(vault.sharesMint, "2000000"), bal(vault.asset.address, "999000")] }), SIG, withdraw, ACCOUNT, opts);
     expect(v.verified).toBe("matched");
+  });
+
+  it("a deposit that took LESS of the asset than acknowledged: mismatch (a 1-unit mint is not the deposit)", async () => {
+    const v = await verifySolanaLanded(rpc({ confirmationStatus: "confirmed" }, { pre: [bal(vault.asset.address, "5000000")], post: [bal(vault.asset.address, "4999999"), bal(vault.sharesMint, "1")] }), SIG, deposit, ACCOUNT, opts);
+    expect(v.verified).toBe("mismatch");
+    expect(v.detail).toMatch(/not the 2 USDC acknowledged/);
+  });
+
+  it("shares arriving with no asset leaving (a plain share transfer in): mismatch", async () => {
+    const v = await verifySolanaLanded(rpc({ confirmationStatus: "confirmed" }, { pre: [bal(vault.sharesMint, "0")], post: [bal(vault.sharesMint, "5")] }), SIG, deposit, ACCOUNT, opts);
+    expect(v.verified).toBe("mismatch");
+  });
+
+  it("a transaction this page did not build (another blockhash): mismatch, whatever its balances say", async () => {
+    const exact = { pre: [bal(vault.asset.address, "5000000")], post: [bal(vault.asset.address, "3000000"), bal(vault.sharesMint, "1999999")] };
+    const v = await verifySolanaLanded(rpc({ confirmationStatus: "confirmed" }, { ...exact, blockhash: OTHER_BLOCKHASH }), SIG, deposit, ACCOUNT, opts);
+    expect(v.verified).toBe("mismatch");
+    expect(v.detail).toMatch(/not the transaction this page built/);
+    // The same balances under the built blockhash are the deposit.
+    expect((await verifySolanaLanded(rpc({ confirmationStatus: "confirmed" }, exact), SIG, deposit, ACCOUNT, opts)).verified).toBe("matched");
+    // With nothing built yet, nothing can match.
+    expect((await verifySolanaLanded(rpc({ confirmationStatus: "confirmed" }, exact), SIG, deposit, ACCOUNT, { ...opts, built: new Set<string>() })).verified).toBe("mismatch");
+  });
+
+  it("a transaction paid for by another account: mismatch", async () => {
+    const v = await verifySolanaLanded(rpc({ confirmationStatus: "confirmed" }, { pre: [bal(vault.asset.address, "5000000")], post: [bal(vault.asset.address, "3000000"), bal(vault.sharesMint, "1999999")], feePayer: "11111111111111111111111111111112" }), SIG, deposit, ACCOUNT, opts);
+    expect(v.verified).toBe("mismatch");
+  });
+
+  it("a withdrawal this page did not build: mismatch, even with the exact burn", async () => {
+    const v = await verifySolanaLanded(rpc({ confirmationStatus: "confirmed" }, { pre: [bal(vault.sharesMint, "3000000")], post: [bal(vault.sharesMint, "2000000"), bal(vault.asset.address, "999000")], blockhash: OTHER_BLOCKHASH }), SIG, withdraw, ACCOUNT, opts);
+    expect(v.verified).toBe("mismatch");
   });
 
   it("a failed transaction: reverted; no status within the wait: unverified, never 'not sent'", async () => {
