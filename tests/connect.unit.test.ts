@@ -10,13 +10,15 @@ import { admit, type GateCall } from "../src/connect/gate.js";
 import { verifyLanded } from "../src/connect/verify.js";
 import { buildConnectCommands, outcome, runConfirm, runConnect, signInMessage, type ConnectDeps } from "../src/connect/commands.js";
 import { pendingAckPath, readSession, writeSession } from "../src/connect/session.js";
-import { PAGE_CSP } from "../src/connect/page.js";
+import { PAGE_CSP, shell } from "../src/connect/page.js";
+import { runConfirmSolana } from "../src/connect/solana.js";
+import { getBase58Decoder } from "@solana/kit";
 import { ACK_TTL_MS } from "../src/connect/ack.js";
 import { run } from "../src/cli.js";
 import { DISCLOSURES } from "../src/disclosures.js";
 import { operatorWarning } from "../src/connect/ack.js";
 import { linksFor } from "../src/links.js";
-import { defaultVault, getVault, listVaults } from "../src/registry.js";
+import { defaultVault, getVault, listSolanaVaults, listVaults } from "../src/registry.js";
 
 /**
  * `treasury connect`, offline. No browser and no key: the tests play the page by speaking its HTTP
@@ -1155,5 +1157,72 @@ describe("a Solana withdrawal by amount: the acknowledgement survives the vault'
   it("refuses an --ack run for 25 shares with an acknowledgement given for 25 USDC", async () => {
     const first = JSON.parse(await withdraw({ amount_usdc: "25" })) as { ack: string };
     await expect(withdraw({ all: true, shares_exact: "25", ack: first.ack })).rejects.toThrow(/acknowledged/);
+  });
+});
+
+describe("the Solana confirm flow binds the landed transaction to one it built", () => {
+  const solVault = listSolanaVaults()[0]!;
+  const SOL_ACCOUNT = "9xQeWvG816bUx9EPjHmaT23yvVM2ZWbrrpZb9PusVFin";
+  const SOL_SIG = getBase58Decoder().decode(new Uint8Array(64).fill(7));
+  const snapshot = JSON.parse(readFileSync(new URL("./fixtures/solana/vault-snapshot.json", import.meta.url), "utf8")) as { slot: number; accounts: Record<string, { data: string }> };
+  const tokenAccount = (amount: bigint) => {
+    const b = Buffer.alloc(165);
+    b.writeBigUInt64LE(amount, 64);
+    return [b.toString("base64"), "base64"];
+  };
+  const bal = (mint: string, amount: string) => ({ owner: SOL_ACCOUNT, mint, uiTokenAmount: { amount } });
+
+  /** The recorded vault, a deposit that simulates clean, and a landed transaction naming `landed()`'s blockhash. */
+  const solRpc = (landed: () => string) =>
+    ({
+      getAccountInfo: (a: string) => ({ send: async () => ({ value: snapshot.accounts[String(a)] ? { data: [snapshot.accounts[String(a)]!.data, "base64"] } : { data: tokenAccount(0n) }, context: { slot: BigInt(snapshot.slot) } }) }),
+      getMultipleAccounts: (ks: string[]) => ({ send: async () => ({ value: ks.map((k) => ({ data: [snapshot.accounts[String(k)]!.data, "base64"] })), context: { slot: BigInt(snapshot.slot) } }) }),
+      getLatestBlockhash: () => ({ send: async () => ({ value: { blockhash: "4sGjMW1sUnHzSxGspuhpqLDx6wiyjNtZAMdL4VZHirAn", lastValidBlockHeight: 1150n } }) }),
+      getBlockHeight: () => ({ send: async () => 1000n }),
+      getBalance: () => ({ send: async () => ({ value: 10_000_000n }) }),
+      simulateTransaction: (_tx: string, cfg?: { accounts?: { addresses: string[] } }) => ({
+        send: async () => ({ context: { slot: BigInt(snapshot.slot) }, value: { err: null, logs: [], unitsConsumed: 100_000n, accounts: (cfg?.accounts?.addresses ?? []).map(() => ({ data: tokenAccount(0n) })) } }),
+      }),
+      getSignatureStatuses: () => ({ send: async () => ({ value: [{ confirmationStatus: "confirmed" }] }) }),
+      getTransaction: () => ({
+        send: async () => ({
+          transaction: { message: { recentBlockhash: landed(), accountKeys: [SOL_ACCOUNT] } },
+          meta: { err: null, preTokenBalances: [bal(solVault.asset.address, "5000000")], postTokenBalances: [bal(solVault.asset.address, "4000000"), bal(solVault.sharesMint, "999000")] },
+        }),
+      }),
+    }) as never;
+
+  async function deposit(landed: (built: string) => string) {
+    let url = "";
+    let builtHash = "";
+    const run = runConfirmSolana({ kind: "deposit", vault: solVault, raw: 1_000_000n }, { account: SOL_ACCOUNT, walletType: "external", connectedAtIso: "" } as never, {
+      open: (u) => ((url = u), true),
+      ttlMs: 5_000,
+      rpc: solRpc(() => landed(builtHash)),
+      verifyOpts: { attempts: 1, delayMs: 1 },
+      html: shell,
+      csp: PAGE_CSP,
+      assets: {},
+      port: Number(process.env["TREASURY_CONNECT_PORT"]),
+      appId: "test",
+    });
+    while (!url) await new Promise((r) => setTimeout(r, 10));
+    const p = page(url);
+    const reply = (await (await p.post("/result", { build: true })).json()) as { wire: string; blockhash: string };
+    expect(reply.wire.length).toBeGreaterThan(0);
+    builtHash = reply.blockhash;
+    await p.post("/result", { hash: SOL_SIG });
+    const r = await run;
+    return r.result.ok ? r.result.value[0]! : r.done[0]!;
+  }
+
+  it("the transaction the page was handed lands as matched", async () => {
+    expect((await deposit((built) => built)).verified).toBe("matched");
+  });
+
+  it("a signature for a transaction with any other blockhash is a mismatch", async () => {
+    const v = await deposit(() => "GHtXQBsoZHVnNFa9YevAzFr17DJjgHXk3ycTKD5xD3Zi");
+    expect(v.verified).toBe("mismatch");
+    expect(v.detail).toMatch(/not the transaction this page built/);
   });
 });

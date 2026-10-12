@@ -46621,11 +46621,21 @@ async function verifySolanaLanded(rpc, signature, intent, account, opts) {
       if (!tx || !tx.meta) return { verified: "unverified", detail: "the signature is confirmed but its transaction could not be read; look it up before retrying anything" };
       const meta3 = tx.meta;
       if (meta3.err) return { verified: "reverted", detail: `the transaction failed on chain: ${JSON.stringify(meta3.err)}` };
+      const message = tx.transaction?.message;
+      if (!message?.recentBlockhash || !opts.built.has(message.recentBlockhash)) {
+        return { verified: "mismatch", detail: `${signature} is not the transaction this page built (its blockhash is not one handed to the page); check \`earn balance --chain solana\` before retrying anything` };
+      }
+      if (message.accountKeys?.[0] !== account) {
+        return { verified: "mismatch", detail: `${signature} was paid for by ${message.accountKeys?.[0] ?? "an unknown account"}, not the connected account` };
+      }
       const shares = tokenDelta(meta3, account, intent.vault.sharesMint);
       const asset = tokenDelta(meta3, account, intent.vault.asset.address);
       const a = intent.vault.asset;
       if (intent.kind === "deposit") {
         if (shares <= 0n) return { verified: "mismatch", detail: `the transaction landed but the account received no ${intent.vault.symbol} shares` };
+        if (-asset < intent.raw) {
+          return { verified: "mismatch", detail: `the transaction landed, but the account's ${a.symbol} fell by ${formatAmount(-asset > 0n ? -asset : 0n, a.decimals)} ${a.symbol}, not the ${formatAmount(intent.raw, a.decimals)} ${a.symbol} acknowledged` };
+        }
         if (-asset > intent.raw) {
           return { verified: "extra_transfer", detail: `the deposit landed, and the account's ${a.symbol} fell by ${formatAmount(-asset, a.decimals)}, more than the ${formatAmount(intent.raw, a.decimals)} deposited. Tell the operator.`, alsoMoved: [{ to: "unknown", amountRaw: (-asset - intent.raw).toString() }] };
         }
@@ -46659,13 +46669,14 @@ async function buildForIntent(rpc, intent, account) {
     const partial2 = partialWithdrawal(intent.raw, burned, legs, intent.vault.shareDecimals, sim.slot);
     if (partial2) throw new Error(`refused: ${partial2}`);
   }
-  return { wire, expiresAfterBlockHeight: life.lastValidBlockHeight.toString() };
+  return { wire, expiresAfterBlockHeight: life.lastValidBlockHeight.toString(), blockhash: life.blockhash };
 }
 async function runConfirmSolana(intent, session, deps) {
   const account = session.account;
   const rpc = deps.rpc ?? makeSolanaRpc(solanaRpcUrlFromEnv());
   await buildForIntent(rpc, intent, account);
   const done = [];
+  const built = /* @__PURE__ */ new Set();
   let stopReason;
   const deadline = Date.now() + deps.ttlMs;
   const a = intent.vault.asset;
@@ -46712,7 +46723,9 @@ async function runConfirmSolana(intent, session, deps) {
       if (body["build"] === true) {
         if (done.length > 0) return { ok: false, reason: "the transaction was already sent" };
         try {
-          return { ok: true, final: false, reply: await buildForIntent(rpc, intent, account) };
+          const reply = await buildForIntent(rpc, intent, account);
+          built.add(reply.blockhash);
+          return { ok: true, final: false, reply };
         } catch (e4) {
           return { ok: false, reason: redactEndpoints(e4 instanceof Error ? e4.message : String(e4)) };
         }
@@ -46724,7 +46737,7 @@ async function runConfirmSolana(intent, session, deps) {
       done.push(entry);
       let verdict;
       try {
-        verdict = await verifySolanaLanded(rpc, sig, intent, account, { ...deps.verifyOpts, deadline });
+        verdict = await verifySolanaLanded(rpc, sig, intent, account, { ...deps.verifyOpts, deadline, built });
       } catch (e4) {
         verdict = { verified: "unverified", detail: `could not check ${sig}: ${redactEndpoints(e4 instanceof Error ? e4.message : String(e4))}; look it up before retrying anything` };
       }
