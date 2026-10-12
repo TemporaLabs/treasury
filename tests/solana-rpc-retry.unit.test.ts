@@ -26,6 +26,25 @@ describe("the Solana rate-limit retry", () => {
     expect(timers[0]!.hasRef()).toBe(true);
   });
 
+  it("the retry uses that timer by default: a 429 waited out with no sleep given is waited on a ref'd timer", async () => {
+    const timers: NodeJS.Timeout[] = [];
+    const real = globalThis.setTimeout;
+    vi.spyOn(globalThis, "setTimeout").mockImplementation(((fn: () => void, ms?: number) => {
+      const t = real(fn, ms);
+      timers.push(t);
+      return t;
+    }) as typeof setTimeout);
+    let calls = 0;
+    const base = (async () => {
+      calls++;
+      if (calls < 2) throw http429();
+      return { result: "ok" };
+    }) as unknown as RpcTransport;
+    await expect(withRateLimitRetry(base)({ payload: {} } as never)).resolves.toEqual({ result: "ok" });
+    expect(timers).toHaveLength(1);
+    expect(timers[0]!.hasRef()).toBe(true);
+  });
+
   it("retries a 429 and returns the answer that follows", async () => {
     let calls = 0;
     const base = (async () => {
