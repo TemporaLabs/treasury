@@ -106,7 +106,7 @@ below, before you build either call; never fill it in from `account` on your own
 ## Choosing the chain
 
 A deposit goes to ONE chain, and the vault's asset (USDC; USDG on Robinhood Chain) has to be on that chain already — this skill does not
-bridge. **Which chain is the operator's decision. Ask; do not pick.**
+bridge. An operator can still put money into several vaults, on one chain or several, in one request: one deposit per vault (below). **Which chain is the operator's decision. Ask; do not pick.**
 
 - **Before preparing a deposit, if the operator has not said which chain, show them `earn_vaults` →
   `chains` and ask.** Each entry is a chain with its default vault; the first is the default chain.
@@ -129,6 +129,33 @@ bridge. **Which chain is the operator's decision. Ask; do not pick.**
   holds, call `earn_balance` once per vault; a zero on one chain says nothing about the other.
 - **Say the chain out loud at every money step**: in the quote, when you hand over the calls, and
   when you report the result. The operator's signer must be on that network (below).
+
+### Several vaults in one request
+
+An operator can spread money across vaults in one sitting — "1 USDC on Base and 3 on Solana", "2 USDC on
+every chain", "1 in 2A and 1 in 2B". The vaults may be on different chains or the same one. That is **one
+deposit per vault**, each a complete deposit of its own with its own transaction; nothing moves money into
+several vaults at once.
+
+1. **Settle the list from the operator's own words.** Each vault, its chain and its amount. A chain named
+   without a vault means that chain's default vault. "Every chain" means every entry in `earn_vaults` →
+   `chains`, each with its default vault; "every vault" means every vault `earn_vaults` lists. Do not add,
+   drop or resize a leg on your own.
+2. **Check every leg before any money moves:** `earn_quote` with `direction: "deposit"`, the real account
+   and amount, for each vault. The asset has to be on that vault's chain already (USDG, not USDC, on
+   Robinhood Chain); this skill does not bridge, so a leg whose funds are elsewhere cannot go ahead until
+   the operator moves them. Two legs on one chain draw on the same balance: check it covers both. On
+   Solana the account also needs SOL, and on Ethereum gas can be a large share of a small amount: say so
+   for that leg.
+3. **Show one plan and get a yes to it:** a row per leg (vault, chain, amount, asset) with the total, and
+   which legs cannot go ahead and why. Changing the plan is the operator's call, not yours.
+4. **Then run the legs one at a time, each through the whole deposit flow below.** Each leg has its own
+   receiver check, and through `connect` its own acknowledgement and yes. `earn_terms` comes once, before
+   the operator's first deposit, as below. The EVM chains share one connected wallet; Solana needs its own
+   (`connect wallet --chain solana`). Do not start the next leg until the last one has landed or been
+   abandoned.
+5. **If a leg fails or the operator stops it, stop and ask before the rest.** Then report every leg:
+   vault, chain, amount, transaction, and which did not happen.
 
 ## Solana is different
 
