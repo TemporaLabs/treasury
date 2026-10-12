@@ -15,6 +15,7 @@ import { dirname, resolve } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { run } from "../src/cli.js";
 import { GUIDE_URL } from "../src/guide.js";
+import { PACKAGE_VERSION } from "../src/version.js";
 
 const pkgDir = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const SKILL = resolve(pkgDir, "plugin/skills/earn/SKILL.md");
@@ -75,8 +76,8 @@ export async function expectedGuide(): Promise<string> {
     `> ${pkg.description}`,
     "",
     "This file is generated from the earn skill and from the command descriptions `treasury --help` prints; it is not edited by hand.",
-    `Its stable address is ${GUIDE_URL}.`,
-    "Run commands as `treasury <skill> <command> [--flag value …]` (`npx @temporalabs/treasury …` runs the same CLI without installing it). Each prints one JSON document.",
+    `This version's copy is at ${GUIDE_URL}.`,
+    `Run commands as \`treasury <skill> <command> [--flag value …]\` (\`npx @temporalabs/treasury@${PACKAGE_VERSION} …\` runs the same version without installing it). Each prints one JSON document.`,
     "",
     "# The earn skill",
     "",

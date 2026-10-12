@@ -141,7 +141,8 @@ Privy wallet from an email or social login), for the vault on Solana; the two co
 ## As a library
 
 `@temporalabs/treasury` — the same package, `npm install @temporalabs/treasury@0.1.3` — also exports
-the builders, the pre-flight, the position scan and the registry as plain functions. ⚠️ The library returns bare `UnsignedCall[]` arrays; the
+the builders, the pre-flight, the position scan and the registry as plain functions, for the EVM chains
+only: the Solana vault's reads and builders are not exported, so reach it through the CLI. ⚠️ The library returns bare `UnsignedCall[]` arrays; the
 `{ requires_signature: true, status: "unsigned", calls }` envelope is a property of the command
 boundary, not of the functions. If you consume the library directly, you are the boundary.
 

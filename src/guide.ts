@@ -16,9 +16,14 @@
 import { existsSync, realpathSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
+import { PACKAGE_VERSION } from "./version.js";
 
-/** The stable public copy: the file on the default branch. */
-export const GUIDE_URL = "https://raw.githubusercontent.com/TemporaLabs/treasury/main/llms.txt";
+/**
+ * The public copy for THIS version: the file at its release tag, so the guide an agent reads describes the
+ * CLI it is running. The default branch does not: it moves with each release, and before v0.1.3 it had no
+ * llms.txt at all. A tag exists only once the release is cut, so an unreleased build's URL resolves then.
+ */
+export const GUIDE_URL = `https://raw.githubusercontent.com/TemporaLabs/treasury/v${PACKAGE_VERSION}/llms.txt`;
 
 /** The folder above this module: the package root for dist/treasury.mjs, plugin/ for the plugin's copy. */
 function root(): string | undefined {

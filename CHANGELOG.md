@@ -75,7 +75,8 @@ Pre-1.0, minor versions may change tool names, schemas and behaviour.
   description now names that question, so the skill is loaded for it.
 
 ### Added — a guide for agents without the plugin
-- **`llms.txt`**, in the npm package and at `https://raw.githubusercontent.com/TemporaLabs/treasury/main/llms.txt`: the Earn skill's
+- **`llms.txt`**, in the npm package and at `https://raw.githubusercontent.com/TemporaLabs/treasury/v0.1.3/llms.txt` (each
+  release's own copy, at its tag; the URL and the `npx` line in the guide follow the package version): the Earn skill's
   rules and every command with its flags, for an agent that runs `treasury` without the plugin. It is generated from the skill and
   the command descriptions, and CI fails when the committed file differs from what they produce.
 - **`treasury --help` and `treasury <skill> --help` carry a `guide` field** that tells the agent to read it first, with the

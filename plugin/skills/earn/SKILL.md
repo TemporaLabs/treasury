@@ -30,7 +30,8 @@ cannot run as asked (an unknown or repeated flag, a vault on another chain, a qu
 RPC cannot be reached) it exits non-zero with `{ "error": … }` on stderr — report it, never read it as a
 result. A verdict is a result and exits 0, with its fields saying what was found: `WHITELIST_GATED`,
 or `earn_status` reporting `rpc: "unreachable"` or a pre-flight `UNRESOLVED`. Every prepared call comes back inside
-`{ requires_signature: true, status: "unsigned", calls }` — that envelope is the command telling you
+`{ requires_signature: true, status: "unsigned", calls }` (on Solana, one `transaction` in place of
+`calls`) — that envelope is the command telling you
 nothing has been submitted and no money has moved. No `earn` command can sign or send, and neither can you through it — the operator's own signer
 (a wallet, a policy-engine signer, a token-bound account) does that. `connect` does not sign either: it
 opens a page where the operator confirms each call in their own wallet. That boundary is the
@@ -88,7 +89,7 @@ three blocks a second, so a public-RPC scan there covers under an hour.
 | `earn_terms` | show the operator the required disclosures before a first deposit |
 | `earn_status` | **with no `account`**: is the CLI healthy and the chain's RPC reachable (chain, latest block, which RPC variable resolved); pass `chain` to check the chain you are about to use. **With `account`**: the access verdict alone. `mode` tells you which you got |
 | `earn_quote` | with `direction: "deposit"` — expected shares, share price, and the verdict from a **simulated** deposit. No rate is quoted — the vault exposes none and this client calls no yield API. With `direction: "withdraw"` — shares that would burn, a simulated `withdraw` verdict, the vault's `instantLiquidity`, queue depth. `direction` is required and is echoed back on the result |
-| `earn_prepare_deposit` | get the unsigned `approve` + `deposit` calls, enveloped; `--receiver` (required) is where the shares land |
+| `earn_prepare_deposit` | get the unsigned `approve` + `deposit` calls, enveloped (on Solana, one transaction); `--receiver` (required) is where the shares land |
 | `earn_prepare_withdraw` | get the unsigned `withdraw` call in terms of the vault's asset — or `--all` with `--shares_exact` to empty the account |
 | `earn_balance` | shares (exact), USDC value, entry basis and accrued yield from the vault's own events; `lookback_blocks` / `max_log_requests` set the scan window (see Setup) |
 | `earn_claim` | finalize a queued withdrawal; today no vault queues, and it says so |
@@ -140,14 +141,15 @@ bridge. An operator can still put money into several vaults, on one chain or sev
 ### Several vaults in one request
 
 An operator can spread money across vaults in one sitting — "1 USDC on Base and 3 on Solana", "2 USDC on
-every chain", "1 in 2A and 1 in 2B". The vaults may be on different chains or the same one. That is **one
+every chain", "1 in 2B and 1 in 2E". The vaults may be on different chains or the same one. That is **one
 deposit per vault**, each a complete deposit of its own with its own transaction; nothing moves money into
 several vaults at once.
 
 1. **Settle the list from the operator's own words.** Each vault, its chain and its amount. A chain named
    without a vault means that chain's default vault. "Every chain" means every entry in `earn_vaults` →
-   `chains`, each with its default vault; "every vault" means every vault `earn_vaults` lists. Do not add,
-   drop or resize a leg on your own.
+   `chains`, each with its default vault; "every vault" means every vault in `earn_vaults` →
+   `depositable`. A listed vault that is not in `depositable` cannot take the deposit: name it to the
+   operator rather than dropping it silently. Do not add, drop or resize a leg on your own.
 2. **Check every leg before any money moves:** `earn_quote` with `direction: "deposit"`, the real account
    and amount, for each vault. The asset has to be on that vault's chain already (USDG, not USDC, on
    Robinhood Chain); this skill does not bridge, so a leg whose funds are elsewhere cannot go ahead until
@@ -208,7 +210,7 @@ with these differences — say them to the operator where they apply:
    admission is a fund-side action — do not offer a substitute and do not retry.** A listed vault that
    is not the default may be gated even when the default is open.
 2. **`depositable` may be EMPTY, and an empty set is an answer, not an error.** It is the set of
-   vaults any account can deposit into — ACTIVE, ERC-4626, *and measured open by simulation*. When
+   vaults any account can deposit into — ACTIVE, ERC-4626 (or the Kamino vault on Solana), *and measured open by simulation*. When
    every vault on offer is whitelist-gated it is empty, which is the state to report, not a fault
    to work around. Read it from `earn_vaults` rather than assuming either way. A vault can be live and still refuse you: IPOR Fusion
    vaults restrict `deposit()` to a whitelist role while their `redeem()` is public, and Enzyme
@@ -225,19 +227,24 @@ with these differences — say them to the operator where they apply:
    pre-flight; read `preflight.status`, not `advisory.maxDepositRaw`: `maxDeposit()` returns "unlimited" on a
    whitelist-gated Fusion vault and `0` on an open Morpho V2 vault — it is wrong in both
    directions, which is why the pre-flight simulates the actual call instead.
-   - `NEEDS_APPROVAL` → normal; the deposit reached the token pull. Proceed to build.
-   - `OPEN_READY` → allowance already covers it. Proceed to build.
+   - `NEEDS_APPROVAL` → normal; the deposit reached the token pull. Proceed to build. (EVM chains only.)
+   - `OPEN_READY` → on an EVM chain, the allowance already covers it; on Solana, which has no approve
+     step, the simulated deposit succeeded. Proceed to build.
+   - `NEEDS_FUNDS` (Solana only) → the simulation stopped at the account's own funds: no USDC, or no SOL
+     for the fee. Show the `findings`, and quote again once the operator has funded the account; it is
+     not a verdict that the vault would take the deposit.
    - `WHITELIST_GATED` → stop. The operator needs the role granted (a fund-side action), not
      a retry.
    - `REVERTED_OTHER` → stop and show the `findings`; they list candidate causes. Do not guess
      one.
    - `REFUSED_BY_CLIENT` / `UNRESOLVED` → stop; the first is a registry/chain mismatch, the
      second a transport failure. Neither is a verdict about the vault.
-5. **Through `connect`, skip this step:** `connect deposit` builds the same two calls and checks them, and
+5. **Through `connect`, skip this step:** `connect deposit` builds the same calls (on Solana, the one transaction) and checks them, and
    opens the signing page only after the operator acknowledges them, every time (see **Handing calls to
    the signer** below). Its acknowledgement restates the disclosures in plain words on every
    deposit; on a first deposit the full `earn_terms` of step 3 still come first.
-   **Otherwise, `earn_prepare_deposit`, then hand BOTH calls in `calls` to the signer in order, and ask before each.** The
+   **Otherwise, `earn_prepare_deposit`, then hand BOTH calls in `calls` to the signer in order, and ask before each.**
+   (On Solana it returns one transaction instead: see **Solana is different** above.) The
    envelope names `chain` and `chainId`: tell the operator which chain these calls are for before
    anything else, because a call sent on the wrong chain can be mined there and do nothing. The
    amount is in the vault's asset (USDC, or USDG on Robinhood Chain; 6 decimals for both); the tool
@@ -273,7 +280,8 @@ right on both chassis; `exit.maxWithdrawSays` is reported only because other int
 2026-09-15 on a live Tempora Labs vault: with a key, both the exit and a whole-history scan complete in
 about 15-22 s; with no key, one of them usually degrades — the exit reports `not measured`, or the
 scan reports CUT SHORT. Each says so in its own result, so the answer is smaller, never wrong. A
-keyed RPC for the vault's chain (`TREASURY_RPC_BASE`, `TREASURY_RPC_ARBITRUM`, `TREASURY_RPC_ROBINHOOD`, `TREASURY_RPC_ETHEREUM`, `TREASURY_RPC_MONAD`) is what makes both available in one call.
+keyed RPC for the vault's chain (`TREASURY_RPC_BASE`, `TREASURY_RPC_ARBITRUM`, `TREASURY_RPC_ROBINHOOD`, `TREASURY_RPC_ETHEREUM`, `TREASURY_RPC_MONAD`) is what makes both available in one call. On Solana,
+which has no scan, the keyed RPC is `TREASURY_RPC_SOLANA`.
 
 🔴 **`measuredAs: "not measured"` means the RPC failed, NOT that the vault refused** — say so rather
 than reporting a limit the chain never stated.

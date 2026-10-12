@@ -47593,7 +47593,7 @@ function buildConnectCommands(deps = {}) {
 import { existsSync, realpathSync as realpathSync2 } from "fs";
 import { dirname, resolve } from "path";
 import { fileURLToPath as fileURLToPath2 } from "url";
-var GUIDE_URL = "https://raw.githubusercontent.com/TemporaLabs/treasury/main/llms.txt";
+var GUIDE_URL = `https://raw.githubusercontent.com/TemporaLabs/treasury/v${PACKAGE_VERSION}/llms.txt`;
 function root() {
   try {
     return resolve(dirname(realpathSync2(fileURLToPath2(import.meta.url))), "..");
