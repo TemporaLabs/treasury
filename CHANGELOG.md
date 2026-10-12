@@ -37,7 +37,9 @@ Pre-1.0, minor versions may change tool names, schemas and behaviour.
 - Quotes and positions are read from simulated transactions. Each withdraw instruction keeps up to 0.001 USDC in
   the vault — Kamino's global withdrawal penalty for every vault on its program, which Kamino can change; a
   withdrawal split across reserves pays it per part — and one worth 0.001 USDC or less is refused; `receives`
-  is exact and net of it. Kamino's program can require a co-signer on every deposit and withdrawal; the client
+  is exact and net of it. A withdrawal whose simulation burns fewer shares than asked for is refused, in the quote,
+  the prepared transaction and the confirm flow: Kamino pays what a reserve can and leaves the rest of the shares,
+  rather than failing, when one part asks for more than its reserve can pay. Kamino's program can require a co-signer on every deposit and withdrawal; the client
   refuses to build while one is set (none is today). Entry basis and yield are not read on Solana.
 - `TREASURY_RPC_SOLANA` (then `SOLANA_RPC_URL`, then `https://api.mainnet-beta.solana.com`). A new runtime
   dependency, `@solana/kit`. The instruction builders and account decoders are pinned byte for byte to

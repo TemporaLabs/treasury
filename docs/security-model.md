@@ -114,6 +114,9 @@ open for nothing but the calls that text described.
   instruction is a compute-unit limit, the connected account's own token-account creation for the
   vault's asset or shares, or this vault's deposit or withdrawal for the connected account, with that
   account as fee payer and only signer, no lookup table, and the vault's own token and share accounts.
+  The admitted transaction is then simulated; a withdrawal is refused unless the simulation burns every
+  share acknowledged, because Kamino's program pays what a reserve can and keeps the rest of the shares,
+  rather than failing, when one part of a withdrawal asks for more than its reserve can pay.
 - **The operator acknowledges before any page opens.** `connect deposit` and `connect withdraw` first
   return a fixed text, written by the CLI, naming the amount, chain, vault and explorer link, receiver,
   the vault's warning and the disclosures, and open nothing. The page opens only on a second run that

@@ -44800,6 +44800,19 @@ async function simulate(rpc, ixs, feePayer, watch) {
   (res.value.accounts ?? []).forEach((acc, i) => after.set(watch[i], acc ? splAmount(b64(acc.data)) : null));
   return { ok: res.value.err === null, err: res.value.err, logs: res.value.logs ?? [], unitsConsumed: res.value.unitsConsumed ?? null, slot: BigInt(res.context.slot), after };
 }
+async function simulateWithdrawal(rpc, v, user, ixs) {
+  const tokenAta = await associatedTokenAccount(user, v.state.tokenMint);
+  const sharesAta = await associatedTokenAccount(user, v.state.sharesMint);
+  const [token, held] = await Promise.all([tokenBalance(rpc, tokenAta), tokenBalance(rpc, sharesAta)]);
+  const sim = await simulate(rpc, ixs, user, [tokenAta, sharesAta]);
+  const tokenAfter = sim.after.get(tokenAta);
+  if (!sim.ok || tokenAfter === null || tokenAfter === void 0) return { sim };
+  return { sim, received: tokenAfter - token.amount, burned: held.amount - (sim.after.get(sharesAta) ?? 0n) };
+}
+function partialWithdrawal(asked, burned, shareDecimals, slot) {
+  if (burned === asked) return void 0;
+  return `the simulated withdrawal at slot ${slot} burns ${formatAmount(burned, shareDecimals)} of the ${formatAmount(asked, shareDecimals)} shares asked for: a reserve cannot pay its full part now, so it would land as a partial withdrawal. Try a smaller amount, or again later`;
+}
 function describeSimulation(s2) {
   const err = JSON.stringify(s2.err, (_k, x) => typeof x === "bigint" ? x.toString() : x);
   const why = s2.logs.filter((l) => /error|failed|insufficient|exceed|cap|Error Message/i.test(l)).slice(-3);
@@ -44956,11 +44969,7 @@ function sharesFor(v, amountHuman) {
   return (amount * v.state.sharesIssued + v.holdings.netAum - 1n) / v.holdings.netAum;
 }
 async function simulateWithdraw(rpc, v, account, shares) {
-  const tokenAta = await associatedTokenAccount(account, v.state.tokenMint);
-  const before = await tokenBalance(rpc, tokenAta);
-  const sim = await simulate(rpc, await withdrawInstructions(v, account, shares), account, [tokenAta]);
-  const after = sim.after.get(tokenAta);
-  return { sim, received: sim.ok && after !== null && after !== void 0 ? after - before.amount : void 0 };
+  return simulateWithdrawal(rpc, v, account, await withdrawInstructions(v, account, shares));
 }
 async function solanaQuoteWithdraw(vault, account, amountHuman) {
   const { rpc, source } = rpcAndCheck();
@@ -44981,8 +44990,10 @@ async function solanaQuoteWithdraw(vault, account, amountHuman) {
     if (shares > held.amount) {
       return { ...base2, canWithdraw: false, note: `the account holds ${formatAmount(held.amount, vault.shareDecimals)} shares, fewer than the ${formatAmount(shares, vault.shareDecimals)} this amount needs` };
     }
-    const { sim, received } = await simulateWithdraw(rpc, v, owner, shares);
-    if (received === void 0) return { ...base2, canWithdraw: false, measuredAtSlot: Number(sim.slot), note: `the simulated withdrawal failed: ${describeSimulation(sim)}` };
+    const { sim, received, burned } = await simulateWithdraw(rpc, v, owner, shares);
+    if (received === void 0 || burned === void 0) return { ...base2, canWithdraw: false, measuredAtSlot: Number(sim.slot), note: `the simulated withdrawal failed: ${describeSimulation(sim)}` };
+    const partial2 = partialWithdrawal(shares, burned, vault.shareDecimals, sim.slot);
+    if (partial2) return { ...base2, canWithdraw: false, measuredAtSlot: Number(sim.slot), note: partial2 };
     return {
       ...base2,
       canWithdraw: true,
@@ -45095,8 +45106,10 @@ async function solanaPrepareWithdraw(vault, account, receiver, args) {
     const held = await tokenBalance(rpc, await associatedTokenAccount(user, v.state.sharesMint));
     if (shares > held.amount) throw new Error(`the account holds ${formatAmount(held.amount, vault.shareDecimals)} shares, fewer than the ${formatAmount(shares, vault.shareDecimals)} this withdrawal burns`);
     const ixs = await withdrawInstructions(v, user, shares);
-    const { sim, received } = await simulateWithdraw(rpc, v, user, shares);
-    if (received === void 0) throw new Error(`not prepared: the simulated withdrawal fails at slot ${sim.slot}: ${describeSimulation(sim)}`);
+    const { sim, received, burned } = await simulateWithdraw(rpc, v, user, shares);
+    if (received === void 0 || burned === void 0) throw new Error(`not prepared: the simulated withdrawal fails at slot ${sim.slot}: ${describeSimulation(sim)}`);
+    const partial2 = partialWithdrawal(shares, burned, vault.shareDecimals, sim.slot);
+    if (partial2) throw new Error(`not prepared: ${partial2}`);
     const got = `${formatAmount(received, vault.asset.decimals)} ${vault.asset.symbol}`;
     return envelope(rpc, v, user, "withdraw", `burn ${formatAmount(shares, vault.shareDecimals)} ${vault.symbol}; the simulation at slot ${sim.slot} paid ${got} (net of the up to 0.001 USDC Kamino keeps per withdraw instruction)`, ixs, got);
   });
@@ -46627,8 +46640,15 @@ async function buildForIntent(rpc, intent, account) {
   if (admitted.kind !== intent.kind || admitted.vault.address !== intent.vault.address || admitted.amount !== intent.raw) {
     throw new Error(`refused: the transaction built (${admitted.kind} ${admitted.amount} on ${admitted.vault.symbol}) is not the one acknowledged (${intent.kind} ${intent.raw} on ${intent.vault.symbol})`);
   }
-  const sim = await simulate(rpc, ixs, account, []);
-  if (!sim.ok) throw new Error(`the simulated ${intent.kind} fails at slot ${sim.slot}: ${describeSimulation(sim)}`);
+  if (intent.kind === "deposit") {
+    const sim = await simulate(rpc, ixs, account, []);
+    if (!sim.ok) throw new Error(`the simulated deposit fails at slot ${sim.slot}: ${describeSimulation(sim)}`);
+  } else {
+    const { sim, burned } = await simulateWithdrawal(rpc, v, account, ixs);
+    if (burned === void 0) throw new Error(`the simulated withdraw fails at slot ${sim.slot}: ${describeSimulation(sim)}`);
+    const partial2 = partialWithdrawal(intent.raw, burned, intent.vault.shareDecimals, sim.slot);
+    if (partial2) throw new Error(`refused: ${partial2}`);
+  }
   return { wire, expiresAfterBlockHeight: life.lastValidBlockHeight.toString() };
 }
 async function runConfirmSolana(intent, session, deps) {
