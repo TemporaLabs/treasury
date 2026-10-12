@@ -47724,6 +47724,12 @@ function isEntryPoint() {
     return false;
   }
 }
+var WINDOWS_EXIT_BACKSTOP_MS = 2e3;
+function exitWith(code) {
+  if (process.platform !== "win32") process.exit(code);
+  process.exitCode = code;
+  setTimeout(() => process.exit(code), WINDOWS_EXIT_BACKSTOP_MS).unref();
+}
 if (isEntryPoint()) {
   run(process.argv.slice(2)).then(
     ({ stdout, stderr, code }) => {
@@ -47731,11 +47737,11 @@ if (isEntryPoint()) {
 `, () => done()));
       const err = stderr === void 0 ? Promise.resolve() : new Promise((done) => process.stderr.write(`${stderr}
 `, () => done()));
-      void Promise.all([out, err]).then(() => process.exit(code));
+      void Promise.all([out, err]).then(() => exitWith(code));
     },
     (e4) => {
       process.stderr.write(`${JSON.stringify({ error: redactEndpoints(String(e4)) })}
-`, () => process.exit(1));
+`, () => exitWith(1));
     }
   );
 }
