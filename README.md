@@ -46,23 +46,6 @@ default vault; the agent asks which chain when you have not said, and the funds 
 chain already. See [Vaults](#vaults).
 See the [command reference](docs/tools.md), the eight `earn` commands and the five `connect` commands, for inputs, outputs, and limits.
 
-## Supported chains
-
-Six chains, each with its own vault. Funds have to be on the chain already; OAT does not bridge.
-
-| | Chain | Asset | Vault | Wallet |
-|---|---|---|---|---|
-| <img src="docs/assets/chains/base.webp" alt="Base logo" width="32" height="32"> | **Base** (the default) | USDC | Test 2B, the default; Test 2, the demo; Test 2A, whitelist only | an EVM wallet |
-| <img src="docs/assets/chains/arbitrum.webp" alt="Arbitrum One logo" width="32" height="32"> | **Arbitrum One** | USDC | Test 2C | an EVM wallet |
-| <img src="docs/assets/chains/robinhood.webp" alt="Robinhood Chain logo" width="32" height="32"> | **Robinhood Chain** | USDG | Test 2D | an EVM wallet |
-| <img src="docs/assets/chains/ethereum.webp" alt="Ethereum logo" width="32" height="32"> | **Ethereum** | USDC | Test 2E | an EVM wallet |
-| <img src="docs/assets/chains/monad.webp" alt="Monad logo" width="32" height="32"> | **Monad** | USDC | Test 2F | an EVM wallet |
-| <img src="docs/assets/chains/solana.webp" alt="Solana logo" width="32" height="32"> | **Solana** | USDC | Test 2G, a Kamino vault | a Solana wallet (`treasury connect wallet --chain solana`) |
-
-Choose a chain with `--chain`; [Vaults](#vaults) lists each vault and how to name it.
-Chain logos are the marks of their respective owners, shown only to identify the chains;
-the icons come from [DefiLlama](https://defillama.com)'s chain icon set.
-
 ## Quick start
 
 **Requires Node.js 22+ on your `PATH`.** Use a keyed RPC for each chain you use; the public fallbacks rate-limit quickly.
@@ -118,18 +101,22 @@ Later, ask: **“What is my position worth, and how much can I withdraw now?”*
 ## Vaults
 
 A command that names no vault or chain uses **Cash Plus USDC (Test 2B)** on Base; the agent still asks
-which chain first when you have not said. There are other options, and a demo.
+which chain first when you have not said. These are Tempora Labs' curated test vaults, on six chains: Base,
+Arbitrum One, Robinhood Chain, Ethereum, Monad and Solana. There are other options, and a demo.
 
 | | vault | chain | choose it by |
 |---|---|---|---|
-| **Default** | **Cash Plus USDC (Test 2B)** | Base | naming nothing, or `--chain base` |
-| **Demo** | **Cash Plus USDC (Test 2)** | Base | `--vault tlCashPlusUSDC2` |
-| Option | **Cash Plus USDC (Test 2C)** | Arbitrum One | `--chain arbitrum` |
-| Option | **Cash Plus USDG (Test 2D)** | Robinhood Chain | `--chain robinhood` |
-| Option | **Cash Plus USDC (Test 2E)** | Ethereum | `--chain ethereum` |
-| Option | **Cash Plus USDC (Test 2F)** | Monad | `--chain monad` |
-| Option | **Cash Plus USDC (Test 2G)** | Solana | `--chain solana` |
-| Option | **Cash Plus USDC (Test 2A)** | Base | `--vault tlCashPlusUSDC2A` (whitelist only) |
+| **Default** | **Cash Plus USDC (Test 2B)** | <img src="docs/assets/chains/base.webp" alt="" width="20" height="20"> Base | naming nothing, or `--chain base` |
+| **Demo** | **Cash Plus USDC (Test 2)** | <img src="docs/assets/chains/base.webp" alt="" width="20" height="20"> Base | `--vault tlCashPlusUSDC2` |
+| Option | **Cash Plus USDC (Test 2C)** | <img src="docs/assets/chains/arbitrum.webp" alt="" width="20" height="20"> Arbitrum One | `--chain arbitrum` |
+| Option | **Cash Plus USDG (Test 2D)** | <img src="docs/assets/chains/robinhood.webp" alt="" width="20" height="20"> Robinhood Chain | `--chain robinhood` |
+| Option | **Cash Plus USDC (Test 2E)** | <img src="docs/assets/chains/ethereum.webp" alt="" width="20" height="20"> Ethereum | `--chain ethereum` |
+| Option | **Cash Plus USDC (Test 2F)** | <img src="docs/assets/chains/monad.webp" alt="" width="20" height="20"> Monad | `--chain monad` |
+| Option | **Cash Plus USDC (Test 2G)** | <img src="docs/assets/chains/solana.webp" alt="" width="20" height="20"> Solana | `--chain solana` |
+| Option | **Cash Plus USDC (Test 2A)** | <img src="docs/assets/chains/base.webp" alt="" width="20" height="20"> Base | `--vault tlCashPlusUSDC2A` (whitelist only) |
+
+Chain logos are the marks of their respective owners, shown only to identify the chains; the icons come from
+[DefiLlama](https://defillama.com)'s chain icon set.
 
 - **Test 2B, the default.** A Morpho Vault V2 on Base, open to any account. Its first position is a
   savings-rate token rather than a lending vault, and its other two positions differ from Test 2's too
