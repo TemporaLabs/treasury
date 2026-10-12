@@ -11,6 +11,7 @@
     "NOTICE",
     "THIRD_PARTY_NOTICES.md",
     "THIRD_PARTY_NOTICES.connect-page.md",
+    "llms.txt",
     "dist",
     "registry"
   ],
@@ -35,14 +36,15 @@
     "node": ">=22"
   },
   "scripts": {
-    "prepack": "npm run build && git diff --exit-code -- dist/treasury.mjs THIRD_PARTY_NOTICES.md",
-    "build": "tsc -b && tsup && tsx scripts/third-party-notices.ts --write && bash scripts/sync-plugin.sh",
+    "prepack": "npm run build && git diff --exit-code -- dist/treasury.mjs THIRD_PARTY_NOTICES.md llms.txt",
+    "build": "tsc -b && tsup && tsx scripts/third-party-notices.ts --write && tsx scripts/llms-txt.ts --write && bash scripts/sync-plugin.sh",
     "typecheck": "tsc -b && tsc -p tsconfig.scripts.json",
     "test": "tsc -b && tsc -p tsconfig.scripts.json && vitest run",
     "test:fork": "tsc -b && TREASURY_FORK=1 vitest run --testTimeout 300000 tests/fork.test.ts tests/fork-solana.test.ts",
     "cli": "tsx src/cli.ts",
     "registry:check": "tsx scripts/registry-check.ts",
     "notices:check": "tsx scripts/third-party-notices.ts",
+    "llms:check": "tsx scripts/llms-txt.ts",
     "plugin:check": "bash scripts/sync-plugin.sh --check && bash scripts/check-versions.sh",
     "lint:skill": "bash scripts/lint-skill.sh"
   },

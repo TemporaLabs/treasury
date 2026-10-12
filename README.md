@@ -23,6 +23,16 @@ A transaction goes out only from your own wallet, after you approve it there. Yo
 > and withdrawals depend on available liquidity. Review every transaction before signing and
 > read the [risks](docs/risks.md) before depositing.
 
+## Two ways to use the vaults
+
+- **In a browser, at [app.temporalabs.com](https://app.temporalabs.com).** Connect a wallet, then deposit
+  and withdraw from the page. The app shows the Cash Plus vaults it currently supports, which can be fewer
+  than OAT offers.
+- **With an agent, through OAT.** Your agent quotes, prepares and confirms deposits and withdrawals through
+  the plugin or the CLI, and you approve each transaction in your own wallet.
+
+Either way the vaults are the same on-chain contracts.
+
 ## What you can do
 
 - **Inspect vaults:** check assets, fees, and deposit access.
@@ -70,6 +80,9 @@ npx --no-install treasury earn --help     # every command and flag, as JSON
 ```
 
 Each command prints one JSON document; a refusal exits 1 with `{ "error": … }` on stderr.
+`treasury --help` points to [`llms.txt`](llms.txt), the guide an agent without the plugin should read first: the rules the
+plugin's Earn skill carries (which questions to ask the operator, what to show before a first deposit) and every command with its flags.
+It is generated from that skill and the command descriptions, and CI fails when it drifts.
 For library usage, other hosts, and troubleshooting, see [installation](docs/install.md).
 
 ### Try it
