@@ -1091,3 +1091,50 @@ describe("a receipt mined before the confirm flow started is not this flow's tra
     expect(out.txs[0]!.detail).toMatch(/already existed when this confirm flow started/);
   });
 });
+
+describe("a Solana withdrawal by amount: the acknowledgement survives the vault's value moving", () => {
+  // The vault earns between the operator reading the acknowledgement and the --ack run, so the shares worth
+  // the same amount change. The acknowledgement must cover what the operator asked for (the amount), not a
+  // share count recomputed on each run, or the second run refuses what the operator just said yes to.
+  const SOL_ACCOUNT = "9xQeWvG816bUx9EPjHmaT23yvVM2ZWbrrpZb9PusVFin";
+  const fx = JSON.parse(readFileSync(new URL("./fixtures/solana/vault-snapshot.json", import.meta.url), "utf8")) as {
+    slot: number;
+    vault: string;
+    accounts: Record<string, { data: string }>;
+  };
+  let bump = 0n;
+  const data = (a: string) => {
+    const b = Buffer.from(fx.accounts[a]!.data, "base64");
+    if (a === fx.vault && bump) b.writeBigUInt64LE(b.readBigUInt64LE(224) + bump, 224); // the vault's idle USDC
+    return [b.toString("base64"), "base64"];
+  };
+  const rpc = {
+    getAccountInfo: (a: string) => ({ send: async () => ({ value: { data: data(String(a)) }, context: { slot: BigInt(fx.slot) } }) }),
+    getMultipleAccounts: (ks: string[]) => ({ send: async () => ({ value: ks.map((k) => ({ data: data(String(k)) })), context: { slot: BigInt(fx.slot) } }) }),
+  };
+  const withdraw = (args: Record<string, unknown>) =>
+    buildConnectCommands({ solanaRpc: rpc as never, open: () => false, ttlMs: 50 })["connect_withdraw"]!.handler({ chain: "solana", receiver: SOL_ACCOUNT, ...args } as never);
+
+  beforeEach(() => {
+    bump = 0n;
+    writeFileSync(join(home, "connect-session-solana.json"), JSON.stringify({ account: SOL_ACCOUNT, walletType: "external", connectedAtIso: new Date().toISOString() }));
+  });
+
+  it("the acknowledgement names the amount asked for, and the --ack run accepts it after the vault earned", async () => {
+    const first = JSON.parse(await withdraw({ amount_usdc: "25" })) as { status: string; amount: string; ack: string };
+    expect(first.status).toBe("needs_acknowledgement");
+    expect(first.amount).toBe("25 USDC");
+    bump = 1000n; // 0.001 USDC lands in the vault between the two runs
+    expect(existsSync(pendingAckPath())).toBe(true);
+    // Past the acknowledgement, the flow goes on to build the transaction, which this stub RPC cannot serve;
+    // what matters here is that the acknowledgement was accepted and spent, not refused.
+    const second = await withdraw({ amount_usdc: "25", ack: first.ack }).then(() => "", (e: Error) => e.message);
+    expect(second).not.toMatch(/acknowledged/);
+    expect(existsSync(pendingAckPath())).toBe(false);
+  });
+
+  it("still refuses an --ack run for a different amount", async () => {
+    const first = JSON.parse(await withdraw({ amount_usdc: "25" })) as { ack: string };
+    await expect(withdraw({ amount_usdc: "26", ack: first.ack })).rejects.toThrow(/acknowledged/);
+  });
+});

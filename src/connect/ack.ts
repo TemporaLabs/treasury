@@ -45,9 +45,11 @@ export function issueAck(calls: UnsignedCall[], account: Address, now: Date): Pe
 /**
  * What a Solana intent IS: the connected account, the vault, the action and its raw amount. Not the
  * transaction's bytes — those name a blockhash that expires in about a minute, so the page builds a fresh
- * transaction for the same intent, and the gate holds every one of them to it.
+ * transaction for the same intent, and the gate holds every one of them to it. A withdrawal by amount is
+ * `withdraw-assets` with the asset's raw amount: the shares worth it change as the vault earns, so they are
+ * worked out only once the acknowledgement is accepted.
  */
-export function solanaIntentDigest(account: string, vault: string, action: "deposit" | "withdraw", raw: bigint): string {
+export function solanaIntentDigest(account: string, vault: string, action: "deposit" | "withdraw" | "withdraw-assets", raw: bigint): string {
   return keccak256(stringToHex(JSON.stringify(["solana", account, vault, action, raw.toString()])));
 }
 

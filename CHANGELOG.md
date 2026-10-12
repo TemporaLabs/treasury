@@ -26,7 +26,9 @@ Pre-1.0, minor versions may change tool names, schemas and behaviour.
 - **A Kamino vault on Solana: Tempora Labs Cash Plus USDC (Test 2G), `--chain solana`.** The earn commands
   read, quote and prepare for it; `treasury connect wallet --chain solana` connects a Solana wallet (Phantom,
   Solflare, Backpack, or a Privy wallet from an email or social login), and `connect deposit` / `withdraw`
-  confirm through it, with the same acknowledgement step. Base stays the default chain.
+  confirm through it, with the same acknowledgement step. A withdrawal by amount is acknowledged as that amount, and
+  the shares worth it are worked out when the operator confirms, so the vault earning in between does not void it.
+  Base stays the default chain.
 - On Solana a prepared deposit or withdrawal is ONE unsigned transaction (`transaction.wire`, base64), simulated
   before it is returned, that lands only before `transaction.expiresAfterBlockHeight` (about a minute). The
   confirm page builds it when the operator presses Confirm, and a gate admits it only if every instruction is

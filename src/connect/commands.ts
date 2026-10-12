@@ -420,20 +420,29 @@ export function buildConnectCommands(deps: ConnectDeps = {}): Record<string, Com
   const notConnectedSolana = () => new Error("no Solana wallet is connected — run `treasury connect wallet --chain solana` first, and let the operator sign in");
 
   /**
-   * The Solana counterpart of `confirmInWallet`: the same two runs. The acknowledgement covers the INTENT
-   * (account, vault, action, raw amount), because the transaction itself is built when the operator confirms.
+   * The Solana counterpart of `confirmInWallet`: the same two runs. The acknowledgement covers what the
+   * operator asked for (`acked`: account, vault, action, raw amount), because the transaction itself is built
+   * when the operator confirms. `intent` gives the shares and amount to build from; it runs again after the
+   * acknowledgement is accepted, so a withdrawal by amount burns the shares worth that amount at that moment.
    */
-  const confirmSolana = async (intent: SolanaIntent, amountText: string, session: Session, ack: string | undefined) => {
-    const digest = solanaIntentDigest(session.account, intent.vault.address, intent.kind, intent.raw);
+  const confirmSolana = async (
+    acked: { kind: "deposit" | "withdraw" | "withdraw-assets"; vault: SolanaVaultEntry; raw: bigint },
+    amountText: string,
+    session: Session,
+    ack: string | undefined,
+    intent: () => Promise<SolanaIntent>,
+  ) => {
+    const digest = solanaIntentDigest(session.account, acked.vault.address, acked.kind, acked.raw);
     if (ack === undefined) {
-      const summary = summarizeSolana(intent.kind, intent.vault, amountText, session.account);
+      await intent(); // the same checks the --ack run makes, so an impossible request fails before the operator is asked
+      const summary = summarizeSolana(acked.kind === "deposit" ? "deposit" : "withdraw", acked.vault, amountText, session.account);
       const pending = issueAckForDigest(digest, now());
       writePendingAck(pending);
       return JSON.stringify(
         {
           status: "needs_acknowledgement",
           opened: false,
-          action: intent.kind,
+          action: acked.kind === "deposit" ? "deposit" : "withdraw",
           amount: summary.amount,
           chain: "solana",
           chainId: null,
@@ -443,7 +452,7 @@ export function buildConnectCommands(deps: ConnectDeps = {}): Record<string, Com
           acknowledgement: acknowledgementText(summary),
           ack: pending.code,
           expiresAtIso: pending.expiresAtIso,
-          next_step: `Post \`acknowledgement\` to the operator word for word, as it is, and wait for their reply. Only an explicit yes they give after reading it is an acknowledgement: not a "go" from before they saw it, and not your own reading of the conversation. On yes, run this same command again with --ack ${pending.code} added, and the signing page opens. On anything else, stop. The code works once, for exactly this ${intent.kind}, until ${pending.expiresAtIso}.`,
+          next_step: `Post \`acknowledgement\` to the operator word for word, as it is, and wait for their reply. Only an explicit yes they give after reading it is an acknowledgement: not a "go" from before they saw it, and not your own reading of the conversation. On yes, run this same command again with --ack ${pending.code} added, and the signing page opens. On anything else, stop. The code works once, for exactly this ${acked.kind === "deposit" ? "deposit" : "withdrawal"}, until ${pending.expiresAtIso}.`,
         },
         null,
         2,
@@ -451,7 +460,7 @@ export function buildConnectCommands(deps: ConnectDeps = {}): Record<string, Com
     }
     checkAckDigest(ack, readPendingAck(), digest, now());
     clearPendingAck();
-    const r = await runConfirmSolana(intent, session, solanaDeps());
+    const r = await runConfirmSolana(await intent(), session, solanaDeps());
     const txs = r.result.ok ? r.result.value : r.done;
     const all = txs.length === r.total && txs.every((t) => t.verified === "matched" || t.verified === "extra_transfer");
     const status = r.result.ok ? (all ? "completed" : "stopped") : txs.length ? "stopped" : "not_reported";
@@ -542,7 +551,8 @@ export function buildConnectCommands(deps: ConnectDeps = {}): Record<string, Com
         if (rawReceiver !== session.account) throw new Error(`refused: --receiver ${rawReceiver} is not the connected Solana account ${session.account}; on Solana the shares can only go to the account that deposits`);
         const raw = parseAmount(amount_usdc, target.vault.asset.decimals, `deposit amount (${target.vault.asset.symbol})`);
         if (raw === 0n) throw new Error("a deposit of 0");
-        return confirmSolana({ kind: "deposit", vault: target.vault, raw }, `${formatAmount(raw, target.vault.asset.decimals)} ${target.vault.asset.symbol}`, session, ack);
+        const intent: SolanaIntent = { kind: "deposit", vault: target.vault, raw };
+        return confirmSolana(intent, `${formatAmount(raw, target.vault.asset.decimals)} ${target.vault.asset.symbol}`, session, ack, async () => intent);
       }
       const session = readSession();
       if (!session) throw notConnected();
@@ -579,9 +589,18 @@ export function buildConnectCommands(deps: ConnectDeps = {}): Record<string, Com
         const session = readSolanaSession();
         if (!session) throw notConnectedSolana();
         if (rawReceiver !== session.account) throw new Error(`refused: --receiver ${rawReceiver} is not the connected Solana account ${session.account}; on Solana a withdrawal pays only the account whose shares burn`);
-        const raw = await solanaWithdrawShares(target.vault, all ? undefined : amount_usdc, all ? shares_exact : undefined);
-        if (raw === 0n) throw new Error("a withdrawal of 0");
-        return confirmSolana({ kind: "withdraw", vault: target.vault, raw }, `${formatAmount(raw, target.vault.shareDecimals)} ${target.vault.symbol} shares`, session, ack);
+        const v = target.vault;
+        const intent = async (): Promise<SolanaIntent> => {
+          const raw = await solanaWithdrawShares(v, all ? undefined : amount_usdc, all ? shares_exact : undefined);
+          if (raw === 0n) throw new Error("a withdrawal of 0");
+          return { kind: "withdraw", vault: v, raw };
+        };
+        if (all) {
+          const shares = parseAmount(shares_exact!, v.shareDecimals, "shares_exact");
+          return confirmSolana({ kind: "withdraw", vault: v, raw: shares }, `${formatAmount(shares, v.shareDecimals)} ${v.symbol} shares`, session, ack, intent);
+        }
+        const assets = parseAmount(amount_usdc!, v.asset.decimals, `withdrawal amount (${v.asset.symbol})`);
+        return confirmSolana({ kind: "withdraw-assets", vault: v, raw: assets }, `${formatAmount(assets, v.asset.decimals)} ${v.asset.symbol}`, session, ack, intent);
       }
       const session = readSession();
       if (!session) throw notConnected();
