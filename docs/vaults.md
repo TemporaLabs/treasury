@@ -180,7 +180,7 @@ open to any account and exercises every path. It is not what an agent uses unles
 | chassis | IPOR Fusion PlasmaVault (ERC-4626) |
 | deployed | block 51,359,816 (first block with code) |
 | deposits | **whitelist-gated**: `deposit()` needs a role on the vault's AccessManager. A stranger's simulated deposit reverts `AccessManagedUnauthorized` (measured at block 51,361,109) |
-| withdrawals | **public**: an account that holds shares can always leave |
+| withdrawals | **public**: not gated by the whitelist, so an account that holds shares can leave, subject to the liquidity described under exit |
 | exit | instant-withdrawal fuses are configured, so a withdrawal is served from the vault's liquid balance and then by unwinding positions in the same transaction. A withdrawal larger than what those positions can release in-block still reverts — `earn_balance` reports `exit.exitableNow` by simulating it |
 | fees | a management fee and a performance fee, both readable on-chain from the vault (`getManagementFeeData`, `getPerformanceFeeData`) |
 | positions | ERC-4626 leaf vaults on Base — readable on-chain; Treasury does not model the fund's allocation |

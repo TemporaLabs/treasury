@@ -15,7 +15,7 @@ Pre-1.0, minor versions may change tool names, schemas and behaviour.
   `https://ethereum.reth.rs/rpc`) and `TREASURY_LOGS_RPC_ETHEREUM`; `TREASURY_RPC_MONAD` (then
   `MONAD_RPC_URL`, then `https://rpc.monad.xyz`) and `TREASURY_LOGS_RPC_MONAD`.
 - **On Monad, set `TREASURY_LOGS_RPC_MONAD` for position history.** Monad's public endpoint serves
-  `eth_getLogs` over 100 blocks per request, and Monad makes about three blocks a second, so
+  `eth_getLogs` over at most 100 blocks per request, and Monad makes about three blocks a second, so
   `earn balance` through it covers under an hour and reports the scan as cut short (basis and yield
   `unknown`). Measured 2026-10-11.
 - The earn skill lists the new chains when it asks which chain, and **tells the operator that
@@ -43,6 +43,8 @@ Pre-1.0, minor versions may change tool names, schemas and behaviour.
   dependency, `@solana/kit`. The instruction builders and account decoders are pinned byte for byte to
   Kamino's own SDK by committed fixtures (`vendor/kamino/`); that SDK is not a dependency.
 - `registry:check` reconciles the Solana row against the vault's own state.
+- The Solana vault is reached through the CLI. The library's `listVaults()` and builders cover the EVM vaults
+  only, and `loadRegistry()` returns the Solana row under `solanaVaults`.
 
 ### Changed — the registry and the version are inside the bundle
 - The vault registry and the package version are now compiled into the CLI bundle and the library build
@@ -75,8 +77,8 @@ Pre-1.0, minor versions may change tool names, schemas and behaviour.
   100000") as a 100,000-block window and walks the history in chunks, instead of failing the scan.
 
 ### Dependencies
-- viem 2.57.3, inlined in the CLI bundle. It includes a fix to `waitForTransactionReceipt`, which no longer
-  treats the awaited transaction as its own replacement when its receipt is not yet available.
+- viem 2.57.3, inlined in the CLI bundle. Treasury does not call `waitForTransactionReceipt`, the function
+  this release of viem fixes.
 
 ## [v0.1.2] - 2026-10-05
 
