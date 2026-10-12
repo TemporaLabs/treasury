@@ -370,7 +370,8 @@ jobs:
           node-version: ${{ matrix.node }}
       # Installed the way users install it, so the npm `treasury` bin is exercised too: this tree's
       # package (packed without the build lifecycle; CI's `check` job already holds dist/ to the
-      # source) and the published v0.1.2, the release the failure was first seen with.
+      # source) and the published v0.1.2, the release the failure was first seen with. v0.1.2 is a
+      # reference: reported beside this tree, but it does not decide the verdict, since it ships the defect.
       - name: install this tree's package and the published v0.1.2
         shell: bash
         run: |
@@ -379,7 +380,7 @@ jobs:
           npm install --prefix "$RUNNER_TEMP/v012" --ignore-scripts --no-audit --no-fund @temporalabs/treasury@0.1.2
       - name: the built CLI exits 0 with a chain-read answer, and 1 on a refused argument
         shell: bash
-        run: CLI_EXIT_PREFIX="$RUNNER_TEMP/cur" node .github/scripts/cli-exit.mjs "--subject=v0.1.2=$RUNNER_TEMP/v012"
+        run: CLI_EXIT_PREFIX="$RUNNER_TEMP/cur" node .github/scripts/cli-exit.mjs "--reference=v0.1.2=$RUNNER_TEMP/v012"
 
   # ── Bundle provenance ──────────────────────────────────────────────────────────────────────────
   # This job attests the COMMITTED root dist/treasury.mjs. A marketplace install runs

@@ -83,10 +83,13 @@ const cases = [
 ];
 
 // Subjects: this tree, plus any `--subject name=<prefix>` (an npm install prefix holding the package).
+// A `--reference name=<prefix>` is run and reported the same way but does not decide the verdict: it is
+// a published release kept beside this tree for comparison, and a release that shipped a defect this
+// tree fixes would otherwise keep the job red for good.
 const subjects = [{ name: "this tree", version: "0.1.3", file: join(ROOT, "dist", "treasury.mjs"), prefix: process.env.CLI_EXIT_PREFIX }];
 for (const a of process.argv.slice(2)) {
-  const m = /^--subject=([^=]+)=(.+)$/.exec(a);
-  if (m) subjects.push({ name: m[1], version: m[1].replace(/^v/, ""), file: join(m[2], "node_modules", "@temporalabs", "treasury", "dist", "treasury.mjs"), prefix: m[2] });
+  const m = /^--(subject|reference)=([^=]+)=(.+)$/.exec(a);
+  if (m) subjects.push({ name: m[2], version: m[2].replace(/^v/, ""), file: join(m[3], "node_modules", "@temporalabs", "treasury", "dist", "treasury.mjs"), prefix: m[3], reference: m[1] === "reference" });
 }
 
 function launches(s) {
@@ -129,7 +132,7 @@ const rows = [];
 for (const s of subjects) {
   if (!existsSync(s.file)) {
     console.log(`subject ${s.name}: ${s.file} is missing`);
-    rows.push({ subject: s.name, launch: "-", case: "installed", ok: false });
+    rows.push({ subject: s.name, launch: "-", case: "installed", ok: false, gates: true });
     continue;
   }
   for (const l of launches(s)) {
@@ -144,7 +147,7 @@ for (const s of subjects) {
       }
       const hex = typeof r.status === "number" && r.status > 255 ? ` (0x${(r.status >>> 0).toString(16).toUpperCase()})` : "";
       const ok = r.status === c.code && proved && r.ms <= MAX_MS;
-      rows.push({ subject: s.name, launch: l.how, case: c.name, expected: c.code, exit: `${r.status}${hex}`, signal: r.signal, ms: r.ms, proved, ok });
+      rows.push({ subject: s.reference ? `${s.name} (reference)` : s.name, launch: l.how, case: c.name, expected: c.code, exit: `${r.status}${hex}`, signal: r.signal, ms: r.ms, proved, ok, gates: !s.reference });
       console.log(`--- [${s.name} | ${l.how}] ${c.name}: exit ${r.status}${hex}${r.signal ? ` signal ${r.signal}` : ""}, ${r.ms} ms, expected ${c.code}, answer proved: ${proved}`);
       if (!ok) {
         if (r.stdout.trim()) console.log(`stdout:\n${r.stdout.trim().slice(0, 1500)}`);
@@ -157,7 +160,9 @@ slow.close();
 slow.closeAllConnections?.();
 console.log(`\n${process.platform} ${process.arch} ${process.version}`);
 console.table(rows);
-const bad = rows.filter((r) => !r.ok);
+const differs = rows.filter((r) => !r.ok && !r.gates);
+if (differs.length) console.log(`reference, not gating: ${differs.map((r) => `${r.subject} | ${r.launch} | ${r.case}`).join("; ")}`);
+const bad = rows.filter((r) => !r.ok && r.gates);
 if (bad.length) {
   console.log(`FAILED: ${bad.map((r) => `${r.subject} | ${r.launch} | ${r.case}`).join("; ")}`);
   process.exit(1);
