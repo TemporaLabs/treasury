@@ -12,7 +12,7 @@ transfers, and CI asserts the command list exactly — a ninth command, or a `si
 The five `connect` commands [further down](#the-connect-commands--treasury-connect-command) are a third
 kind: they hand calls to the operator's own wallet for approval. Their list is pinned by CI the same way.
 
-Every tool that takes a vault takes it as `vault`, the vault's ERC-20 ticker (e.g. `tlCashPlusUSDC2`), and uses the default when it is
+Every tool that takes a vault takes it as `vault`, the vault's ticker (e.g. `tlCashPlusUSDC2`: its ERC-20 ticker on the EVM chains, one the registry assigns on Solana), and uses the default when it is
 omitted. Every tool that takes an address takes it as `account` — whose shares these are.
 Both prepare commands also take `receiver`, which is a different thing: where the shares land on a
 deposit, where the asset (USDC; USDG on Robinhood Chain) lands on a withdrawal.
@@ -37,7 +37,8 @@ different chains.
 Every result that names a vault carries `chain` and `chainId`. On a prepared envelope they come
 before the calls, and every call inside carries the same `chainId`: a call is correct on that chain
 only. Sent on another chain, a transaction to an address with no contract there is mined and does
-nothing.
+nothing. On Solana `chainId` is `null`, the envelope carries one `transaction` instead of calls, and
+`cluster` and `genesisHash` name the chain (see [On Solana](#on-solana)).
 
 **The agent asks, the tool does not choose.** When the operator has not said which chain to deposit
 on, the skill has the agent show `earn_vaults` → `chains` and ask. Withdrawals, quotes and balances
@@ -54,8 +55,9 @@ More fractional digits than the asset has (6 for both) are refused, never trunca
 No inputs. Every vault in the registry, on every chain, with its chassis, decimals and **measured** deposit-open
 status (the block and method it was measured at). Each row carries the vault's public identity:
 
-- `symbol` — the vault's own ERC-20 ticker, e.g. `tlCashPlusUSDC2`, as `symbol()` reports it;
-- `name` — the vault's `name()`;
+- `symbol` — the vault's own ERC-20 ticker, e.g. `tlCashPlusUSDC2`, as `symbol()` reports it; on
+  Solana, the ticker the registry assigns;
+- `name` — the vault's `name()`; on Solana, the name the registry records;
 - `chain` and `chainId` — the chain the vault is on, e.g. `"arbitrum"` and `42161`;
 - `address` — the contract itself, on that chain;
 - `links` — `explorer` always (the chain's own: BaseScan, Arbiscan, Robinhood Chain's Blockscout, Etherscan, MonadScan, or Solscan on Solana), and `app` where the chassis has a front end whose page for this vault exists. **These need no
@@ -140,12 +142,13 @@ vault on another.
 
 **`deposit`:** expected shares (`previewDeposit`), share price, and the same pre-flight verdict as
 `earn_status`. No rate is quoted: an ERC-4626 vault exposes none, and this client calls no yield
-API. What a position has actually earned comes from `earn_balance`, from the vault's own events. `canProceed` is false unless the verdict allows it.
+API. What a position has actually earned comes from `earn_balance`, from the vault's own events. On the EVM chains, `canProceed` is false unless the verdict allows it; a Solana quote has no `canProceed`, so read `preflight.status`.
 
 **`withdraw`:** shares that would burn (`previewWithdraw`), shares held, a **simulated `withdraw()`**
 verdict (`OK`, or `REVERTED` with the chain's revert reason; on a Fusion vault, which pays only from its
 own balance, also in liquidity terms), the vault's `instantLiquidity`, and
-`maxWithdraw` as an advisory only.
+`maxWithdraw` as an advisory only. On Solana the quote reports `canWithdraw` and a `note` instead of
+`simulated` and `canProceed` (see [On Solana](#on-solana)).
 
 ## `earn_balance` — READ
 

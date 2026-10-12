@@ -66,6 +66,14 @@ describe("llms.txt is what the skill and the commands produce", () => {
     expect(isCurrent(`${GUIDE}x`, want)).toBe(false);
   });
 
+  it("it points at this version: the URL is the release tag's copy, and npx runs the same version", () => {
+    const version = (JSON.parse(readFileSync(join(pkgRoot, "package.json"), "utf8")) as { version: string }).version;
+    expect(GUIDE_URL).toBe(`https://raw.githubusercontent.com/TemporaLabs/treasury/v${version}/llms.txt`);
+    expect(GUIDE).toContain(GUIDE_URL);
+    expect(GUIDE).toContain(`npx @temporalabs/treasury@${version} `);
+    expect(GUIDE).not.toMatch(/npx @temporalabs\/treasury[^@]/);
+  });
+
   it("it is for an agent without the plugin: no launch line that only the plugin can run", () => {
     expect(GUIDE).not.toContain("CLAUDE_PLUGIN_ROOT");
     expect(GUIDE).toContain("treasury earn <command> --flag value");

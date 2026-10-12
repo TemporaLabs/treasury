@@ -13,6 +13,7 @@ a command that did would be a design change the project refuses.
 
 ```
    agent ──▶ Treasury ──▶ { requires_signature: true, status: "unsigned", calls: [...] }
+                          (on Solana, one transaction: {...} in place of calls)
                                               │
                           your signer — a wallet, a policy engine, a token-bound account
                                               │
