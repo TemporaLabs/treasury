@@ -38,8 +38,11 @@ export const EDITS: [string, string][] = [
 interface Flag { flag: string; type: string; required: boolean; takesValue?: boolean; [k: string]: unknown }
 interface Cmd { command: string; title: string; description: string; flags: Flag[] }
 
-function skillBody(): string {
-  let text = readFileSync(SKILL, "utf8");
+/** A checkout with `core.autocrlf` (Windows) has `\r\n` line ends; every comparison here is on `\n`. */
+const lf = (s: string): string => s.replace(/\r\n/g, "\n");
+
+export function skillBody(raw: string = readFileSync(SKILL, "utf8")): string {
+  let text = lf(raw);
   const end = text.indexOf("\n---\n", 4);
   if (!text.startsWith("---\n") || end < 0) throw new Error("plugin/skills/earn/SKILL.md has no frontmatter to strip");
   text = text.slice(end + 5).replace(/^\n+/, "");
@@ -91,6 +94,11 @@ export async function expectedGuide(): Promise<string> {
   return `${out.join("\n")}\n`;
 }
 
+/** Whether the committed `llms.txt` text is the generated one, whatever line ends the checkout gave it. */
+export function isCurrent(committed: string, want: string): boolean {
+  return lf(committed) === want;
+}
+
 async function main(): Promise<void> {
   const want = await expectedGuide();
   if (process.argv.includes("--write")) {
@@ -98,13 +106,13 @@ async function main(): Promise<void> {
     console.log("✓ llms.txt written");
     return;
   }
-  let have = "";
+  let have: string | undefined;
   try {
     have = readFileSync(OUT, "utf8");
   } catch {
     /* missing is stale */
   }
-  if (have !== want) {
+  if (have === undefined || !isCurrent(have, want)) {
     console.log("✗ llms.txt is stale: run npx tsx scripts/llms-txt.ts --write");
     process.exit(1);
   }
