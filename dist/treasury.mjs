@@ -44476,7 +44476,8 @@ function compileUnsigned(instructions, feePayer, lifetime) {
 
 // src/solana/rpc.ts
 var RATE_LIMIT_WAIT_MS2 = 15e3;
-function withRateLimitRetry(base2, sleep = (ms) => new Promise((r) => setTimeout(r, ms).unref?.())) {
+var retrySleep = (ms) => new Promise((r) => setTimeout(r, ms));
+function withRateLimitRetry(base2, sleep = retrySleep) {
   return (async (req) => {
     let waited = 0;
     for (let attempt = 0; ; attempt++) {
