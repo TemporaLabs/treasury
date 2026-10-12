@@ -2,7 +2,7 @@
  * Decoders for the two accounts this client reads on Solana: the kVault `VaultState` and the lending
  * program's `Reserve`.
  *
- * 🔴 HAND-DECLARED OFFSETS, PINNED TO KAMINO'S OWN SDK. `tests/solana-layout.unit.test.ts` decodes a real
+ * 🔴 HAND-DECLARED OFFSETS, PINNED TO KAMINO'S OWN SDK. `tests/solana-kvault.unit.test.ts` decodes a real
  * mainnet snapshot (`tests/fixtures/solana/vault-snapshot.json`) and compares every field with what
  * Kamino's SDK decoded from the same bytes (`vendor/kamino/decode-fixtures.json`, version in
  * `vendor/kamino/PINNED`). The discriminator and the exact account length are checked on every decode, so a

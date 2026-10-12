@@ -133,6 +133,45 @@ describe("the Solana gate refuses", () => {
     await refused([...d, d[2]!], /two deposits/);
   });
 
+  const swap = (ix: Instruction, at: number, to: string): Instruction => ({ ...ix, accounts: ix.accounts!.map((m, i) => (i === at ? { ...m, address: address(to) } : m)) });
+
+  it("a withdrawal paying into a token account that is not the connected account's own", async () => {
+    const [cu, ata, leg] = await withdrawInstructions(read, ACCOUNT, 1_000_000n);
+    await refused([cu!, ata!, swap(leg!, 5, key(81))], /pays into .* not the connected account's own/);
+  });
+
+  it("a share account that is not the connected account's own, on a deposit and on a withdrawal", async () => {
+    const [cu, ata, dep] = await deposit();
+    await refused([cu!, ata!, swap(dep!, 7, key(82))], /as the share account/);
+    const [wcu, wata, leg] = await withdrawInstructions(read, ACCOUNT, 1_000_000n);
+    await refused([wcu!, wata!, swap(leg!, 7, key(82))], /as the share account/);
+  });
+
+  it("a token or share mint that is not the vault's", async () => {
+    const [cu, ata, dep] = await deposit();
+    await refused([cu!, ata!, swap(dep!, 3, key(83))], /token or share mint/);
+    await refused([cu!, ata!, swap(dep!, 5, key(83))], /token or share mint/);
+    const [wcu, wata, leg] = await withdrawInstructions(read, ACCOUNT, 1_000_000n);
+    await refused([wcu!, wata!, swap(leg!, 6, key(83))], /token or share mint/);
+    await refused([wcu!, wata!, swap(leg!, 8, key(83))], /token or share mint/);
+  });
+
+  it("a token account the connected account pays for but someone else owns", async () => {
+    const [cu, ata, dep] = await deposit();
+    await refused([cu!, swap(ata!, 2, OTHER), dep!], /creates a token account for/);
+  });
+
+  it("a token-account creation naming another program", async () => {
+    const [cu, ata, dep] = await deposit();
+    await refused([cu!, swap(ata!, 4, key(84)), dep!], /unexpected program/);
+    await refused([cu!, swap(ata!, 5, key(84)), dep!], /unexpected program/);
+  });
+
+  it("the connected account's own token account, but for a mint that is not this vault's", async () => {
+    const [cu, ata, dep] = await deposit();
+    await refused([cu!, ata!, await createAtaIdempotentIx(ACCOUNT, key(85)), dep!], /created for .* not this vault's/);
+  });
+
   it("a zero amount", async () => {
     await refused(await depositInstructions(read, ACCOUNT, 0n), /moves 0/);
   });

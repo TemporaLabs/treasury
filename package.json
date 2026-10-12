@@ -50,7 +50,7 @@
   },
   "dependencies": {
     "@solana/kit": "^8.4.0",
-    "viem": "^2.37.0",
+    "viem": "^2.57.3",
     "zod": "^4.1.0"
   },
   "devDependencies": {

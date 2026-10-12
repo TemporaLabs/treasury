@@ -115,7 +115,7 @@ export async function admitSolana(wireBase64: string, account: string): Promise<
         if (isWithdraw && accts[14]?.address !== state) refuse(`${at} names a second vault state ${accts[14]?.address}, not ${state}`);
         // The fixed account positions, as `src/solana/kvault.ts` builds them and Kamino's SDK does.
         const userToken = accts[isDeposit ? 6 : 5]?.address;
-        const userShares = accts[isDeposit ? 7 : 7]?.address;
+        const userShares = accts[7]?.address; // both instructions put the user's share account at index 7
         const mint = accts[isDeposit ? 3 : 6]?.address;
         const sharesMint = accts[isDeposit ? 5 : 8]?.address;
         if (mint !== v!.asset.address || sharesMint !== v!.sharesMint) refuse(`${at} names a token or share mint that is not the vault's`);
