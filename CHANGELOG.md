@@ -67,6 +67,11 @@ Pre-1.0, minor versions may change tool names, schemas and behaviour.
   3 on Solana", "2 USDC on every chain"): settle the list from the operator's words, check every leg first,
   show one plan with what cannot go ahead and why, then run one complete deposit per vault, one at a time,
   stopping to ask if a leg fails. `llms.txt` carries the same text.
+- **Positions and withdrawals across vaults, the same way:** "what do I hold?" is one table over every vault, and
+  "withdraw everything" is one plan with what each vault can pay now, then one withdrawal per vault.
+- **When the operator asks what Treasury can do,** the skill says how to answer: the chains and vaults from the live
+  list, quote, deposit, check and withdraw in one vault or several, money moving only from the operator's own wallet,
+  and the two ways in (an agent, or the browser app at app.temporalabs.com).
 
 ### Added — a guide for agents without the plugin
 - **`llms.txt`**, in the npm package and at `https://raw.githubusercontent.com/TemporaLabs/treasury/main/llms.txt`: the Earn skill's
