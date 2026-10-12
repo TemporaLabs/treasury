@@ -434,7 +434,10 @@ export function buildConnectCommands(deps: ConnectDeps = {}): Record<string, Com
   ) => {
     const digest = solanaIntentDigest(session.account, acked.vault.address, acked.kind, acked.raw);
     if (ack === undefined) {
-      await intent(); // the same checks the --ack run makes, so an impossible request fails before the operator is asked
+      // Resolves the request (for a withdrawal by amount, the shares it burns now), so one that cannot be priced
+      // fails before the operator is asked. It is NOT the gate: no transaction is built or simulated here. The
+      // --ack run builds and simulates it (buildForIntent) before any page opens.
+      await intent();
       const summary = summarizeSolana(acked.kind === "deposit" ? "deposit" : "withdraw", acked.vault, amountText, session.account);
       const pending = issueAckForDigest(digest, now());
       writePendingAck(pending);

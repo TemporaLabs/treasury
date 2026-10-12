@@ -6,7 +6,8 @@
  * asserts three things the prose cannot:
  *
  *   1. it reaches ONE host (the mock) and calls only chain methods: eth_blockNumber, eth_getCode, eth_call,
- *      and on Solana getAccountInfo and getMultipleAccounts (served from the committed vault snapshot);
+ *      and on Solana getGenesisHash (which cluster it is), getAccountInfo and getMultipleAccounts (served from
+ *      the committed vault snapshot);
  *   2. when the chain agrees with the rows it exits 0;
  *   3. when the chain DISAGREES with one row — one byte of one symbol — it exits non-zero and names
  *      that row. That is the whole property: the chain is the authority, the file is the claim.
@@ -62,6 +63,8 @@ function startMock(corrupt?: { address: string; symbol: string }, corruptDeploym
         return acc ? { data: [acc.data, "base64"], executable: false, lamports: 1, owner: acc.owner, rentEpoch: 0, space: Buffer.from(acc.data, "base64").length } : null;
       };
       const context = { slot: SOLANA_SNAPSHOT.slot };
+      // Mainnet's genesis hash: the script checks the endpoint is mainnet before reading the row.
+      if (req.method === "getGenesisHash") return { jsonrpc: "2.0", id, result: "5eykt4UsFv8P8NJdTREpY1vzqKqZKvdpKuc147dw2N9d" };
       if (req.method === "getAccountInfo") return { jsonrpc: "2.0", id, result: { context, value: account(String(req.params?.[0])) } };
       if (req.method === "getMultipleAccounts") return { jsonrpc: "2.0", id, result: { context, value: (req.params?.[0] as string[]).map(account) } };
       return { jsonrpc: "2.0", id, error: { code: -32601, message: `method ${req.method} is not a chain read` } };
@@ -193,7 +196,7 @@ describe("registry-check reconciles against the CHAIN and nothing else", () => {
     // would show up here even if the verdict were unchanged.
     // `eth_chainId` is in the set because the script proves each endpoint is on its chain before
     // reading any row through it.
-    expect([...mock.methods].sort()).toEqual(["eth_blockNumber", "eth_call", "eth_chainId", "eth_getCode", "getAccountInfo", "getMultipleAccounts"]);
+    expect([...mock.methods].sort()).toEqual(["eth_blockNumber", "eth_call", "eth_chainId", "eth_getCode", "getAccountInfo", "getGenesisHash", "getMultipleAccounts"]);
     // The Solana row was read on the mock too, not on a public endpoint the test cannot see.
     expect(mock.perAddress.get(reg.solanaVaults[0]!.address)).toEqual(new Set(["getAccountInfo"]));
     // Each row was read on ITS chain and on no other: a reconciler that read an Arbitrum row

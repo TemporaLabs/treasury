@@ -119,11 +119,14 @@ export const WITHDRAW_COMPUTE_UNITS_PER_RESERVE = 400_000;
  * transactions only, so it cannot move money in or out while one is set. Unset today; checked on every build.
  */
 export function assertNoCoSigner(v: VaultRead): void {
-  if (v.state.permissioningAuthority !== DEFAULT_PUBKEY) {
-    throw new Error(
-      `refused: ${v.entry.symbol} now requires a co-signer (permissioning authority ${v.state.permissioningAuthority}) for every deposit and withdrawal, and this client builds single-signer transactions only. Nothing was prepared.`,
-    );
-  }
+  const refusal = coSignerRefusal(v);
+  if (refusal) throw new Error(`refused: ${refusal} Nothing was prepared.`);
+}
+
+/** Why the vault refuses this client while a co-signer is set, or `undefined` when none is. */
+function coSignerRefusal(v: VaultRead): string | undefined {
+  if (v.state.permissioningAuthority === DEFAULT_PUBKEY) return undefined;
+  return `${v.entry.symbol} now requires a co-signer (permissioning authority ${v.state.permissioningAuthority}) for every deposit and withdrawal, and this client builds single-signer transactions only.`;
 }
 
 /** The deposit: create the user's share account if it is missing, then deposit `amount` base units. */
@@ -177,11 +180,13 @@ export async function withdrawInstructions(v: VaultRead, user: string, shares: b
   const legs: { reserve: string; shares: bigint }[] = [];
   let left = shares;
   let idle = v.holdings.idle;
-  for (const reserve of order) {
+  for (const [i, reserve] of order.entries()) {
     if (left === 0n) break;
     const tokens = idle + capacity(reserve);
     const fits = perShareNum === 0n ? left : (tokens * perShareDen) / perShareNum;
-    const take = legs.length === order.length - 1 || fits >= left ? left : fits;
+    // The last reserve in ORDER takes the rest. Counting the legs pushed so far missed it whenever an earlier
+    // reserve could release nothing (no leg pushed), and the rest then became a second leg on order[0].
+    const take = i === order.length - 1 || fits >= left ? left : fits;
     if (take > 0n) legs.push({ reserve, shares: take });
     left -= take;
     idle = 0n;
@@ -288,6 +293,9 @@ export async function preflightDepositSolana(rpc: SolanaRpc, entry: SolanaVaultE
     return { vault: entry.symbol, depositor: account, status: "UNRESOLVED" as SolanaPreflightStatus, canDeposit: false, findings: [`vault read failed: ${describeError(e)}`] };
   }
   findings.push(`identity OK at slot ${v.slot}: token mint ${v.state.tokenMint}, share mint ${v.state.sharesMint}, ${v.state.allocations.length} reserve(s)`);
+  // A co-signer refuses every deposit this client can build: a verdict about the vault, given in full.
+  const coSigner = coSignerRefusal(v);
+  if (coSigner) return { vault: entry.symbol, depositor: account, status: "REVERTED_OTHER" as SolanaPreflightStatus, canDeposit: false, findings: [...findings, coSigner] };
   const tokenAta = await associatedTokenAccount(account, v.state.tokenMint);
   const sharesAta = await associatedTokenAccount(account, v.state.sharesMint);
   let held: { exists: boolean; amount: bigint };
@@ -298,7 +306,8 @@ export async function preflightDepositSolana(rpc: SolanaRpc, entry: SolanaVaultE
     return { vault: entry.symbol, depositor: account, status: "UNRESOLVED" as SolanaPreflightStatus, canDeposit: false, findings: [...findings, `balance reads failed: ${describeError(e)}`] };
   }
   const cap = v.state.depositCap;
-  if (cap !== 0n && v.holdings.aumIncludingFees + amount > cap) {
+  const overCap = cap !== 0n && v.holdings.aumIncludingFees + amount > cap;
+  if (overCap) {
     findings.push(`the vault's deposit cap is ${formatAmount(cap, entry.asset.decimals)} ${entry.asset.symbol} and it holds ${formatAmount(v.holdings.aumIncludingFees, entry.asset.decimals)}: this deposit would exceed it`);
   }
   if (!held.exists) findings.push(`the account has no ${entry.asset.symbol} token account yet, so it holds no ${entry.asset.symbol} on Solana`);
@@ -319,13 +328,21 @@ export async function preflightDepositSolana(rpc: SolanaRpc, entry: SolanaVaultE
   }
   const why = describeSimulation(sim);
   const text = `${why} ${sim.logs.join(" ")}`;
+  // canDeposit is a yes only when the simulation reached the vault and the vault did not refuse. One that
+  // stopped at the fee never reached it, and a deposit over the cap would be refused there once funded.
   if (NO_FEE_ACCOUNT.test(text)) {
-    findings.push(`the account cannot pay a transaction fee: it holds no SOL (${why}). It needs SOL for the fee and for its share account's rent, about 0.003 SOL in all`);
-    return { ...base, status: "NEEDS_FUNDS" as SolanaPreflightStatus, canDeposit: true, findings };
+    findings.push(
+      `the account cannot pay a transaction fee: it holds no SOL (${why}). It needs SOL for the fee and for its share account's rent, about 0.003 SOL in all. The simulation stopped there, before the vault, so whether the vault takes this deposit was not checked`,
+    );
+    return { ...base, status: "NEEDS_FUNDS" as SolanaPreflightStatus, canDeposit: false, findings };
   }
   if (NO_TOKENS.test(text)) {
-    findings.push(`the deposit stopped at the account's own ${entry.asset.symbol} (${why}): the vault did not refuse the account; it needs ${entry.asset.symbol} on Solana`);
-    return { ...base, status: "NEEDS_FUNDS" as SolanaPreflightStatus, canDeposit: true, findings };
+    findings.push(
+      overCap
+        ? `the deposit stopped at the account's own ${entry.asset.symbol} (${why}), and it is over the vault's deposit cap, so the vault would refuse it once funded`
+        : `the deposit stopped at the account's own ${entry.asset.symbol} (${why}): the vault did not refuse the account; it needs ${entry.asset.symbol} on Solana`,
+    );
+    return { ...base, status: "NEEDS_FUNDS" as SolanaPreflightStatus, canDeposit: !overCap, findings };
   }
   findings.push(`simulated deposit reverted: ${why}`);
   return { ...base, status: "REVERTED_OTHER" as SolanaPreflightStatus, canDeposit: false, findings };
