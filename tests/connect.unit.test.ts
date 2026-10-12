@@ -9,7 +9,9 @@ import { buildDeposit, buildWithdraw } from "../src/build.js";
 import { admit, type GateCall } from "../src/connect/gate.js";
 import { verifyLanded } from "../src/connect/verify.js";
 import { buildConnectCommands, outcome, runConfirm, runConnect, signInMessage, type ConnectDeps } from "../src/connect/commands.js";
-import { pendingAckPath, readSession, writeSession } from "../src/connect/session.js";
+import { pageLockPath, pendingAckPath, readSession, writeSession } from "../src/connect/session.js";
+import { serveOnce, type Flow } from "../src/connect/http.js";
+import { DEFAULT_CONNECT_PORTS, connectPorts } from "../src/connect/config.js";
 import { PAGE_CSP, shell } from "../src/connect/page.js";
 import { runConfirmSolana } from "../src/connect/solana.js";
 import { getBase58Decoder } from "@solana/kit";
@@ -1203,7 +1205,7 @@ describe("the Solana confirm flow binds the landed transaction to one it built",
       html: shell,
       csp: PAGE_CSP,
       assets: {},
-      port: Number(process.env["TREASURY_CONNECT_PORT"]),
+      ports: [Number(process.env["TREASURY_CONNECT_PORT"])],
       appId: "test",
     });
     while (!url) await new Promise((r) => setTimeout(r, 10));
@@ -1224,5 +1226,92 @@ describe("the Solana confirm flow binds the landed transaction to one it built",
     const v = await deposit(() => "GHtXQBsoZHVnNFa9YevAzFr17DJjgHXk3ycTKD5xD3Zi");
     expect(v.verified).toBe("mismatch");
     expect(v.detail).toMatch(/not the transaction this page built/);
+  });
+});
+
+describe("the page port: the first free one of a list, and one page at a time", () => {
+  const flow = (ports: readonly number[]): Flow<never> => ({
+    mode: "connect",
+    ttlMs: 5_000,
+    html: () => "",
+    csp: PAGE_CSP,
+    assets: {},
+    info: () => ({}),
+    accept: async () => ({ ok: false, reason: "not in this test" }),
+    ports,
+  });
+  const hold = async (port: number) => {
+    const s = createServer();
+    await new Promise<void>((resolve, reject) => {
+      s.once("error", reject);
+      s.listen(port, "127.0.0.1", () => resolve());
+    });
+    return () => new Promise<void>((r) => s.close(() => r()));
+  };
+  const portOf = (url: string) => Number(new URL(url).port);
+
+  it("defaults to 53682 first, then 53683 to 53686; TREASURY_CONNECT_PORT replaces the list with one port", () => {
+    expect(connectPorts()).toEqual([Number(process.env["TREASURY_CONNECT_PORT"])]);
+    delete process.env["TREASURY_CONNECT_PORT"];
+    expect(connectPorts()).toEqual([53682, 53683, 53684, 53685, 53686]);
+    expect(DEFAULT_CONNECT_PORTS).toEqual([53682, 53683, 53684, 53685, 53686]);
+  });
+
+  it("takes the next port when another program holds the first, and serves its origin from that port", async () => {
+    const [a, b] = [await freePort(), await freePort()];
+    const release = await hold(a);
+    try {
+      const h = await serveOnce(flow([a, b]));
+      expect(portOf(h.url)).toBe(b);
+      // Host and Origin are checked against the port actually bound, not the first in the list.
+      const info = await fetch(h.url.replace("/connect?", "/info?"));
+      expect(info.status).toBe(200);
+      h.close();
+      await h.done;
+    } finally {
+      await release();
+    }
+  });
+
+  it("names every port when all are taken, and leaves no lock behind", async () => {
+    const [a, b] = [await freePort(), await freePort()];
+    const releases = [await hold(a), await hold(b)];
+    try {
+      await expect(serveOnce(flow([a, b]))).rejects.toThrow(new RegExp(`ports ${a}, ${b} are all in use by other programs`));
+      expect(existsSync(pageLockPath())).toBe(false);
+    } finally {
+      for (const r of releases) await r();
+    }
+  });
+
+  it("refuses a second page while one is open, even on a free port, and admits one once it closes", async () => {
+    const [a, b] = [await freePort(), await freePort()];
+    const first = await serveOnce(flow([a]));
+    await expect(serveOnce(flow([b]))).rejects.toThrow(new RegExp(`another sign-in or confirmation page is still open on port ${a};`));
+    first.close();
+    await first.done;
+    expect(existsSync(pageLockPath())).toBe(false);
+    const next = await serveOnce(flow([b]));
+    expect(portOf(next.url)).toBe(b);
+    next.close();
+    await next.done;
+  });
+
+  it("replaces a lock left by a process that has gone, or by a page that has expired", async () => {
+    for (const stale of [{ pid: 2 ** 30, expiresAt: Date.now() + 60_000 }, { pid: process.pid, expiresAt: Date.now() - 1 }]) {
+      // A fresh port each time: a closed page keeps its port for a short grace period.
+      const port = await freePort();
+      writeFileSync(pageLockPath(), JSON.stringify({ ...stale, token: "old" }));
+      const h = await serveOnce(flow([port]));
+      expect(portOf(h.url)).toBe(port);
+      h.close();
+      await h.done;
+    }
+  });
+
+  it("does not replace a live lock: a running page in another process is reported, not raced", async () => {
+    writeFileSync(pageLockPath(), JSON.stringify({ pid: process.ppid, expiresAt: Date.now() + 60_000, token: "theirs", port: 53682 }));
+    await expect(serveOnce(flow([await freePort()]))).rejects.toThrow(/still open on port 53682;/);
+    expect(JSON.parse(readFileSync(pageLockPath(), "utf8")).token).toBe("theirs");
   });
 });

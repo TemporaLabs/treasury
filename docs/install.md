@@ -118,7 +118,7 @@ MCP tools; the `earn` skill reaches the same operations through the CLI.
 
 ## Connecting a wallet (`treasury connect`)
 
-`treasury connect wallet` opens a one-time URL on `http://localhost:53682` in the browser on the same machine: one
+`treasury connect wallet` opens a one-time URL on `http://localhost:53682` (or the next free port up to 53686) in the browser on the same machine: one
 Connect button, then Privy's window. Its first screen lists the browser wallets installed there
 (MetaMask, Rabby, or any wallet that announces itself to the page), then email and Google, four
 entries in all: with three or more wallets installed, Google moves under "More options", and with
@@ -134,7 +134,10 @@ Privy wallet from an email or social login), for the vault on Solana; the two co
 - It needs a browser on the machine running the agent. Over SSH, on Linux with no display, or with
   `TREASURY_CONNECT_NO_OPEN` set, the command prints the URL instead of opening it; it prints the URL
   on stderr either way.
-- Port 53682 must be free while a page is open; one sign-in or confirmation runs at a time.
+- The page uses the first free port of 53682 to 53686, so another program on 53682 does not stop it. One
+  sign-in or confirmation runs at a time: a second is refused while a page is open, whatever port it is on.
+  A page that falls back to another port is a different site to the browser, so an email or social login
+  may be asked for again there.
 - Phone wallets are not offered in this release: the page lists wallets installed in the browser, and
   an email or social login gives a wallet with no extension at all.
 

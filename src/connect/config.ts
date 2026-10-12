@@ -11,21 +11,23 @@
 export const DEFAULT_PRIVY_APP_ID = "cmubfegl2028d0ci3n0f2u6z5";
 
 /**
- * The fixed local port. Privy accepts sign-in only from origins listed in its dashboard, by exact
- * string, so the page must always be served from the same `http://localhost:<port>`. Change it with
- * `TREASURY_CONNECT_PORT` only together with the Privy app's allowed domains.
+ * The local ports the page may be served on, tried in this order. Privy accepts sign-in only from
+ * origins listed in its dashboard, by exact string, so every one of them is listed there as
+ * `http://localhost:<port>`. The first stays 53682, the only port earlier versions used, so an
+ * operator who signed in before keeps the same origin. `TREASURY_CONNECT_PORT` replaces the list with
+ * one port, which must then be listed in the Privy app's allowed domains.
  */
-export const DEFAULT_CONNECT_PORT = 53682;
+export const DEFAULT_CONNECT_PORTS: readonly number[] = [53682, 53683, 53684, 53685, 53686];
 
 export const privyAppId = (): string => {
   const v = (process.env["PRIVY_APP_ID"] ?? "").trim();
   return v.length > 0 && !v.includes("${") ? v : DEFAULT_PRIVY_APP_ID;
 };
 
-export const connectPort = (): number => {
+export const connectPorts = (): readonly number[] => {
   const raw = (process.env["TREASURY_CONNECT_PORT"] ?? "").trim();
   const n = Number(raw);
-  return raw.length > 0 && Number.isInteger(n) && n > 0 && n < 65536 ? n : DEFAULT_CONNECT_PORT;
+  return raw.length > 0 && Number.isInteger(n) && n > 0 && n < 65536 ? [n] : DEFAULT_CONNECT_PORTS;
 };
 
 /** Where the session file lives; `TREASURY_CONNECT_HOME` moves it (tests use a temporary directory). */

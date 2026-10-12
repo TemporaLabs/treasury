@@ -32,7 +32,7 @@ import { readVault } from "../solana/vault.js";
 import { solanaRpcUrlFromEnv } from "../client.js";
 import { runConfirmSolana, runConnectSolana, type SolanaFlowDeps, type SolanaIntent } from "./solana.js";
 import { acknowledgementText, checkAck, checkAckDigest, issueAck, issueAckForDigest, solanaIntentDigest, summarize, summarizeSolana } from "./ack.js";
-import { connectPort, privyAppId } from "./config.js";
+import { connectPorts, privyAppId } from "./config.js";
 import { admit } from "./gate.js";
 import { serveOnce, type Settled } from "./http.js";
 import { openBrowser } from "./open.js";
@@ -119,7 +119,7 @@ export async function runConnect(deps: ConnectDeps = {}): Promise<{ result: Sett
     html: (s) => shell(s, "Connect to Open Agent Treasury"),
     csp: PAGE_CSP,
     assets: assets(),
-    port: connectPort(),
+    ports: connectPorts(),
     info: () => ({ mode: "connect", appId: privyAppId() }),
     challenge: (address, origin, nonce) => signInMessage({ address, origin, nonce, issuedAt: new Date().toISOString() }),
     accept: async (body, ctx) => {
@@ -235,7 +235,7 @@ export async function runConfirm(
     html: (s) => shell(s, "Confirm — Open Agent Treasury"),
     csp: PAGE_CSP,
     assets: assets(),
-    port: connectPort(),
+    ports: connectPorts(),
     info: () => ({
       mode: "confirm",
       appId: privyAppId(),
@@ -413,7 +413,7 @@ export function buildConnectCommands(deps: ConnectDeps = {}): Record<string, Com
     html: shell,
     csp: PAGE_CSP,
     assets: assets(),
-    port: connectPort(),
+    ports: connectPorts(),
     appId: privyAppId(),
   });
 
@@ -532,7 +532,7 @@ export function buildConnectCommands(deps: ConnectDeps = {}): Record<string, Com
     }
     checkAck(ack, readPendingAck(), calls, account, now());
     // Spent before the page opens, so a flow that fails to start leaves nothing to reuse. Two
-    // concurrent runs could both pass the check; only one page opens because the port is fixed.
+    // concurrent runs could both pass the check; only one page opens, because the page lock admits one.
     clearPendingAck();
     const r = await runConfirm(calls, session, deps);
     return outcome(calls[0]!.chainId, session.account, r);
