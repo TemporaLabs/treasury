@@ -282,7 +282,7 @@ Coinbase Wallet's own entry in the sign-in window (the Coinbase SDK, for its mob
 wallet) is untested in this release ([#88](https://github.com/TemporaLabs/treasury/issues/88)). That
 entry is separate from the Coinbase Wallet browser extension, which, like any wallet installed in the
 browser, is listed on the window's first screen.
-A page opens on the operator's machine, at a one-time URL on `http://localhost:53682` that the command
+A page opens on the operator's machine, at a one-time URL on `http://localhost:53682` (or the next free port up to 53686) that the command
 also prints on stderr; they read each call there and
 confirm it in the wallet. Nothing here signs. See [`security-model.md`](security-model.md#the-wallet-connection-treasury-connect).
 

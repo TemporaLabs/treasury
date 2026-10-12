@@ -84,6 +84,17 @@ Pre-1.0, minor versions may change tool names, schemas and behaviour.
   0 times in 9; with one, 9 times in 9, and showed all of the first-deposit terms instead of about a third.
   The plugin's copy of the CLI carries no `guide`: its Earn skill is the same text and is already loaded.
 
+### Changed — the connect page falls back to another port
+- `treasury connect` serves its page on the first free port of 53682 to 53686, in that order, instead of
+  53682 only, so another program holding 53682 no longer stops sign-in or confirmation. Each of these is an
+  allowed origin of the Privy app. 53682 stays first, so an operator who signed in before keeps the same
+  origin; a page that falls back is a different site to the browser, and an email or social login may be
+  asked for again there.
+- One page at a time is now kept by a lock file next to the session (`connect-page.lock`), not by the
+  port: a second sign-in or confirmation is refused while one is open, naming the port it is on. A lock
+  left by a process that has gone, or by a page that has expired, is replaced.
+- `TREASURY_CONNECT_PORT` still sets one port, with no fallback.
+
 ### Documentation
 - The README names the two ways to use the vaults: in a browser at app.temporalabs.com, or with an agent
   through OAT.

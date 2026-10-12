@@ -46396,7 +46396,177 @@ async function admitSolana(wireBase64, account) {
 // src/connect/http.ts
 import http2 from "http";
 import { randomBytes as randomBytes2, timingSafeEqual } from "crypto";
+
+// src/connect/session.ts
+import { chmodSync, closeSync, mkdirSync, openSync, readFileSync, rmSync, statSync, writeFileSync, writeSync } from "fs";
+import { homedir } from "os";
+import { join } from "path";
+
+// src/connect/config.ts
+var DEFAULT_PRIVY_APP_ID = "cmubfegl2028d0ci3n0f2u6z5";
+var DEFAULT_CONNECT_PORTS = [53682, 53683, 53684, 53685, 53686];
+var privyAppId = () => {
+  const v = (process.env["PRIVY_APP_ID"] ?? "").trim();
+  return v.length > 0 && !v.includes("${") ? v : DEFAULT_PRIVY_APP_ID;
+};
+var connectPorts = () => {
+  const raw = (process.env["TREASURY_CONNECT_PORT"] ?? "").trim();
+  const n = Number(raw);
+  return raw.length > 0 && Number.isInteger(n) && n > 0 && n < 65536 ? [n] : DEFAULT_CONNECT_PORTS;
+};
+var connectHome = () => {
+  const v = (process.env["TREASURY_CONNECT_HOME"] ?? "").trim();
+  return v.length > 0 && !v.includes("${") ? v : void 0;
+};
+var noOpen = () => (process.env["TREASURY_CONNECT_NO_OPEN"] ?? "").trim().length > 0;
+
+// src/connect/session.ts
+var dir = () => connectHome() ?? join(homedir(), ".config", "treasury");
+var sessionPath = () => join(dir(), "connect-session.json");
+function readSession() {
+  let raw;
+  try {
+    raw = readFileSync(sessionPath(), "utf8");
+  } catch {
+    return void 0;
+  }
+  try {
+    const v = JSON.parse(raw);
+    if (typeof v.account !== "string" || !isAddress(v.account)) return void 0;
+    if (v.walletType !== "external" && v.walletType !== "embedded") return void 0;
+    return { account: getAddress(v.account), walletType: v.walletType, connectedAtIso: String(v.connectedAtIso ?? "") };
+  } catch {
+    return void 0;
+  }
+}
+function writeOwnerOnly(path, value) {
+  mkdirSync(dir(), { recursive: true, mode: 448 });
+  writeFileSync(path, `${JSON.stringify(value, null, 2)}
+`, { mode: 384 });
+  chmodSync(path, 384);
+}
+function writeSession(s2) {
+  writeOwnerOnly(sessionPath(), s2);
+  clearPendingAck();
+}
+function clearSession() {
+  const had = readSession() !== void 0;
+  rmSync(sessionPath(), { force: true });
+  clearPendingAck();
+  return had;
+}
+var solanaSessionPath = () => join(dir(), "connect-session-solana.json");
+function readSolanaSession() {
+  try {
+    const v = JSON.parse(readFileSync(solanaSessionPath(), "utf8"));
+    if (typeof v.account !== "string" || !isAddress2(v.account)) return void 0;
+    if (v.walletType !== "external" && v.walletType !== "embedded") return void 0;
+    return { account: v.account, walletType: v.walletType, connectedAtIso: String(v.connectedAtIso ?? "") };
+  } catch {
+    return void 0;
+  }
+}
+function writeSolanaSession(s2) {
+  writeOwnerOnly(solanaSessionPath(), s2);
+  clearPendingAck();
+}
+function clearSolanaSession() {
+  const had = readSolanaSession() !== void 0;
+  rmSync(solanaSessionPath(), { force: true });
+  clearPendingAck();
+  return had;
+}
+var pendingAckPath = () => join(dir(), "connect-ack.json");
+function writePendingAck(a) {
+  writeOwnerOnly(pendingAckPath(), a);
+}
+function readPendingAck() {
+  try {
+    const v = JSON.parse(readFileSync(pendingAckPath(), "utf8"));
+    if (typeof v.code !== "string" || typeof v.digest !== "string" || typeof v.issuedAtIso !== "string" || typeof v.expiresAtIso !== "string") return void 0;
+    return { code: v.code, digest: v.digest, issuedAtIso: v.issuedAtIso, expiresAtIso: v.expiresAtIso };
+  } catch {
+    return void 0;
+  }
+}
+function clearPendingAck() {
+  rmSync(pendingAckPath(), { force: true });
+}
+var pageLockPath = () => join(dir(), "connect-page.lock");
+var LOCK_WRITE_GRACE_MS = 2e3;
+var alive = (pid) => {
+  try {
+    process.kill(pid, 0);
+    return true;
+  } catch (e4) {
+    return e4.code === "EPERM";
+  }
+};
+function heldBy(path) {
+  let raw;
+  try {
+    raw = readFileSync(path, "utf8");
+  } catch {
+    return void 0;
+  }
+  try {
+    const v = JSON.parse(raw);
+    if (typeof v.pid !== "number" || typeof v.expiresAt !== "number") return void 0;
+    if (v.expiresAt < Date.now() || !alive(v.pid)) return void 0;
+    return { pid: v.pid, ...typeof v.port === "number" ? { port: v.port } : {} };
+  } catch {
+    try {
+      return Date.now() - statSync(path).mtimeMs < LOCK_WRITE_GRACE_MS ? { pid: 0 } : void 0;
+    } catch {
+      return void 0;
+    }
+  }
+}
+function claimPageLock(ttlMs) {
+  mkdirSync(dir(), { recursive: true, mode: 448 });
+  const path = pageLockPath();
+  const token = `${process.pid}.${Date.now()}.${Math.random().toString(36).slice(2)}`;
+  const expiresAt = Date.now() + ttlMs;
+  const write = (port) => writeFileSync(path, JSON.stringify({ pid: process.pid, expiresAt, token, ...port ? { port } : {} }), { mode: 384 });
+  for (let attempt = 0; ; attempt++) {
+    try {
+      const fd = openSync(path, "wx", 384);
+      try {
+        writeSync(fd, JSON.stringify({ pid: process.pid, expiresAt, token }));
+      } finally {
+        closeSync(fd);
+      }
+      break;
+    } catch (e4) {
+      if (e4.code !== "EEXIST") throw e4;
+      const holder = heldBy(path);
+      if (holder || attempt > 0) {
+        const where = holder?.port ? ` on port ${holder.port}` : "";
+        throw new Error(`another sign-in or confirmation page is still open${where}; finish or close it, then retry`);
+      }
+      rmSync(path, { force: true });
+    }
+  }
+  const ours = () => {
+    try {
+      return JSON.parse(readFileSync(path, "utf8")).token === token;
+    } catch {
+      return false;
+    }
+  };
+  return {
+    setPort: (port) => {
+      if (ours()) write(port);
+    },
+    release: () => {
+      if (ours()) rmSync(path, { force: true });
+    }
+  };
+}
+
+// src/connect/http.ts
 var MAX_BODY_BYTES = 16 * 1024;
+var LOCK_MARGIN_MS = 6e4;
 var CANCEL_GRACE_MS = 3e4;
 var same2 = (a, b) => {
   const x = Buffer.from(a);
@@ -46405,7 +46575,7 @@ var same2 = (a, b) => {
 };
 async function serveOnce(flow) {
   const secret = randomBytes2(24).toString("hex");
-  const origin = `http://localhost:${flow.port}`;
+  let origin = "";
   let settled = false;
   let busy = false;
   let deferred;
@@ -46510,7 +46680,7 @@ async function serveOnce(flow) {
       }
     })();
   };
-  const servers = [http2.createServer(onRequest), http2.createServer(onRequest)];
+  let servers = [];
   const closeAll = () => {
     for (const s2 of servers) {
       s2.close();
@@ -46520,6 +46690,7 @@ async function serveOnce(flow) {
   const finish = (r) => {
     if (settled) return;
     settled = true;
+    lock.release();
     resolveDone(r);
     setTimeout(closeAll, 1500).unref();
   };
@@ -46529,21 +46700,41 @@ async function serveOnce(flow) {
     deferred = r;
     setTimeout(() => finish(r), flow.cancelGraceMs ?? CANCEL_GRACE_MS).unref();
   };
-  const listen = (server, host, optional2) => new Promise((resolve2, reject) => {
+  const listen = (server, port, host, optional2) => new Promise((resolve2, reject) => {
     server.once("error", (e4) => {
       if (e4.code === "EADDRINUSE") {
-        return reject(new Error(`port ${flow.port} is in use on ${host} \u2014 another sign-in or confirmation page is probably still open; finish or close it, then retry`));
+        return reject(Object.assign(new Error(`port ${port} is in use on ${host} by another program; close it, then retry`), { inUse: true }));
       }
       if (optional2 && (e4.code === "EADDRNOTAVAIL" || e4.code === "EAFNOSUPPORT")) return resolve2();
       reject(e4);
     });
-    server.listen({ port: flow.port, host, ipv6Only: host === "::1" }, () => resolve2());
+    server.listen({ port, host, ipv6Only: host === "::1" }, () => resolve2());
   });
+  const lock = claimPageLock(flow.ttlMs + LOCK_MARGIN_MS);
   try {
-    await listen(servers[0], "127.0.0.1", false);
-    await listen(servers[1], "::1", true);
+    let busy2;
+    let bound = false;
+    for (const port of flow.ports) {
+      origin = `http://localhost:${port}`;
+      servers = [http2.createServer(onRequest), http2.createServer(onRequest)];
+      try {
+        await listen(servers[0], port, "127.0.0.1", false);
+        await listen(servers[1], port, "::1", true);
+        lock.setPort(port);
+        bound = true;
+        break;
+      } catch (e4) {
+        closeAll();
+        if (!e4.inUse) throw e4;
+        busy2 = e4;
+      }
+    }
+    if (!bound) {
+      if (flow.ports.length === 1 && busy2) throw busy2;
+      throw new Error(`ports ${flow.ports.join(", ")} are all in use by other programs; close one of them, then retry`);
+    }
   } catch (e4) {
-    closeAll();
+    lock.release();
     throw e4;
   }
   const timer = setTimeout(
@@ -46588,7 +46779,7 @@ async function runConnectSolana(deps) {
     html: (s2) => deps.html(s2, "Connect to Open Agent Treasury"),
     csp: deps.csp,
     assets: deps.assets,
-    port: deps.port,
+    ports: deps.ports,
     info: () => ({ mode: "connect", chain: "solana", appId: deps.appId }),
     challengeAddress: (a) => typeof a === "string" && isAddress2(a) ? a : void 0,
     challenge: (address3, origin, nonce) => solanaSignInMessage({ address: address3, origin, nonce, issuedAt: (/* @__PURE__ */ new Date()).toISOString() }),
@@ -46701,7 +46892,7 @@ async function runConfirmSolana(intent, session, deps) {
     html: (s2) => deps.html(s2, "Confirm \u2014 Open Agent Treasury"),
     csp: deps.csp,
     assets: deps.assets,
-    port: deps.port,
+    ports: deps.ports,
     info: () => ({
       mode: "confirm",
       chain: "solana",
@@ -46848,24 +47039,6 @@ function acknowledgementText(s2) {
   ].join("\n");
 }
 
-// src/connect/config.ts
-var DEFAULT_PRIVY_APP_ID = "cmubfegl2028d0ci3n0f2u6z5";
-var DEFAULT_CONNECT_PORT = 53682;
-var privyAppId = () => {
-  const v = (process.env["PRIVY_APP_ID"] ?? "").trim();
-  return v.length > 0 && !v.includes("${") ? v : DEFAULT_PRIVY_APP_ID;
-};
-var connectPort = () => {
-  const raw = (process.env["TREASURY_CONNECT_PORT"] ?? "").trim();
-  const n = Number(raw);
-  return raw.length > 0 && Number.isInteger(n) && n > 0 && n < 65536 ? n : DEFAULT_CONNECT_PORT;
-};
-var connectHome = () => {
-  const v = (process.env["TREASURY_CONNECT_HOME"] ?? "").trim();
-  return v.length > 0 && !v.includes("${") ? v : void 0;
-};
-var noOpen = () => (process.env["TREASURY_CONNECT_NO_OPEN"] ?? "").trim().length > 0;
-
 // src/connect/gate.ts
 var UNLIMITED = 2n ** 128n;
 var same3 = (a, b) => getAddress(a) === getAddress(b);
@@ -46953,7 +47126,7 @@ function openBrowser(url2) {
 }
 
 // src/connect/page.ts
-import { readFileSync, realpathSync } from "fs";
+import { readFileSync as readFileSync2, realpathSync } from "fs";
 import { fileURLToPath, pathToFileURL } from "url";
 var PAGE_CSP = [
   "default-src 'self'",
@@ -46975,7 +47148,7 @@ var here = pathToFileURL(realpathSync(fileURLToPath(import.meta.url)));
 function readPageBundle() {
   for (const rel of ["./connect-page.js", "../../dist/connect-page.js"]) {
     try {
-      return readFileSync(new URL(rel, here));
+      return readFileSync2(new URL(rel, here));
     } catch {
     }
   }
@@ -47006,82 +47179,6 @@ function shell(secret, title) {
 </body>
 </html>
 `;
-}
-
-// src/connect/session.ts
-import { chmodSync, mkdirSync, readFileSync as readFileSync2, rmSync, writeFileSync } from "fs";
-import { homedir } from "os";
-import { join } from "path";
-var dir = () => connectHome() ?? join(homedir(), ".config", "treasury");
-var sessionPath = () => join(dir(), "connect-session.json");
-function readSession() {
-  let raw;
-  try {
-    raw = readFileSync2(sessionPath(), "utf8");
-  } catch {
-    return void 0;
-  }
-  try {
-    const v = JSON.parse(raw);
-    if (typeof v.account !== "string" || !isAddress(v.account)) return void 0;
-    if (v.walletType !== "external" && v.walletType !== "embedded") return void 0;
-    return { account: getAddress(v.account), walletType: v.walletType, connectedAtIso: String(v.connectedAtIso ?? "") };
-  } catch {
-    return void 0;
-  }
-}
-function writeOwnerOnly(path, value) {
-  mkdirSync(dir(), { recursive: true, mode: 448 });
-  writeFileSync(path, `${JSON.stringify(value, null, 2)}
-`, { mode: 384 });
-  chmodSync(path, 384);
-}
-function writeSession(s2) {
-  writeOwnerOnly(sessionPath(), s2);
-  clearPendingAck();
-}
-function clearSession() {
-  const had = readSession() !== void 0;
-  rmSync(sessionPath(), { force: true });
-  clearPendingAck();
-  return had;
-}
-var solanaSessionPath = () => join(dir(), "connect-session-solana.json");
-function readSolanaSession() {
-  try {
-    const v = JSON.parse(readFileSync2(solanaSessionPath(), "utf8"));
-    if (typeof v.account !== "string" || !isAddress2(v.account)) return void 0;
-    if (v.walletType !== "external" && v.walletType !== "embedded") return void 0;
-    return { account: v.account, walletType: v.walletType, connectedAtIso: String(v.connectedAtIso ?? "") };
-  } catch {
-    return void 0;
-  }
-}
-function writeSolanaSession(s2) {
-  writeOwnerOnly(solanaSessionPath(), s2);
-  clearPendingAck();
-}
-function clearSolanaSession() {
-  const had = readSolanaSession() !== void 0;
-  rmSync(solanaSessionPath(), { force: true });
-  clearPendingAck();
-  return had;
-}
-var pendingAckPath = () => join(dir(), "connect-ack.json");
-function writePendingAck(a) {
-  writeOwnerOnly(pendingAckPath(), a);
-}
-function readPendingAck() {
-  try {
-    const v = JSON.parse(readFileSync2(pendingAckPath(), "utf8"));
-    if (typeof v.code !== "string" || typeof v.digest !== "string" || typeof v.issuedAtIso !== "string" || typeof v.expiresAtIso !== "string") return void 0;
-    return { code: v.code, digest: v.digest, issuedAtIso: v.issuedAtIso, expiresAtIso: v.expiresAtIso };
-  } catch {
-    return void 0;
-  }
-}
-function clearPendingAck() {
-  rmSync(pendingAckPath(), { force: true });
 }
 
 // src/connect/verify.ts
@@ -47197,7 +47294,7 @@ async function runConnect(deps = {}) {
     html: (s2) => shell(s2, "Connect to Open Agent Treasury"),
     csp: PAGE_CSP,
     assets: assets(),
-    port: connectPort(),
+    ports: connectPorts(),
     info: () => ({ mode: "connect", appId: privyAppId() }),
     challenge: (address3, origin, nonce) => signInMessage({ address: address3, origin, nonce, issuedAt: (/* @__PURE__ */ new Date()).toISOString() }),
     accept: async (body, ctx) => {
@@ -47281,7 +47378,7 @@ async function runConfirm(calls, session, deps = {}) {
     html: (s2) => shell(s2, "Confirm \u2014 Open Agent Treasury"),
     csp: PAGE_CSP,
     assets: assets(),
-    port: connectPort(),
+    ports: connectPorts(),
     info: () => ({
       mode: "confirm",
       appId: privyAppId(),
@@ -47435,7 +47532,7 @@ function buildConnectCommands(deps = {}) {
     html: shell,
     csp: PAGE_CSP,
     assets: assets(),
-    port: connectPort(),
+    ports: connectPorts(),
     appId: privyAppId()
   });
   const notConnectedSolana = () => new Error("no Solana wallet is connected \u2014 run `treasury connect wallet --chain solana` first, and let the operator sign in");

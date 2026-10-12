@@ -62,7 +62,7 @@ export interface SolanaFlowDeps {
   html: (secret: string, title: string) => string;
   csp: string;
   assets: Record<string, { type: string; body: string | Buffer }>;
-  port: number;
+  ports: readonly number[];
   appId: string;
 }
 
@@ -73,7 +73,7 @@ export async function runConnectSolana(deps: SolanaFlowDeps): Promise<{ result: 
     html: (s) => deps.html(s, "Connect to Open Agent Treasury"),
     csp: deps.csp,
     assets: deps.assets,
-    port: deps.port,
+    ports: deps.ports,
     info: () => ({ mode: "connect", chain: "solana", appId: deps.appId }),
     challengeAddress: (a) => (typeof a === "string" && isSolanaAddress(a) ? a : undefined),
     challenge: (address, origin, nonce) => solanaSignInMessage({ address, origin, nonce, issuedAt: new Date().toISOString() }),
@@ -229,7 +229,7 @@ export async function runConfirmSolana(intent: SolanaIntent, session: Session, d
     html: (s) => deps.html(s, "Confirm — Open Agent Treasury"),
     csp: deps.csp,
     assets: deps.assets,
-    port: deps.port,
+    ports: deps.ports,
     info: () => ({
       mode: "confirm",
       chain: "solana",
