@@ -21,7 +21,7 @@ import { loadRegistry } from "../registry.js";
 import { MAINNET_GENESIS_HASH } from "../solana/constants.js";
 import { associatedTokenAccount, compileUnsigned } from "../solana/kvault.js";
 import { makeSolanaRpc, solanaCluster, type SolanaRpc } from "../solana/rpc.js";
-import { depositInstructions, describeSimulation, freshLifetime, preflightDepositSolana, readVault, sharePrice, simulate, tokenBalance, withdrawInstructions, type VaultRead } from "../solana/vault.js";
+import { depositInstructions, describeSimulation, freshLifetime, partialWithdrawal, preflightDepositSolana, readVault, sharePrice, simulate, simulateWithdrawal, tokenBalance, withdrawInstructions, type VaultRead } from "../solana/vault.js";
 
 /** Which chain a Solana response is about: the name a caller passes back, and the cluster a wallet must be on. */
 export const onSolana = { chain: SOLANA_INFO.key, chainId: null, cluster: "mainnet-beta", genesisHash: MAINNET_GENESIS_HASH } as const;
@@ -138,13 +138,9 @@ function sharesFor(v: VaultRead, amountHuman: string): bigint {
   return (amount * v.state.sharesIssued + v.holdings.netAum - 1n) / v.holdings.netAum;
 }
 
-/** Simulates a withdrawal of `shares` and reads what the account would receive. */
+/** Simulates a withdrawal of `shares` and reads what the account would receive and how many shares it would burn. */
 async function simulateWithdraw(rpc: SolanaRpc, v: VaultRead, account: string, shares: bigint) {
-  const tokenAta = await associatedTokenAccount(account, v.state.tokenMint);
-  const before = await tokenBalance(rpc, tokenAta);
-  const sim = await simulate(rpc, await withdrawInstructions(v, account, shares), account, [tokenAta]);
-  const after = sim.after.get(tokenAta);
-  return { sim, received: sim.ok && after !== null && after !== undefined ? after - before.amount : undefined };
+  return simulateWithdrawal(rpc, v, account, await withdrawInstructions(v, account, shares));
 }
 
 /** `earn quote --direction withdraw`. */
@@ -167,8 +163,10 @@ export async function solanaQuoteWithdraw(vault: SolanaVaultEntry, account: stri
     if (shares > held.amount) {
       return { ...base, canWithdraw: false, note: `the account holds ${formatAmount(held.amount, vault.shareDecimals)} shares, fewer than the ${formatAmount(shares, vault.shareDecimals)} this amount needs` };
     }
-    const { sim, received } = await simulateWithdraw(rpc, v, owner, shares);
-    if (received === undefined) return { ...base, canWithdraw: false, measuredAtSlot: Number(sim.slot), note: `the simulated withdrawal failed: ${describeSimulation(sim)}` };
+    const { sim, received, burned, legs } = await simulateWithdraw(rpc, v, owner, shares);
+    if (received === undefined || burned === undefined) return { ...base, canWithdraw: false, measuredAtSlot: Number(sim.slot), note: `the simulated withdrawal failed: ${describeSimulation(sim)}` };
+    const partial = partialWithdrawal(shares, burned, legs, vault.shareDecimals, sim.slot);
+    if (partial) return { ...base, canWithdraw: false, measuredAtSlot: Number(sim.slot), note: partial };
     return {
       ...base,
       canWithdraw: true,
@@ -302,8 +300,10 @@ export async function solanaPrepareWithdraw(vault: SolanaVaultEntry, account: st
     const held = await tokenBalance(rpc, await associatedTokenAccount(user, v.state.sharesMint));
     if (shares > held.amount) throw new Error(`the account holds ${formatAmount(held.amount, vault.shareDecimals)} shares, fewer than the ${formatAmount(shares, vault.shareDecimals)} this withdrawal burns`);
     const ixs = await withdrawInstructions(v, user, shares);
-    const { sim, received } = await simulateWithdraw(rpc, v, user, shares);
-    if (received === undefined) throw new Error(`not prepared: the simulated withdrawal fails at slot ${sim.slot}: ${describeSimulation(sim)}`);
+    const { sim, received, burned, legs } = await simulateWithdraw(rpc, v, user, shares);
+    if (received === undefined || burned === undefined) throw new Error(`not prepared: the simulated withdrawal fails at slot ${sim.slot}: ${describeSimulation(sim)}`);
+    const partial = partialWithdrawal(shares, burned, legs, vault.shareDecimals, sim.slot);
+    if (partial) throw new Error(`not prepared: ${partial}`);
     const got = `${formatAmount(received, vault.asset.decimals)} ${vault.asset.symbol}`;
     return envelope(rpc, v, user, "withdraw", `burn ${formatAmount(shares, vault.shareDecimals)} ${vault.symbol}; the simulation at slot ${sim.slot} paid ${got} (net of the up to 0.001 USDC Kamino keeps per withdraw instruction)`, ixs, got);
   });

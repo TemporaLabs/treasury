@@ -20,6 +20,7 @@ import { decodeReserve, decodeVaultState, vaultHoldings, type ReserveView, type 
 import {
   associatedTokenAccount,
   compileUnsigned,
+  DISCRIMINATORS,
   createAtaIdempotentIx,
   depositIx,
   setComputeUnitLimitIx,
@@ -28,7 +29,7 @@ import {
   type ReserveAccounts,
   type VaultAccounts,
 } from "./kvault.js";
-import { DEFAULT_PUBKEY, MAX_COMPUTE_UNITS, MAX_TRANSACTION_BYTES } from "./constants.js";
+import { DEFAULT_PUBKEY, KVAULT_PROGRAM_ID, MAX_COMPUTE_UNITS, MAX_TRANSACTION_BYTES } from "./constants.js";
 import type { SolanaRpc } from "./rpc.js";
 
 /** The vault and every reserve it allocates to, read at (about) one slot. */
@@ -155,8 +156,9 @@ function reserveAccounts(v: VaultRead, reserve: string): ReserveAccounts {
  *
  * ⚠️ The program CAPS a leg that asks for more than it can pay rather than reverting it (measured: a leg
  * oversized by 500,000 shares succeeded, paid the leg's maximum and left the excess shares with the user).
- * So if a reserve's state moves between the quote and the send, the transaction can land paying less than
- * quoted, with no error; `verifySolanaLanded` reports that as a partial withdrawal.
+ * So every build path simulates the withdrawal and refuses it unless every share burns, less rounding
+ * (`simulateWithdrawal`, `partialWithdrawal`). A reserve's state can still move between that simulation and the send, and then the
+ * transaction lands paying less, with no error; `verifySolanaLanded` reports that as a partial withdrawal.
  */
 export async function withdrawInstructions(v: VaultRead, user: string, shares: bigint): Promise<Instruction[]> {
   assertNoCoSigner(v);
@@ -230,6 +232,35 @@ export async function simulate(rpc: SolanaRpc, ixs: readonly Instruction[], feeP
   const after = new Map<string, bigint | null>();
   (res.value.accounts ?? []).forEach((acc, i) => after.set(watch[i]!, acc ? splAmount(b64(acc.data)) : null));
   return { ok: res.value.err === null, err: res.value.err, logs: res.value.logs ?? [], unitsConsumed: res.value.unitsConsumed ?? null, slot: BigInt(res.context.slot), after };
+}
+
+/**
+ * Simulates a withdrawal and reads, from the account's own token accounts, what it would pay and how many shares
+ * it would burn. The program caps a leg it cannot pay in full rather than failing it (see `withdrawInstructions`),
+ * so `burned` short of the shares asked for means the transaction would land as a partial withdrawal. Both are
+ * `undefined` when the simulation fails or the account's USDC account would not exist. `legs` is the number of
+ * withdraw instructions.
+ */
+export async function simulateWithdrawal(rpc: SolanaRpc, v: VaultRead, user: string, ixs: readonly Instruction[]): Promise<{ sim: Simulated; received?: bigint; burned?: bigint; legs: number }> {
+  const tokenAta = await associatedTokenAccount(user, v.state.tokenMint);
+  const sharesAta = await associatedTokenAccount(user, v.state.sharesMint);
+  const [token, held] = await Promise.all([tokenBalance(rpc, tokenAta), tokenBalance(rpc, sharesAta)]);
+  const sim = await simulate(rpc, ixs, user, [tokenAta, sharesAta]);
+  const legs = ixs.filter((ix) => ix.programAddress === KVAULT_PROGRAM_ID && ix.data !== undefined && DISCRIMINATORS.withdraw.every((x, i) => ix.data![i] === x)).length;
+  const tokenAfter = sim.after.get(tokenAta);
+  if (!sim.ok || tokenAfter === null || tokenAfter === undefined) return { sim, legs };
+  return { sim, received: tokenAfter - token.amount, burned: held.amount - (sim.after.get(sharesAta) ?? 0n), legs };
+}
+
+/**
+ * Why a simulated withdrawal that burns fewer shares than asked for is refused, or `undefined` when it burns them
+ * all. Up to one share unit per withdraw instruction is rounding, not a capped leg: the program floors what a
+ * leg pays and then ceils the shares that payment burns, which comes out one unit short when a share is worth
+ * less than one base unit of the asset. A capped leg falls short by the part its reserve could not pay.
+ */
+export function partialWithdrawal(asked: bigint, burned: bigint, legs: number, shareDecimals: number, slot: bigint): string | undefined {
+  if (burned + BigInt(legs) >= asked) return undefined;
+  return `the simulated withdrawal at slot ${slot} burns ${formatAmount(burned, shareDecimals)} of the ${formatAmount(asked, shareDecimals)} shares asked for: a reserve cannot pay its full part now, so it would land as a partial withdrawal. Try a smaller amount, or again later`;
 }
 
 /** One line for a failed simulation: the program's error and the last log lines that say why. */

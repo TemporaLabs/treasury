@@ -19,7 +19,7 @@ import { redactEndpoints } from "../redact.js";
 import { formatAmount } from "../units.js";
 import { associatedTokenAccount } from "../solana/kvault.js";
 import { makeSolanaRpc, type SolanaRpc } from "../solana/rpc.js";
-import { compileUnsigned, depositInstructions, describeSimulation, freshLifetime, readVault, simulate, tokenBalance, withdrawInstructions } from "../solana/vault.js";
+import { compileUnsigned, depositInstructions, describeSimulation, freshLifetime, partialWithdrawal, readVault, simulate, simulateWithdrawal, tokenBalance, withdrawInstructions } from "../solana/vault.js";
 import { admitSolana } from "./gate-solana.js";
 import { serveOnce, type Settled } from "./http.js";
 import type { Session } from "./session.js";
@@ -161,8 +161,17 @@ export async function buildForIntent(rpc: SolanaRpc, intent: SolanaIntent, accou
   if (admitted.kind !== intent.kind || admitted.vault.address !== intent.vault.address || admitted.amount !== intent.raw) {
     throw new Error(`refused: the transaction built (${admitted.kind} ${admitted.amount} on ${admitted.vault.symbol}) is not the one acknowledged (${intent.kind} ${intent.raw} on ${intent.vault.symbol})`);
   }
-  const sim = await simulate(rpc, ixs, account, []);
-  if (!sim.ok) throw new Error(`the simulated ${intent.kind} fails at slot ${sim.slot}: ${describeSimulation(sim)}`);
+  if (intent.kind === "deposit") {
+    const sim = await simulate(rpc, ixs, account, []);
+    if (!sim.ok) throw new Error(`the simulated deposit fails at slot ${sim.slot}: ${describeSimulation(sim)}`);
+  } else {
+    // A leg the program caps would land as a partial withdrawal with no error, so the shares it burns are
+    // checked here, before the page opens, rather than only after it lands.
+    const { sim, burned, legs } = await simulateWithdrawal(rpc, v, account, ixs);
+    if (burned === undefined) throw new Error(`the simulated withdraw fails at slot ${sim.slot}: ${describeSimulation(sim)}`);
+    const partial = partialWithdrawal(intent.raw, burned, legs, intent.vault.shareDecimals, sim.slot);
+    if (partial) throw new Error(`refused: ${partial}`);
+  }
   return { wire, expiresAfterBlockHeight: life.lastValidBlockHeight.toString() };
 }
 
