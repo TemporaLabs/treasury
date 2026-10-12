@@ -38,8 +38,11 @@ export const EDITS: [string, string][] = [
 interface Flag { flag: string; type: string; required: boolean; takesValue?: boolean; [k: string]: unknown }
 interface Cmd { command: string; title: string; description: string; flags: Flag[] }
 
-function skillBody(): string {
-  let text = readFileSync(SKILL, "utf8");
+/** A checkout with `core.autocrlf` (Windows) has `\r\n` line ends; every comparison here is on `\n`. */
+const lf = (s: string): string => s.replace(/\r\n/g, "\n");
+
+export function skillBody(raw: string = readFileSync(SKILL, "utf8")): string {
+  let text = lf(raw);
   const end = text.indexOf("\n---\n", 4);
   if (!text.startsWith("---\n") || end < 0) throw new Error("plugin/skills/earn/SKILL.md has no frontmatter to strip");
   text = text.slice(end + 5).replace(/^\n+/, "");
@@ -100,7 +103,7 @@ async function main(): Promise<void> {
   }
   let have = "";
   try {
-    have = readFileSync(OUT, "utf8");
+    have = lf(readFileSync(OUT, "utf8"));
   } catch {
     /* missing is stale */
   }
