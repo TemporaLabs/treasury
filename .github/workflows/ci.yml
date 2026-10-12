@@ -346,6 +346,30 @@ jobs:
           console.log("LICENSE is the canonical Apache-2.0 text; NOTICE and the third-party notices say what they must");
           JS
 
+  # The BUILT CLI, run as a caller runs it, on each OS the CLI ships to: the exit code, the time the
+  # call takes, and proof the answer came from the chain (.github/scripts/cli-exit.mjs). Issue #122:
+  # on Windows with Node 24 a correct answer came with a non-zero exit. Node 22 is the control. Uses
+  # the committed bundle and installs nothing, so it measures exactly what users run.
+  cli-exit:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { os: windows-latest, node: 24 }
+          - { os: windows-latest, node: 22 }
+          - { os: macos-latest, node: 24 }
+          - { os: ubuntu-latest, node: 24 }
+          - { os: ubuntu-latest, node: 22 }
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: ${{ matrix.node }}
+      - name: the built CLI exits 0 with a chain-read answer, and 1 on a refused argument
+        run: node .github/scripts/cli-exit.mjs
+
   # ── Bundle provenance ──────────────────────────────────────────────────────────────────────────
   # This job attests the COMMITTED root dist/treasury.mjs. A marketplace install runs
   # plugin/dist/treasury.mjs, which the plugin-folder step holds byte-identical to it in the
