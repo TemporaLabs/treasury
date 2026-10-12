@@ -47397,17 +47397,18 @@ function buildConnectCommands(deps = {}) {
     appId: privyAppId()
   });
   const notConnectedSolana = () => new Error("no Solana wallet is connected \u2014 run `treasury connect wallet --chain solana` first, and let the operator sign in");
-  const confirmSolana = async (intent, amountText, session, ack) => {
-    const digest = solanaIntentDigest(session.account, intent.vault.address, intent.kind, intent.raw);
+  const confirmSolana = async (acked, amountText, session, ack, intent) => {
+    const digest = solanaIntentDigest(session.account, acked.vault.address, acked.kind, acked.raw);
     if (ack === void 0) {
-      const summary = summarizeSolana(intent.kind, intent.vault, amountText, session.account);
+      await intent();
+      const summary = summarizeSolana(acked.kind === "deposit" ? "deposit" : "withdraw", acked.vault, amountText, session.account);
       const pending = issueAckForDigest(digest, now());
       writePendingAck(pending);
       return JSON.stringify(
         {
           status: "needs_acknowledgement",
           opened: false,
-          action: intent.kind,
+          action: acked.kind === "deposit" ? "deposit" : "withdraw",
           amount: summary.amount,
           chain: "solana",
           chainId: null,
@@ -47417,7 +47418,7 @@ function buildConnectCommands(deps = {}) {
           acknowledgement: acknowledgementText(summary),
           ack: pending.code,
           expiresAtIso: pending.expiresAtIso,
-          next_step: `Post \`acknowledgement\` to the operator word for word, as it is, and wait for their reply. Only an explicit yes they give after reading it is an acknowledgement: not a "go" from before they saw it, and not your own reading of the conversation. On yes, run this same command again with --ack ${pending.code} added, and the signing page opens. On anything else, stop. The code works once, for exactly this ${intent.kind}, until ${pending.expiresAtIso}.`
+          next_step: `Post \`acknowledgement\` to the operator word for word, as it is, and wait for their reply. Only an explicit yes they give after reading it is an acknowledgement: not a "go" from before they saw it, and not your own reading of the conversation. On yes, run this same command again with --ack ${pending.code} added, and the signing page opens. On anything else, stop. The code works once, for exactly this ${acked.kind === "deposit" ? "deposit" : "withdrawal"}, until ${pending.expiresAtIso}.`
         },
         null,
         2
@@ -47425,7 +47426,7 @@ function buildConnectCommands(deps = {}) {
     }
     checkAckDigest(ack, readPendingAck(), digest, now());
     clearPendingAck();
-    const r = await runConfirmSolana(intent, session, solanaDeps());
+    const r = await runConfirmSolana(await intent(), session, solanaDeps());
     const txs = r.result.ok ? r.result.value : r.done;
     const all = txs.length === r.total && txs.every((t) => t.verified === "matched" || t.verified === "extra_transfer");
     const status = r.result.ok ? all ? "completed" : "stopped" : txs.length ? "stopped" : "not_reported";
@@ -47499,7 +47500,8 @@ function buildConnectCommands(deps = {}) {
         if (rawReceiver !== session2.account) throw new Error(`refused: --receiver ${rawReceiver} is not the connected Solana account ${session2.account}; on Solana the shares can only go to the account that deposits`);
         const raw = parseAmount(amount_usdc, target.vault.asset.decimals, `deposit amount (${target.vault.asset.symbol})`);
         if (raw === 0n) throw new Error("a deposit of 0");
-        return confirmSolana({ kind: "deposit", vault: target.vault, raw }, `${formatAmount(raw, target.vault.asset.decimals)} ${target.vault.asset.symbol}`, session2, ack);
+        const intent = { kind: "deposit", vault: target.vault, raw };
+        return confirmSolana(intent, `${formatAmount(raw, target.vault.asset.decimals)} ${target.vault.asset.symbol}`, session2, ack, async () => intent);
       }
       const session = readSession();
       if (!session) throw notConnected();
@@ -47534,9 +47536,18 @@ function buildConnectCommands(deps = {}) {
         const session2 = readSolanaSession();
         if (!session2) throw notConnectedSolana();
         if (rawReceiver !== session2.account) throw new Error(`refused: --receiver ${rawReceiver} is not the connected Solana account ${session2.account}; on Solana a withdrawal pays only the account whose shares burn`);
-        const raw = await solanaWithdrawShares(target.vault, all ? void 0 : amount_usdc, all ? shares_exact : void 0);
-        if (raw === 0n) throw new Error("a withdrawal of 0");
-        return confirmSolana({ kind: "withdraw", vault: target.vault, raw }, `${formatAmount(raw, target.vault.shareDecimals)} ${target.vault.symbol} shares`, session2, ack);
+        const v = target.vault;
+        const intent = async () => {
+          const raw = await solanaWithdrawShares(v, all ? void 0 : amount_usdc, all ? shares_exact : void 0);
+          if (raw === 0n) throw new Error("a withdrawal of 0");
+          return { kind: "withdraw", vault: v, raw };
+        };
+        if (all) {
+          const shares = parseAmount(shares_exact, v.shareDecimals, "shares_exact");
+          return confirmSolana({ kind: "withdraw", vault: v, raw: shares }, `${formatAmount(shares, v.shareDecimals)} ${v.symbol} shares`, session2, ack, intent);
+        }
+        const assets2 = parseAmount(amount_usdc, v.asset.decimals, `withdrawal amount (${v.asset.symbol})`);
+        return confirmSolana({ kind: "withdraw-assets", vault: v, raw: assets2 }, `${formatAmount(assets2, v.asset.decimals)} ${v.asset.symbol}`, session2, ack, intent);
       }
       const session = readSession();
       if (!session) throw notConnected();
