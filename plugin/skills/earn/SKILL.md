@@ -1,6 +1,6 @@
 ---
 name: earn
-description: Put approved idle USDC, or USDG on Robinhood Chain, to work in supported vaults curated by Tempora Labs on Base, Arbitrum, Robinhood Chain, Ethereum, Monad or Solana. Inspect vault terms, quote deposits and withdrawals, check position value and currently withdrawable amounts, prepare unsigned transactions for the operator's own signer, and connect the operator's own wallet (a browser wallet, or an email or social login) to confirm them in a browser page. Use for earning yield on idle USDC or USDG, or managing these vault positions, including withdrawal requests. Not for generating business revenue, paid tasks, swaps, trading, or operating a vault allocator.
+description: Put approved idle USDC, or USDG on Robinhood Chain, to work in supported vaults curated by Tempora Labs on Base, Arbitrum, Robinhood Chain, Ethereum, Monad or Solana. Inspect vault terms, quote deposits and withdrawals, check position value and currently withdrawable amounts, prepare unsigned transactions for the operator's own signer, and connect the operator's own wallet (a browser wallet, or an email or social login) to confirm them in a browser page. Use for earning yield on idle USDC or USDG, managing these vault positions, including withdrawal requests, or when asked what Treasury or these vaults can do. Not for generating business revenue, paid tasks, swaps, trading, or operating a vault allocator.
 allowed-tools: Bash(node "${CLAUDE_PLUGIN_ROOT}/dist/treasury.mjs" *)
 ---
 
@@ -38,11 +38,10 @@ whole design: a skill that supplies judgement must never hold the gate that supp
 
 ## When the operator asks what this can do
 
-Answer in a few lines from `earn_vaults` (the live list), then ask what they want to do:
-- **Where:** every chain `earn_vaults` lists, each with its default vault and asset; today Base, Arbitrum One, Robinhood Chain (USDG), Ethereum, Monad and Solana. Read the list rather than reciting this one.
-- **What:** quote, deposit, check what a position is worth and what it can be withdrawn for now, and withdraw: in one vault, or in several in one request, on one chain or several (below).
-- **Money moves only from their own wallet, after their yes there.** You prepare calls or open a confirm page; you never sign. No bridging, swapping or trading: the asset has to be on that chain already. Quote no yield; this client reads none.
-- **Two ways in:** through you, or in a browser at `https://app.temporalabs.com`, which connects their wallet and deposits and withdraws from the page (it can list fewer vaults than `earn_vaults`).
+Answer in at most five lines, then ask what they want to do. Name the chains from `earn_vaults`, never from memory. Say that they
+can quote, deposit, check what a position is worth and can be withdrawn for now, and withdraw, in one vault or several in one request
+(below); that money moves only from their own wallet, after their yes there, and that you never sign, bridge or swap; and that there
+are two ways in: through you, or in a browser at `https://app.temporalabs.com`. Quote no yield; this client reads none.
 
 ## Setup
 

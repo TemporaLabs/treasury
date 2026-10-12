@@ -71,7 +71,8 @@ Pre-1.0, minor versions may change tool names, schemas and behaviour.
   "withdraw everything" is one plan with what each vault can pay now, then one withdrawal per vault.
 - **When the operator asks what Treasury can do,** the skill says how to answer: the chains and vaults from the live
   list, quote, deposit, check and withdraw in one vault or several, money moving only from the operator's own wallet,
-  and the two ways in (an agent, or the browser app at app.temporalabs.com).
+  and the two ways in (an agent, or the browser app at app.temporalabs.com), in at most five lines. The skill's
+  description now names that question, so the skill is loaded for it.
 
 ### Added — a guide for agents without the plugin
 - **`llms.txt`**, in the npm package and at `https://raw.githubusercontent.com/TemporaLabs/treasury/main/llms.txt`: the Earn skill's
