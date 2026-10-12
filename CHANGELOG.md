@@ -59,11 +59,11 @@ Pre-1.0, minor versions may change tool names, schemas and behaviour.
 - Importing the library unbundled on Node 22.0 to 22.11 prints Node's `ExperimentalWarning` for JSON modules;
   it works, and Node 22.12 and later print nothing. The CLI is unaffected.
 
-### Added — several chains in one request
-- **The Earn skill says how to spread a deposit across chains** ("1 USDC on Base and 3 on Solana", "2 USDC on
-  every chain"): settle the list from the operator's words, check every leg first, show one plan with what
-  cannot go ahead and why, then run one complete deposit per chain, one at a time, stopping to ask if a leg
-  fails. `llms.txt` carries the same text.
+### Added — several vaults in one request
+- **The Earn skill says how to spread a deposit across vaults**, on one chain or several ("1 USDC on Base and
+  3 on Solana", "2 USDC on every chain"): settle the list from the operator's words, check every leg first,
+  show one plan with what cannot go ahead and why, then run one complete deposit per vault, one at a time,
+  stopping to ask if a leg fails. `llms.txt` carries the same text.
 
 ### Added — a guide for agents without the plugin
 - **`llms.txt`**, in the npm package and at `https://raw.githubusercontent.com/TemporaLabs/treasury/main/llms.txt`: the Earn skill's
