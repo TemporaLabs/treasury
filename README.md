@@ -46,6 +46,23 @@ default vault; the agent asks which chain when you have not said, and the funds 
 chain already. See [Vaults](#vaults).
 See the [command reference](docs/tools.md), the eight `earn` commands and the five `connect` commands, for inputs, outputs, and limits.
 
+## Supported chains
+
+Six chains, each with its own vault. Funds have to be on the chain already; OAT does not bridge.
+
+| | Chain | Asset | Vault | Wallet |
+|---|---|---|---|---|
+| <img src="docs/assets/chains/base.webp" alt="Base logo" width="32" height="32"> | **Base** (the default) | USDC | Test 2B, the default; Test 2, the demo; Test 2A, whitelist only | an EVM wallet |
+| <img src="docs/assets/chains/arbitrum.webp" alt="Arbitrum One logo" width="32" height="32"> | **Arbitrum One** | USDC | Test 2C | an EVM wallet |
+| <img src="docs/assets/chains/robinhood.webp" alt="Robinhood Chain logo" width="32" height="32"> | **Robinhood Chain** | USDG | Test 2D | an EVM wallet |
+| <img src="docs/assets/chains/ethereum.webp" alt="Ethereum logo" width="32" height="32"> | **Ethereum** | USDC | Test 2E | an EVM wallet |
+| <img src="docs/assets/chains/monad.webp" alt="Monad logo" width="32" height="32"> | **Monad** | USDC | Test 2F | an EVM wallet |
+| <img src="docs/assets/chains/solana.webp" alt="Solana logo" width="32" height="32"> | **Solana** | USDC | Test 2G, a Kamino vault | a Solana wallet (`treasury connect wallet --chain solana`) |
+
+Choose a chain with `--chain`; [Vaults](#vaults) lists each vault and how to name it.
+Chain logos are the marks of their respective owners, shown only to identify the chains;
+the icons come from [DefiLlama](https://defillama.com)'s chain icon set.
+
 ## Quick start
 
 **Requires Node.js 22+ on your `PATH`.** Use a keyed RPC for each chain you use; the public fallbacks rate-limit quickly.
