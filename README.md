@@ -23,6 +23,16 @@ A transaction goes out only from your own wallet, after you approve it there. Yo
 > and withdrawals depend on available liquidity. Review every transaction before signing and
 > read the [risks](docs/risks.md) before depositing.
 
+## Two ways to use the vaults
+
+- **In a browser, at [app.temporalabs.com](https://app.temporalabs.com).** Connect a wallet, then deposit
+  and withdraw from the page. The app shows the Cash Plus vaults it currently supports, which can be fewer
+  than OAT offers.
+- **With an agent, through OAT.** Your agent quotes, prepares and confirms deposits and withdrawals through
+  the plugin or the CLI, and you approve each transaction in your own wallet.
+
+Either way the vaults are the same on-chain contracts.
+
 ## What you can do
 
 - **Inspect vaults:** check assets, fees, and deposit access.
