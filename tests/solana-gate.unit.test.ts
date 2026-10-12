@@ -172,6 +172,11 @@ describe("the Solana gate refuses", () => {
     await refused([cu!, ata!, await createAtaIdempotentIx(ACCOUNT, key(85)), dep!], /created for .* not this vault's/);
   });
 
+  it("a vault instruction whose data is longer than its discriminator and amount", async () => {
+    const [cu, ata, dep] = await deposit();
+    await refused([cu!, ata!, { ...dep!, data: Uint8Array.from([...dep!.data!, 0]) }], /bytes of data, not 16/);
+  });
+
   it("a zero amount", async () => {
     await refused(await depositInstructions(read, ACCOUNT, 0n), /moves 0/);
   });

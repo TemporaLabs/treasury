@@ -1133,6 +1133,13 @@ describe("a Solana withdrawal by amount: the acknowledgement survives the vault'
     expect(existsSync(pendingAckPath())).toBe(false);
   });
 
+  it("refuses a receiver other than the connected Solana account, for a withdrawal and a deposit", async () => {
+    const other = "4Nd1mBQtrMJVYVfKf2PJy9NZUZdTAsp7D4xWLs4gDB4T";
+    await expect(withdraw({ amount_usdc: "25", receiver: other })).rejects.toThrow(/is not the connected Solana account/);
+    const deposit = buildConnectCommands({ solanaRpc: rpc as never, open: () => false, ttlMs: 50 })["connect_deposit"]!;
+    await expect(deposit.handler({ chain: "solana", amount_usdc: "1", receiver: other } as never)).rejects.toThrow(/not the connected Solana account/);
+  });
+
   it("still refuses an --ack run for a different amount", async () => {
     const first = JSON.parse(await withdraw({ amount_usdc: "25" })) as { ack: string };
     await expect(withdraw({ amount_usdc: "26", ack: first.ack })).rejects.toThrow(/acknowledged/);
