@@ -14,6 +14,10 @@ Pre-1.0, minor versions may change tool names, schemas and behaviour.
   reported only if a withdrawal of just the shares that did burn simulates without a cap
   (`measuredAs: "a simulated partial withdrawal"`); otherwise `exitableNow` is `unknown`
   (`measuredAs: "a capped withdrawal"`).
+- **On Solana, the `setup_required` hint now appears with `NODE_ENV=production` too** (#154). In that
+  mode the Solana client's errors carry a code instead of a sentence, so a rate limit (429) or a
+  failing endpoint (5xx) on the public endpoint reached the operator without the hint naming
+  `TREASURY_RPC_SOLANA`. The error is now described from its code and status, in either mode.
 
 ## [v0.1.3] - 2026-10-13
 
