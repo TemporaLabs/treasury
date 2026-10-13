@@ -194,14 +194,18 @@ The vault on Solana is a Kamino vault, and the same commands answer for it with 
 - `earn_prepare_deposit` and `earn_prepare_withdraw` return ONE unsigned transaction, not a list of calls:
   `transaction` carries `wire` (base64, every signature slot empty), `feePayer`, `blockhash`,
   `preparedAtBlockHeight` and `expiresAfterBlockHeight`. It is simulated before it is returned, and a
-  transaction the program would refuse is not returned at all. `expected` and `simulated` say what the
-  simulation minted or paid.
+  transaction the program would refuse is not returned at all. Neither is a withdrawal whose simulation burns
+  fewer shares than asked, beyond one share unit of rounding per withdraw instruction: the program would pay
+  what a reserve can and leave the rest of the shares, so the quote reports `canWithdraw: false` with a `note`
+  and the prepare refuses. `expected` and `simulated` say what the simulation minted or paid.
 - `earn_quote --direction withdraw` reports `receives`, the USDC the account's balance would rise by: each
   withdraw instruction keeps up to 0.001 USDC in the vault (Kamino's charge, which it can change).
 - `earn_balance` reports shares, `usdcValue` and `exit` (a simulated full withdrawal); `entryBasisUsdc`,
   `accruedYieldUsdc` and `scan.wholeHistory` say the history was not read.
 - `earn_status` with `account` returns `OPEN_READY`, `NEEDS_FUNDS` (no USDC, or no SOL for the fee),
-  `REVERTED_OTHER` or `UNRESOLVED`.
+  `REVERTED_OTHER` (including a vault that requires a co-signer) or `UNRESOLVED`. With no SOL, `canDeposit` is
+  false: the simulation stopped before the vault and says nothing about it. A deposit over the vault's cap is not
+  `canDeposit` either.
 
 ## `earn_prepare_deposit` — PREPARE
 
@@ -325,7 +329,8 @@ refused, and nothing opens, when:
 A `connect wallet` that completes a sign-in, or a `connect disconnect`, clears any pending
 acknowledgement; a sign-in that does not finish leaves it as it was. The pending one
 sits beside the session file (`connect-ack.json`, owner-readable only) and holds a digest of the calls,
-not the calls.
+not the calls. While a page is open, `connect-page.lock` beside them names its process and port, and a second
+sign-in or confirmation is refused until the page closes.
 
 ### What the confirm flow returns
 
@@ -341,7 +346,7 @@ the receipt:
 |---|---|
 | `matched` | the vault's (or token's) own event for the connected account and the exact amount is there, and no other transfer of the vault's asset left the account |
 | `extra_transfer` | as `matched`, but the account ALSO sent the asset elsewhere in the same transaction (`alsoMoved`) — often a wallet's fee for paying gas in tokens. Tell the operator |
-| `mismatch` | the transaction succeeded without the expected event, or was mined before this flow started (an older transaction, not this one). Stop |
+| `mismatch` | the transaction succeeded without the expected event, or was mined before this flow started (an older transaction, not this one). On Solana also: a transaction the page did not build (another blockhash), one paid for by another account, a deposit short by more than rounding, or a partial withdrawal. Stop |
 | `reverted` | it failed on chain; nothing it was meant to do happened |
 | `unverified` | no receipt in time; look the hash up before retrying anything |
 

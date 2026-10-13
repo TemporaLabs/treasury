@@ -21,6 +21,8 @@ Pre-1.0, minor versions may change tool names, schemas and behaviour.
 - The earn skill lists the new chains when it asks which chain, and **tells the operator that
   Ethereum gas is far higher** when they pick Ethereum for a small amount.
 - Explorer links: Etherscan on Ethereum, MonadScan on Monad. The connect page accepts both chains.
+- `earn balance` reads the Ethereum public endpoint's range refusal ("query exceeds max block range
+  100000") as a 100,000-block window and walks the history in chunks.
 
 ### Added — Solana
 - **A Kamino vault on Solana: Tempora Labs Cash Plus USDC (Test 2G), `--chain solana`.** The earn commands
@@ -48,6 +50,13 @@ Pre-1.0, minor versions may change tool names, schemas and behaviour.
 - `registry:check` reconciles the Solana row against the vault's own state.
 - The Solana vault is reached through the CLI. The library's `listVaults()` and builders cover the EVM vaults
   only, and `loadRegistry()` returns the Solana row under `solanaVaults`.
+- Pre-flight on Solana: an account with no SOL for the fee is `NEEDS_FUNDS` with `canDeposit: false`, because
+  the simulation stopped before the vault and says nothing about whether it takes the deposit. A deposit over
+  the vault's cap is not `canDeposit` either. A vault that requires a co-signer is `REVERTED_OTHER` with the
+  whole reason. A withdrawal split across reserves gives the rest to the last reserve in order.
+- A Solana call refused with `HTTP error (429)` or a 5xx on the public endpoint carries the `setup_required`
+  hint naming `TREASURY_RPC_SOLANA`, and `npm run registry:check` reports a Solana endpoint on another cluster
+  as not checked.
 
 ### Changed — the registry and the version are inside the bundle
 - The vault registry and the package version are now compiled into the CLI bundle and the library build
@@ -106,19 +115,7 @@ Pre-1.0, minor versions may change tool names, schemas and behaviour.
   after the health check's request. On Windows the CLI now sets the exit code and lets Node end on its
   own, with a two-second backstop for a request that is still pending; macOS and Linux exit exactly as
   before. Measured on Windows, a command now takes about 0.1 s longer to end.
-- `earn balance` reads the Ethereum public endpoint's range refusal ("query exceeds max block range
-  100000") as a 100,000-block window and walks the history in chunks, instead of failing the scan.
-- **Solana pre-flight verdicts.** An account with no SOL for the fee is `NEEDS_FUNDS` with `canDeposit: false`:
-  the simulation stopped before the vault, so it says nothing about whether the vault takes the deposit. A
-  deposit over the vault's cap is not `canDeposit` either. A vault that requires a co-signer is
-  `REVERTED_OTHER` with the whole reason, instead of `UNRESOLVED` with a shortened one.
-- A Solana withdrawal split across reserves gives the rest to the last reserve in order. When an earlier reserve
-  could release nothing, the rest became a second instruction on the first reserve.
-- A Solana call refused with `HTTP error (429)` or a 5xx on the public endpoint now carries the
-  `setup_required` hint naming `TREASURY_RPC_SOLANA`.
 - `earn status --account` on an EVM chain echoes the account checksummed.
-- `npm run registry:check` reports a Solana endpoint on another cluster as not checked, instead of
-  as a registry row that disagrees with the chain.
 
 ### Dependencies
 - viem 2.57.3, inlined in the CLI bundle. Treasury does not call `waitForTransactionReceipt`, the function

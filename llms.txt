@@ -170,7 +170,7 @@ several vaults at once.
    vault, chain, amount, transaction, and which did not happen.
 
 **Positions and withdrawals across vaults work the same way.** "What do I hold?" is `earn_balance` on every vault `earn_vaults` lists (the EVM account and the Solana account each), reported as one table: per vault, its chain, what it is worth and what it can
-be withdrawn for now, with the totals. "Withdraw everything" or "10 USDC from each" is settled from the operator's words the same way: the vaults that hold shares, each quoted with `direction: "withdraw"` (for everything, `--all` with that vault's own
+be withdrawn for now, with the totals. "Withdraw everything" or "10 USDC from each" is settled from the operator's words the same way: the vaults that hold shares, each quoted with `direction: "withdraw"` (for everything, the amount its `earn_balance` `exit` gives, and the withdrawal then takes `--all` with that vault's own
 `sharesExact`), one plan with what each can pay now and a yes to it, then one complete withdrawal per vault, one at a time. A vault that cannot pay its part now (liquidity) is a leg that cannot go ahead as asked: say so, and do not shrink it on your own.
 
 ## Solana is different
