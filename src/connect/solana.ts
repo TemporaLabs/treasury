@@ -19,7 +19,7 @@ import { redactEndpoints } from "../redact.js";
 import { formatAmount } from "../units.js";
 import { associatedTokenAccount } from "../solana/kvault.js";
 import { makeSolanaRpc, type SolanaRpc } from "../solana/rpc.js";
-import { compileUnsigned, depositInstructions, describeSimulation, freshLifetime, partialWithdrawal, readVault, simulate, simulateWithdrawal, tokenBalance, withdrawInstructions } from "../solana/vault.js";
+import { compileUnsigned, depositInstructions, describeSimulation, freshLifetime, isWithdrawInstruction, partialWithdrawal, readVault, simulate, simulateWithdrawal, tokenBalance, withdrawInstructions } from "../solana/vault.js";
 import { admitSolana } from "./gate-solana.js";
 import { serveOnce, type Settled } from "./http.js";
 import type { Session } from "./session.js";
@@ -138,7 +138,7 @@ export async function verifySolanaLanded(
       // Bound to what this flow built: the page is handed a transaction with a fresh blockhash, recorded in
       // `built`. A signature for any other transaction — an older one of the same shape, or a share transfer
       // — names another blockhash, and its balances say nothing about this deposit or withdrawal.
-      const message = (tx as unknown as { transaction?: { message?: { recentBlockhash?: string; accountKeys?: readonly string[] } } }).transaction?.message;
+      const message = (tx as unknown as { transaction?: { message?: { recentBlockhash?: string; accountKeys?: readonly string[]; instructions?: readonly { programIdIndex: number; data: string }[] } } }).transaction?.message;
       if (!message?.recentBlockhash || !opts.built.has(message.recentBlockhash)) {
         return { verified: "mismatch", detail: `${signature} is not the transaction this page built (its blockhash is not one handed to the page); check \`earn balance --chain solana\` before retrying anything` };
       }
@@ -150,7 +150,10 @@ export async function verifySolanaLanded(
       const a = intent.vault.asset;
       if (intent.kind === "deposit") {
         if (shares <= 0n) return { verified: "mismatch", detail: `the transaction landed but the account received no ${intent.vault.symbol} shares` };
-        if (-asset < intent.raw) {
+        // The program mints whole share units and takes only the asset that backs them, so it can take less than
+        // asked by up to one share unit's worth (measured: 1,999,999 of 2,000,000). Short by more is not this deposit.
+        const taken = -asset;
+        if (taken < intent.raw && (intent.raw - taken) * shares >= taken + shares) {
           return { verified: "mismatch", detail: `the transaction landed, but the account's ${a.symbol} fell by ${formatAmount(-asset > 0n ? -asset : 0n, a.decimals)} ${a.symbol}, not the ${formatAmount(intent.raw, a.decimals)} ${a.symbol} acknowledged` };
         }
         if (-asset > intent.raw) {
@@ -158,8 +161,11 @@ export async function verifySolanaLanded(
         }
         return { verified: "matched", detail: `received ${formatAmount(shares, intent.vault.shareDecimals)} ${intent.vault.symbol}` };
       }
-      if (-shares !== intent.raw) {
-        // The program pays what a leg can and leaves the rest of the shares with the account, without an error.
+      // The program pays what a leg can and leaves the rest of the shares with the account, without an error. Up to
+      // one share unit per withdraw instruction is rounding, the same allowance the simulation before sending makes.
+      const keys = message.accountKeys ?? [];
+      const legs = (message.instructions ?? []).filter((ix) => isWithdrawInstruction(keys[ix.programIdIndex] ?? "", getBase58Encoder().encode(ix.data))).length;
+      if (-shares > intent.raw || -shares + BigInt(legs) < intent.raw) {
         return { verified: "mismatch", detail: `a PARTIAL withdrawal: it burned ${formatAmount(-shares, intent.vault.shareDecimals)} of the ${formatAmount(intent.raw, intent.vault.shareDecimals)} shares acknowledged and paid ${formatAmount(asset > 0n ? asset : 0n, intent.vault.asset.decimals)} ${intent.vault.asset.symbol}; the rest of the shares are still in the account. Check \`earn balance --chain solana\` before withdrawing again.` };
       }
       if (asset <= 0n) return { verified: "mismatch", detail: `the shares burned but the account's ${a.symbol} did not rise` };

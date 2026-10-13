@@ -7,6 +7,8 @@ import { generateKeyPairSigner, signBytes, getBase58Decoder, type KeyPairSigner 
 import { solanaSignInMessage, verifySolanaLanded, verifySolanaSignIn, type SolanaIntent } from "../src/connect/solana.js";
 import { acknowledgementText, solanaIntentDigest, summarizeSolana } from "../src/connect/ack.js";
 import { listSolanaVaults } from "../src/registry.js";
+import { DISCRIMINATORS } from "../src/solana/kvault.js";
+import { KVAULT_PROGRAM_ID } from "../src/solana/constants.js";
 
 const vault = listSolanaVaults()[0]!;
 const b64 = (u: Uint8Array) => Buffer.from(u).toString("base64");
@@ -42,7 +44,7 @@ const OTHER_BLOCKHASH = "GHtXQBsoZHVnNFa9YevAzFr17DJjgHXk3ycTKD5xD3Zi";
 /** A scripted RPC: the signature's status, then the transaction's message and token balances. */
 function rpc(
   status: { err?: unknown; confirmationStatus?: string } | null,
-  tx?: { err?: unknown; pre: Bal[]; post: Bal[]; blockhash?: string; feePayer?: string },
+  tx?: { err?: unknown; pre: Bal[]; post: Bal[]; blockhash?: string; feePayer?: string; withdrawLegs?: number },
 ) {
   return {
     getSignatureStatuses: () => ({ send: async () => ({ value: [status] }) }),
@@ -50,7 +52,14 @@ function rpc(
       send: async () =>
         tx
           ? {
-              transaction: { message: { recentBlockhash: tx.blockhash ?? BUILT, accountKeys: [tx.feePayer ?? ACCOUNT] } },
+              transaction: {
+                message: {
+                  recentBlockhash: tx.blockhash ?? BUILT,
+                  accountKeys: [tx.feePayer ?? ACCOUNT, KVAULT_PROGRAM_ID],
+                  // Each withdraw leg: the kVault program, with the withdraw discriminator and an amount after it.
+                  instructions: Array.from({ length: tx.withdrawLegs ?? 0 }, () => ({ programIdIndex: 1, data: getBase58Decoder().decode(new Uint8Array([...DISCRIMINATORS.withdraw, 1, 0, 0, 0, 0, 0, 0, 0])) })),
+                },
+              },
               meta: { err: tx.err ?? null, preTokenBalances: tx.pre, postTokenBalances: tx.post },
             }
           : null,
@@ -95,6 +104,28 @@ describe("whether a Solana transaction landed as acknowledged", () => {
     const v = await verifySolanaLanded(rpc({ confirmationStatus: "confirmed" }, { pre: [bal(vault.asset.address, "5000000")], post: [bal(vault.asset.address, "4999999"), bal(vault.sharesMint, "1")] }), SIG, deposit, ACCOUNT, opts);
     expect(v.verified).toBe("mismatch");
     expect(v.detail).toMatch(/not the 2 USDC acknowledged/);
+  });
+
+  it("a deposit the program rounded down by less than one share's worth: matched (measured on a fork: 1,999,999 of 2,000,000)", async () => {
+    const v = await verifySolanaLanded(rpc({ confirmationStatus: "confirmed" }, { pre: [bal(vault.asset.address, "5000000")], post: [bal(vault.asset.address, "3000001"), bal(vault.sharesMint, "1999679")] }), SIG, deposit, ACCOUNT, opts);
+    expect(v.verified, v.detail).toBe("matched");
+  });
+
+  it("a deposit short by more than one share's worth: mismatch", async () => {
+    // At a share price of 1, ten base units short is ten shares' worth.
+    const v = await verifySolanaLanded(rpc({ confirmationStatus: "confirmed" }, { pre: [bal(vault.asset.address, "5000000")], post: [bal(vault.asset.address, "3000010"), bal(vault.sharesMint, "1999990")] }), SIG, deposit, ACCOUNT, opts);
+    expect(v.verified).toBe("mismatch");
+    expect(v.detail).toMatch(/fell by 1\.99999 USDC, not the 2 USDC acknowledged/);
+  });
+
+  it("a withdrawal short by up to one share unit per withdraw instruction is rounding: matched; by more, or with no withdraw instruction, mismatch", async () => {
+    const landed = (burnedTo: string, withdrawLegs: number) =>
+      verifySolanaLanded(rpc({ confirmationStatus: "confirmed" }, { pre: [bal(vault.sharesMint, "3000000")], post: [bal(vault.sharesMint, burnedTo), bal(vault.asset.address, "999000")], withdrawLegs }), SIG, withdraw, ACCOUNT, opts);
+    expect((await landed("2000001", 1)).verified).toBe("matched");
+    expect((await landed("2000002", 2)).verified).toBe("matched");
+    expect((await landed("2000002", 1)).verified).toBe("mismatch");
+    expect((await landed("2000001", 0)).verified).toBe("mismatch");
+    expect((await landed("1999999", 1)).verified).toBe("mismatch");
   });
 
   it("shares arriving with no asset leaving (a plain share transfer in): mismatch", async () => {
