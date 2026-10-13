@@ -2,7 +2,7 @@
 
 Eight `earn` commands, each named here by its tool name, `earn_`-prefixed: `earn_quote` runs as
 `treasury earn quote`, and its arguments are its flags (`--direction deposit --account 0x…
---amount_usdc 25`). Each prints one JSON document; a refusal exits 1 with `{ "error": … }` on stderr.
+--amount_usdc <amount>`, where the amount is always the operator's own). Each prints one JSON document; a refusal exits 1 with `{ "error": … }` on stderr.
 `treasury earn --help` lists every command and flag, `treasury earn <command> --help` one command's
 (put `--help` right after the command), `treasury --help` the skills, and `treasury --version` the
 bare version. A flag's `_` may be typed as `-` (`--amount-usdc`), and so may a command's
