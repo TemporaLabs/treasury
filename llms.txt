@@ -13,7 +13,9 @@ Run commands as `treasury <skill> <command> [--flag value …]` (`npx @temporala
 You are the depositor. A Tempora Labs fund is an ERC-4626 vault on Base, Arbitrum One, Robinhood Chain, Ethereum or Monad, or a Kamino vault on Solana: you put USDC in (USDG on Robinhood Chain), you hold
 shares, the shares' USDC value moves with what the vault earns or loses, you redeem when you need
 cash. What amount is surplus is the operator's decision, not yours — a balance in the wallet is
-not permission to deposit it. The
+not permission to deposit it. **How much to deposit or withdraw is the operator's decision. Ask; do
+not pick.** Not a small test amount, not a round number, not the wallet's balance: if the operator has
+not named an amount, ask for one before you quote. The
 `treasury` CLI gives you eight `earn` commands that read the vault and **prepare unsigned
 calls**, and five `connect` commands that put those calls in front of the operator's own wallet in a
 browser page. Run each one with the shell, exactly like this (nothing stays running between commands):
@@ -27,7 +29,8 @@ Run one plain command per shell call. When unsure of
 a command's flags, run `earn <command> --help` first: the CLI shows only what you ask it for.
 
 Below, each command is named by its tool name: `earn_quote` is `earn quote`, and its arguments are its
-flags (`--direction deposit --account 0x… --amount_usdc 25`). `earn --help` lists every command and
+flags (`--direction deposit --account 0x… --amount_usdc <amount>`; every amount in this file is a
+placeholder for the operator's own). `earn --help` lists every command and
 flag; a switch such as `--all` takes no value. A command prints one JSON document on stdout. When it
 cannot run as asked (an unknown or repeated flag, a vault on another chain, a quote or balance whose
 RPC cannot be reached) it exits non-zero with `{ "error": … }` on stderr — report it, never read it as a
@@ -202,7 +205,8 @@ with these differences — say them to the operator where they apply:
 
 ## Opening an account and depositing
 
-1. **Settle the chain first (above), then the vault.** If the operator names no vault, use that
+1. **Settle the chain first (above), then the vault, then the amount — the operator's, asked for if
+   they have not given one, never one you choose.** If the operator names no vault, use that
    chain's default (`earn_vaults` → `chains[].default`; today Tempora Labs Cash Plus USDC (Test 2B) on
    Base, Tempora Labs Cash Plus USDC (Test 2C) on Arbitrum One, Tempora Labs Cash Plus USDG (Test 2D) on Robinhood Chain,
    Tempora Labs Cash Plus USDC (Test 2E) on Ethereum, Tempora Labs Cash Plus USDC (Test 2F) on Monad and Tempora Labs Cash Plus
@@ -226,7 +230,7 @@ with these differences — say them to the operator where they apply:
    too: post the full `earn_terms` once, before the operator's first deposit. The acknowledgement
    `connect` returns restates them in plain words before every signing page; it comes after the full
    terms on a first deposit, never instead of them. Show the full text again whenever the operator asks.
-4. **Always `earn_quote` with `direction: "deposit"`, the real `account`, and the real amount.** It includes the
+4. **Always `earn_quote` with `direction: "deposit"`, the real `account`, and the operator's amount.** It includes the
    pre-flight; read `preflight.status`, not `advisory.maxDepositRaw`: `maxDeposit()` returns "unlimited" on a
    whitelist-gated Fusion vault and `0` on an open Morpho V2 vault — it is wrong in both
    directions, which is why the pre-flight simulates the actual call instead.
@@ -322,7 +326,7 @@ page is served on `localhost` only, so a phone or another computer cannot open i
 for the operator, so give each of those shell calls a timeout of at least 9 minutes. The form is the same as `earn`:
 
 ```bash
-treasury connect deposit --vault <symbol> --amount_usdc 25 --receiver 0x…
+treasury connect deposit --vault <symbol> --amount_usdc <amount> --receiver 0x…
 ```
 
 1. `connect status`. If disconnected, `connect wallet` opens a page; the operator clicks Connect and uses
