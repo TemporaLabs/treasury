@@ -1,7 +1,7 @@
 # Open Agent Treasury (OAT)
 
 **The open-source treasury management system for AI agents.** Built by Tempora Labs. Apache-2.0.
-Current release: **v0.1.2** (October 2026).
+Current release: **v0.1.3** (October 2026).
 
 Open Agent Treasury gives an AI agent a safe way to manage on-chain capital. The agent reads the
 chain directly, works out what it wants to do, and hands back unsigned transactions. A human, or
@@ -11,15 +11,15 @@ sends no telemetry; the optional sign-in page loads Privy, whose script sends it
 
 ## The first skill: Earn
 
-Earn puts idle USDC to work in vaults curated by Tempora Labs on Base and Arbitrum One, and idle USDG on Robinhood Chain. With it, an agent can:
+Earn puts idle USDC to work in vaults curated by Tempora Labs on Base, Arbitrum One, Ethereum, Monad and Solana, and idle USDG on Robinhood Chain. With it, an agent can:
 
 - **Inspect vaults:** assets, fees, deposit access, and links to verify each contract independently.
 - **Prepare a deposit:** review the terms, simulate access, then build unsigned calls.
 - **Track a position:** its value, deposits and earnings, read from on-chain records.
 - **Prepare a withdrawal:** check what is withdrawable right now, then build unsigned calls.
 
-Earn takes the vault's own asset in and pays it out: USDC on Base and Arbitrum One, USDG on Robinhood
-Chain. It runs as a command line: eight `earn` commands, READ commands that
+Earn takes the vault's own asset in and pays it out: USDC on Base, Arbitrum One, Ethereum, Monad and Solana,
+USDG on Robinhood Chain. It runs as a command line: eight `earn` commands, READ commands that
 return facts from the chain and PREPARE commands that return unsigned calls, and five `connect`
 commands that hand calls to the operator's own wallet for approval. CI asserts both command lists on
 every build, so a signing command cannot slip in.
@@ -27,7 +27,7 @@ every build, so a signing command cannot slip in.
 ## The default vault
 
 Earn deposits into **Tempora Labs Cash Plus USDC (Test 2B)** by default, a Morpho Vault V2 on Base
-that any account can deposit into. Arbitrum One and Robinhood Chain each have their own default, and
+that any account can deposit into. Arbitrum One, Robinhood Chain, Ethereum, Monad and Solana each have their own default, and
 the agent asks which chain when the operator has not said.
 
 Vault: https://basescan.org/address/0x91BcEbA5feCB9E92d80F1845B55cC56621E9352F
@@ -51,7 +51,7 @@ page for its current total.
 
 ```bash
 export TREASURY_RPC_BASE=https://...   # your Base RPC URL
-claude plugin marketplace add TemporaLabs/treasury@v0.1.2
+claude plugin marketplace add TemporaLabs/treasury@v0.1.3
 claude plugin install treasury@treasury
 ```
 
@@ -62,7 +62,7 @@ repository as of v0.1.1. If you installed from the earlier `treasury-plugin` rep
 ### Any agent with a shell
 
 ```bash
-npm install --save-exact @temporalabs/treasury@0.1.2
+npm install --save-exact @temporalabs/treasury@0.1.3
 npx --no-install treasury earn --help
 ```
 
@@ -83,11 +83,11 @@ no money. Later:
 
 ## For agents reading this
 
-- Every tool that takes a vault takes its ERC-20 ticker (`tlCashPlusUSDC2B` is the default on Base); every
+- Every tool that takes a vault takes its ticker (`tlCashPlusUSDC2B` is the default on Base); every
   tool that takes an address takes it as `account`.
 - Amounts are decimal strings in the vault's asset (USDC; USDG on Robinhood Chain). Shares are exact strings and never cross the boundary as numbers.
 - `earn_vaults` returns a `warning` for each vault. Show it to the operator before any deposit.
-- A deposit is two calls, `approve` then `deposit`, returned in order with signer rules attached.
+- A deposit is two calls, `approve` then `deposit`, returned in order with signer rules attached (on Solana, one transaction).
 - Whether a balance is surplus is the operator's decision. A balance in the wallet is not
   permission to deposit it.
 
@@ -98,6 +98,13 @@ no money. Later:
   from every output.
 - **Verifiable builds:** CI checks the committed bundle, and each npm release carries provenance.
 - Vulnerabilities go through private reporting, not public issues.
+
+## New in v0.1.3
+
+Three more chains: Ethereum and Monad, each with a Morpho vault over USDC, and Solana, with a Kamino
+vault over USDC and a Solana wallet through `treasury connect`. The registry and the version are built
+into the CLI, and `treasury --help` points agents without the plugin to `llms.txt`, a guide generated
+from the Earn skill.
 
 ## New in v0.1.2
 
@@ -114,6 +121,6 @@ More yield configurations across the risk/return spectrum.
 - Source: https://github.com/TemporaLabs/treasury
 - Plugin and the Earn skill: https://github.com/TemporaLabs/treasury/tree/main/plugin
 - npm: https://www.npmjs.com/package/@temporalabs/treasury
-- Release notes: https://github.com/TemporaLabs/treasury/releases/tag/v0.1.2
+- Release notes: https://github.com/TemporaLabs/treasury/releases/tag/v0.1.3
 - Docs: tools, configuration, risks, security model: https://github.com/TemporaLabs/treasury/tree/main/docs
 - Licence: Apache-2.0. Forks must not claim to be the official distribution.

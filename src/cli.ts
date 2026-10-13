@@ -7,7 +7,7 @@
  * turns argv into their arguments, validates them against each command's own schema, and prints.
  *
  *   treasury earn --help                 every command, its flags and its description, as JSON
- *   treasury earn quote --direction deposit --account 0x… --amount_usdc 25 --chain base
+ *   treasury earn quote --direction deposit --account 0x… --amount_usdc <amount> --chain base
  *   treasury --version
  *
  * Flags are the command's argument names. `--amount-usdc` is accepted for `--amount_usdc`, and
@@ -28,6 +28,7 @@ import { buildConnectCommands } from "./connect/commands.js";
 import { resolvedRpcSecrets } from "./client.js";
 import { redactEndpoints, registerSecretSource } from "./redact.js";
 import { PACKAGE_VERSION } from "./version.js";
+import { guidePointer } from "./guide.js";
 
 /**
  * The skills this CLI carries: a word on the command line, and the commands it opens. A command's name
@@ -131,6 +132,12 @@ function parseFlags(c: Command, argv: string[]): Record<string, unknown> {
   return checked.data as Record<string, unknown>;
 }
 
+/** `{ guide }` for the help documents, or nothing when the pointer does not apply (the plugin's copy). */
+const guideField = (): { guide?: NonNullable<ReturnType<typeof guidePointer>> } => {
+  const guide = guidePointer();
+  return guide ? { guide } : {};
+};
+
 /** Runs one invocation. Returns what to print and the exit status; never calls `process.exit` itself, so tests can drive it. */
 export async function run(argv: string[]): Promise<{ stdout?: string; stderr?: string; code: 0 | 1 }> {
   // Registered before anything can be printed: a usage error echoes what was typed, and what was typed
@@ -140,7 +147,7 @@ export async function run(argv: string[]): Promise<{ stdout?: string; stderr?: s
   const [first, second, ...rest] = argv;
   if (first === "--version" || first === "-v") return { stdout: PACKAGE_VERSION, code: 0 };
   if (first === undefined || first === "--help" || first === "-h") {
-    return { stdout: JSON.stringify({ usage: "treasury <skill> <command> [--flag value …]", version: PACKAGE_VERSION, skills: Object.keys(SKILLS) }, null, 2), code: 0 };
+    return { stdout: JSON.stringify({ usage: "treasury <skill> <command> [--flag value …]", version: PACKAGE_VERSION, skills: Object.keys(SKILLS), ...guideField() }, null, 2), code: 0 };
   }
   const build = Object.hasOwn(SKILLS, first) ? SKILLS[first] : undefined;
   if (!build) return fail(`unknown skill ${JSON.stringify(first)}; this CLI carries: ${Object.keys(SKILLS).join(", ")}`);
@@ -154,7 +161,7 @@ export async function run(argv: string[]): Promise<{ stdout?: string; stderr?: s
   }
   const mine = Object.entries(commands).filter(([name]) => name.startsWith(`${skill}_`));
   if (second === undefined || second === "--help" || second === "-h") {
-    return { stdout: JSON.stringify({ usage: `treasury ${skill} <command> [--flag value …]`, version: PACKAGE_VERSION, commands: mine.map(([n, c]) => describe(skill, n, c)) }, null, 2), code: 0 };
+    return { stdout: JSON.stringify({ usage: `treasury ${skill} <command> [--flag value …]`, version: PACKAGE_VERSION, ...guideField(), commands: mine.map(([n, c]) => describe(skill, n, c)) }, null, 2), code: 0 };
   }
   const name = `${skill}_${second.replaceAll("-", "_")}`;
   // Own keys only: `commands` is a plain object, so `earn constructor` must not reach anything inherited.
@@ -199,6 +206,24 @@ function isEntryPoint(): boolean {
   }
 }
 
+/** How long Windows waits for open handles to finish before it ends the process anyway. */
+const WINDOWS_EXIT_BACKSTOP_MS = 2_000;
+
+/**
+ * Ends the process with `code` once the answer is written. Elsewhere this is an immediate
+ * `process.exit`. On Windows it is not (#122): Node 24 (24.0.0 and 24.19.0 measured) aborts with
+ * 0xC0000409, on the libuv assertion `!(handle->flags & UV_HANDLE_CLOSING)`, when `process.exit` runs
+ * right after the health check's request — it printed a correct answer and then crashed. There the
+ * exit code is set and Node ends on its own once nothing is left open; a backstop that holds
+ * nothing open ends it after WINDOWS_EXIT_BACKSTOP_MS if a request is still pending, as the
+ * slow-endpoint case leaves one.
+ */
+function exitWith(code: number): void {
+  if (process.platform !== "win32") process.exit(code);
+  process.exitCode = code;
+  setTimeout(() => process.exit(code), WINDOWS_EXIT_BACKSTOP_MS).unref();
+}
+
 if (isEntryPoint()) {
   run(process.argv.slice(2)).then(
     ({ stdout, stderr, code }) => {
@@ -207,12 +232,12 @@ if (isEntryPoint()) {
       // the agent's shell call would wait it out. The callbacks wait for each stream to flush first.
       const out = stdout === undefined ? Promise.resolve() : new Promise<void>((done) => process.stdout.write(`${stdout}\n`, () => done()));
       const err = stderr === undefined ? Promise.resolve() : new Promise<void>((done) => process.stderr.write(`${stderr}\n`, () => done()));
-      void Promise.all([out, err]).then(() => process.exit(code));
+      void Promise.all([out, err]).then(() => exitWith(code));
     },
     (e: unknown) => {
       // Defence-in-depth: `run` catches everything it calls, so this is reached only by a defect in
       // `run` itself. Masked anyway, so that stays true if `run` ever grows.
-      process.stderr.write(`${JSON.stringify({ error: redactEndpoints(String(e)) })}\n`, () => process.exit(1));
+      process.stderr.write(`${JSON.stringify({ error: redactEndpoints(String(e)) })}\n`, () => exitWith(1));
     },
   );
 }

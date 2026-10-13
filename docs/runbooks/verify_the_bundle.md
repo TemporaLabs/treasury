@@ -101,7 +101,7 @@ with npm provenance: each version is published from `publish.yml` running on Git
 with `id-token: write`, from the release tag, and npm records that fact against the tarball.
 `package.json` is what makes that hold — `repository` names the public repository,
 `TemporaLabs/treasury` (CI fails if it names anything else, because that is the only repository
-provenance can be issued from), `files` limits the tarball to `dist/`, `registry/` and the licence files (the skill is
+provenance can be issued from), `files` limits the tarball to `dist/`, `registry/`, the licence files and `llms.txt` (the skill is
 not in it — it ships in `plugin/`, by git tag), `publishConfig.provenance` is on, and `prepack`
 builds so `main`/`types` exist in the tarball — only the two bundles (`dist/treasury.mjs`, `dist/connect-page.js`) are committed, so without that build
 the tarball would carry the bundle and nothing the manifest's own `main`/`types` point at.

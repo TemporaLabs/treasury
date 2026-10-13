@@ -1,9 +1,10 @@
 import { describe, it, expect, beforeAll, afterAll } from "vitest";
 import { spawn } from "node:child_process";
-import { copyFileSync, mkdirSync, mkdtempSync, readFileSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
+import { mkdtempSync, readFileSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { pathToFileURL } from "node:url";
+import { build } from "tsup";
 
 /**
  * The bundle runs the CLI only when it IS the file Node was asked to run — decided by resolved-path
@@ -65,14 +66,13 @@ describe("the bundle runs the CLI only when it is the entry file", () => {
     expect(r.stderr).toBe("");
   });
 
-  it("run through that symlink with `--preserve-symlinks-main`, it still reads its OWN package.json and registry", async () => {
-    // With the flag, import.meta.url is the symlink's path, not the bundle's. The package.json and
-    // registry beside the bundle must still be the ones read: resolved from the symlink instead,
-    // `../package.json` is a file in whatever directory holds the link (a consumer's node_modules/).
+  it("run through that symlink with `--preserve-symlinks-main`, it still reports its OWN version and registry", async () => {
+    // With the flag, import.meta.url is the symlink's path, not the bundle's. The version and registry are
+    // inlined into the bundle, so nothing is resolved from the symlink's directory (a consumer's node_modules/).
     const version = await run(bin, ["--version"], ["--preserve-symlinks-main"]);
     expect(version.stderr).toBe("");
     expect(version.stdout.trim()).toBe(VERSION);
-    // `earn vaults` reads the registry: exit 0 with a vault list means ../registry/vaults.json was found
+    // `earn vaults` reads the registry: exit 0 with a vault list means the embedded registry loaded
     const vaults = await run(bin, ["earn", "vaults"], ["--preserve-symlinks-main"]);
     expect(vaults.stderr).toBe("");
     expect(vaults.code).toBe(0);
@@ -101,36 +101,42 @@ describe("the bundle runs the CLI only when it is the entry file", () => {
  * The commands build their schemas from the registry (the `chain` flag lists the chains that have a
  * vault). A registry that does not parse must not stop the CLI from answering `--help`: a CLI that
  * dies before printing anything leaves an agent nothing to report, while one that runs can say which
- * registry rule was broken. Run against a copy of the committed bundle beside a registry that breaks
- * the one-default-per-chain rule.
+ * registry rule was broken. The registry is inlined at build time, so the broken one is fed in by
+ * bundling the CLI from source with the registry import pointed at a broken copy: the same source and the same
+ * bundler settings as `tsup.config.ts`, a different embedded registry.
  */
 describe("a registry that does not parse is reported by the commands, not by the CLI failing to start", () => {
-  let dir: string;
-  const layout = (registry: unknown): string => {
+  const roots: string[] = [];
+  const bundleWith = async (registry: unknown): Promise<string> => {
     const root = mkdtempSync(join(tmpdir(), "treasury-badreg-"));
-    mkdirSync(join(root, "dist"));
-    mkdirSync(join(root, "registry"));
-    copyFileSync(BUNDLE, join(root, "dist/treasury.mjs"));
-    copyFileSync(resolve(__dirname, "../package.json"), join(root, "package.json"));
-    writeFileSync(join(root, "registry/vaults.json"), JSON.stringify(registry));
-    return root;
+    roots.push(root);
+    const registryFile = join(root, "vaults.json");
+    writeFileSync(registryFile, JSON.stringify(registry));
+    await build({
+      config: false,
+      entry: { treasury: resolve(__dirname, "../src/cli.ts") },
+      outDir: join(root, "out"),
+      format: ["esm"],
+      outExtension: () => ({ js: ".mjs" }),
+      platform: "node",
+      target: "node22",
+      noExternal: [/.*/],
+      silent: true,
+      esbuildPlugins: [{ name: "embedded-registry", setup: (b) => b.onResolve({ filter: /registry\/vaults\.json$/ }, () => ({ path: registryFile })) }],
+    });
+    return join(root, "out/treasury.mjs");
   };
   const shipped = () => JSON.parse(readFileSync(resolve(__dirname, "../registry/vaults.json"), "utf8")) as { vaults: { chainId: number; isDefault: boolean }[] };
 
   afterAll(() => {
-    if (dir) rmSync(dir, { recursive: true, force: true });
+    for (const r of roots) rmSync(r, { recursive: true, force: true });
   });
 
-  it("control: the same layout with the SHIPPED registry lists the vaults", async () => {
-    const root = layout(shipped());
-    try {
-      const r = await run(join(root, "dist/treasury.mjs"), ["earn", "vaults"]);
-      expect(r.stderr).toBe("");
-      expect(r.code).toBe(0);
-    } finally {
-      rmSync(root, { recursive: true, force: true });
-    }
-  });
+  it("control: the same build with the SHIPPED registry lists the vaults", async () => {
+    const r = await run(await bundleWith(shipped()), ["earn", "vaults"]);
+    expect(r.stderr).toBe("");
+    expect(r.code).toBe(0);
+  }, 60_000);
 
   it("no vault on the default chain: the schema alone accepts it, so the LOAD refuses it and names the cause", async () => {
     // One default per chain that HAS a vault is all the schema can hold. An Arbitrum-only registry
@@ -138,26 +144,21 @@ describe("a registry that does not parse is reported by the commands, not by the
     const arbOnly = shipped();
     arbOnly.vaults = arbOnly.vaults.filter((v) => v.chainId === 42161);
     expect(arbOnly.vaults.length, "premise: the shipped registry has a vault on a second chain").toBeGreaterThan(0);
-    const root = layout(arbOnly);
-    try {
-      const r = await run(join(root, "dist/treasury.mjs"), ["earn", "vaults"]);
-      expect(r.code).toBe(1);
-      expect(r.stdout).toBe("");
-      expect((JSON.parse(r.stderr) as { error: string }).error).toMatch(/the registry has no vault on Base, which config\/earn\.ts names as the default chain/);
-    } finally {
-      rmSync(root, { recursive: true, force: true });
-    }
-  });
+    const r = await run(await bundleWith(arbOnly), ["earn", "vaults"]);
+    expect(r.code).toBe(1);
+    expect(r.stdout).toBe("");
+    expect((JSON.parse(r.stderr) as { error: string }).error).toMatch(/the registry has no vault on Base, which config\/earn\.ts names as the default chain/);
+  }, 60_000);
 
   it("two defaults on one chain: the CLI still lists its commands, and the command names the broken rule", async () => {
     const bad = shipped();
     for (const v of bad.vaults) if (v.chainId === 8453) v.isDefault = true; // two Base defaults
-    dir = layout(bad);
-    const help = await run(join(dir, "dist/treasury.mjs"), ["earn", "--help"]);
+    const cli = await bundleWith(bad);
+    const help = await run(cli, ["earn", "--help"]);
     expect(help.code, `the CLI did not answer --help: ${help.stderr}`).toBe(0);
     expect((JSON.parse(help.stdout) as { commands: unknown[] }).commands).toHaveLength(8);
-    const r = await run(join(dir, "dist/treasury.mjs"), ["earn", "vaults"]);
+    const r = await run(cli, ["earn", "vaults"]);
     expect(r.code).toBe(1);
     expect((JSON.parse(r.stderr) as { error: string }).error).toMatch(/exactly one vault per chain must be isDefault; chain 8453 has [23]/);
-  });
+  }, 60_000);
 });

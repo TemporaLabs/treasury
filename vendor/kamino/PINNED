@@ -1,0 +1,14 @@
+# Kamino's SDK version that wrote instruction-fixtures.json and decode-fixtures.json (generate-fixtures.mjs).
+# Read 2026-10-11.
+#
+#   @kamino-finance/klend-sdk 13.0.1
+#   npm integrity  sha512-Zii3BPi6yYELOI37SdLHnfoJpRjMWDEyD4OhCSoiVof9udWMJdxzVCQHkl++yeLjVjkVmNlDrGGJPnoBNiTDAg==
+#
+# generate-fixtures.mjs also imports @solana/kit, bn.js and @solana-program/token. The setup it describes
+# installs only klend-sdk, so those resolve through klend-sdk 13.0.1's own dependencies, declared as
+# @solana/kit ^2.3.0, bn.js ^5.2.1 and @solana-program/token ^0.6.0. The exact versions they resolved to
+# when the fixtures were written were not recorded.
+#
+# The fixtures pin src/solana/kvault.ts (deposit, withdraw, the share account) and src/solana/layout.ts
+# (VaultState, Reserve) to what that SDK builds and decodes. Regenerate them on any version bump, and
+# after Kamino upgrades either program, then re-run the tests.

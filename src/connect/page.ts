@@ -11,7 +11,7 @@
 import { readFileSync, realpathSync } from "node:fs";
 import { fileURLToPath, pathToFileURL } from "node:url";
 
-/** Privy's own hosts: its auth and embedded-wallet iframe, its RPC, and the Cloudflare check it uses. */
+/** Privy's own hosts: its auth and embedded-wallet iframe, its RPC (HTTPS, and WebSocket for Solana), and the Cloudflare check it uses. */
 export const PAGE_CSP = [
   "default-src 'self'",
   "script-src 'self' https://challenges.cloudflare.com",
@@ -24,7 +24,7 @@ export const PAGE_CSP = [
   "frame-ancestors 'none'",
   "child-src https://auth.privy.io",
   "frame-src https://auth.privy.io https://challenges.cloudflare.com",
-  "connect-src 'self' https://auth.privy.io https://*.rpc.privy.systems",
+  "connect-src 'self' https://auth.privy.io https://*.rpc.privy.systems wss://*.rpc.privy.systems",
   "worker-src 'self'",
   "manifest-src 'self'",
 ].join("; ");

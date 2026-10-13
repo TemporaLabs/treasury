@@ -76,7 +76,7 @@ import { readFileSync, existsSync, readdirSync } from "node:fs";
 import { dirname, resolve, relative, sep } from "node:path";
 import { fileURLToPath } from "node:url";
 import ts from "typescript";
-import { rpcUrlFromEnv } from "../src/client.js";
+import { rpcUrlFromEnv, solanaRpcUrlFromEnv } from "../src/client.js";
 import { loadRegistry, getVault, depositableVaults } from "../src/registry.js";
 import { buildDeposit, buildWithdraw } from "../src/build.js";
 import { buildCommands } from "../src/earn/commands.js";
@@ -98,11 +98,14 @@ const ENTRY_POINTS = ["src/index.ts", "src/cli.ts"];
 // TREASURY_LOGS_FALLBACK: the event scan's fallback endpoint, or `off` to forbid the fallback
 // entirely — an operator who may not reach a third party they did not name.
 // One RPC pair and one logs variable PER CHAIN (`CHAIN_INFO` in src/client.ts). A chain reads only its
-// own names — an Arbitrum or Robinhood Chain call never falls back to a Base endpoint.
+// own names — an Arbitrum, Robinhood Chain, Ethereum, Monad or Solana call never falls back to a Base endpoint.
 const ENV_READS_ALLOWED = [
   "ARBITRUM_RPC_URL",
   "BASE_RPC_URL",
+  "ETHEREUM_RPC_URL",
+  "MONAD_RPC_URL",
   "ROBINHOOD_RPC_URL",
+  "SOLANA_RPC_URL",
   // `treasury connect` (src/connect/): its own optional settings, and the four a browser launcher
   // needs to tell whether there is a browser to open at all.
   "DISPLAY",
@@ -117,10 +120,15 @@ const ENV_READS_ALLOWED = [
   "TREASURY_LOGS_FALLBACK",
   "TREASURY_LOGS_RPC_ARBITRUM",
   "TREASURY_LOGS_RPC_BASE",
+  "TREASURY_LOGS_RPC_ETHEREUM",
+  "TREASURY_LOGS_RPC_MONAD",
   "TREASURY_LOGS_RPC_ROBINHOOD",
   "TREASURY_RPC_ARBITRUM",
   "TREASURY_RPC_BASE",
+  "TREASURY_RPC_ETHEREUM",
+  "TREASURY_RPC_MONAD",
   "TREASURY_RPC_ROBINHOOD",
+  "TREASURY_RPC_SOLANA",
 ];
 
 /**
@@ -148,17 +156,24 @@ const BUILTINS_ALLOWED_PER_FILE: Record<string, string[]> = {
   "src/connect/session.ts": ["os"], //                     the session file lives under the home directory
   "tests/connect.unit.test.ts": ["os", "net"], //           a temporary session directory; a free local port per test
   "tests/fork.test.ts": ["child_process"], //              spawns anvil; anvil holds the keys, this repo never does
+  "tests/fork-solana.test.ts": ["child_process", "os"], //  spawns surfpool in a temporary directory; the key is generated per run
   "tests/registry-check.chain.test.ts": ["child_process"], // runs scripts/registry-check.ts against a mock chain
   "tests/entrypoint.unit.test.ts": ["child_process", "os"], // runs the committed bundle by symlink and by import; tmpdir for the symlink
+  "tests/guide.unit.test.ts": ["child_process", "os"], //     runs the committed bundle in place and alone in a temporary folder
+  "tests/embedded.unit.test.ts": ["child_process", "os"], //   runs the committed bundle and a consumer's re-bundle of it from a temporary folder
   "tests/licence.unit.test.ts": ["crypto"], //             pins the sha256 of the canonical Apache-2.0 text
+  "tests/solana-kvault.unit.test.ts": ["crypto"], //       derives Anchor's instruction discriminators (sha256)
 };
 
 const MAY_SPAWN: Record<string, string[]> = {
   "scripts/roundtrip.ts": ["node", "npx"],
   "src/connect/open.ts": ["open", "cmd", "xdg-open"], //    the platform's own "open this URL" command, nothing else
   "tests/fork.test.ts": ["anvil"],
+  "tests/fork-solana.test.ts": ["surfpool"],
   "tests/registry-check.chain.test.ts": ["npx"],
   "tests/entrypoint.unit.test.ts": ["node"],
+  "tests/guide.unit.test.ts": ["node"],
+  "tests/embedded.unit.test.ts": ["node"],
 };
 
 const parse = (file: string) =>
@@ -225,6 +240,24 @@ const resolveTs = (from: string, spec: string): string | null => {
   return null;
 };
 
+/**
+ * The ONLY data files a module may import, by exact importing file and exact specifier. The registry and the
+ * package version are inlined into the bundle at build time instead of read from beside it, so the bundle
+ * needs nothing next to it. Nothing here is a pattern: a third JSON import, or either of these from another
+ * file, fails until it is added on purpose.
+ */
+const JSON_IMPORTS_ALLOWED: Record<string, string[]> = {
+  "src/registry.ts": ["../registry/vaults.json"],
+  "src/version.ts": ["../package.json"],
+};
+
+/** A `.json` specifier is data, not code: it must be allowlisted for this file and be a real file in this package. */
+function jsonReachProblem(file: string, spec: string): string | null {
+  if (!(JSON_IMPORTS_ALLOWED[rel(file)] ?? []).includes(spec)) return `${rel(file)} → ${spec} (a JSON import this file is not allowed)`;
+  const target = resolve(dirname(file), spec);
+  return existsSync(target) && target.startsWith(pkgRoot + sep) ? null : `${rel(file)} → ${spec} (does not resolve to a file in this package)`;
+}
+
 /** Walk the runtime import graph from the entry points. */
 function reachable(): { files: Set<string>; external: Set<string>; importers: Map<string, Set<string>>; escapes: string[] } {
   const files = new Set<string>();
@@ -243,6 +276,11 @@ function reachable(): { files: Set<string>; external: Set<string>; importers: Ma
       if (!spec.startsWith(".")) {
         external.add(spec);
         importers.set(spec, (importers.get(spec) ?? new Set()).add(rel(file)));
+        continue;
+      }
+      if (spec.endsWith(".json")) {
+        const problem = jsonReachProblem(file, spec);
+        if (problem) escapes.push(problem);
         continue;
       }
       const target = resolveTs(file, spec);
@@ -313,6 +351,16 @@ describe("A. the runtime module graph cannot leave this package", () => {
     expect(escapes).toEqual([]);
   });
 
+  it("the JSON allowlist is exact: each entry is really imported, and anything else is refused (positive and negative controls)", () => {
+    for (const [file, specs] of Object.entries(JSON_IMPORTS_ALLOWED))
+      for (const spec of specs) expect(moduleReaches(resolve(pkgRoot, file)).specs, `${file} no longer imports ${spec}: drop the entry`).toContain(spec);
+    const registryTs = resolve(srcRoot, "registry.ts");
+    expect(jsonReachProblem(registryTs, "../registry/vaults.json")).toBeNull();
+    expect(jsonReachProblem(registryTs, "../package.json")).toMatch(/not allowed/); // another allowed file's JSON
+    expect(jsonReachProblem(resolve(srcRoot, "build.ts"), "../registry/vaults.json")).toMatch(/not allowed/); // the same JSON, wrong importer
+    expect(jsonReachProblem(registryTs, "../../outside.json")).toMatch(/not allowed/); // outside the package
+  });
+
   it("every external import is a DECLARED dependency or a node: builtin", () => {
     const declared = new Set(Object.keys(pkg.dependencies ?? {}));
     // By EXCLUSION, so nothing is exempt: a specifier is a declared dependency, or it is on the
@@ -328,8 +376,9 @@ describe("A. the runtime module graph cannot leave this package", () => {
     expect(undeclared).toEqual([]);
   });
 
-  it("the dependency set is EXACTLY these two — membership, so a swap holding the count fails too", () => {
+  it("the dependency set is EXACTLY these three — membership, so a swap holding the count fails too", () => {
     expect(Object.keys(pkg.dependencies ?? {}).sort()).toEqual([
+      "@solana/kit",
       "viem",
       "zod",
     ]);
@@ -350,8 +399,11 @@ describe("B. the environment surface, statically and at runtime", () => {
       "ARBITRUM_RPC_URL",
       "BASE_RPC_URL",
       "DISPLAY",
+      "ETHEREUM_RPC_URL",
+      "MONAD_RPC_URL",
       "PRIVY_APP_ID",
       "ROBINHOOD_RPC_URL",
+      "SOLANA_RPC_URL",
       "SSH_CONNECTION",
       "SSH_TTY",
       "TREASURY_CONNECT_HOME",
@@ -360,10 +412,15 @@ describe("B. the environment surface, statically and at runtime", () => {
       "TREASURY_LOGS_FALLBACK",
       "TREASURY_LOGS_RPC_ARBITRUM",
       "TREASURY_LOGS_RPC_BASE",
+      "TREASURY_LOGS_RPC_ETHEREUM",
+      "TREASURY_LOGS_RPC_MONAD",
       "TREASURY_LOGS_RPC_ROBINHOOD",
       "TREASURY_RPC_ARBITRUM",
       "TREASURY_RPC_BASE",
+      "TREASURY_RPC_ETHEREUM",
+      "TREASURY_RPC_MONAD",
       "TREASURY_RPC_ROBINHOOD",
+      "TREASURY_RPC_SOLANA",
       "WAYLAND_DISPLAY",
     ]);
   });
@@ -371,7 +428,7 @@ describe("B. the environment surface, statically and at runtime", () => {
   it("a fund variable in the environment is not used, WHATEVER it is called — the property, not the prefix", () => {
     const saved = { ...process.env };
     try {
-      for (const k of ["TREASURY_RPC_BASE", "TREASURY_LOGS_RPC_BASE", "TREASURY_LOGS_FALLBACK", "BASE_RPC_URL", "TREASURY_RPC_ARBITRUM", "TREASURY_LOGS_RPC_ARBITRUM", "ARBITRUM_RPC_URL", "TREASURY_RPC_ROBINHOOD", "TREASURY_LOGS_RPC_ROBINHOOD", "ROBINHOOD_RPC_URL"]) delete process.env[k];
+      for (const k of ["TREASURY_RPC_BASE", "TREASURY_LOGS_RPC_BASE", "TREASURY_LOGS_FALLBACK", "BASE_RPC_URL", "TREASURY_RPC_ARBITRUM", "TREASURY_LOGS_RPC_ARBITRUM", "ARBITRUM_RPC_URL", "TREASURY_RPC_ROBINHOOD", "TREASURY_LOGS_RPC_ROBINHOOD", "ROBINHOOD_RPC_URL", "TREASURY_RPC_ETHEREUM", "TREASURY_LOGS_RPC_ETHEREUM", "ETHEREUM_RPC_URL", "TREASURY_RPC_MONAD", "TREASURY_LOGS_RPC_MONAD", "MONAD_RPC_URL"]) delete process.env[k];
       // Three DISTINCT naming conventions, because the title's claim is "whatever it is called". A
       // mechanical rename once collapsed two of these into one line — the test still passed, and
       // proved one convention fewer than it said (caught in review of the public release).
@@ -387,8 +444,18 @@ describe("B. the environment surface, statically and at runtime", () => {
       const arb = rpcUrlFromEnv(42161);
       expect(arb).toBe("https://arb1.arbitrum.io/rpc");
       expect(arb).not.toMatch(/sibling|fund|generic/i);
+      // And on Solana, which reads its own two variables through a separate function: look-alikes of both.
+      delete process.env["TREASURY_RPC_SOLANA"];
+      delete process.env["SOLANA_RPC_URL"];
+      process.env["SIBLING_RPC_SOLANA"] = "https://sibling.example/KEY";
+      process.env["FUND_RPC_SOLANA"] = "https://fund.example/KEY";
+      process.env["TREASURY_SOLANA_RPC"] = "https://fund.example/KEY";
+      process.env["SOLANA_RPC"] = "https://generic.example/KEY";
+      const sol = solanaRpcUrlFromEnv();
+      expect(sol).toBe("https://api.mainnet-beta.solana.com");
+      expect(sol).not.toMatch(/sibling|fund|generic/i);
     } finally {
-      for (const k of ["SIBLING_RPC_BASE", "FUND_RPC_BASE", "RPC_URL", "SIBLING_RPC_ARBITRUM", "FUND_RPC_ARBITRUM"]) delete process.env[k];
+      for (const k of ["SIBLING_RPC_BASE", "FUND_RPC_BASE", "RPC_URL", "SIBLING_RPC_ARBITRUM", "FUND_RPC_ARBITRUM", "SIBLING_RPC_SOLANA", "FUND_RPC_SOLANA", "TREASURY_SOLANA_RPC", "SOLANA_RPC"]) delete process.env[k];
       Object.assign(process.env, saved);
     }
   });
@@ -491,7 +558,10 @@ describe("E. the AUDITED surface is every .ts under src/, scripts/ and tests/", 
       const { specs, opaque } = moduleReaches(f);
       for (const o of opaque) bad.push(`${rel(f)}: unanalysable module reach — ${o}`);
       for (const spec of specs) {
-        if (spec.startsWith(".")) {
+        if (spec.endsWith(".json")) {
+          const problem = jsonReachProblem(f, spec);
+          if (problem) bad.push(problem);
+        } else if (spec.startsWith(".")) {
           const target = resolveTs(f, spec);
           if (!target || !target.startsWith(pkgRoot + sep)) bad.push(`${rel(f)} → ${spec} (escapes this package)`);
         } else {

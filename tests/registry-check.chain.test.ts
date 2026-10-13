@@ -5,7 +5,9 @@
  * real, as CI does, against a LOCAL mock JSON-RPC — no network, no fund repo, no commit pin — and
  * asserts three things the prose cannot:
  *
- *   1. it reaches ONE host (the mock) and calls only chain methods: eth_blockNumber, eth_getCode, eth_call;
+ *   1. it reaches ONE host (the mock) and calls only chain methods: eth_blockNumber, eth_getCode, eth_call,
+ *      and on Solana getGenesisHash (which cluster it is), getAccountInfo and getMultipleAccounts (served from
+ *      the committed vault snapshot);
  *   2. when the chain agrees with the rows it exits 0;
  *   3. when the chain DISAGREES with one row — one byte of one symbol — it exits non-zero and names
  *      that row. That is the whole property: the chain is the authority, the file is the claim.
@@ -18,6 +20,7 @@ import { describe, it, expect, afterAll } from "vitest";
 import { createServer, type Server } from "node:http";
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
+import { readFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { loadRegistry } from "../src/registry.js";
@@ -49,9 +52,23 @@ function startMock(corrupt?: { address: string; symbol: string }, corruptDeploym
   const rows = new Map(reg.vaults.map((v) => [v.address.toLowerCase(), v]));
   // ONE host plays every chain: the path says which (`/chain/42161`), so "it reached one host" stays
   // a checkable property while each row is still served by an endpoint that answers for its chain.
-  const handle = (req: { method: string; params?: unknown[]; id: unknown }, servedChain: number) => {
+  const handle = (req: { method: string; params?: unknown[]; id: unknown }, servedChain: number | "solana") => {
     methods.add(req.method);
     const id = req.id;
+    if (servedChain === "solana") {
+      // Solana mainnet as the committed snapshot recorded it: the vault state and its reserves.
+      const account = (a: string) => {
+        const acc = SOLANA_SNAPSHOT.accounts[a];
+        perAddress.set(a, (perAddress.get(a) ?? new Set()).add(req.method));
+        return acc ? { data: [acc.data, "base64"], executable: false, lamports: 1, owner: acc.owner, rentEpoch: 0, space: Buffer.from(acc.data, "base64").length } : null;
+      };
+      const context = { slot: SOLANA_SNAPSHOT.slot };
+      // Mainnet's genesis hash: the script checks the endpoint is mainnet before reading the row.
+      if (req.method === "getGenesisHash") return { jsonrpc: "2.0", id, result: "5eykt4UsFv8P8NJdTREpY1vzqKqZKvdpKuc147dw2N9d" };
+      if (req.method === "getAccountInfo") return { jsonrpc: "2.0", id, result: { context, value: account(String(req.params?.[0])) } };
+      if (req.method === "getMultipleAccounts") return { jsonrpc: "2.0", id, result: { context, value: (req.params?.[0] as string[]).map(account) } };
+      return { jsonrpc: "2.0", id, error: { code: -32601, message: `method ${req.method} is not a chain read` } };
+    }
     if (req.method === "eth_blockNumber") return { jsonrpc: "2.0", id, result: encUint(600_000_000) };
     if (req.method === "eth_chainId") return { jsonrpc: "2.0", id, result: encUint(servedChain) };
     if (req.method === "eth_getCode") {
@@ -103,7 +120,7 @@ function startMock(corrupt?: { address: string; symbol: string }, corruptDeploym
         res.end("Too Many Requests");
         return;
       }
-      const servedChain = Number(/\/chain\/(\d+)/.exec(req.url ?? "")?.[1] ?? 8453);
+      const servedChain = (req.url ?? "").startsWith("/solana") ? ("solana" as const) : Number(/\/chain\/(\d+)/.exec(req.url ?? "")?.[1] ?? 8453);
       const out = Array.isArray(parsed) ? parsed.map((p) => handle(p, servedChain)) : handle(parsed, servedChain);
       res.writeHead(200, { "content-type": "application/json" });
       res.end(JSON.stringify(out));
@@ -125,6 +142,7 @@ function startMock(corrupt?: { address: string; symbol: string }, corruptDeploym
 }
 
 const exec = promisify(execFile);
+const SOLANA_SNAPSHOT = JSON.parse(readFileSync(new URL("./fixtures/solana/vault-snapshot.json", import.meta.url), "utf8")) as { slot: number; accounts: Record<string, { owner: string; data: string }> };
 
 /**
  * ⚠️ ASYNC on purpose. `spawnSync` blocks this process's event loop, so the in-process mock server
@@ -147,6 +165,12 @@ const run = async (rpc: string, arbitrumServes = 42161): Promise<{ status: numbe
         ARBITRUM_RPC_URL: `${rpc}/chain/${arbitrumServes}`,
         TREASURY_RPC_ROBINHOOD: `${rpc}/chain/4663`,
         ROBINHOOD_RPC_URL: `${rpc}/chain/4663`,
+        TREASURY_RPC_ETHEREUM: `${rpc}/chain/1`,
+        ETHEREUM_RPC_URL: `${rpc}/chain/1`,
+        TREASURY_RPC_MONAD: `${rpc}/chain/143`,
+        MONAD_RPC_URL: `${rpc}/chain/143`,
+        TREASURY_RPC_SOLANA: `${rpc}/solana`,
+        SOLANA_RPC_URL: `${rpc}/solana`,
         FUND_REPO: "/nonexistent",
         FUND_RPC_BASE: "not-a-url",
       },
@@ -172,7 +196,9 @@ describe("registry-check reconciles against the CHAIN and nothing else", () => {
     // would show up here even if the verdict were unchanged.
     // `eth_chainId` is in the set because the script proves each endpoint is on its chain before
     // reading any row through it.
-    expect([...mock.methods].sort()).toEqual(["eth_blockNumber", "eth_call", "eth_chainId", "eth_getCode"]);
+    expect([...mock.methods].sort()).toEqual(["eth_blockNumber", "eth_call", "eth_chainId", "eth_getCode", "getAccountInfo", "getGenesisHash", "getMultipleAccounts"]);
+    // The Solana row was read on the mock too, not on a public endpoint the test cannot see.
+    expect(mock.perAddress.get(reg.solanaVaults[0]!.address)).toEqual(new Set(["getAccountInfo"]));
     // Each row was read on ITS chain and on no other: a reconciler that read an Arbitrum row
     // through the Base endpoint would report "no contract" about a vault that exists.
     expect(new Set(reg.vaults.map((v) => v.chainId)).size, "premise: the registry spans more than one chain").toBeGreaterThan(1);

@@ -11,7 +11,8 @@
  *                         config/registry disagreement — and the schema allows a WHITELIST_GATED
  *                         default, because the pre-flight re-measures access live on every call and
  *                         refuses a non-member before anything is built.
- *   `roundTripVault`      what the deposit → redeem tiers exercise. The Base default today.
+ *   `roundTripVault`      what `scripts/roundtrip.ts` exercises by default. The Base default today. (The fork
+ *                         tier round-trips every depositable vault on each chain, from the registry.)
  *
  * Addresses live in the registry (`registry/vaults.json`, schema-validated, block-stamped) — a
  * ticker here resolves through it.
@@ -47,12 +48,20 @@ export const EARN = {
    * `robinhood`: Tempora Labs Cash Plus USDG (Test 2D) — a Morpho Vault V2 on Robinhood Chain over
    * USDG, the first vault whose asset is not USDC. Open to any account by the same measurement.
    *
+   * `ethereum`: Tempora Labs Cash Plus USDC (Test 2E) — a Morpho Vault V2 on Ethereum, open to any
+   * account by the same measurement. Gas there costs far more than on the other chains.
+   *
+   * `monad`: Tempora Labs Cash Plus USDC (Test 2F) — a Morpho Vault V2 on Monad, open to any account
+   * by the same measurement.
+   *
    * `Record<ChainKey, …>`: a chain added to `CHAIN_INFO` without a default here does not compile.
    */
   defaultVaultByChain: {
     base: "tlCashPlusUSDC2B",
     arbitrum: "tlCashPlusUSDC2C",
     robinhood: "tlCashPlusUSDG2D",
+    ethereum: "tlCashPlusUSDC2E",
+    monad: "tlCashPlusUSDC2F",
   } satisfies Record<ChainKey, VaultSymbol>,
 
   /** The round-trip target. The same vault as the default; open, so the fork tier deposits from the whale directly. */
@@ -69,6 +78,12 @@ export const EARN = {
     usdcWhale: "0xBBBBBbbBBb9cC5e90e3b3Af64bdAF62C37EEFFCb" as const,
     /** Aave V3's aArbUSDCn token on Arbitrum One — held ~1.7e13 native-USDC base units when probed 2026-10-02. Impersonated on the fork, never keyed. */
     usdcWhaleArbitrum: "0x724dc807b04555b71ed48a6896b6F41593b8C637" as const,
+    /** Morpho Blue on Ethereum — held ~1.2e14 USDC base units when probed 2026-10-11. Impersonated on the fork, never keyed. */
+    usdcWhaleEthereum: "0xBBBBBbbBBb9cC5e90e3b3Af64bdAF62C37EEFFCb" as const,
+    /** The largest USDC holder among recent transfers on Monad — ~1.3e13 base units when probed 2026-10-11. Impersonated on the fork, never keyed. */
+    usdcWhaleMonad: "0x188d586Ddcf52439676Ca21A244753fA19F9Ea8e" as const,
+    /** The largest USDG holder among recent transfers on Robinhood Chain — ~1.0e14 base units when probed 2026-10-11. Impersonated on the fork, never keyed. */
+    usdgWhaleRobinhood: "0x94bAB9693Ba2f6358507eFfcbd372b0660AFfF9d" as const,
     /** USDC the fork round trip deposits, and what it seeds a discovered depositor with beforehand. */
     forkDepositUsdc: "100",
     forkSeedUsdc: "1000",

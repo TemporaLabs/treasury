@@ -4,6 +4,138 @@ All notable changes to Agent Treasury are recorded here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versions follow [SemVer](https://semver.org/).
 Pre-1.0, minor versions may change tool names, schemas and behaviour.
 
+## [v0.1.3] - 2026-10-13
+
+### Added — Ethereum and Monad
+- **Two more chains: Ethereum and Monad**, each with its own default vault, so `earn` and `connect`
+  now work on Ethereum and Monad too. `--chain ethereum` uses Tempora Labs Cash Plus USDC (Test 2E) and
+  `--chain monad` uses Tempora Labs Cash Plus USDC (Test 2F); both are Morpho Vault V2 vaults over
+  USDC, open to any account, with 18-decimal shares. Base stays the default chain.
+- Each chain reads only its own variables: `TREASURY_RPC_ETHEREUM` (then `ETHEREUM_RPC_URL`, then
+  `https://ethereum.reth.rs/rpc`) and `TREASURY_LOGS_RPC_ETHEREUM`; `TREASURY_RPC_MONAD` (then
+  `MONAD_RPC_URL`, then `https://rpc.monad.xyz`) and `TREASURY_LOGS_RPC_MONAD`.
+- **On Monad, set `TREASURY_LOGS_RPC_MONAD` for position history.** Monad's public endpoint serves
+  `eth_getLogs` over at most 100 blocks per request, and Monad makes about three blocks a second, so
+  `earn balance` through it covers under an hour and reports the scan as cut short (basis and yield
+  `unknown`). Measured 2026-10-11.
+- The earn skill lists the new chains when it asks which chain, and **tells the operator that
+  Ethereum gas is far higher** when they pick Ethereum for a small amount.
+- Explorer links: Etherscan on Ethereum, MonadScan on Monad. The connect page accepts both chains.
+- `earn balance` reads the Ethereum public endpoint's range refusal ("query exceeds max block range
+  100000") as a 100,000-block window and walks the history in chunks.
+
+### Added — Solana
+- **A Kamino vault on Solana: Tempora Labs Cash Plus USDC (Test 2G), `--chain solana`.** The earn commands
+  read, quote and prepare for it; `treasury connect wallet --chain solana` connects a Solana wallet (Phantom,
+  Solflare, Backpack, or a Privy wallet from an email or social login), and `connect deposit` / `withdraw`
+  confirm through it, with the same acknowledgement step. A withdrawal by amount is acknowledged as that amount, and
+  the shares worth it are worked out when the operator confirms, so the vault earning in between does not void it.
+  Base stays the default chain.
+- On Solana a prepared deposit or withdrawal is ONE unsigned transaction (`transaction.wire`, base64), simulated
+  before it is returned, that lands only before `transaction.expiresAfterBlockHeight` (about a minute). The
+  confirm page builds it when the operator presses Confirm, and a gate admits it only if every instruction is
+  a compute-unit limit, the account's own token-account creation, or this vault's deposit or withdrawal for the
+  connected account.
+- A confirmed Solana transaction is checked against what the page built: it must name a blockhash the page
+  was handed and be paid for by the connected account, or it is `mismatch`. Its token balances then decide:
+  a deposit takes the acknowledged amount, or less by under one share's worth (the program mints whole shares
+  and takes only what backs them), and a withdrawal burns the acknowledged shares, less at most one share unit
+  of rounding per withdraw instruction, the same allowance the simulation before sending makes.
+- Quotes and positions are read from simulated transactions. Each withdraw instruction keeps up to 0.001 USDC in
+  the vault — Kamino's global withdrawal penalty for every vault on its program, which Kamino can change; a
+  withdrawal split across reserves pays it per part — and one worth 0.001 USDC or less is refused; `receives`
+  is exact and net of it. A withdrawal whose simulation burns fewer shares than asked for, beyond one share unit of rounding per
+  withdraw instruction, is refused, in the quote,
+  the prepared transaction and the confirm flow: Kamino pays what a reserve can and leaves the rest of the shares,
+  rather than failing, when one part asks for more than its reserve can pay. Kamino's program can require a co-signer on every deposit and withdrawal; the client
+  refuses to build while one is set (none is today). Entry basis and yield are not read on Solana.
+- `TREASURY_RPC_SOLANA` (then `SOLANA_RPC_URL`, then `https://api.mainnet-beta.solana.com`). A new runtime
+  dependency, `@solana/kit`. The instruction builders and account decoders are pinned byte for byte to
+  Kamino's own SDK by committed fixtures (`vendor/kamino/`); that SDK is not a dependency.
+- `registry:check` reconciles the Solana row against the vault's own state.
+- The Solana vault is reached through the CLI. The library's `listVaults()` and builders cover the EVM vaults
+  only, and `loadRegistry()` returns the Solana row under `solanaVaults`.
+- Pre-flight on Solana: an account with no SOL for the fee is `NEEDS_FUNDS` with `canDeposit: false`, because
+  the simulation stopped before the vault and says nothing about whether it takes the deposit. A deposit over
+  the vault's cap is not `canDeposit` either. A vault that requires a co-signer is `REVERTED_OTHER` with the
+  whole reason. A withdrawal split across reserves gives the rest to the last reserve in order.
+- A Solana call refused with `HTTP error (429)` or a 5xx on the public endpoint carries the `setup_required`
+  hint naming `TREASURY_RPC_SOLANA`, and `npm run registry:check` reports a Solana endpoint on another cluster
+  as not checked.
+
+### Changed — the registry and the version are inside the bundle
+- The vault registry and the package version are now compiled into the CLI bundle and the library build
+  instead of being read from files beside them. `treasury --version` reports the version the bundle was built
+  from, and `listVaults()` returns the shipped registry even when the library is re-bundled into another
+  application, where it used to look for `registry/vaults.json` beside the consumer's own bundle and read
+  whatever it found there. A registry change now also changes `dist/treasury.mjs`.
+- A bundler that builds on this package must accept JSON import attributes (`with { type: "json" }`);
+  esbuild, webpack 5 and Rollup with its JSON plugin do.
+- The CLI bundle carries only the `version` field of `package.json`, so editing anything else there (a
+  dev-dependency bump) leaves `dist/treasury.mjs` unchanged.
+- Importing the library unbundled on Node 22.0 to 22.11 prints Node's `ExperimentalWarning` for JSON modules;
+  it works, and Node 22.12 and later print nothing. The CLI is unaffected.
+
+### Added — several vaults in one request
+- **The Earn skill says how to spread a deposit across vaults**, on one chain or several ("1 USDC on Base and
+  3 on Solana", "2 USDC on every chain"): settle the list from the operator's words, check every leg first,
+  show one plan with what cannot go ahead and why, then run one complete deposit per vault, one at a time,
+  stopping to ask if a leg fails. `llms.txt` carries the same text.
+- **Positions and withdrawals across vaults, the same way:** "what do I hold?" is one table over every vault, and
+  "withdraw everything" is one plan with what each vault can pay now, then one withdrawal per vault.
+- **When the operator asks what Treasury can do,** the skill says how to answer: the chains and vaults from the live
+  list, quote, deposit, check and withdraw in one vault or several, money moving only from the operator's own wallet,
+  and the two ways in (an agent, or the browser app at app.temporalabs.com), in at most five lines. The skill's
+  description now names that question, so the skill is loaded for it.
+
+### Added — a guide for agents without the plugin
+- **`llms.txt`**, in the npm package and at `https://raw.githubusercontent.com/TemporaLabs/treasury/v0.1.3/llms.txt` (each
+  release's own copy, at its tag; the URL and the `npx` line in the guide follow the package version): the Earn skill's
+  rules and every command with its flags, for an agent that runs `treasury` without the plugin. It is generated from the skill and
+  the command descriptions, and CI fails when the committed file differs from what they produce.
+- **`treasury --help` and `treasury <skill> --help` carry a `guide` field** that tells the agent to read it first, with the
+  file's path when it sits beside the CLI and the URL. Measured on 0.1.2: with no pointer in `--help` an agent read the guide
+  0 times in 9; with one, 9 times in 9, and showed all of the first-deposit terms instead of about a third.
+  The plugin's copy of the CLI carries no `guide`: its Earn skill is the same text and is already loaded.
+
+### Changed — the connect page falls back to another port
+- `treasury connect` serves its page on the first free port of 53682 to 53686, in that order, instead of
+  53682 only, so another program holding 53682 no longer stops sign-in or confirmation. Each of these is an
+  allowed origin of the Privy app. 53682 stays first, so an operator who signed in before keeps the same
+  origin; a page that falls back is a different site to the browser, and an email or social login may be
+  asked for again there.
+- One page at a time is now kept by a lock file next to the session (`connect-page.lock`), not by the
+  port: a second sign-in or confirmation is refused while one is open, naming the port it is on. A lock
+  left by a process that has gone, or by a page that has expired, is replaced.
+- `TREASURY_CONNECT_PORT` still sets one port, with no fallback.
+
+### Documentation
+- The README names the two ways to use the vaults: in a browser at app.temporalabs.com, or with an agent
+  through OAT.
+- The earn skill now says the amount is the operator's to decide, in the same words as the chain: ask,
+  do not pick. Its example amounts are placeholders (`<amount>`), in the skill, `llms.txt` and the tools
+  reference. When a vault cannot pay a whole withdrawal now, the skill says what can come out and asks the
+  operator what to do, instead of withdrawing or quoting a smaller amount on its own.
+
+### Fixed
+- **Windows with Node 24: the health check no longer exits `3221226505` (`0xC0000409`) after a
+  correct answer** (#122). Node aborted on an internal assertion about a closing handle
+  (`!(handle->flags & UV_HANDLE_CLOSING)`, `src\win\async.c`) when the CLI called `process.exit` right
+  after the health check's request. On Windows the CLI now sets the exit code and lets Node end on its
+  own, with a two-second backstop for a request that is still pending; macOS and Linux exit exactly as
+  before. Measured on Windows, a command now takes about 0.1 s longer to end.
+- `earn status --account` on an EVM chain echoes the account checksummed.
+- **The earn skill no longer loads to analyse what a vault holds or why its share price moved**
+  (#113). Its description now names that as out of scope, along with bridging, staking and vaults
+  from other providers.
+- The CLI's withdrawal refusals (a Fusion vault short of liquid funds, a Morpho V2 revert, a Solana partial
+  withdrawal) now tell the agent to ask the operator about a smaller amount, as the skill does, instead
+  of suggesting one.
+
+### Dependencies
+- viem 2.57.3, inlined in the CLI bundle. Treasury does not call `waitForTransactionReceipt`, the function
+  this release of viem fixes.
+
 ## [v0.1.2] - 2026-10-05
 
 ### Changed — headless: a command line replaces the MCP server

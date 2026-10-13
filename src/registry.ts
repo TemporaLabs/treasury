@@ -1,18 +1,14 @@
-import { readFileSync, realpathSync } from "node:fs";
-import { fileURLToPath, pathToFileURL } from "node:url";
-import { registrySchema, erc4626Chassis, type Registry, type VaultEntry } from "./registry-schema.js";
+import { registrySchema, erc4626Chassis, type Registry, type SolanaVaultEntry, type VaultEntry } from "./registry-schema.js";
+import registryJson from "../registry/vaults.json" with { type: "json" };
 import { EARN } from "./config/earn.js";
-import { CHAIN_INFO, chainIdForKey, supportedChainIds, type ChainKey, type SupportedChainId } from "./client.js";
-
-// From this file's real path, not a symlink's: see PACKAGE_JSON_URL in version.ts.
-const REGISTRY_URL = new URL("../registry/vaults.json", pathToFileURL(realpathSync(fileURLToPath(import.meta.url))));
+import { CHAIN_INFO, chainIdForKey, SOLANA_INFO, supportedChainIds, type ChainKey, type SupportedChainId } from "./client.js";
 
 let cached: Registry | undefined;
 
 /** Parses and validates the shipped registry. Throws on any schema violation — a registry that does not parse is not a registry. */
 export function loadRegistry(): Registry {
   if (cached) return cached;
-  const raw = JSON.parse(readFileSync(fileURLToPath(REGISTRY_URL), "utf8")) as unknown;
+  const raw: unknown = registryJson;
   const parsed = registrySchema.parse(raw);
   // The schema holds one default per chain THAT HAS A VAULT, so it cannot see a registry with no
   // vault on the default chain at all — and then the discovery call itself is what fails, with an
@@ -43,12 +39,59 @@ export function listVaults(): VaultEntry[] {
 export function getVault(symbol: string): VaultEntry {
   const v = loadRegistry().vaults.find((x) => x.symbol === symbol);
   if (!v) {
-    const known = loadRegistry()
-      .vaults.map((x) => x.symbol)
-      .join(", ");
+    if (loadRegistry().solanaVaults.some((x) => x.symbol === symbol)) {
+      throw new Error(`vault "${symbol}" is on solana, which this command does not handle`);
+    }
+    const known = [...loadRegistry().vaults, ...loadRegistry().solanaVaults].map((x) => x.symbol).join(", ");
     throw new Error(`unknown vault "${symbol}"; known: ${known}`);
   }
   return v;
+}
+
+/** The vaults on Solana (`solanaVaults` in the registry). */
+export function listSolanaVaults(): SolanaVaultEntry[] {
+  return loadRegistry().solanaVaults;
+}
+
+/** Every chain a caller can name, EVM and Solana, the default chain first: the list a refusal names. */
+export function offeredChainKeys(): string[] {
+  return [...offeredChains().map((c) => c.key as string), ...(listSolanaVaults().length > 0 ? [SOLANA_INFO.key] : [])];
+}
+
+/** One vault on any chain: an EVM row or a Solana row, which every caller must tell apart before using it. */
+export type ResolvedVault = { family: "evm"; vault: VaultEntry } | { family: "solana"; vault: SolanaVaultEntry };
+
+/**
+ * `resolveVault` across chain families: `chain: "solana"`, or a `vault` that is on Solana, resolves to the
+ * Solana row; anything else is `resolveVault`, unchanged. The same refusals hold: a vault and a chain that
+ * disagree are refused, and the error says which chain the vault is on.
+ */
+export function resolveAnyVault(symbol?: string, chain?: string): ResolvedVault {
+  const sol = symbol ? listSolanaVaults().find((x) => x.symbol === symbol) : undefined;
+  if (chain === SOLANA_INFO.key) {
+    const vaults = listSolanaVaults();
+    if (vaults.length === 0) throw new Error(`unknown chain "${chain}"; chains with a vault: ${offeredChainKeys().join(", ")}`);
+    if (!symbol) return { family: "solana", vault: vaults.find((x) => x.isDefault)! };
+    if (sol) return { family: "solana", vault: sol };
+    const evm = getVault(symbol);
+    throw new Error(
+      `vault "${symbol}" is on ${CHAIN_INFO[evm.chainId].key}, not solana. Name one or the other: drop \`chain\` to use ${symbol} on ${CHAIN_INFO[evm.chainId].key}, or pick a vault on solana (${vaults.map((x) => x.symbol).join(", ")}).`,
+    );
+  }
+  if (sol) {
+    if (chain) {
+      throw new Error(
+        `vault "${symbol}" is on solana, not ${chain}. Name one or the other: drop \`chain\` to use ${symbol} on solana, or pick a vault on ${chain}.`,
+      );
+    }
+    return { family: "solana", vault: sol };
+  }
+  return { family: "evm", vault: resolveVault(symbol, chain) };
+}
+
+/** The Solana vaults any account can put money into: measured open. */
+export function depositableSolanaVaults(): SolanaVaultEntry[] {
+  return listSolanaVaults().filter((v) => v.depositOpen.open);
 }
 
 /** The chain used when a caller names neither a chain nor a vault: `EARN.defaultChain`. */
@@ -106,10 +149,11 @@ export function resolveVault(symbol?: string, chain?: string): VaultEntry {
   // An EMPTY string is an omitted argument, for `chain` exactly as for `vault` (`!symbol` below):
   // a host that sends "" for every optional it did not fill must get the default, not a refusal.
   if (chain) {
+    if (chain === SOLANA_INFO.key) throw new Error(`chain "${chain}" has no ERC-4626 vault; this resolves the EVM vaults only, and the Solana vault is reached through the CLI (\`treasury earn … --chain solana\`)`);
     chainId = chainIdForKey(chain);
     const offered = offeredChains();
     if (chainId === undefined || !offered.some((c) => c.chainId === chainId)) {
-      throw new Error(`unknown chain "${chain}"; chains with a vault: ${offered.map((c) => c.key).join(", ")}`);
+      throw new Error(`unknown chain "${chain}"; chains with a vault: ${offeredChainKeys().join(", ")}`);
     }
   }
   if (!symbol) return defaultVault(chainId);

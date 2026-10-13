@@ -3,11 +3,12 @@
  * An agent skill IS a distribution surface, so `earn_terms` returns these verbatim and the
  * skill instructs the agent to show them and get an explicit acknowledgement before building a
  * first deposit. They are written for the vaults this registry actually offers — Tempora Labs test
- * vaults on ERC-4626 chassis, on Base, Arbitrum One and Robinhood Chain — and say what is true of
- * those, not of a fund that has not launched. Change them when the offering changes, and nowhere else.
+ * vaults on ERC-4626 chassis on Base, Arbitrum One, Robinhood Chain, Ethereum and Monad, and a Kamino
+ * vault on Solana — and say what is true of those, not of a fund that has not launched. Change them when the offering changes,
+ * and nowhere else.
  */
 export const DISCLOSURES = {
-  source: "Agent Treasury — pre-deposit disclosures, 2026-09-15 (wording revised 2026-10-04: Tempora Labs named in full)",
+  source: "Agent Treasury — pre-deposit disclosures, 2026-09-15 (wording revised 2026-10-04: Tempora Labs named in full; 2026-10-12: withdrawals subject to liquidity, and the Solana co-signer)",
   presentBefore: "the depositor's first deposit, on every distribution surface",
   items: [
     "EVERY VAULT THIS CLIENT OFFERS TODAY IS A TEST VAULT — unproven, and named as such on-chain. They exist to exercise the product, not to hold savings. Deposit only an amount you are fully prepared to lose entirely, and do not move significant funds into one.",
@@ -16,7 +17,7 @@ export const DISCLOSURES = {
     "The vault holds positions in third-party protocols, each of which carries smart-contract, custody, and mechanism risk that Tempora Labs does not control.",
     "Any yield figure is a measurement over a past window, not a promise. Historical performance is not indicative of future results.",
     "A withdrawal is served from the vault's liquid balance and then by unwinding its positions. In stressed conditions part of a position may not be withdrawable immediately; earn_balance reports what is exitable now, simulated at the current block.",
-    "Deposits into a whitelist-gated vault are accepted only from accounts the fund has admitted. Withdrawals are public: an account that holds shares can always leave.",
+    "Deposits into a whitelist-gated vault are accepted only from accounts the fund has admitted. Withdrawals are not gated: an account that holds shares can leave, subject to the vault's liquidity. On Solana, Kamino's program can require a co-signer on every withdrawal, which would stop exits until it co-signs; none is required today.",
     "The vault's current holdings, weights and fees are on-chain and publicly readable at the vault's address.",
     "Each default vault, and the demo vault, is a destination curated by Tempora Labs. Tempora Labs can set fees on it as curator (a management fee and a performance fee, both readable on-chain; check them before depositing). This client offers it because it is a Tempora Labs vault, not because it is the best-yielding vault available.",
   ],

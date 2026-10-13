@@ -7,14 +7,14 @@ front of an agent.
 ## Claude Code — the plugin
 
 ```bash
-claude plugin marketplace add TemporaLabs/treasury@v0.1.2
+claude plugin marketplace add TemporaLabs/treasury@v0.1.3
 claude plugin install treasury@treasury
 ```
 
 `@<ref>` pins the marketplace to a tag or a branch, and is recorded with the marketplace entry, so
 `claude plugin marketplace update` refreshes *that* ref rather than moving the install onto another
 branch; `#<ref>` is equivalent. Prefer a tag — it is immutable. Before a release is tagged, pin its
-release branch instead (`TemporaLabs/treasury@release/v0.1.2`); dropping the suffix entirely tracks
+release branch instead (`TemporaLabs/treasury@release/v0.1.3`); dropping the suffix entirely tracks
 this repository's default branch.
 
 The plugin is the [`plugin/`](../plugin/) folder of this repository: its manifests, the `earn` skill,
@@ -25,6 +25,11 @@ of the bundled CLI with a bare `node` — `node "${CLAUDE_PLUGIN_ROOT}/dist/trea
 per command. `plugin/` carries a version-only `package.json` and no lockfile, so a marketplace install
 copies files and runs no dependency install. **Node 22 or later is required and must be on `PATH`** —
 without it every command fails with the shell's own `node: command not found`.
+
+**Windows with Node 24, before v0.1.3:** the health check (`earn status`) prints its answer and then
+exits with `3221226505` (`0xC0000409`), so a caller that trusts the exit code reads success as a
+failure (#122). Measured on Node 24.0.0 and 24.19.0; Node 24.21.0, Node 22, macOS and Linux did not
+crash. v0.1.3 fixes it. On v0.1.2 or earlier, use Node 22 on Windows.
 
 **Codex is not supported as a plugin host in this release.** The skill names the CLI through
 `${CLAUDE_PLUGIN_ROOT}`, which Claude Code substitutes and Codex did not (measured on Codex 0.155.1, for
@@ -41,7 +46,7 @@ marketplace also uninstalls the plugin, so upgrade in three steps:
 
 ```bash
 claude plugin marketplace remove treasury
-claude plugin marketplace add TemporaLabs/treasury@v0.1.2
+claude plugin marketplace add TemporaLabs/treasury@v0.1.3
 claude plugin install treasury@treasury
 ```
 
@@ -63,6 +68,10 @@ export TREASURY_LOGS_RPC_BASE=https://...     # optional: a wide-window provider
 export TREASURY_RPC_ARBITRUM=https://...      # a keyed Arbitrum One RPC, if you will use a vault on Arbitrum
 export TREASURY_LOGS_RPC_ARBITRUM=https://... # optional, the same for Arbitrum
 export TREASURY_RPC_ROBINHOOD=https://...     # a keyed Robinhood Chain RPC, if you will use a vault there
+export TREASURY_RPC_ETHEREUM=https://...      # a keyed Ethereum RPC, if you will use a vault there
+export TREASURY_RPC_MONAD=https://...         # a keyed Monad RPC, if you will use a vault there
+export TREASURY_LOGS_RPC_MONAD=https://...    # on Monad, needed for earn_balance's history: the public RPC serves 100 blocks per request
+export TREASURY_RPC_SOLANA=https://...        # a keyed Solana RPC, if you will use the vault on Solana
 ```
 
 Each chain reads only its own variable. Unset, a chain falls back to its public RPC, which rate-limits
@@ -83,7 +92,7 @@ version — a published version is immutable, and `--save-exact` keeps a later `
 to another one:
 
 ```bash
-npm install --save-exact @temporalabs/treasury@0.1.2
+npm install --save-exact @temporalabs/treasury@0.1.3
 npx --no-install treasury earn --help     # every command and flag, as JSON
 npx --no-install treasury earn vaults     # or: node <project>/node_modules/@temporalabs/treasury/dist/treasury.mjs earn vaults
 ```
@@ -109,7 +118,7 @@ MCP tools; the `earn` skill reaches the same operations through the CLI.
 
 ## Connecting a wallet (`treasury connect`)
 
-`treasury connect wallet` opens a one-time URL on `http://localhost:53682` in the browser on the same machine: one
+`treasury connect wallet` opens a one-time URL on `http://localhost:53682` (or the next free port up to 53686) in the browser on the same machine: one
 Connect button, then Privy's window. Its first screen lists the browser wallets installed there
 (MetaMask, Rabby, or any wallet that announces itself to the page), then email and Google, four
 entries in all: with three or more wallets installed, Google moves under "More options", and with
@@ -119,18 +128,24 @@ Wallet entry (the Coinbase SDK, for its mobile app or a smart wallet) is unteste
 browser extension, which, like any installed wallet, is listed on the first screen. Signing in costs
 nothing. After that, `treasury connect deposit` and `treasury connect withdraw` first return an
 acknowledgement for the operator to answer, and on their yes open a confirm page for each transaction. See [`tools.md`](tools.md#the-connect-commands--treasury-connect-command).
+`treasury connect wallet --chain solana` connects a Solana wallet instead (Phantom, Solflare, Backpack, or a
+Privy wallet from an email or social login), for the vault on Solana; the two connections are kept apart.
 
 - It needs a browser on the machine running the agent. Over SSH, on Linux with no display, or with
   `TREASURY_CONNECT_NO_OPEN` set, the command prints the URL instead of opening it; it prints the URL
   on stderr either way.
-- Port 53682 must be free while a page is open; one sign-in or confirmation runs at a time.
+- The page uses the first free port of 53682 to 53686, so another program on 53682 does not stop it. One
+  sign-in or confirmation runs at a time: a second is refused while a page is open, whatever port it is on.
+  A page that falls back to another port is a different site to the browser, so an email or social login
+  may be asked for again there.
 - Phone wallets are not offered in this release: the page lists wallets installed in the browser, and
   an email or social login gives a wallet with no extension at all.
 
 ## As a library
 
-`@temporalabs/treasury` — the same package, `npm install @temporalabs/treasury@0.1.2` — also exports
-the builders, the pre-flight, the position scan and the registry as plain functions. ⚠️ The library returns bare `UnsignedCall[]` arrays; the
+`@temporalabs/treasury` — the same package, `npm install @temporalabs/treasury@0.1.3` — also exports
+the builders, the pre-flight, the position scan and the registry as plain functions, for the EVM chains
+only: the Solana vault's reads and builders are not exported, so reach it through the CLI. ⚠️ The library returns bare `UnsignedCall[]` arrays; the
 `{ requires_signature: true, status: "unsigned", calls }` envelope is a property of the command
 boundary, not of the functions. If you consume the library directly, you are the boundary.
 

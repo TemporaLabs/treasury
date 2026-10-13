@@ -98,7 +98,8 @@ A vault on a chain Treasury does not support yet needs that chain added first:
 
 ## Development
 
-Requires Node.js 22 or later. Fork tests also need [Foundry](https://getfoundry.sh) for `anvil`.
+Requires Node.js 22 or later. Fork tests also need [Foundry](https://getfoundry.sh) for `anvil`, and
+[Surfpool](https://surfpool.run) on `PATH` for Solana's.
 
 ```bash
 npm ci
@@ -107,11 +108,13 @@ npm run typecheck
 npm test                          # unit tests
 TREASURY_RPC_BASE=https://... npm test          # adds live read-only checks against Base
 TREASURY_RPC_BASE=https://... npm run test:fork # anvil fork round trips with impersonated accounts
+TREASURY_RPC_SOLANA=https://... npm run test:fork # adds a Surfpool fork round trip on Solana, signed by a key made for the run
 ```
 
 Each chain's live and fork tiers run when that chain's RPC variable is set. For Arbitrum One, add
-`TREASURY_RPC_ARBITRUM=https://...` to the same commands, and `TREASURY_RPC_ROBINHOOD=https://...` for
-Robinhood Chain; a chain with no variable set is skipped
+`TREASURY_RPC_ARBITRUM=https://...` to the same commands, `TREASURY_RPC_ROBINHOOD=https://...` for
+Robinhood Chain, `TREASURY_RPC_ETHEREUM=https://...` for Ethereum, `TREASURY_RPC_MONAD=https://...` for Monad and `TREASURY_RPC_SOLANA=https://...` for Solana
+(the fork tier covers every chain: anvil for the EVM chains, Surfpool for Solana); a chain with no variable set is skipped
 and shown as skipped.
 
 - **Use `npm ci`, not `npm install`.** It fails on a stale lockfile, which is what CI does.

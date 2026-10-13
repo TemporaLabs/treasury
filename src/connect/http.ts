@@ -10,8 +10,11 @@
 import http from "node:http";
 import { randomBytes, timingSafeEqual } from "node:crypto";
 import { getAddress, isAddress } from "viem";
+import { claimPageLock } from "./session.js";
 
 const MAX_BODY_BYTES = 16 * 1024;
+/** How long past the page's own time limit the lock stays valid, covering the cancel grace and the close. */
+const LOCK_MARGIN_MS = 60_000;
 /** How long a cancel waits for a result already being checked, so it can carry that verdict. */
 const CANCEL_GRACE_MS = 30_000;
 
@@ -31,6 +34,11 @@ export interface Flow<T> {
   assets: Record<string, { type: string; body: string | Buffer }>;
   info: () => Record<string, unknown>;
   challenge?: (address: string, origin: string, nonce: string) => string;
+  /**
+   * Reads the address a sign-in challenge is for, or `undefined` for one that is not an address. An EVM
+   * address (checksummed) unless the flow says otherwise; the Solana sign-in takes a base58 one.
+   */
+  challengeAddress?: (a: unknown) => string | undefined;
   accept: (body: Record<string, unknown>, ctx: { nonce: string; origin: string; message?: string; challengedAddress?: string }) => Promise<Accepted<T>>;
   /** Called with the page's body when it reports a rejection, before the flow ends. */
   onReject?: (body: Record<string, unknown>) => void;
@@ -38,7 +46,8 @@ export interface Flow<T> {
   timeoutReason?: () => string;
   /** Overrides the cancel grace period (tests). */
   cancelGraceMs?: number;
-  port: number;
+  /** Tried in order; the page takes the first one free. Each must be an origin the Privy app allows. */
+  ports: readonly number[];
 }
 
 export interface Handle<T> {
@@ -55,8 +64,9 @@ const same = (a: string, b: string) => {
 
 export async function serveOnce<T>(flow: Flow<T>): Promise<Handle<T>> {
   const secret = randomBytes(24).toString("hex");
-  // Privy matches allowed origins by exact string, and `localhost` is the host it documents.
-  const origin = `http://localhost:${flow.port}`;
+  // Privy matches allowed origins by exact string, and `localhost` is the host it documents. Set to
+  // the port being tried; a request can only arrive on the port that was bound.
+  let origin = "";
   let settled = false;
   let busy = false;
   /** A cancel or timeout that arrived while a result was being checked; applied once the check ends. */
@@ -136,8 +146,8 @@ export async function serveOnce<T>(flow: Flow<T>): Promise<Handle<T>> {
           if (url.pathname === "/challenge") {
             if (!flow.challenge) return json(res, 404, { ok: false, reason: "not found" });
             const a = body["address"];
-            if (typeof a !== "string" || !isAddress(a)) return json(res, 400, { ok: false, reason: "not an address" });
-            const address = getAddress(a);
+            const address = flow.challengeAddress ? flow.challengeAddress(a) : typeof a === "string" && isAddress(a) ? getAddress(a) : undefined;
+            if (address === undefined) return json(res, 400, { ok: false, reason: "not an address" });
             const message = flow.challenge(address, origin, secret);
             issued = { address, message };
             return json(res, 200, { ok: true, message });
@@ -173,7 +183,7 @@ export async function serveOnce<T>(flow: Flow<T>): Promise<Handle<T>> {
   };
   // `localhost` can resolve to either loopback address, so both are held: a browser that tries
   // `::1` first must reach this server, never another process waiting on that address.
-  const servers = [http.createServer(onRequest), http.createServer(onRequest)] as const;
+  let servers: http.Server[] = [];
   const closeAll = () => {
     for (const s of servers) {
       s.close();
@@ -184,6 +194,7 @@ export async function serveOnce<T>(flow: Flow<T>): Promise<Handle<T>> {
   const finish = (r: Settled<T>) => {
     if (settled) return;
     settled = true;
+    lock.release();
     resolveDone(r);
     // A short grace period lets the page receive its last answer before the socket closes.
     setTimeout(closeAll, 1500).unref();
@@ -200,23 +211,45 @@ export async function serveOnce<T>(flow: Flow<T>): Promise<Handle<T>> {
     setTimeout(() => finish(r), flow.cancelGraceMs ?? CANCEL_GRACE_MS).unref();
   };
 
-  const listen = (server: http.Server, host: string, optional: boolean) =>
+  const listen = (server: http.Server, port: number, host: string, optional: boolean) =>
     new Promise<void>((resolve, reject) => {
       server.once("error", (e: NodeJS.ErrnoException) => {
         if (e.code === "EADDRINUSE") {
-          return reject(new Error(`port ${flow.port} is in use on ${host} — another sign-in or confirmation page is probably still open; finish or close it, then retry`));
+          return reject(Object.assign(new Error(`port ${port} is in use on ${host} by another program; close it, then retry`), { inUse: true }));
         }
         // A machine with IPv6 switched off has no `::1` for anyone to wait on.
         if (optional && (e.code === "EADDRNOTAVAIL" || e.code === "EAFNOSUPPORT")) return resolve();
         reject(e);
       });
-      server.listen({ port: flow.port, host, ipv6Only: host === "::1" }, () => resolve());
+      server.listen({ port, host, ipv6Only: host === "::1" }, () => resolve());
     });
+  // Taken before any port is tried: a page this machine already has open is reported as that, and
+  // never answered by opening a second one on the next port.
+  const lock = claimPageLock(flow.ttlMs + LOCK_MARGIN_MS);
   try {
-    await listen(servers[0], "127.0.0.1", false);
-    await listen(servers[1], "::1", true);
+    let busy: Error | undefined;
+    let bound = false;
+    for (const port of flow.ports) {
+      origin = `http://localhost:${port}`;
+      servers = [http.createServer(onRequest), http.createServer(onRequest)];
+      try {
+        await listen(servers[0]!, port, "127.0.0.1", false);
+        await listen(servers[1]!, port, "::1", true);
+        lock.setPort(port);
+        bound = true;
+        break;
+      } catch (e) {
+        closeAll();
+        if (!(e as { inUse?: boolean }).inUse) throw e;
+        busy = e as Error;
+      }
+    }
+    if (!bound) {
+      if (flow.ports.length === 1 && busy) throw busy;
+      throw new Error(`ports ${flow.ports.join(", ")} are all in use by other programs; close one of them, then retry`);
+    }
   } catch (e) {
-    closeAll();
+    lock.release();
     throw e;
   }
   const timer = setTimeout(

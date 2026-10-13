@@ -1,0 +1,242 @@
+{
+  "_comment": [
+    "Kamino's own SDK (version in PINNED) building a depositor's instructions for the vault in the snapshot, for a synthetic user (bytes [201]*32)."
+  ],
+  "user": "EahQmXc3rwhY3CH1g3ZgUx8L4vHTNmzpK1xtiQ1RAxq6",
+  "vault": "8qV54zrW2piQgBbVaUUtGajf4KuVDKLUDquHv9VZBfS7",
+  "deposit": {
+    "maxAmount": "1234567",
+    "ix": {
+      "programAddress": "KvauGMspG5k6rtzrqqn7WNn3oZdyKqLKwK2XWQ8FLjd",
+      "accounts": [
+        {
+          "address": "EahQmXc3rwhY3CH1g3ZgUx8L4vHTNmzpK1xtiQ1RAxq6",
+          "role": 3
+        },
+        {
+          "address": "8qV54zrW2piQgBbVaUUtGajf4KuVDKLUDquHv9VZBfS7",
+          "role": 1
+        },
+        {
+          "address": "8wkjVMcLQt9Ud2jhjougp1kJPxX8tFxT5cJH1RUxoMaQ",
+          "role": 1
+        },
+        {
+          "address": "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v",
+          "role": 0
+        },
+        {
+          "address": "9fo4ie6z2Kdorniau9farJa2x6hRzwip22tKbeNVqPQV",
+          "role": 0
+        },
+        {
+          "address": "pxUHrn6sFsnZiLToD9hQa5p6vXRFx7h8dCjZr7LXp7Z",
+          "role": 1
+        },
+        {
+          "address": "AQBLZAkwwSgHd9ruKE2GCsykxiUgtdruLcMuceSJ7gPM",
+          "role": 1
+        },
+        {
+          "address": "D4Zx4ju4v3uCSBBs5ZQV74LGKqw3YjFyHbqCMghsfsEQ",
+          "role": 1
+        },
+        {
+          "address": "KLend2g3cP87fffoy8q1mQqGKjrxjC8boSyAYavgmjD",
+          "role": 0
+        },
+        {
+          "address": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA",
+          "role": 0
+        },
+        {
+          "address": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA",
+          "role": 0
+        },
+        {
+          "address": "24tHwQyJJ9akVXxnvkekGfAoeUJXXS7mE6kQNioNySsK",
+          "role": 0
+        },
+        {
+          "address": "KvauGMspG5k6rtzrqqn7WNn3oZdyKqLKwK2XWQ8FLjd",
+          "role": 0
+        },
+        {
+          "address": "D6q6wuQSrifJKZYpR1M8R4YawnLDtDsMmWM1NbBmgJ59",
+          "role": 1
+        },
+        {
+          "address": "AYL4LMc4ZCVyq3Z7XPJGWDM4H9PiWjqXAAuuHBEGVR2Z",
+          "role": 1
+        },
+        {
+          "address": "7u3HeHxYDLhnCoErrtycNokbQYbWGzLs6JSDqGAv5PfF",
+          "role": 0
+        },
+        {
+          "address": "47tfyEG9SsdEnUm9cw5kY9BXngQGqu3LBoop9j5uTAv8",
+          "role": 0
+        }
+      ],
+      "data": "f223c68952e1f2b687d6120000000000"
+    }
+  },
+  "withdraw": {
+    "sharesAmount": "7654321",
+    "reserve": "D6q6wuQSrifJKZYpR1M8R4YawnLDtDsMmWM1NbBmgJ59",
+    "ix": {
+      "programAddress": "KvauGMspG5k6rtzrqqn7WNn3oZdyKqLKwK2XWQ8FLjd",
+      "accounts": [
+        {
+          "address": "EahQmXc3rwhY3CH1g3ZgUx8L4vHTNmzpK1xtiQ1RAxq6",
+          "role": 2
+        },
+        {
+          "address": "8qV54zrW2piQgBbVaUUtGajf4KuVDKLUDquHv9VZBfS7",
+          "role": 1
+        },
+        {
+          "address": "BKyTcUe6daNG8HbgBix2ugdRHbykG2dK9hPBBqhUyoEX",
+          "role": 0
+        },
+        {
+          "address": "8wkjVMcLQt9Ud2jhjougp1kJPxX8tFxT5cJH1RUxoMaQ",
+          "role": 1
+        },
+        {
+          "address": "9fo4ie6z2Kdorniau9farJa2x6hRzwip22tKbeNVqPQV",
+          "role": 0
+        },
+        {
+          "address": "AQBLZAkwwSgHd9ruKE2GCsykxiUgtdruLcMuceSJ7gPM",
+          "role": 1
+        },
+        {
+          "address": "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v",
+          "role": 1
+        },
+        {
+          "address": "D4Zx4ju4v3uCSBBs5ZQV74LGKqw3YjFyHbqCMghsfsEQ",
+          "role": 1
+        },
+        {
+          "address": "pxUHrn6sFsnZiLToD9hQa5p6vXRFx7h8dCjZr7LXp7Z",
+          "role": 1
+        },
+        {
+          "address": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA",
+          "role": 0
+        },
+        {
+          "address": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA",
+          "role": 0
+        },
+        {
+          "address": "KLend2g3cP87fffoy8q1mQqGKjrxjC8boSyAYavgmjD",
+          "role": 0
+        },
+        {
+          "address": "24tHwQyJJ9akVXxnvkekGfAoeUJXXS7mE6kQNioNySsK",
+          "role": 0
+        },
+        {
+          "address": "KvauGMspG5k6rtzrqqn7WNn3oZdyKqLKwK2XWQ8FLjd",
+          "role": 0
+        },
+        {
+          "address": "8qV54zrW2piQgBbVaUUtGajf4KuVDKLUDquHv9VZBfS7",
+          "role": 1
+        },
+        {
+          "address": "D6q6wuQSrifJKZYpR1M8R4YawnLDtDsMmWM1NbBmgJ59",
+          "role": 1
+        },
+        {
+          "address": "2NqbmP17V5qZBs9V8AQDepWy2yz3QW4U2n6y3U6naLsa",
+          "role": 1
+        },
+        {
+          "address": "7u3HeHxYDLhnCoErrtycNokbQYbWGzLs6JSDqGAv5PfF",
+          "role": 0
+        },
+        {
+          "address": "9DrvZvyWh1HuAoZxvYWMvkf2XCzryCpGgHqrMjyDWpmo",
+          "role": 0
+        },
+        {
+          "address": "Bgq7trRgVMeq33yt235zM2onQ4bRDBsY5EWiTetF4qw6",
+          "role": 1
+        },
+        {
+          "address": "B8V6WVjPxW1UGwVDfxH2d2r8SyT4cqn7dQRK6XneVa7D",
+          "role": 1
+        },
+        {
+          "address": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA",
+          "role": 0
+        },
+        {
+          "address": "Sysvar1nstructions1111111111111111111111111",
+          "role": 0
+        },
+        {
+          "address": "24tHwQyJJ9akVXxnvkekGfAoeUJXXS7mE6kQNioNySsK",
+          "role": 0
+        },
+        {
+          "address": "KvauGMspG5k6rtzrqqn7WNn3oZdyKqLKwK2XWQ8FLjd",
+          "role": 0
+        },
+        {
+          "address": "D6q6wuQSrifJKZYpR1M8R4YawnLDtDsMmWM1NbBmgJ59",
+          "role": 1
+        },
+        {
+          "address": "AYL4LMc4ZCVyq3Z7XPJGWDM4H9PiWjqXAAuuHBEGVR2Z",
+          "role": 1
+        },
+        {
+          "address": "7u3HeHxYDLhnCoErrtycNokbQYbWGzLs6JSDqGAv5PfF",
+          "role": 0
+        },
+        {
+          "address": "47tfyEG9SsdEnUm9cw5kY9BXngQGqu3LBoop9j5uTAv8",
+          "role": 0
+        }
+      ],
+      "data": "b712469c946da122b1cb740000000000"
+    }
+  },
+  "createSharesAta": {
+    "ix": {
+      "programAddress": "ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL",
+      "accounts": [
+        {
+          "address": "EahQmXc3rwhY3CH1g3ZgUx8L4vHTNmzpK1xtiQ1RAxq6",
+          "role": 3
+        },
+        {
+          "address": "D4Zx4ju4v3uCSBBs5ZQV74LGKqw3YjFyHbqCMghsfsEQ",
+          "role": 1
+        },
+        {
+          "address": "EahQmXc3rwhY3CH1g3ZgUx8L4vHTNmzpK1xtiQ1RAxq6",
+          "role": 0
+        },
+        {
+          "address": "pxUHrn6sFsnZiLToD9hQa5p6vXRFx7h8dCjZr7LXp7Z",
+          "role": 0
+        },
+        {
+          "address": "11111111111111111111111111111111",
+          "role": 0
+        },
+        {
+          "address": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA",
+          "role": 0
+        }
+      ],
+      "data": "01"
+    }
+  }
+}

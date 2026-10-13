@@ -9,14 +9,18 @@ import { buildDeposit, buildWithdraw } from "../src/build.js";
 import { admit, type GateCall } from "../src/connect/gate.js";
 import { verifyLanded } from "../src/connect/verify.js";
 import { buildConnectCommands, outcome, runConfirm, runConnect, signInMessage, type ConnectDeps } from "../src/connect/commands.js";
-import { pendingAckPath, readSession, writeSession } from "../src/connect/session.js";
-import { PAGE_CSP } from "../src/connect/page.js";
+import { pageLockPath, pendingAckPath, readSession, writeSession } from "../src/connect/session.js";
+import { serveOnce, type Flow } from "../src/connect/http.js";
+import { DEFAULT_CONNECT_PORTS, connectPorts } from "../src/connect/config.js";
+import { PAGE_CSP, shell } from "../src/connect/page.js";
+import { runConfirmSolana } from "../src/connect/solana.js";
+import { getBase58Decoder } from "@solana/kit";
 import { ACK_TTL_MS } from "../src/connect/ack.js";
 import { run } from "../src/cli.js";
 import { DISCLOSURES } from "../src/disclosures.js";
 import { operatorWarning } from "../src/connect/ack.js";
 import { linksFor } from "../src/links.js";
-import { defaultVault, getVault, listVaults } from "../src/registry.js";
+import { defaultVault, getVault, listSolanaVaults, listVaults } from "../src/registry.js";
 
 /**
  * `treasury connect`, offline. No browser and no key: the tests play the page by speaking its HTTP
@@ -61,7 +65,7 @@ describe("the gate admits exactly the registry's own calls for the connected acc
     ["an approval for more than the deposit", [approve(vault.address, 2_000_000n), deposit()], /must be followed by a deposit of exactly/],
     ["a call to a contract outside the registry", [{ ...deposit(), to: OTHER }], /not a listed vault/],
     ["attached native value", [{ ...deposit(), value: "0x1" }], /native value/],
-    ["an unsupported chain", [{ ...deposit(), chainId: 1 }], /not supported/],
+    ["an unsupported chain", [{ ...deposit(), chainId: 10 }], /not supported/],
     ["a plain token transfer", [{ chainId: vault.chainId, to: usdc, data: ("0xa9059cbb" + "00".repeat(64)) as Hex, value: "0x0" }], /not an approve, deposit, withdraw or redeem/],
     ["nothing at all", [], /nothing to confirm/],
     [
@@ -1089,5 +1093,225 @@ describe("a receipt mined before the confirm flow started is not this flow's tra
     expect(out.status).toBe("stopped");
     expect(out.txs[0]!.verified).toBe("mismatch");
     expect(out.txs[0]!.detail).toMatch(/already existed when this confirm flow started/);
+  });
+});
+
+describe("a Solana withdrawal by amount: the acknowledgement survives the vault's value moving", () => {
+  // The vault earns between the operator reading the acknowledgement and the --ack run, so the shares worth
+  // the same amount change. The acknowledgement must cover what the operator asked for (the amount), not a
+  // share count recomputed on each run, or the second run refuses what the operator just said yes to.
+  const SOL_ACCOUNT = "9xQeWvG816bUx9EPjHmaT23yvVM2ZWbrrpZb9PusVFin";
+  const fx = JSON.parse(readFileSync(new URL("./fixtures/solana/vault-snapshot.json", import.meta.url), "utf8")) as {
+    slot: number;
+    vault: string;
+    accounts: Record<string, { data: string }>;
+  };
+  let bump = 0n;
+  const data = (a: string) => {
+    const b = Buffer.from(fx.accounts[a]!.data, "base64");
+    if (a === fx.vault && bump) b.writeBigUInt64LE(b.readBigUInt64LE(224) + bump, 224); // the vault's idle USDC
+    return [b.toString("base64"), "base64"];
+  };
+  const rpc = {
+    getAccountInfo: (a: string) => ({ send: async () => ({ value: { data: data(String(a)) }, context: { slot: BigInt(fx.slot) } }) }),
+    getMultipleAccounts: (ks: string[]) => ({ send: async () => ({ value: ks.map((k) => ({ data: data(String(k)) })), context: { slot: BigInt(fx.slot) } }) }),
+  };
+  const withdraw = (args: Record<string, unknown>) =>
+    buildConnectCommands({ solanaRpc: rpc as never, open: () => false, ttlMs: 50 })["connect_withdraw"]!.handler({ chain: "solana", receiver: SOL_ACCOUNT, ...args } as never);
+
+  beforeEach(() => {
+    bump = 0n;
+    writeFileSync(join(home, "connect-session-solana.json"), JSON.stringify({ account: SOL_ACCOUNT, walletType: "external", connectedAtIso: new Date().toISOString() }));
+  });
+
+  it("the acknowledgement names the amount asked for, and the --ack run accepts it after the vault earned", async () => {
+    const first = JSON.parse(await withdraw({ amount_usdc: "25" })) as { status: string; amount: string; ack: string };
+    expect(first.status).toBe("needs_acknowledgement");
+    expect(first.amount).toBe("25 USDC");
+    bump = 1000n; // 0.001 USDC lands in the vault between the two runs
+    expect(existsSync(pendingAckPath())).toBe(true);
+    // Past the acknowledgement, the flow goes on to build the transaction, which this stub RPC cannot serve;
+    // what matters here is that the acknowledgement was accepted and spent, not refused.
+    const second = await withdraw({ amount_usdc: "25", ack: first.ack }).then(() => "", (e: Error) => e.message);
+    expect(second).not.toMatch(/acknowledged/);
+    expect(existsSync(pendingAckPath())).toBe(false);
+  });
+
+  it("refuses a receiver other than the connected Solana account, for a withdrawal and a deposit", async () => {
+    const other = "4Nd1mBQtrMJVYVfKf2PJy9NZUZdTAsp7D4xWLs4gDB4T";
+    await expect(withdraw({ amount_usdc: "25", receiver: other })).rejects.toThrow(/is not the connected Solana account/);
+    const deposit = buildConnectCommands({ solanaRpc: rpc as never, open: () => false, ttlMs: 50 })["connect_deposit"]!;
+    await expect(deposit.handler({ chain: "solana", amount_usdc: "1", receiver: other } as never)).rejects.toThrow(/not the connected Solana account/);
+  });
+
+  it("still refuses an --ack run for a different amount", async () => {
+    const first = JSON.parse(await withdraw({ amount_usdc: "25" })) as { ack: string };
+    await expect(withdraw({ amount_usdc: "26", ack: first.ack })).rejects.toThrow(/acknowledged/);
+  });
+
+  // Solana shares and USDC both have 6 decimals, so 25 shares and 25 USDC are the same raw number: only the
+  // action in the acknowledgement keeps a withdrawal of one from being confirmed as a withdrawal of the other.
+  it("refuses an --ack run for 25 USDC with an acknowledgement given for 25 shares", async () => {
+    const first = JSON.parse(await withdraw({ all: true, shares_exact: "25" })) as { ack: string };
+    await expect(withdraw({ amount_usdc: "25", ack: first.ack })).rejects.toThrow(/acknowledged/);
+  });
+
+  it("refuses an --ack run for 25 shares with an acknowledgement given for 25 USDC", async () => {
+    const first = JSON.parse(await withdraw({ amount_usdc: "25" })) as { ack: string };
+    await expect(withdraw({ all: true, shares_exact: "25", ack: first.ack })).rejects.toThrow(/acknowledged/);
+  });
+});
+
+describe("the Solana confirm flow binds the landed transaction to one it built", () => {
+  const solVault = listSolanaVaults()[0]!;
+  const SOL_ACCOUNT = "9xQeWvG816bUx9EPjHmaT23yvVM2ZWbrrpZb9PusVFin";
+  const SOL_SIG = getBase58Decoder().decode(new Uint8Array(64).fill(7));
+  const snapshot = JSON.parse(readFileSync(new URL("./fixtures/solana/vault-snapshot.json", import.meta.url), "utf8")) as { slot: number; accounts: Record<string, { data: string }> };
+  const tokenAccount = (amount: bigint) => {
+    const b = Buffer.alloc(165);
+    b.writeBigUInt64LE(amount, 64);
+    return [b.toString("base64"), "base64"];
+  };
+  const bal = (mint: string, amount: string) => ({ owner: SOL_ACCOUNT, mint, uiTokenAmount: { amount } });
+
+  /** The recorded vault, a deposit that simulates clean, and a landed transaction naming `landed()`'s blockhash. */
+  const solRpc = (landed: () => string) =>
+    ({
+      getAccountInfo: (a: string) => ({ send: async () => ({ value: snapshot.accounts[String(a)] ? { data: [snapshot.accounts[String(a)]!.data, "base64"] } : { data: tokenAccount(0n) }, context: { slot: BigInt(snapshot.slot) } }) }),
+      getMultipleAccounts: (ks: string[]) => ({ send: async () => ({ value: ks.map((k) => ({ data: [snapshot.accounts[String(k)]!.data, "base64"] })), context: { slot: BigInt(snapshot.slot) } }) }),
+      getLatestBlockhash: () => ({ send: async () => ({ value: { blockhash: "4sGjMW1sUnHzSxGspuhpqLDx6wiyjNtZAMdL4VZHirAn", lastValidBlockHeight: 1150n } }) }),
+      getBlockHeight: () => ({ send: async () => 1000n }),
+      getBalance: () => ({ send: async () => ({ value: 10_000_000n }) }),
+      simulateTransaction: (_tx: string, cfg?: { accounts?: { addresses: string[] } }) => ({
+        send: async () => ({ context: { slot: BigInt(snapshot.slot) }, value: { err: null, logs: [], unitsConsumed: 100_000n, accounts: (cfg?.accounts?.addresses ?? []).map(() => ({ data: tokenAccount(0n) })) } }),
+      }),
+      getSignatureStatuses: () => ({ send: async () => ({ value: [{ confirmationStatus: "confirmed" }] }) }),
+      getTransaction: () => ({
+        send: async () => ({
+          transaction: { message: { recentBlockhash: landed(), accountKeys: [SOL_ACCOUNT] } },
+          meta: { err: null, preTokenBalances: [bal(solVault.asset.address, "5000000")], postTokenBalances: [bal(solVault.asset.address, "4000000"), bal(solVault.sharesMint, "999000")] },
+        }),
+      }),
+    }) as never;
+
+  async function deposit(landed: (built: string) => string) {
+    let url = "";
+    let builtHash = "";
+    const run = runConfirmSolana({ kind: "deposit", vault: solVault, raw: 1_000_000n }, { account: SOL_ACCOUNT, walletType: "external", connectedAtIso: "" } as never, {
+      open: (u) => ((url = u), true),
+      ttlMs: 5_000,
+      rpc: solRpc(() => landed(builtHash)),
+      verifyOpts: { attempts: 1, delayMs: 1 },
+      html: shell,
+      csp: PAGE_CSP,
+      assets: {},
+      ports: [Number(process.env["TREASURY_CONNECT_PORT"])],
+      appId: "test",
+    });
+    while (!url) await new Promise((r) => setTimeout(r, 10));
+    const p = page(url);
+    const reply = (await (await p.post("/result", { build: true })).json()) as { wire: string; blockhash: string };
+    expect(reply.wire.length).toBeGreaterThan(0);
+    builtHash = reply.blockhash;
+    await p.post("/result", { hash: SOL_SIG });
+    const r = await run;
+    return r.result.ok ? r.result.value[0]! : r.done[0]!;
+  }
+
+  it("the transaction the page was handed lands as matched", async () => {
+    expect((await deposit((built) => built)).verified).toBe("matched");
+  });
+
+  it("a signature for a transaction with any other blockhash is a mismatch", async () => {
+    const v = await deposit(() => "GHtXQBsoZHVnNFa9YevAzFr17DJjgHXk3ycTKD5xD3Zi");
+    expect(v.verified).toBe("mismatch");
+    expect(v.detail).toMatch(/not the transaction this page built/);
+  });
+});
+
+describe("the page port: the first free one of a list, and one page at a time", () => {
+  const flow = (ports: readonly number[]): Flow<never> => ({
+    mode: "connect",
+    ttlMs: 5_000,
+    html: () => "",
+    csp: PAGE_CSP,
+    assets: {},
+    info: () => ({}),
+    accept: async () => ({ ok: false, reason: "not in this test" }),
+    ports,
+  });
+  const hold = async (port: number) => {
+    const s = createServer();
+    await new Promise<void>((resolve, reject) => {
+      s.once("error", reject);
+      s.listen(port, "127.0.0.1", () => resolve());
+    });
+    return () => new Promise<void>((r) => s.close(() => r()));
+  };
+  const portOf = (url: string) => Number(new URL(url).port);
+
+  it("defaults to 53682 first, then 53683 to 53686; TREASURY_CONNECT_PORT replaces the list with one port", () => {
+    expect(connectPorts()).toEqual([Number(process.env["TREASURY_CONNECT_PORT"])]);
+    delete process.env["TREASURY_CONNECT_PORT"];
+    expect(connectPorts()).toEqual([53682, 53683, 53684, 53685, 53686]);
+    expect(DEFAULT_CONNECT_PORTS).toEqual([53682, 53683, 53684, 53685, 53686]);
+  });
+
+  it("takes the next port when another program holds the first, and serves its origin from that port", async () => {
+    const [a, b] = [await freePort(), await freePort()];
+    const release = await hold(a);
+    try {
+      const h = await serveOnce(flow([a, b]));
+      expect(portOf(h.url)).toBe(b);
+      // Host and Origin are checked against the port actually bound, not the first in the list.
+      const info = await fetch(h.url.replace("/connect?", "/info?"));
+      expect(info.status).toBe(200);
+      h.close();
+      await h.done;
+    } finally {
+      await release();
+    }
+  });
+
+  it("names every port when all are taken, and leaves no lock behind", async () => {
+    const [a, b] = [await freePort(), await freePort()];
+    const releases = [await hold(a), await hold(b)];
+    try {
+      await expect(serveOnce(flow([a, b]))).rejects.toThrow(new RegExp(`ports ${a}, ${b} are all in use by other programs`));
+      expect(existsSync(pageLockPath())).toBe(false);
+    } finally {
+      for (const r of releases) await r();
+    }
+  });
+
+  it("refuses a second page while one is open, even on a free port, and admits one once it closes", async () => {
+    const [a, b] = [await freePort(), await freePort()];
+    const first = await serveOnce(flow([a]));
+    await expect(serveOnce(flow([b]))).rejects.toThrow(new RegExp(`another sign-in or confirmation page is still open on port ${a};`));
+    first.close();
+    await first.done;
+    expect(existsSync(pageLockPath())).toBe(false);
+    const next = await serveOnce(flow([b]));
+    expect(portOf(next.url)).toBe(b);
+    next.close();
+    await next.done;
+  });
+
+  it("replaces a lock left by a process that has gone, or by a page that has expired", async () => {
+    for (const stale of [{ pid: 2 ** 30, expiresAt: Date.now() + 60_000 }, { pid: process.pid, expiresAt: Date.now() - 1 }]) {
+      // A fresh port each time: a closed page keeps its port for a short grace period.
+      const port = await freePort();
+      writeFileSync(pageLockPath(), JSON.stringify({ ...stale, token: "old" }));
+      const h = await serveOnce(flow([port]));
+      expect(portOf(h.url)).toBe(port);
+      h.close();
+      await h.done;
+    }
+  });
+
+  it("does not replace a live lock: a running page in another process is reported, not raced", async () => {
+    writeFileSync(pageLockPath(), JSON.stringify({ pid: process.ppid, expiresAt: Date.now() + 60_000, token: "theirs", port: 53682 }));
+    await expect(serveOnce(flow([await freePort()]))).rejects.toThrow(/still open on port 53682;/);
+    expect(JSON.parse(readFileSync(pageLockPath(), "utf8")).token).toBe("theirs");
   });
 });

@@ -2,7 +2,7 @@
 
 Eight `earn` commands, each named here by its tool name, `earn_`-prefixed: `earn_quote` runs as
 `treasury earn quote`, and its arguments are its flags (`--direction deposit --account 0x…
---amount_usdc 25`). Each prints one JSON document; a refusal exits 1 with `{ "error": … }` on stderr.
+--amount_usdc <amount>`, where the amount is always the operator's own). Each prints one JSON document; a refusal exits 1 with `{ "error": … }` on stderr.
 `treasury earn --help` lists every command and flag, `treasury earn <command> --help` one command's
 (put `--help` right after the command), `treasury --help` the skills, and `treasury --version` the
 bare version. A flag's `_` may be typed as `-` (`--amount-usdc`), and so may a command's
@@ -12,14 +12,14 @@ transfers, and CI asserts the command list exactly — a ninth command, or a `si
 The five `connect` commands [further down](#the-connect-commands--treasury-connect-command) are a third
 kind: they hand calls to the operator's own wallet for approval. Their list is pinned by CI the same way.
 
-Every tool that takes a vault takes it as `vault`, the vault's ERC-20 ticker (e.g. `tlCashPlusUSDC2`), and uses the default when it is
+Every tool that takes a vault takes it as `vault`, the vault's ticker (e.g. `tlCashPlusUSDC2`: its ERC-20 ticker on the EVM chains, one the registry assigns on Solana), and uses the default when it is
 omitted. Every tool that takes an address takes it as `account` — whose shares these are.
 Both prepare commands also take `receiver`, which is a different thing: where the shares land on a
 deposit, where the asset (USDC; USDG on Robinhood Chain) lands on a withdrawal.
 
 ## `chain` — which chain a call is for
 
-A vault is on one chain. Every tool that takes `vault` also takes `chain`: `"base"`, `"arbitrum"` or `"robinhood"`
+A vault is on one chain. Every tool that takes `vault` also takes `chain`: `"base"`, `"arbitrum"`, `"robinhood"`, `"ethereum"`, `"monad"` or `"solana"`
 — the chains with a vault in the registry, as `earn_vaults` lists them under `chains`.
 
 | `vault` | `chain` | resolves to |
@@ -37,7 +37,8 @@ different chains.
 Every result that names a vault carries `chain` and `chainId`. On a prepared envelope they come
 before the calls, and every call inside carries the same `chainId`: a call is correct on that chain
 only. Sent on another chain, a transaction to an address with no contract there is mined and does
-nothing.
+nothing. On Solana `chainId` is `null`, the envelope carries one `transaction` instead of calls, and
+`cluster` and `genesisHash` name the chain (see [On Solana](#on-solana)).
 
 **The agent asks, the tool does not choose.** When the operator has not said which chain to deposit
 on, the skill has the agent show `earn_vaults` → `chains` and ask. Withdrawals, quotes and balances
@@ -54,11 +55,12 @@ More fractional digits than the asset has (6 for both) are refused, never trunca
 No inputs. Every vault in the registry, on every chain, with its chassis, decimals and **measured** deposit-open
 status (the block and method it was measured at). Each row carries the vault's public identity:
 
-- `symbol` — the vault's own ERC-20 ticker, e.g. `tlCashPlusUSDC2`, as `symbol()` reports it;
-- `name` — the vault's `name()`;
+- `symbol` — the vault's own ERC-20 ticker, e.g. `tlCashPlusUSDC2`, as `symbol()` reports it; on
+  Solana, the ticker the registry assigns;
+- `name` — the vault's `name()`; on Solana, the name the registry records;
 - `chain` and `chainId` — the chain the vault is on, e.g. `"arbitrum"` and `42161`;
 - `address` — the contract itself, on that chain;
-- `links` — `explorer` always (the chain's own: BaseScan, Arbiscan, or Robinhood Chain's Blockscout), and `app` where the chassis has a front end whose page for this vault exists. **These need no
+- `links` — `explorer` always (the chain's own: BaseScan, Arbiscan, Robinhood Chain's Blockscout, Etherscan, MonadScan, or Solscan on Solana), and `app` where the chassis has a front end whose page for this vault exists. **These need no
   RPC endpoint.** They are how an operator verifies, without this client's help, that the address
   about to be used is the vault it claims to be;
 - `warning` — what to show before preparing a deposit into this vault. Show it; do not summarise it.
@@ -75,7 +77,7 @@ And, once per response:
 - `default` — the vault used in that case: the default chain's default;
 - `defaultAccess` — `"open"` if the default takes deposits from any account, `"whitelist"` if only
   admitted ones;
-- `depositable` — those any account can put money into today, across all chains: ERC-4626 chassis and measured open.
+- `depositable` — those any account can put money into today, across all chains: an ERC-4626 chassis (or the Kamino vault on Solana) and measured open.
   **May be empty.** An empty set is a state of the offering, not a fault.
 
 ## `earn_terms` — READ
@@ -105,7 +107,7 @@ result stays the same JSON; it names the program, not a running process. `rpc` i
 | `wrong_chain` | the configured endpoint answers for a different chain (`rpcChainId`). Reads through it fail with "returned no data", because the vault has no contract there. Point the variable `reason` names at an endpoint for this chain |
 
 When a separate logs endpoint is configured (`TREASURY_LOGS_RPC_BASE`, `TREASURY_LOGS_RPC_ARBITRUM`,
-`TREASURY_LOGS_RPC_ROBINHOOD`),
+`TREASURY_LOGS_RPC_ROBINHOOD`, `TREASURY_LOGS_RPC_ETHEREUM`, `TREASURY_LOGS_RPC_MONAD`),
 the result also carries `logsRpc` (`ok`, `wrong_chain` or `unreachable`) and `logsRpcSource`: that is
 the endpoint `earn_balance` reads through, and it can be wrong on its own.
 
@@ -140,12 +142,13 @@ vault on another.
 
 **`deposit`:** expected shares (`previewDeposit`), share price, and the same pre-flight verdict as
 `earn_status`. No rate is quoted: an ERC-4626 vault exposes none, and this client calls no yield
-API. What a position has actually earned comes from `earn_balance`, from the vault's own events. `canProceed` is false unless the verdict allows it.
+API. What a position has actually earned comes from `earn_balance`, from the vault's own events. On the EVM chains, `canProceed` is false unless the verdict allows it; a Solana quote has no `canProceed`, so read `preflight.status`.
 
 **`withdraw`:** shares that would burn (`previewWithdraw`), shares held, a **simulated `withdraw()`**
 verdict (`OK`, or `REVERTED` with the chain's revert reason; on a Fusion vault, which pays only from its
 own balance, also in liquidity terms), the vault's `instantLiquidity`, and
-`maxWithdraw` as an advisory only.
+`maxWithdraw` as an advisory only. On Solana the quote reports `canWithdraw` and a `note` instead of
+`simulated` and `canProceed` (see [On Solana](#on-solana)).
 
 ## `earn_balance` — READ
 
@@ -180,6 +183,29 @@ objects worth reading carefully:
   caveat as the basis: they are the events **inside the scanned window**, which is the whole history
   only when `wholeHistory` is true. Each list holds at most 100 entries, the most recent; `deposits`
   and `withdrawals` remain the totals, so a truncated list is visible by comparing the two.
+
+## On Solana
+
+The vault on Solana is a Kamino vault, and the same commands answer for it with these differences:
+
+- Every result carries `chain: "solana"`, `chainId: null`, `cluster: "mainnet-beta"` and the cluster's
+  `genesisHash`; an endpoint whose genesis hash differs is reported as `wrong_chain`.
+- `account` and `receiver` are Solana addresses, and `receiver` must equal `account`.
+- `earn_prepare_deposit` and `earn_prepare_withdraw` return ONE unsigned transaction, not a list of calls:
+  `transaction` carries `wire` (base64, every signature slot empty), `feePayer`, `blockhash`,
+  `preparedAtBlockHeight` and `expiresAfterBlockHeight`. It is simulated before it is returned, and a
+  transaction the program would refuse is not returned at all. Neither is a withdrawal whose simulation burns
+  fewer shares than asked, beyond one share unit of rounding per withdraw instruction: the program would pay
+  what a reserve can and leave the rest of the shares, so the quote reports `canWithdraw: false` with a `note`
+  and the prepare refuses. `expected` and `simulated` say what the simulation minted or paid.
+- `earn_quote --direction withdraw` reports `receives`, the USDC the account's balance would rise by: each
+  withdraw instruction keeps up to 0.001 USDC in the vault (Kamino's charge, which it can change).
+- `earn_balance` reports shares, `usdcValue` and `exit` (a simulated full withdrawal); `entryBasisUsdc`,
+  `accruedYieldUsdc` and `scan.wholeHistory` say the history was not read.
+- `earn_status` with `account` returns `OPEN_READY`, `NEEDS_FUNDS` (no USDC, or no SOL for the fee),
+  `REVERTED_OTHER` (including a vault that requires a co-signer) or `UNRESOLVED`. With no SOL, `canDeposit` is
+  false: the simulation stopped before the vault and says nothing about it. A deposit over the vault's cap is not
+  `canDeposit` either.
 
 ## `earn_prepare_deposit` — PREPARE
 
@@ -260,17 +286,17 @@ Coinbase Wallet's own entry in the sign-in window (the Coinbase SDK, for its mob
 wallet) is untested in this release ([#88](https://github.com/TemporaLabs/treasury/issues/88)). That
 entry is separate from the Coinbase Wallet browser extension, which, like any wallet installed in the
 browser, is listed on the window's first screen.
-A page opens on the operator's machine, at a one-time URL on `http://localhost:53682` that the command
+A page opens on the operator's machine, at a one-time URL on `http://localhost:53682` (or the next free port up to 53686) that the command
 also prints on stderr; they read each call there and
 confirm it in the wallet. Nothing here signs. See [`security-model.md`](security-model.md#the-wallet-connection-treasury-connect).
 
 | command | flags | does |
 |---|---|---|
-| `connect status` | — | the connected account and how it signed in (`external` / `embedded`), or `disconnected`; reads a local file only |
-| `connect wallet` | — | opens the sign-in page: one Connect button, then Privy's window. The wallet signs a free sign-in message; waits up to 9 minutes and returns `{ status: "connected", account, walletType, connectedAtIso, opened }`. If the sign-in does not finish, it exits 1 with `not connected: <reason>` |
+| `connect status` | — | the connected account and how it signed in (`external` / `embedded`), or `disconnected`, with the connected Solana account under `solana`; reads a local file only |
+| `connect wallet` | `--chain` (optional; `solana` connects a Solana wallet: Phantom, Solflare, Backpack, or a Privy wallet) | opens the sign-in page: one Connect button, then Privy's window. The wallet signs a free sign-in message; waits up to 9 minutes and returns `{ status: "connected", account, walletType, connectedAtIso, opened }`. If the sign-in does not finish, it exits 1 with `not connected: <reason>` |
 | `connect deposit` | `--amount_usdc`, `--receiver`, optional `--vault`, `--chain`, `--ack` | builds approve + deposit for the connected account and checks them against the registry. Without `--ack`, opens nothing and returns the operator's acknowledgement; with its code, hands each call to the wallet in turn |
 | `connect withdraw` | `--receiver`, then `--amount_usdc` or `--all --shares_exact`, optional `--vault`, `--chain`, `--ack` | the same for a withdrawal |
-| `connect disconnect` | — | forgets the connected account; moves nothing |
+| `connect disconnect` | — | forgets the connected accounts, EVM and Solana; moves nothing |
 
 `--receiver` must be the connected account: this page pays no one else. It comes from the operator's
 own message, never from the agent. To pay a different address, use `earn prepare_deposit` /
@@ -303,7 +329,8 @@ refused, and nothing opens, when:
 A `connect wallet` that completes a sign-in, or a `connect disconnect`, clears any pending
 acknowledgement; a sign-in that does not finish leaves it as it was. The pending one
 sits beside the session file (`connect-ack.json`, owner-readable only) and holds a digest of the calls,
-not the calls.
+not the calls. While a page is open, `connect-page.lock` beside them names its process and port, and a second
+sign-in or confirmation is refused until the page closes.
 
 ### What the confirm flow returns
 
@@ -319,7 +346,7 @@ the receipt:
 |---|---|
 | `matched` | the vault's (or token's) own event for the connected account and the exact amount is there, and no other transfer of the vault's asset left the account |
 | `extra_transfer` | as `matched`, but the account ALSO sent the asset elsewhere in the same transaction (`alsoMoved`) — often a wallet's fee for paying gas in tokens. Tell the operator |
-| `mismatch` | the transaction succeeded without the expected event, or was mined before this flow started (an older transaction, not this one). Stop |
+| `mismatch` | the transaction succeeded without the expected event, or was mined before this flow started (an older transaction, not this one). On Solana also: a transaction the page did not build (another blockhash), one paid for by another account, a deposit short by more than rounding, or a partial withdrawal. Stop |
 | `reverted` | it failed on chain; nothing it was meant to do happened |
 | `unverified` | no receipt in time; look the hash up before retrying anything |
 

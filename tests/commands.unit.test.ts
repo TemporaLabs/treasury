@@ -132,6 +132,8 @@ describe("earn_vaults — Tempora Labs vaults only, and the access of each is re
       ["base", 8453, "Base", "tlCashPlusUSDC2B", "open"],
       ["arbitrum", 42161, "Arbitrum One", "tlCashPlusUSDC2C", "open"],
       ["robinhood", 4663, "Robinhood Chain", "tlCashPlusUSDG2D", "open"],
+      ["ethereum", 1, "Ethereum", "tlCashPlusUSDC2E", "open"],
+      ["monad", 143, "Monad", "tlCashPlusUSDC2F", "open"],
     ]);
     // the global default is the default CHAIN's default — the two fields cannot disagree
     expect(out.default).toBe(out.chains[0]!.default);
@@ -276,9 +278,14 @@ describe("the test-vault warning travels with money-committing responses, and on
     const src = readFileSync(new URL("../src/earn/commands.ts", import.meta.url), "utf8").replace(/\/\*[\s\S]*?\*\/|\/\/.*$/gm, "");
     const writers = src.split("\n").filter((l) => /\bwarning:/.test(l)).map((l) => l.trim());
     expect(writers).toEqual([
-      "const commitsMoney = (vault: VaultEntry) => ({ warning: vault.warning });",
+      "const commitsMoney = (vault: Pick<VaultEntry, \"warning\">) => ({ warning: vault.warning });",
       "warning: v.warning,",
     ]);
+  });
+
+  it("the Solana handlers write no warning field of their own beyond the vault listing: theirs goes through the same chokepoint", () => {
+    const src = readFileSync(new URL("../src/earn/solana.ts", import.meta.url), "utf8").replace(/\/\*[\s\S]*?\*\/|\/\/.*$/gm, "");
+    expect(src.split("\n").filter((l) => /\bwarning:/.test(l)).map((l) => l.trim())).toEqual(["warning: v.warning,"]);
   });
 
   it("earn_prepare_deposit carries it, before next_step", async () => {
@@ -294,6 +301,14 @@ describe("the test-vault warning travels with money-committing responses, and on
     const out = payload(await tools()["earn_status"]!.handler({ account: RECEIVER }, {})) as { mode?: string; warning?: string };
     expect(out.mode).toBe("preflight");
     expect(out.warning, "earn_status preflight must carry the warning").toBe(defaultVault().warning);
+  });
+
+  it("earn_status's pre-flight echoes the account checksummed, as it was read", async () => {
+    process.env["TREASURY_RPC_BASE"] = "http://127.0.0.1:9/v2/K";
+    const mixed = "0x5aaeb6053f3e94c9b9a09f33669435e7ef1beaed"; // EIP-55's own example, lowercased
+    const out = payload(await tools()["earn_status"]!.handler({ account: mixed }, {})) as { account?: string; depositor?: string };
+    expect(out.account).toBe("0x5aAeb6053F3E94C9b9A09f33669435E7Ef1BeAed");
+    expect(out.account).toBe(out.depositor);
   });
 
   it("earn_quote carries it on the deposit side and NOT on the withdraw side", async () => {

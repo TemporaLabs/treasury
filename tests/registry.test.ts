@@ -26,9 +26,9 @@ describe("the shipped registry", () => {
     expect(reg.vaults.length).toBeGreaterThan(0);
   });
 
-  it("offers THREE Tempora Labs vaults on Base, ONE on Arbitrum One and ONE on Robinhood Chain; with nothing named, the default is Cash Plus USDC (Test 2B) on Base — open to any account", () => {
+  it("offers THREE Tempora Labs EVM vaults on Base and ONE each on Arbitrum One, Robinhood Chain, Ethereum and Monad (Solana's is in its own list); with nothing named, the default is Cash Plus USDC (Test 2B) on Base — open to any account", () => {
     const d = defaultVault();
-    expect(listVaults().map((v) => `${v.symbol}@${v.chainId}`)).toEqual(["tlCashPlusUSDC2@8453", "tlCashPlusUSDC2A@8453", "tlCashPlusUSDC2B@8453", "tlCashPlusUSDC2C@42161", "tlCashPlusUSDG2D@4663"]);
+    expect(listVaults().map((v) => `${v.symbol}@${v.chainId}`)).toEqual(["tlCashPlusUSDC2@8453", "tlCashPlusUSDC2A@8453", "tlCashPlusUSDC2B@8453", "tlCashPlusUSDC2C@42161", "tlCashPlusUSDG2D@4663", "tlCashPlusUSDC2E@1", "tlCashPlusUSDC2F@143"]);
     expect(d.symbol).toBe("tlCashPlusUSDC2B");
     expect(d.name).toBe("Tempora Labs Cash Plus USDC (Test 2B)");
     expect(d.backend).toBe("tempora");
@@ -36,8 +36,8 @@ describe("the shipped registry", () => {
     expect(d.address).toBe("0x91BcEbA5feCB9E92d80F1845B55cC56621E9352F");
     expect(d.chassis).toBe("morpho-v2");
     expect(resolveVault()).toBe(d);
-    // One default per chain, and no more: the Base one above, and Test 2C on Arbitrum One.
-    expect(listVaults().filter((v) => v.isDefault).map((v) => `${v.symbol}@${v.chainId}`)).toEqual(["tlCashPlusUSDC2B@8453", "tlCashPlusUSDC2C@42161", "tlCashPlusUSDG2D@4663"]);
+    // One default per chain, and no more: the Base one above, then one on each other chain.
+    expect(listVaults().filter((v) => v.isDefault).map((v) => `${v.symbol}@${v.chainId}`)).toEqual(["tlCashPlusUSDC2B@8453", "tlCashPlusUSDC2C@42161", "tlCashPlusUSDG2D@4663", "tlCashPlusUSDC2E@1", "tlCashPlusUSDC2F@143"]);
     for (const v of listVaults()) expect(v.backend).toBe("tempora");
   });
 
@@ -94,6 +94,35 @@ describe("the shipped registry", () => {
     expect(resolveVault(undefined, "robinhood")).toBe(d);
   });
 
+  it("the Ethereum default is Cash Plus USDC (Test 2E): a Morpho Vault V2 over Ethereum's USDC, measured open", () => {
+    const e = defaultVault(1);
+    expect(e.symbol).toBe("tlCashPlusUSDC2E");
+    expect(e.name).toBe("Tempora Labs Cash Plus USDC (Test 2E)");
+    expect([e.chainId, e.address, e.chassis, e.shareDecimals]).toEqual([1, "0x2AA9B1F12bbFE1E01dcb4DD52E6836d68416e3B6", "morpho-v2", 18]);
+    // The asset is per chain: Ethereum's USDC is neither Base's nor Arbitrum's address.
+    expect(e.asset).toEqual({ symbol: "USDC", decimals: 6, address: "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48" });
+    expect(e.depositOpen).toMatchObject({ open: true, method: "simulated-deposit-from-stranger", measuredAtBlock: 26_166_799 });
+    expect(e.depositOpen.detail).toMatch(/0xe65b7a77/); // TransferFromReverted — reached the token pull
+    expect(e.deployedAtBlock).toBe(26_164_268);
+    // Gas on Ethereum is the one thing an operator choosing a chain for a small amount must hear.
+    expect(e.notes.join(" ")).toMatch(/Gas on Ethereum costs far more/);
+    expect(resolveVault(undefined, "ethereum")).toBe(e);
+  });
+
+  it("the Monad default is Cash Plus USDC (Test 2F): a Morpho Vault V2 over Monad's USDC, measured open", () => {
+    const f = defaultVault(143);
+    expect(f.symbol).toBe("tlCashPlusUSDC2F");
+    expect(f.name).toBe("Tempora Labs Cash Plus USDC (Test 2F)");
+    expect([f.chainId, f.address, f.chassis, f.shareDecimals]).toEqual([143, "0x163295A4d4381745A205DC5E9A436a3f51791593", "morpho-v2", 18]);
+    expect(f.asset).toEqual({ symbol: "USDC", decimals: 6, address: "0x754704Bc059F8C67012fEd69BC8A327a5aafb603" });
+    expect(f.depositOpen).toMatchObject({ open: true, method: "simulated-deposit-from-stranger", measuredAtBlock: 112_372_495 });
+    expect(f.depositOpen.detail).toMatch(/0xe65b7a77/);
+    expect(f.deployedAtBlock).toBe(112_273_210);
+    // The public endpoint's 100-block log window is the reason history needs a logs variable there.
+    expect(f.notes.join(" ")).toMatch(/TREASURY_LOGS_RPC_MONAD/);
+    expect(resolveVault(undefined, "monad")).toBe(f);
+  });
+
   it("every row's warning says it is a test vault and to deposit only what you can lose: the acknowledgement relies on it for that disclosure", () => {
     // `DISCLOSURES.plain` has no sentence for the first full disclosure because the vault's own warning carries it.
     for (const v of listVaults()) {
@@ -115,11 +144,11 @@ describe("the shipped registry", () => {
     }
   });
 
-  it("🔴 the depositable set is the three chain defaults and Test 2 — each open to any account: open to any account, measured by a simulated deposit", () => {
+  it("🔴 the depositable set is the five chain defaults and Test 2 — each open to any account: open to any account, measured by a simulated deposit", () => {
     // The Morpho V2 vault takes a deposit from anyone (a stranger's simulated deposit reached the token
     // pull). The Fusion sibling is whitelist-gated and stays out of the set — listed so an admitted
     // account's position can be read and exited, refused for everyone else before anything is built.
-    expect(depositableVaults().map((v) => v.symbol)).toEqual(["tlCashPlusUSDC2", "tlCashPlusUSDC2B", "tlCashPlusUSDC2C", "tlCashPlusUSDG2D"]);
+    expect(depositableVaults().map((v) => v.symbol)).toEqual(["tlCashPlusUSDC2", "tlCashPlusUSDC2B", "tlCashPlusUSDC2C", "tlCashPlusUSDG2D", "tlCashPlusUSDC2E", "tlCashPlusUSDC2F"]);
     expect(defaultVault().depositOpen.open).toBe(true);
     expect(getVault("tlCashPlusUSDC2A").depositOpen).toMatchObject({ open: false, reason: "WHITELIST_GATED" });
   });
@@ -143,7 +172,7 @@ describe("the shipped registry", () => {
     // Every offered chain has a config entry, and it is the row the registry marks. A chain with a
     // vault and no config entry would make `chain: "<that chain>"` throw at the first call.
     const offered = offeredChains();
-    expect(offered.map((c) => c.key)).toEqual(["base", "arbitrum", "robinhood"]); // the default chain first, then the order chains were added
+    expect(offered.map((c) => c.key)).toEqual(["base", "arbitrum", "robinhood", "ethereum", "monad"]); // the default chain first, then the order chains were added
     expect(Object.keys(EARN.defaultVaultByChain).sort()).toEqual(offered.map((c) => c.key).sort());
     for (const c of offered) {
       const named = EARN.defaultVaultByChain[c.key];
@@ -169,7 +198,7 @@ describe("the shipped registry", () => {
     expect(() => resolveVault("tlCashPlusUSDC2C", "base")).toThrow(/"tlCashPlusUSDC2C" is on arbitrum, not base.*tlCashPlusUSDC2B/s);
     expect(() => resolveVault("tlCashPlusUSDG2D", "arbitrum")).toThrow(/"tlCashPlusUSDG2D" is on robinhood, not arbitrum.*tlCashPlusUSDC2C/s);
     // an unknown chain names the ones that exist, and is never read as "the default chain"
-    expect(() => resolveVault(undefined, "solana")).toThrow(/unknown chain "solana"; chains with a vault: base, arbitrum, robinhood/);
+    expect(() => resolveVault(undefined, "solana")).toThrow(/chain "solana" has no ERC-4626 vault; this resolves the EVM vaults only/);
     expect(() => resolveVault("tlCashPlusUSDC2", "Base")).toThrow(/unknown chain "Base"/); // exact keys, no case-folding guess
     expect(() => resolveVault(undefined, " arbitrum")).toThrow(/unknown chain " arbitrum"/);
     // exact keys: a prefix or a longer name is not the chain
@@ -193,10 +222,10 @@ describe("the shipped registry", () => {
       const address = "0x040fCA12673778FEED5DA7b2ccFbbAb0cc0134Cf";
       expect(linksFor({ chainId: id, address, chassis: "fusion" }).explorer).toMatch(new RegExp(`^https://[a-z.]+/address/${address}$`));
     }
-    expect(supportedChainIds).toEqual([8453, 42161, 4663]);
-    for (const id of [1, 10, 137, 0]) expect(vaultEntrySchema.safeParse(row(id)).success, `schema accepts unsupported chain ${id}`).toBe(false);
+    expect(supportedChainIds).toEqual([8453, 42161, 4663, 1, 143]);
+    for (const id of [10, 56, 137, 0]) expect(vaultEntrySchema.safeParse(row(id)).success, `schema accepts unsupported chain ${id}`).toBe(false);
     // A chain the explorer map does not know THROWS — it used to interpolate `undefined` into a URL.
-    expect(() => linksFor({ chainId: 1 as never, address: "0x040fCA12673778FEED5DA7b2ccFbbAb0cc0134Cf", chassis: "fusion" })).toThrow(/no block explorer is recorded for chain 1/);
+    expect(() => linksFor({ chainId: 10 as never, address: "0x040fCA12673778FEED5DA7b2ccFbbAb0cc0134Cf", chassis: "fusion" })).toThrow(/no block explorer is recorded for chain 10/);
   });
 
   it("each vault links to ITS chain's explorer, and to the Morpho app only where that page exists", () => {
@@ -210,6 +239,8 @@ describe("the shipped registry", () => {
     expect(linksFor(getVault("tlCashPlusUSDC2C"))).toEqual({ explorer: "https://arbiscan.io/address/0x4057a63953142Ac2b3E5dB1954Fc14d578662587" });
     expect(linksFor(getVault("tlCashPlusUSDC2B"))).toEqual({ explorer: "https://basescan.org/address/0x91BcEbA5feCB9E92d80F1845B55cC56621E9352F" });
     expect(linksFor(getVault("tlCashPlusUSDG2D"))).toEqual({ explorer: "https://robinhoodchain.blockscout.com/address/0x758f00731943aA88e8C7fB709e0B727903B4F833" });
+    expect(linksFor(getVault("tlCashPlusUSDC2E"))).toEqual({ explorer: "https://etherscan.io/address/0x2AA9B1F12bbFE1E01dcb4DD52E6836d68416e3B6" });
+    expect(linksFor(getVault("tlCashPlusUSDC2F"))).toEqual({ explorer: "https://monadscan.com/address/0x163295A4d4381745A205DC5E9A436a3f51791593" });
   });
 
   it("names no depositor: who may deposit is on the chain, not in this repository", () => {
@@ -277,7 +308,7 @@ describe("the registry schema refuses the mistakes a hand-edit would make", () =
     const arb = r.vaults.filter((v) => v.chainId === 42161);
     expect(arb.length, "premise: the fixture registry carries a vault on a second chain").toBeGreaterThan(0);
     for (const v of arb) v.isDefault = false;
-    expect(r.vaults.filter((v) => v.isDefault)).toHaveLength(2); // Base and Robinhood Chain still have theirs
+    expect(r.vaults.filter((v) => v.isDefault)).toHaveLength(4); // Base, Robinhood Chain, Ethereum and Monad still have theirs (Solana's default is in its own list, unaffected)
     expect(() => registrySchema.parse(r)).toThrow(/exactly one vault per chain must be isDefault; chain 42161 has 0/);
   });
 

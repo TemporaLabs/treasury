@@ -164,6 +164,119 @@
         "The public Robinhood Chain endpoint answered a single eth_getLogs over 674,901 blocks (79,300,000 to 79,974,900, on 2026-10-04), which covers this vault's whole history; it does not serve state at past blocks, which nothing in this client reads.",
         "The default vault on Robinhood Chain, and open to any account: it is in depositable."
       ]
+    },
+    {
+      "symbol": "tlCashPlusUSDC2E",
+      "name": "Tempora Labs Cash Plus USDC (Test 2E)",
+      "warning": "TEST VAULT — unproven. It exists to exercise this product, not to hold savings. Deposit only an amount you are fully prepared to lose entirely, and do not move significant funds into it. Show this warning before preparing any deposit.",
+      "chainId": 1,
+      "address": "0x2AA9B1F12bbFE1E01dcb4DD52E6836d68416e3B6",
+      "chassis": "morpho-v2",
+      "backend": "tempora",
+      "isDefault": true,
+      "asset": {
+        "address": "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48",
+        "symbol": "USDC",
+        "decimals": 6
+      },
+      "shareDecimals": 18,
+      "depositOpen": {
+        "open": true,
+        "method": "simulated-deposit-from-stranger",
+        "measuredAtBlock": 26166799,
+        "measuredAtIso": "2026-10-11T04:24:35Z",
+        "detail": "deposit(1 USDC, 0x…dEaD) from 0x…dEaD reverted 0xe65b7a77 TransferFromReverted at block 26166799 — it reached the token pull, so access is open; maxDeposit() reads 0 to every caller on this chassis by design and is not consulted."
+      },
+      "deployedAtBlock": 26164268,
+      "notes": [
+        "On Ethereum (chain 1). Calls for this vault are sent on Ethereum, and its RPC is TREASURY_RPC_ETHEREUM.",
+        "Gas on Ethereum costs far more than on Base, Arbitrum One, Robinhood Chain or Monad: the approve, deposit and withdrawal each pay Ethereum gas in ETH, which can be a large share of a small deposit. Say so before preparing a small deposit here.",
+        "The asset is Circle's USDC on Ethereum (0xA0b8…eB48).",
+        "18-decimal shares against a 6-decimal asset — a share amount is never an asset amount here.",
+        "Morpho Vault V2. maxDeposit() and maxWithdraw() return 0 to every caller by protocol design; the pre-flight simulates the real call and earn_balance simulates the exit. Neither reads those views.",
+        "Withdrawals are served from idle USDC, then through the vault's liquidity adapter; a withdrawal larger than that reverts until positions are unwound. earn_balance reports exitableNow by simulating the withdrawal.",
+        "No fee is set: performanceFee() = 0 and managementFee() = 0 at block 26166799. The curator can introduce one, and the vault's fee timelocks are 0 (timelock(setPerformanceFee) = timelock(setManagementFee) = 0 at block 26166799), so a change needs no notice. Read both fees before depositing.",
+        "Three configured adapters (measured at block 26166799); Treasury does not model the fund's allocation across them — read the vault's positions on-chain before a first deposit.",
+        "The public Ethereum endpoint (ethereum.reth.rs) serves eth_getLogs over up to 100,000 blocks per request (measured 2026-10-11), so earn_balance reads this vault's whole history from it in a few requests.",
+        "The default vault on Ethereum, and open to any account: it is in depositable."
+      ]
+    },
+    {
+      "symbol": "tlCashPlusUSDC2F",
+      "name": "Tempora Labs Cash Plus USDC (Test 2F)",
+      "warning": "TEST VAULT — unproven. It exists to exercise this product, not to hold savings. Deposit only an amount you are fully prepared to lose entirely, and do not move significant funds into it. Show this warning before preparing any deposit.",
+      "chainId": 143,
+      "address": "0x163295A4d4381745A205DC5E9A436a3f51791593",
+      "chassis": "morpho-v2",
+      "backend": "tempora",
+      "isDefault": true,
+      "asset": {
+        "address": "0x754704Bc059F8C67012fEd69BC8A327a5aafb603",
+        "symbol": "USDC",
+        "decimals": 6
+      },
+      "shareDecimals": 18,
+      "depositOpen": {
+        "open": true,
+        "method": "simulated-deposit-from-stranger",
+        "measuredAtBlock": 112372495,
+        "measuredAtIso": "2026-10-11T04:24:45Z",
+        "detail": "deposit(1 USDC, 0x…dEaD) from 0x…dEaD reverted 0xe65b7a77 TransferFromReverted at block 112372495 — it reached the token pull, so access is open; maxDeposit() reads 0 to every caller on this chassis by design and is not consulted."
+      },
+      "deployedAtBlock": 112273210,
+      "notes": [
+        "On Monad (chain 143). Calls for this vault are sent on Monad, and its RPC is TREASURY_RPC_MONAD.",
+        "The asset is the USDC token at 0x7547…b603 on Monad (name and symbol USDC, 6 decimals, read on chain 2026-10-11).",
+        "18-decimal shares against a 6-decimal asset — a share amount is never an asset amount here.",
+        "Morpho Vault V2. maxDeposit() and maxWithdraw() return 0 to every caller by protocol design; the pre-flight simulates the real call and earn_balance simulates the exit. Neither reads those views.",
+        "Withdrawals are served from idle USDC, then through the vault's liquidity adapter; a withdrawal larger than that reverts until positions are unwound. earn_balance reports exitableNow by simulating the withdrawal.",
+        "No fee is set: performanceFee() = 0 and managementFee() = 0 at block 112372495. The curator can introduce one, and the vault's fee timelocks are 0 (timelock(setPerformanceFee) = timelock(setManagementFee) = 0 at block 112372495), so a change needs no notice. Read both fees before depositing.",
+        "Three configured adapters (measured at block 112372495); Treasury does not model the fund's allocation across them — read the vault's positions on-chain before a first deposit.",
+        "The public Monad endpoint (rpc.monad.xyz) serves eth_getLogs over at most 100 blocks per request (measured 2026-10-11), and Monad makes a block about every 0.3 seconds, so from it earn_balance's history scan covers under an hour and reports itself cut short. For entry basis and yield, set TREASURY_LOGS_RPC_MONAD to a provider with a wider eth_getLogs range.",
+        "The default vault on Monad, and open to any account: it is in depositable."
+      ]
+    }
+  ],
+  "solanaVaults": [
+    {
+      "family": "solana",
+      "symbol": "tlCashPlusUSDC2G",
+      "name": "Tempora Labs Cash Plus USDC (Test 2G)",
+      "warning": "TEST VAULT — unproven. It exists to exercise this product, not to hold savings. Deposit only an amount you are fully prepared to lose entirely, and do not move significant funds into it. Show this warning before preparing any deposit.",
+      "chain": "solana",
+      "address": "8qV54zrW2piQgBbVaUUtGajf4KuVDKLUDquHv9VZBfS7",
+      "chassis": "kamino-vault",
+      "backend": "tempora",
+      "isDefault": true,
+      "asset": {
+        "address": "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v",
+        "symbol": "USDC",
+        "decimals": 6
+      },
+      "sharesMint": "pxUHrn6sFsnZiLToD9hQa5p6vXRFx7h8dCjZr7LXp7Z",
+      "shareDecimals": 6,
+      "depositOpen": {
+        "open": true,
+        "method": "simulated-deposit-from-stranger",
+        "measuredAtSlot": 455531367,
+        "measuredAtIso": "2026-10-11T05:12:46Z",
+        "detail": "a simulated 1 USDC deposit from an unrelated account holding USDC and SOL succeeded at slot 455531367 (0.999999 shares minted); the vault's permissioning authority is unset, so no account needs admission."
+      },
+      "deployedAtSlot": 455493127,
+      "notes": [
+        "On Solana mainnet-beta. Every call for this vault is a Solana transaction, signed by a Solana wallet; its RPC is TREASURY_RPC_SOLANA.",
+        "A Kamino vault (program KvauGMspG5k6rtzrqqn7WNn3oZdyKqLKwK2XWQ8FLjd) over Kamino lending reserves. It is not an ERC-4626 vault: shares are an SPL token (6 decimals), and there is no approve step.",
+        "The ticker tlCashPlusUSDC2G is assigned by this registry: the share mint carries no token metadata, so there is no on-chain ticker to read. The name is read from the vault's own state.",
+        "Shares always land in the depositing account, and a withdrawal always pays the account that holds the shares: there is no separate receiver.",
+        "Each withdraw instruction keeps up to 0.001 USDC in the vault: Kamino's GLOBAL withdrawal penalty for every vault on its program (the program's global config holds withdrawalPenaltyLamports = 1000, read 2026-10-11), not this vault's own setting (0), and Kamino can change it at any time without notice. A withdrawal that needs more than one reserve is more than one instruction: measured by simulation 2026-10-11, 2,000,000 shares kept 1,000 as one instruction and 1,929 as two; a withdrawal worth 0.001 USDC or less is refused (program error 7049). Quotes and positions report the exact amount, net of it.",
+        "A first deposit creates the account's share token account, whose rent (about 0.002 SOL) the account pays and gets back if it ever closes that account. Every transaction also needs SOL for its fee.",
+        "A prepared transaction names a recent blockhash and lands only within about a minute of being prepared: prepare it when the operator is ready to sign.",
+        "No fee is set: performance and management fees read 0 at slot 455529733. The vault admin can set them, and this vault's own withdrawal penalty, with no timelock: a change takes effect in the transaction that makes it. The vault admin or Kamino's global admin can also set a per-reserve crank fee taken from each deposit and minimum deposit and withdrawal amounts (all 0, read 2026-10-11).",
+        "Kamino's program can require a co-signer (a permissioning authority) on every deposit AND every withdrawal of this vault; set by Kamino's global admin with no delay, that is a power to stop exits. It is unset (read 2026-10-11), and this client refuses to build while one is set.",
+        "Each withdrawal leg is limited by its reserve's available liquidity: while a reserve is highly utilised, a large withdrawal can be refused or need more than one transaction. earn_balance's exit simulates it.",
+        "Deposit cap: 1,000 USDC in total (read 2026-10-11). Two reserves are configured: Kamino's main-market USDC reserve and its OnRe-market USDC reserve; idle USDC is the rest.",
+        "The default vault on Solana, and open to any account: it is in depositable."
+      ]
     }
   ]
 }

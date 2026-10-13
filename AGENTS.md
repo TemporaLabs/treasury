@@ -4,7 +4,7 @@ Instructions for coding agents working in this repository. People should start w
 [`CONTRIBUTING.md`](CONTRIBUTING.md); it is the fuller guide for people, and wins if the two ever
 disagree.
 
-Treasury is a depositor client for ERC-4626 vaults on Base, Arbitrum One and Robinhood Chain: a vault registry, pre-flight checks, and
+Treasury is a depositor client for ERC-4626 vaults on Base, Arbitrum One, Robinhood Chain, Ethereum and Monad, and a Kamino vault on Solana: a vault registry, pre-flight checks, and
 builders for **unsigned** deposit and withdraw calls, served as a library and as a command-line program
 (`treasury earn <command>`, one JSON document per run).
 
@@ -15,8 +15,8 @@ builders for **unsigned** deposit and withdraw calls, served as a library and as
    commands prepare unsigned calls and never send. The wallet connection (`treasury connect`,
    `src/connect/`) may hand a call to the operator's connected wallet — a browser wallet, or a
    Privy embedded wallet with its own confirmation — which shows it and asks for approval every
-   time. That relay builds calls only through `src/build.ts`, and its gate (`src/connect/gate.ts`)
-   refuses any call whose destination is not a vault in `registry/vaults.json` or that vault's asset
+   time. That relay builds calls only through `src/build.ts` (on Solana, `src/solana/vault.ts`), and its gates (`src/connect/gate.ts`, and
+   `src/connect/gate-solana.ts` on Solana) refuse any call whose destination is not a vault in `registry/vaults.json` or that vault's asset
    (the approval to it, for exactly the deposit's amount), and any receiver or owner other than the
    connected account. Do not add a private-key variable, a local signer, a tool that signs, or a
    relay that accepts an arbitrary destination: that is a design change, not a pull request. CI runs
@@ -46,7 +46,8 @@ post anything, search it for the above. If you are not sure whether something is
 
 ## Commands
 
-Node.js 22 or later. The fork tier also needs [Foundry](https://getfoundry.sh) for `anvil`.
+Node.js 22 or later. The fork tier also needs [Foundry](https://getfoundry.sh) for `anvil`, and
+[Surfpool](https://surfpool.run) on `PATH` for Solana's.
 
 ```bash
 npm ci                     # never `npm install` — CI fails on a stale lockfile
@@ -59,7 +60,9 @@ npm run registry:check     # reconcile registry/vaults.json against the chain
 ```
 
 Each chain's live and fork tiers run when that chain's RPC variable is set: add
-`TREASURY_RPC_ARBITRUM=https://...` for Arbitrum One, or `TREASURY_RPC_ROBINHOOD=https://...` for Robinhood Chain, to the same commands. `registry:check` reads
+`TREASURY_RPC_ARBITRUM=https://...` for Arbitrum One, `TREASURY_RPC_ROBINHOOD=https://...` for Robinhood Chain,
+`TREASURY_RPC_ETHEREUM=https://...` for Ethereum, `TREASURY_RPC_MONAD=https://...` for Monad, or `TREASURY_RPC_SOLANA=https://...` for Solana, to the same commands
+(the fork tier covers every chain: anvil for the EVM chains, Surfpool for Solana). `registry:check` reads
 each row on its own chain and reports a chain it could not reach as not checked.
 
 ## Things that fail CI if forgotten
@@ -71,6 +74,8 @@ each row on its own chain and reports a chain it could not reach as not checked.
   separately: after any change under `connect-page/`, run `npm ci && npm run build` in `connect-page/`,
   then `npm run build` at the root to refresh the `plugin/` copy, and commit all of it. CI rebuilds
   the page and fails on a difference.
+- **`llms.txt` is generated** from the Earn skill and the command descriptions. After a change to
+  either, run `npm run build` and commit it; CI fails on a difference.
 - **Every commit carries a `Signed-off-by` trailer** matching its author (`git commit -s`). See
   [`DCO.md`](DCO.md).
 - **Every relative link in `docs/` must resolve.**

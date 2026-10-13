@@ -1,12 +1,12 @@
 # Configuration
 
-Treasury reads the environment variables below and nothing else that an operator can set: ten for
-the chain, and four optional ones for `treasury connect`. A test pins the exact set — these, plus
+Treasury reads the environment variables below and nothing else that an operator can set: eighteen
+for the chains, and four optional ones for `treasury connect`. A test pins the exact set — these, plus
 `TREASURY_FORK` (a switch only the fork test tier reads, never the shipped code) and the four a
 browser launcher checks to see whether there is a browser to open (`DISPLAY`, `WAYLAND_DISPLAY`,
 `SSH_CONNECTION`, `SSH_TTY`) — so a variable read anywhere else in the package fails the build.
 
-**Each chain has its own variables, and a chain reads only its own.** An Arbitrum or Robinhood Chain
+**Each chain has its own variables, and a chain reads only its own.** An Arbitrum, Robinhood Chain, Ethereum, Monad or Solana
 call never falls back to a Base endpoint: a vault's address has no contract on the other chain, so reads there fail
 with "returned no data", which looks like a broken vault, not like a misconfiguration.
 
@@ -21,10 +21,18 @@ with "returned no data", which looks like a broken vault, not like a misconfigur
 | `TREASURY_RPC_ROBINHOOD` | the Robinhood Chain RPC every tool reads through for a vault on Robinhood Chain | falls back to `ROBINHOOD_RPC_URL`, then to Robinhood Chain's public endpoint `https://rpc.mainnet.chain.robinhood.com` |
 | `TREASURY_LOGS_RPC_ROBINHOOD` | the RPC `earn_balance` scans events through on Robinhood Chain | uses `TREASURY_RPC_ROBINHOOD` |
 | `ROBINHOOD_RPC_URL` | a conventional alias, used when `TREASURY_RPC_ROBINHOOD` is unset — through the plugin too | — |
+| `TREASURY_RPC_ETHEREUM` | the Ethereum RPC every tool reads through for a vault on Ethereum | falls back to `ETHEREUM_RPC_URL`, then to the public endpoint `https://ethereum.reth.rs/rpc` |
+| `TREASURY_LOGS_RPC_ETHEREUM` | the RPC `earn_balance` scans events through on Ethereum | uses `TREASURY_RPC_ETHEREUM` |
+| `ETHEREUM_RPC_URL` | a conventional alias, used when `TREASURY_RPC_ETHEREUM` is unset — through the plugin too | — |
+| `TREASURY_RPC_MONAD` | the Monad RPC every tool reads through for a vault on Monad | falls back to `MONAD_RPC_URL`, then to Monad's public endpoint `https://rpc.monad.xyz` |
+| `TREASURY_LOGS_RPC_MONAD` | the RPC `earn_balance` scans events through on Monad. **Set it for any history on Monad**: the public endpoint's window is 100 blocks (below) | uses `TREASURY_RPC_MONAD` |
+| `MONAD_RPC_URL` | a conventional alias, used when `TREASURY_RPC_MONAD` is unset — through the plugin too | — |
+| `TREASURY_RPC_SOLANA` | the Solana RPC every tool reads through for the vault on Solana. An endpoint whose genesis hash is not mainnet-beta's is reported as `wrong_chain` | falls back to `SOLANA_RPC_URL`, then to Solana's public endpoint `https://api.mainnet-beta.solana.com`, which rate-limits after a handful of requests |
+| `SOLANA_RPC_URL` | a conventional alias, used when `TREASURY_RPC_SOLANA` is unset — through the plugin too | — |
 | `TREASURY_LOGS_FALLBACK` | where a scan goes when the configured RPC cannot cover the range: an `http(s)` URL for a Base endpoint, or anything that is not a URL (`off`, `disabled`, …) to forbid a fallback on every chain | the chain's own public endpoint |
 | `PRIVY_APP_ID` | the Privy app the `treasury connect` sign-in page uses. A Privy app ID is public — it ships in the page — so a fork can point at its own app | Tempora Labs' own app |
-| `TREASURY_CONNECT_PORT` | the local port the connect page is served on. Privy accepts sign-in only from origins its dashboard lists exactly, so change it only together with that list | `53682` |
-| `TREASURY_CONNECT_HOME` | the directory holding the connect session file (an address, how it signed in, when; no credential) | `~/.config/treasury` |
+| `TREASURY_CONNECT_PORT` | one local port for the connect page, in place of the default list. Privy accepts sign-in only from origins its dashboard lists exactly, so set it only to a port listed there | the first free of `53682` to `53686` |
+| `TREASURY_CONNECT_HOME` | the directory holding the connect session file (an address, how it signed in, when; no credential), the pending acknowledgement and the open page's lock | `~/.config/treasury` |
 | `TREASURY_CONNECT_NO_OPEN` | set to anything to stop `treasury connect` opening a browser itself; it prints the page's URL instead | the browser opens |
 
 **Check a chain's RPC with `earn_status` and `chain`.** It reports which variable supplied the
@@ -67,6 +75,16 @@ Robinhood Chain produces blocks faster still. Measured 2026-10-04, its public en
 674,901-block range in one request, which covered Test 2D's whole history. That endpoint does not
 serve state at past blocks; nothing in Treasury reads one.
 
+Ethereum makes a block every 12 seconds, so its ranges are short. Measured 2026-10-11, its public
+endpoint (`ethereum.reth.rs`) served a 100,000-block range in one request — about two weeks — and
+refuses a wider one with a stated limit, which Treasury reads as its window.
+
+Monad is the opposite. It makes about three blocks a second, and measured 2026-10-11 its public
+endpoint (`rpc.monad.xyz`) serves **at most 100 blocks** per `eth_getLogs` request, so 100 requests
+cover under an hour. Test 2F was already about 100,000 blocks old that day. **On Monad, set
+`TREASURY_LOGS_RPC_MONAD`** to a provider with a wide window; without it the scan says it was cut short
+and basis and yield read `unknown`.
+
 What Treasury does about it, in order:
 
 1. It learns the window from the provider's own error message (the stated limit is parsed, never
@@ -77,7 +95,7 @@ What Treasury does about it, in order:
    got: `scan.capped: true`, `scan.wholeHistory: false`, and the basis and yield read `unknown`.
 
 For a vault with a long history, set that chain's logs variable (`TREASURY_LOGS_RPC_BASE`,
-`TREASURY_LOGS_RPC_ARBITRUM`, `TREASURY_LOGS_RPC_ROBINHOOD`) to a provider with a wide window. Until then, `scan` says exactly how
+`TREASURY_LOGS_RPC_ARBITRUM`, `TREASURY_LOGS_RPC_ROBINHOOD`, `TREASURY_LOGS_RPC_ETHEREUM`, `TREASURY_LOGS_RPC_MONAD`) to a provider with a wide window. Until then, `scan` says exactly how
 much was covered, and no partial sum is ever presented as a number.
 
 ## An operator who may not query a third party
@@ -86,10 +104,11 @@ Set `TREASURY_LOGS_FALLBACK=off`. It fails closed: an unrecognised value turns t
 than quietly keeping the default, so a typo cannot re-enable a query to an endpoint you did not name.
 The opt-out applies on every chain.
 
-A URL in `TREASURY_LOGS_FALLBACK` names a Base endpoint. On Arbitrum One and Robinhood Chain it is not
+A URL in `TREASURY_LOGS_FALLBACK` names a Base endpoint. On every other chain it is not
 used — it would answer for the wrong chain — and because the variable is set, no other fallback is used
 there either: you named where this process may talk, and that chain's public endpoint is not it. For
-history there, set `TREASURY_LOGS_RPC_ARBITRUM` or `TREASURY_LOGS_RPC_ROBINHOOD`.
+history there, set that chain's logs variable (`TREASURY_LOGS_RPC_ARBITRUM`, `TREASURY_LOGS_RPC_ROBINHOOD`,
+`TREASURY_LOGS_RPC_ETHEREUM` or `TREASURY_LOGS_RPC_MONAD`).
 
 ## What Treasury never does with the network
 

@@ -11,7 +11,7 @@
 
 
 Open Agent Treasury (OAT) helps agents manage on-chain capital. Its first skill, **Earn**, lets
-agents inspect vaults curated by Tempora Labs on Base, Arbitrum One and Robinhood Chain, track positions, and prepare deposits and
+agents inspect vaults curated by Tempora Labs on Base, Arbitrum One, Robinhood Chain, Ethereum, Monad and Solana, track positions, and prepare deposits and
 withdrawals. It ships as an agent plugin, a command-line program, and a TypeScript/JavaScript library.
 
 **OAT prepares transactions. Your wallet executes them.** It never holds private keys or signs: with
@@ -23,6 +23,16 @@ A transaction goes out only from your own wallet, after you approve it there. Yo
 > and withdrawals depend on available liquidity. Review every transaction before signing and
 > read the [risks](docs/risks.md) before depositing.
 
+## Two ways to use the vaults
+
+- **In a browser, at [app.temporalabs.com](https://app.temporalabs.com).** Connect a wallet, then deposit
+  and withdraw from the page. The app shows the Cash Plus vaults it currently supports, which can be fewer
+  than OAT offers.
+- **With an agent, through OAT.** Your agent quotes, prepares and confirms deposits and withdrawals through
+  the plugin or the CLI, and you approve each transaction in your own wallet.
+
+Either way the vaults are the same on-chain contracts.
+
 ## What you can do
 
 - **Inspect vaults:** check assets, fees, and deposit access.
@@ -30,8 +40,8 @@ A transaction goes out only from your own wallet, after you approve it there. Yo
 - **Track a position:** see its value, deposits, and earnings from on-chain records.
 - **Prepare a withdrawal:** check how much is withdrawable now and build unsigned calls.
 
-Earn currently supports **USDC in, USDC out** through Tempora Labs' ERC-4626 vaults on Base and
-Arbitrum One, and **USDG in, USDG out** on Robinhood Chain. Base is the default chain, and Test 2B its
+Earn currently supports **USDC in, USDC out** through Tempora Labs' ERC-4626 vaults on Base,
+Arbitrum One, Ethereum and Monad, through a Kamino vault on Solana, and **USDG in, USDG out** on Robinhood Chain. Base is the default chain, and Test 2B its
 default vault; the agent asks which chain when you have not said, and the funds have to be on that
 chain already. See [Vaults](#vaults).
 See the [command reference](docs/tools.md), the eight `earn` commands and the five `connect` commands, for inputs, outputs, and limits.
@@ -46,11 +56,14 @@ See the [command reference](docs/tools.md), the eight `earn` commands and the fi
 export TREASURY_RPC_BASE=https://...      # replace with your Base RPC URL
 export TREASURY_RPC_ARBITRUM=https://...  # only if you will use a vault on Arbitrum One
 export TREASURY_RPC_ROBINHOOD=https://... # only if you will use a vault on Robinhood Chain
-claude plugin marketplace add TemporaLabs/treasury@v0.1.2
+export TREASURY_RPC_ETHEREUM=https://...  # only if you will use a vault on Ethereum
+export TREASURY_RPC_MONAD=https://...     # only if you will use a vault on Monad
+export TREASURY_RPC_SOLANA=https://...    # only if you will use the vault on Solana
+claude plugin marketplace add TemporaLabs/treasury@v0.1.3
 claude plugin install treasury@treasury
 ```
 
-Start a new Claude Code session after installing so the Earn skill loads. Keep the `TemporaLabs/treasury@v0.1.2` ref
+Start a new Claude Code session after installing so the Earn skill loads. Keep the `TemporaLabs/treasury@v0.1.3` ref
 explicit so the install stays on a release rather than tracking the default branch. Upgrading an
 earlier install? Run `claude plugin marketplace remove treasury` first, then the two `claude plugin` lines above
 ([details](docs/install.md#upgrading-an-earlier-install)).
@@ -62,11 +75,14 @@ command at a time; nothing stays running.
 ### Any agent with a shell
 
 ```bash
-npm install --save-exact @temporalabs/treasury@0.1.2
+npm install --save-exact @temporalabs/treasury@0.1.3
 npx --no-install treasury earn --help     # every command and flag, as JSON
 ```
 
 Each command prints one JSON document; a refusal exits 1 with `{ "error": … }` on stderr.
+`treasury --help` points to [`llms.txt`](llms.txt), the guide an agent without the plugin should read first: the rules the
+plugin's Earn skill carries (which questions to ask the operator, what to show before a first deposit) and every command with its flags.
+It is generated from that skill and the command descriptions, and CI fails when it drifts.
 For library usage, other hosts, and troubleshooting, see [installation](docs/install.md).
 
 ### Try it
@@ -85,15 +101,22 @@ Later, ask: **“What is my position worth, and how much can I withdraw now?”*
 ## Vaults
 
 A command that names no vault or chain uses **Cash Plus USDC (Test 2B)** on Base; the agent still asks
-which chain first when you have not said. There are other options, and a demo.
+which chain first when you have not said. These are Tempora Labs' curated test vaults, on six chains: Base,
+Arbitrum One, Robinhood Chain, Ethereum, Monad and Solana. There are other options, and a demo.
 
 | | vault | chain | choose it by |
 |---|---|---|---|
-| **Default** | **Cash Plus USDC (Test 2B)** | Base | naming nothing, or `--chain base` |
-| **Demo** | **Cash Plus USDC (Test 2)** | Base | `--vault tlCashPlusUSDC2` |
-| Option | **Cash Plus USDC (Test 2C)** | Arbitrum One | `--chain arbitrum` |
-| Option | **Cash Plus USDG (Test 2D)** | Robinhood Chain | `--chain robinhood` |
-| Option | **Cash Plus USDC (Test 2A)** | Base | `--vault tlCashPlusUSDC2A` (whitelist only) |
+| **Default** | **Cash Plus USDC (Test 2B)** | <img src="docs/assets/chains/base.webp" alt="" width="20" height="20"> Base | naming nothing, or `--chain base` |
+| **Demo** | **Cash Plus USDC (Test 2)** | <img src="docs/assets/chains/base.webp" alt="" width="20" height="20"> Base | `--vault tlCashPlusUSDC2` |
+| Option | **Cash Plus USDC (Test 2C)** | <img src="docs/assets/chains/arbitrum.webp" alt="" width="20" height="20"> Arbitrum One | `--chain arbitrum` |
+| Option | **Cash Plus USDG (Test 2D)** | <img src="docs/assets/chains/robinhood.webp" alt="" width="20" height="20"> Robinhood Chain | `--chain robinhood` |
+| Option | **Cash Plus USDC (Test 2E)** | <img src="docs/assets/chains/ethereum.webp" alt="" width="20" height="20"> Ethereum | `--chain ethereum` |
+| Option | **Cash Plus USDC (Test 2F)** | <img src="docs/assets/chains/monad.webp" alt="" width="20" height="20"> Monad | `--chain monad` |
+| Option | **Cash Plus USDC (Test 2G)** | <img src="docs/assets/chains/solana.webp" alt="" width="20" height="20"> Solana | `--chain solana` |
+| Option | **Cash Plus USDC (Test 2A)** | <img src="docs/assets/chains/base.webp" alt="" width="20" height="20"> Base | `--vault tlCashPlusUSDC2A` (whitelist only) |
+
+Chain logos are the marks of their respective owners, shown only to identify the chains; the icons come from
+[DefiLlama](https://defillama.com)'s chain icon set.
 
 - **Test 2B, the default.** A Morpho Vault V2 on Base, open to any account. Its first position is a
   savings-rate token rather than a lending vault, and its other two positions differ from Test 2's too
@@ -109,6 +132,15 @@ which chain first when you have not said. There are other options, and a demo.
 - **Test 2D, Robinhood Chain.** A Morpho Vault V2 over **USDG**, not USDC, open to any account.
   [Blockscout](https://robinhoodchain.blockscout.com/address/0x758f00731943aA88e8C7fB709e0B727903B4F833).
   The USDG has to be on Robinhood Chain already.
+- **Test 2E, Ethereum.** A Morpho Vault V2 over USDC, open to any account.
+  [Etherscan](https://etherscan.io/address/0x2AA9B1F12bbFE1E01dcb4DD52E6836d68416e3B6). Gas on
+  Ethereum costs far more than on the other chains, which matters for a small deposit.
+- **Test 2F, Monad.** A Morpho Vault V2 over USDC, open to any account.
+  [MonadScan](https://monadscan.com/address/0x163295A4d4381745A205DC5E9A436a3f51791593).
+- **Test 2G, Solana.** A Kamino vault over USDC, open to any account.
+  [Solscan](https://solscan.io/account/8qV54zrW2piQgBbVaUUtGajf4KuVDKLUDquHv9VZBfS7). It takes a Solana
+  wallet (`treasury connect wallet --chain solana`), the account needs a little SOL for fees, and every
+  withdrawal keeps up to 0.001 USDC in the vault per instruction (a charge Kamino sets for every vault on its program, and can change).
 - **Test 2A.** IPOR Fusion, listed so an admitted account can read and exit its position.
 
 When you have not said which chain, the agent shows these and asks before it prepares a deposit.

@@ -1011,7 +1011,7 @@ var version3;
 var init_version2 = __esm({
   "node_modules/viem/_esm/errors/version.js"() {
     "use strict";
-    version3 = "2.57.2";
+    version3 = "2.57.3";
   }
 });
 
@@ -1772,10 +1772,10 @@ var init_u64 = __esm({
     "use strict";
     U32_MASK64 = /* @__PURE__ */ BigInt(2 ** 32 - 1);
     _32n = /* @__PURE__ */ BigInt(32);
-    rotlSH = (h, l, s) => h << s | l >>> 32 - s;
-    rotlSL = (h, l, s) => l << s | h >>> 32 - s;
-    rotlBH = (h, l, s) => l << s - 32 | h >>> 64 - s;
-    rotlBL = (h, l, s) => h << s - 32 | l >>> 64 - s;
+    rotlSH = (h, l, s2) => h << s2 | l >>> 32 - s2;
+    rotlSL = (h, l, s2) => l << s2 | h >>> 32 - s2;
+    rotlBH = (h, l, s2) => l << s2 - 32 | h >>> 64 - s2;
+    rotlBL = (h, l, s2) => h << s2 - 32 | l >>> 64 - s2;
   }
 });
 
@@ -1901,11 +1901,11 @@ var init_utils2 = __esm({
 });
 
 // node_modules/@noble/hashes/esm/sha3.js
-function keccakP(s, rounds = 24) {
+function keccakP(s2, rounds = 24) {
   const B = new Uint32Array(5 * 2);
   for (let round = 24 - rounds; round < 24; round++) {
     for (let x = 0; x < 10; x++)
-      B[x] = s[x] ^ s[x + 10] ^ s[x + 20] ^ s[x + 30] ^ s[x + 40];
+      B[x] = s2[x] ^ s2[x + 10] ^ s2[x + 20] ^ s2[x + 30] ^ s2[x + 40];
     for (let x = 0; x < 10; x += 2) {
       const idx1 = (x + 8) % 10;
       const idx0 = (x + 2) % 10;
@@ -1914,30 +1914,30 @@ function keccakP(s, rounds = 24) {
       const Th = rotlH(B0, B1, 1) ^ B[idx1];
       const Tl = rotlL(B0, B1, 1) ^ B[idx1 + 1];
       for (let y = 0; y < 50; y += 10) {
-        s[x + y] ^= Th;
-        s[x + y + 1] ^= Tl;
+        s2[x + y] ^= Th;
+        s2[x + y + 1] ^= Tl;
       }
     }
-    let curH = s[2];
-    let curL = s[3];
+    let curH = s2[2];
+    let curL = s2[3];
     for (let t = 0; t < 24; t++) {
       const shift = SHA3_ROTL[t];
       const Th = rotlH(curH, curL, shift);
       const Tl = rotlL(curH, curL, shift);
       const PI = SHA3_PI[t];
-      curH = s[PI];
-      curL = s[PI + 1];
-      s[PI] = Th;
-      s[PI + 1] = Tl;
+      curH = s2[PI];
+      curL = s2[PI + 1];
+      s2[PI] = Th;
+      s2[PI + 1] = Tl;
     }
     for (let y = 0; y < 50; y += 10) {
       for (let x = 0; x < 10; x++)
-        B[x] = s[y + x];
+        B[x] = s2[y + x];
       for (let x = 0; x < 10; x++)
-        s[y + x] ^= ~B[(x + 2) % 10] & B[(x + 4) % 10];
+        s2[y + x] ^= ~B[(x + 2) % 10] & B[(x + 4) % 10];
     }
-    s[0] ^= SHA3_IOTA_H[round];
-    s[1] ^= SHA3_IOTA_L[round];
+    s2[0] ^= SHA3_IOTA_H[round];
+    s2[1] ^= SHA3_IOTA_L[round];
   }
   clean(B);
 }
@@ -1971,8 +1971,8 @@ var init_sha3 = __esm({
     IOTAS = split(_SHA3_IOTA, true);
     SHA3_IOTA_H = IOTAS[0];
     SHA3_IOTA_L = IOTAS[1];
-    rotlH = (h, l, s) => s > 32 ? rotlBH(h, l, s) : rotlSH(h, l, s);
-    rotlL = (h, l, s) => s > 32 ? rotlBL(h, l, s) : rotlSL(h, l, s);
+    rotlH = (h, l, s2) => s2 > 32 ? rotlBH(h, l, s2) : rotlSH(h, l, s2);
+    rotlL = (h, l, s2) => s2 > 32 ? rotlBL(h, l, s2) : rotlSL(h, l, s2);
     Keccak = class _Keccak extends Hash {
       // NOTE: we accept arguments in bytes instead of bits here.
       constructor(blockLen, suffix, outputLen, enableXOF = false, rounds = 24) {
@@ -2218,8 +2218,8 @@ var init_address = __esm({
     "use strict";
     init_base();
     InvalidAddressError = class extends BaseError2 {
-      constructor({ address: address2 }) {
-        super(`Address "${address2}" is invalid.`, {
+      constructor({ address: address3 }) {
+        super(`Address "${address3}" is invalid.`, {
           metaMessages: [
             "- Address must be a hex value of 20 bytes (40 hex characters).",
             "- Address must match its checksum counterpart."
@@ -2276,23 +2276,23 @@ function checksumAddress(address_, chainId) {
     return checksumAddressCache.get(`${address_}.${chainId}`);
   const hexAddress = chainId ? `${chainId}${address_.toLowerCase()}` : address_.substring(2).toLowerCase();
   const hash4 = keccak256(stringToBytes(hexAddress), "bytes");
-  const address2 = (chainId ? hexAddress.substring(`${chainId}0x`.length) : hexAddress).split("");
+  const address3 = (chainId ? hexAddress.substring(`${chainId}0x`.length) : hexAddress).split("");
   for (let i = 0; i < 40; i += 2) {
-    if (hash4[i >> 1] >> 4 >= 8 && address2[i]) {
-      address2[i] = address2[i].toUpperCase();
+    if (hash4[i >> 1] >> 4 >= 8 && address3[i]) {
+      address3[i] = address3[i].toUpperCase();
     }
-    if ((hash4[i >> 1] & 15) >= 8 && address2[i + 1]) {
-      address2[i + 1] = address2[i + 1].toUpperCase();
+    if ((hash4[i >> 1] & 15) >= 8 && address3[i + 1]) {
+      address3[i + 1] = address3[i + 1].toUpperCase();
     }
   }
-  const result = `0x${address2.join("")}`;
+  const result = `0x${address3.join("")}`;
   checksumAddressCache.set(`${address_}.${chainId}`, result);
   return result;
 }
-function getAddress(address2, chainId) {
-  if (!isAddress(address2, { strict: false }))
-    throw new InvalidAddressError({ address: address2 });
-  return checksumAddress(address2, chainId);
+function getAddress(address3, chainId) {
+  if (!isAddress(address3, { strict: false }))
+    throw new InvalidAddressError({ address: address3 });
+  return checksumAddress(address3, chainId);
 }
 var checksumAddressCache;
 var init_getAddress = __esm({
@@ -2308,18 +2308,18 @@ var init_getAddress = __esm({
 });
 
 // node_modules/viem/_esm/utils/address/isAddress.js
-function isAddress(address2, options) {
+function isAddress(address3, options) {
   const { strict = true } = options ?? {};
-  const cacheKey2 = `${address2}.${strict}`;
+  const cacheKey2 = `${address3}.${strict}`;
   if (isAddressCache.has(cacheKey2))
     return isAddressCache.get(cacheKey2);
   const result = (() => {
-    if (!addressRegex.test(address2))
+    if (!addressRegex.test(address3))
       return false;
-    if (address2.toLowerCase() === address2)
+    if (address3.toLowerCase() === address3)
       return true;
     if (strict)
-      return checksumAddress(address2) === address2;
+      return checksumAddress(address3) === address3;
     return true;
   })();
   isAddressCache.set(cacheKey2, result);
@@ -3559,8 +3559,8 @@ function prettyStateMapping(stateMapping) {
   }, "");
 }
 function prettyStateOverride(stateOverride) {
-  return stateOverride.reduce((pretty, { address: address2, ...state }) => {
-    let val = `${pretty}    ${address2}:
+  return stateOverride.reduce((pretty, { address: address3, ...state }) => {
+    let val = `${pretty}    ${address3}:
 `;
     if (state.nonce)
       val += `      nonce: ${state.nonce}
@@ -3588,8 +3588,8 @@ var init_stateOverride = __esm({
     "use strict";
     init_base();
     AccountStateConflictError = class extends BaseError2 {
-      constructor({ address: address2 }) {
-        super(`State for account "${address2}" is set multiple times.`, {
+      constructor({ address: address3 }) {
+        super(`State for account "${address3}" is set multiple times.`, {
           name: "AccountStateConflictError"
         });
       }
@@ -3767,7 +3767,7 @@ var getContractAddress, getUrl;
 var init_utils3 = __esm({
   "node_modules/viem/_esm/errors/utils.js"() {
     "use strict";
-    getContractAddress = (address2) => address2;
+    getContractAddress = (address3) => address3;
     getUrl = (url2) => {
       try {
         const parsed = new URL(url2);
@@ -4615,17 +4615,17 @@ var init_rpc = __esm({
 });
 
 // node_modules/@noble/hashes/esm/_md.js
-function setBigUint64(view, byteOffset, value, isLE2) {
-  if (typeof view.setBigUint64 === "function")
-    return view.setBigUint64(byteOffset, value, isLE2);
+function setBigUint64(view2, byteOffset, value, isLE2) {
+  if (typeof view2.setBigUint64 === "function")
+    return view2.setBigUint64(byteOffset, value, isLE2);
   const _32n2 = BigInt(32);
   const _u32_max = BigInt(4294967295);
   const wh = Number(value >> _32n2 & _u32_max);
   const wl = Number(value & _u32_max);
   const h = isLE2 ? 4 : 0;
   const l = isLE2 ? 0 : 4;
-  view.setUint32(byteOffset + h, wh, isLE2);
-  view.setUint32(byteOffset + l, wl, isLE2);
+  view2.setUint32(byteOffset + h, wh, isLE2);
+  view2.setUint32(byteOffset + l, wl, isLE2);
 }
 function Chi(a, b, c) {
   return a & b ^ ~a & c;
@@ -4656,7 +4656,7 @@ var init_md = __esm({
         aexists(this);
         data = toBytes2(data);
         abytes(data);
-        const { view, buffer: buffer2, blockLen } = this;
+        const { view: view2, buffer: buffer2, blockLen } = this;
         const len = data.length;
         for (let pos = 0; pos < len; ) {
           const take = Math.min(blockLen - this.pos, len - pos);
@@ -4670,7 +4670,7 @@ var init_md = __esm({
           this.pos += take;
           pos += take;
           if (this.pos === blockLen) {
-            this.process(view, 0);
+            this.process(view2, 0);
             this.pos = 0;
           }
         }
@@ -4682,18 +4682,18 @@ var init_md = __esm({
         aexists(this);
         aoutput(out, this);
         this.finished = true;
-        const { buffer: buffer2, view, blockLen, isLE: isLE2 } = this;
+        const { buffer: buffer2, view: view2, blockLen, isLE: isLE2 } = this;
         let { pos } = this;
         buffer2[pos++] = 128;
         clean(this.buffer.subarray(pos));
         if (this.padOffset > blockLen - pos) {
-          this.process(view, 0);
+          this.process(view2, 0);
           pos = 0;
         }
         for (let i = pos; i < blockLen; i++)
           buffer2[i] = 0;
-        setBigUint64(view, blockLen - 8, BigInt(this.length * 8), isLE2);
-        this.process(view, 0);
+        setBigUint64(view2, blockLen - 8, BigInt(this.length * 8), isLE2);
+        this.process(view2, 0);
         const oview = createView(out);
         const len = this.outputLen;
         if (len % 4)
@@ -4828,23 +4828,23 @@ var init_sha2 = __esm({
         this.H = SHA256_IV[7] | 0;
       }
       get() {
-        const { A, B, C, D, E, F, G, H } = this;
-        return [A, B, C, D, E, F, G, H];
+        const { A, B, C, D: D2, E, F, G, H } = this;
+        return [A, B, C, D2, E, F, G, H];
       }
       // prettier-ignore
-      set(A, B, C, D, E, F, G, H) {
+      set(A, B, C, D2, E, F, G, H) {
         this.A = A | 0;
         this.B = B | 0;
         this.C = C | 0;
-        this.D = D | 0;
+        this.D = D2 | 0;
         this.E = E | 0;
         this.F = F | 0;
         this.G = G | 0;
         this.H = H | 0;
       }
-      process(view, offset) {
+      process(view2, offset) {
         for (let i = 0; i < 16; i++, offset += 4)
-          SHA256_W[i] = view.getUint32(offset, false);
+          SHA256_W[i] = view2.getUint32(offset, false);
         for (let i = 16; i < 64; i++) {
           const W15 = SHA256_W[i - 15];
           const W2 = SHA256_W[i - 2];
@@ -4852,7 +4852,7 @@ var init_sha2 = __esm({
           const s1 = rotr(W2, 17) ^ rotr(W2, 19) ^ W2 >>> 10;
           SHA256_W[i] = s1 + SHA256_W[i - 7] + s0 + SHA256_W[i - 16] | 0;
         }
-        let { A, B, C, D, E, F, G, H } = this;
+        let { A, B, C, D: D2, E, F, G, H } = this;
         for (let i = 0; i < 64; i++) {
           const sigma1 = rotr(E, 6) ^ rotr(E, 11) ^ rotr(E, 25);
           const T1 = H + sigma1 + Chi(E, F, G) + SHA256_K[i] + SHA256_W[i] | 0;
@@ -4861,8 +4861,8 @@ var init_sha2 = __esm({
           H = G;
           G = F;
           F = E;
-          E = D + T1 | 0;
-          D = C;
+          E = D2 + T1 | 0;
+          D2 = C;
           C = B;
           B = A;
           A = T1 + T2 | 0;
@@ -4870,12 +4870,12 @@ var init_sha2 = __esm({
         A = A + this.A | 0;
         B = B + this.B | 0;
         C = C + this.C | 0;
-        D = D + this.D | 0;
+        D2 = D2 + this.D | 0;
         E = E + this.E | 0;
         F = F + this.F | 0;
         G = G + this.G | 0;
         H = H + this.H | 0;
-        this.set(A, B, C, D, E, F, G, H);
+        this.set(A, B, C, D2, E, F, G, H);
       }
       roundClean() {
         clean(SHA256_W);
@@ -5043,8 +5043,8 @@ function ensureBytes(title, hex3, expectedLength) {
   if (typeof hex3 === "string") {
     try {
       res = hexToBytes2(hex3);
-    } catch (e) {
-      throw new Error(title + " must be hex string or Uint8Array, cause: " + e);
+    } catch (e4) {
+      throw new Error(title + " must be hex string or Uint8Array, cause: " + e4);
     }
   } else if (isBytes2(hex3)) {
     res = Uint8Array.from(hex3);
@@ -5199,21 +5199,21 @@ function mod(a, b) {
   const result = a % b;
   return result >= _0n3 ? result : b + result;
 }
-function pow2(x, power, modulo) {
+function pow2(x, power, modulo2) {
   let res = x;
   while (power-- > _0n3) {
     res *= res;
-    res %= modulo;
+    res %= modulo2;
   }
   return res;
 }
-function invert(number4, modulo) {
+function invert(number4, modulo2) {
   if (number4 === _0n3)
     throw new Error("invert: expected non-zero number");
-  if (modulo <= _0n3)
-    throw new Error("invert: expected positive modulus, got " + modulo);
-  let a = mod(number4, modulo);
-  let b = modulo;
+  if (modulo2 <= _0n3)
+    throw new Error("invert: expected positive modulus, got " + modulo2);
+  let a = mod(number4, modulo2);
+  let b = modulo2;
   let x = _0n3, y = _1n3, u = _1n3, v = _0n3;
   while (a !== _0n3) {
     const q = b / a;
@@ -5225,14 +5225,14 @@ function invert(number4, modulo) {
   const gcd = b;
   if (gcd !== _1n3)
     throw new Error("invert: does not exist");
-  return mod(x, modulo);
+  return mod(x, modulo2);
 }
 function sqrt3mod4(Fp, n) {
   const p1div4 = (Fp.ORDER + _1n3) / _4n;
-  const root = Fp.pow(n, p1div4);
-  if (!Fp.eql(Fp.sqr(root), n))
+  const root2 = Fp.pow(n, p1div4);
+  if (!Fp.eql(Fp.sqr(root2), n))
     throw new Error("Cannot find square root");
-  return root;
+  return root2;
 }
 function sqrt5mod8(Fp, n) {
   const p5div8 = (Fp.ORDER - _5n) / _8n;
@@ -5240,22 +5240,22 @@ function sqrt5mod8(Fp, n) {
   const v = Fp.pow(n2, p5div8);
   const nv = Fp.mul(n, v);
   const i = Fp.mul(Fp.mul(nv, _2n2), v);
-  const root = Fp.mul(nv, Fp.sub(i, Fp.ONE));
-  if (!Fp.eql(Fp.sqr(root), n))
+  const root2 = Fp.mul(nv, Fp.sub(i, Fp.ONE));
+  if (!Fp.eql(Fp.sqr(root2), n))
     throw new Error("Cannot find square root");
-  return root;
+  return root2;
 }
-function tonelliShanks(P) {
-  if (P < BigInt(3))
+function tonelliShanks(P2) {
+  if (P2 < BigInt(3))
     throw new Error("sqrt is not defined for small field");
-  let Q = P - _1n3;
+  let Q = P2 - _1n3;
   let S = 0;
   while (Q % _2n2 === _0n3) {
     Q /= _2n2;
     S++;
   }
   let Z = _2n2;
-  const _Fp = Field(P);
+  const _Fp = Field(P2);
   while (FpLegendre(_Fp, Z) === 1) {
     if (Z++ > 1e3)
       throw new Error("Cannot find square root: probably non-prime P");
@@ -5294,12 +5294,12 @@ function tonelliShanks(P) {
     return R;
   };
 }
-function FpSqrt(P) {
-  if (P % _4n === _3n)
+function FpSqrt(P2) {
+  if (P2 % _4n === _3n)
     return sqrt3mod4;
-  if (P % _8n === _5n)
+  if (P2 % _8n === _5n)
     return sqrt5mod8;
-  return tonelliShanks(P);
+  return tonelliShanks(P2);
 }
 function validateField(field) {
   const initial = {
@@ -5521,13 +5521,13 @@ function validateMSMPoints(points, c) {
 function validateMSMScalars(scalars, field) {
   if (!Array.isArray(scalars))
     throw new Error("array of scalars expected");
-  scalars.forEach((s, i) => {
-    if (!field.isValid(s))
+  scalars.forEach((s2, i) => {
+    if (!field.isValid(s2))
       throw new Error("invalid scalar at index " + i);
   });
 }
-function getW(P) {
-  return pointWindowSizes.get(P) || 1;
+function getW(P2) {
+  return pointWindowSizes.get(P2) || 1;
 }
 function wNAF(c, bits) {
   return {
@@ -5620,32 +5620,32 @@ function wNAF(c, bits) {
       }
       return acc;
     },
-    getPrecomputes(W, P, transform2) {
-      let comp = pointPrecomputes.get(P);
+    getPrecomputes(W, P2, transform2) {
+      let comp = pointPrecomputes.get(P2);
       if (!comp) {
-        comp = this.precomputeWindow(P, W);
+        comp = this.precomputeWindow(P2, W);
         if (W !== 1)
-          pointPrecomputes.set(P, transform2(comp));
+          pointPrecomputes.set(P2, transform2(comp));
       }
       return comp;
     },
-    wNAFCached(P, n, transform2) {
-      const W = getW(P);
-      return this.wNAF(W, this.getPrecomputes(W, P, transform2), n);
+    wNAFCached(P2, n, transform2) {
+      const W = getW(P2);
+      return this.wNAF(W, this.getPrecomputes(W, P2, transform2), n);
     },
-    wNAFCachedUnsafe(P, n, transform2, prev) {
-      const W = getW(P);
+    wNAFCachedUnsafe(P2, n, transform2, prev) {
+      const W = getW(P2);
       if (W === 1)
-        return this.unsafeLadder(P, n, prev);
-      return this.wNAFUnsafe(W, this.getPrecomputes(W, P, transform2), n, prev);
+        return this.unsafeLadder(P2, n, prev);
+      return this.wNAFUnsafe(W, this.getPrecomputes(W, P2, transform2), n, prev);
     },
     // We calculate precomputes for elliptic curve point multiplication
     // using windowed method. This specifies window size and
     // stores precomputed values. Usually only base point would be precomputed.
-    setWindowSize(P, W) {
+    setWindowSize(P2, W) {
       validateW(W, bits);
-      pointWindowSizes.set(P, W);
-      pointPrecomputes.delete(P);
+      pointWindowSizes.set(P2, W);
+      pointPrecomputes.delete(P2);
     }
   };
 }
@@ -5889,9 +5889,9 @@ function weierstrassPoints(opts) {
      * @param hex short/long ECDSA hex
      */
     static fromHex(hex3) {
-      const P = Point2.fromAffine(fromBytes4(ensureBytes("pointHex", hex3)));
-      P.assertValidity();
-      return P;
+      const P2 = Point2.fromAffine(fromBytes4(ensureBytes("pointHex", hex3)));
+      P2.assertValidity();
+      return P2;
     }
     // Multiplies generator point by privateKey.
     static fromPrivateKey(privateKey) {
@@ -6108,7 +6108,7 @@ function weierstrassPoints(opts) {
      */
     multiplyAndAddUnsafe(Q, a, b) {
       const G = Point2.BASE;
-      const mul = (P, a2) => a2 === _0n5 || a2 === _1n5 || !P.equals(G) ? P.multiplyUnsafe(a2) : P.multiply(a2);
+      const mul = (P2, a2) => a2 === _0n5 || a2 === _1n5 || !P2.equals(G) ? P2.multiplyUnsafe(a2) : P2.multiply(a2);
       const sum = mul(this, a).add(mul(Q, b));
       return sum.is0() ? void 0 : sum;
     }
@@ -6229,16 +6229,16 @@ function weierstrass(curveDef) {
     const HALF = CURVE_ORDER >> _1n5;
     return number4 > HALF;
   }
-  function normalizeS(s) {
-    return isBiggerThanHalfOrder(s) ? modN2(-s) : s;
+  function normalizeS(s2) {
+    return isBiggerThanHalfOrder(s2) ? modN2(-s2) : s2;
   }
   const slcNum = (b, from16, to) => bytesToNumberBE(b.slice(from16, to));
   class Signature {
-    constructor(r, s, recovery) {
+    constructor(r, s2, recovery) {
       aInRange("r", r, _1n5, CURVE_ORDER);
-      aInRange("s", s, _1n5, CURVE_ORDER);
+      aInRange("s", s2, _1n5, CURVE_ORDER);
       this.r = r;
-      this.s = s;
+      this.s = s2;
       if (recovery != null)
         this.recovery = recovery;
       Object.freeze(this);
@@ -6252,8 +6252,8 @@ function weierstrass(curveDef) {
     // DER encoded ECDSA signature
     // https://bitcoin.stackexchange.com/questions/57644/what-are-the-parts-of-a-bitcoin-transaction-input-script
     static fromDER(hex3) {
-      const { r, s } = DER.toSig(ensureBytes("DER", hex3));
-      return new Signature(r, s);
+      const { r, s: s2 } = DER.toSig(ensureBytes("DER", hex3));
+      return new Signature(r, s2);
     }
     /**
      * @todo remove
@@ -6265,7 +6265,7 @@ function weierstrass(curveDef) {
       return new Signature(this.r, this.s, recovery);
     }
     recoverPublicKey(msgHash) {
-      const { r, s, recovery: rec } = this;
+      const { r, s: s2, recovery: rec } = this;
       const h = bits2int_modN(ensureBytes("msgHash", msgHash));
       if (rec == null || ![0, 1, 2, 3].includes(rec))
         throw new Error("recovery id invalid");
@@ -6276,7 +6276,7 @@ function weierstrass(curveDef) {
       const R = Point2.fromHex(prefix + numToSizedHex(radj, Fp.BYTES));
       const ir = invN(radj);
       const u1 = modN2(-h * ir);
-      const u2 = modN2(s * ir);
+      const u2 = modN2(s2 * ir);
       const Q = Point2.BASE.multiplyAndAddUnsafe(R, u1, u2);
       if (!Q)
         throw new Error("point at infinify");
@@ -6395,8 +6395,8 @@ function weierstrass(curveDef) {
     const d = normPrivateKeyToScalar(privateKey);
     const seedArgs = [int2octets(d), int2octets(h1int)];
     if (ent != null && ent !== false) {
-      const e = ent === true ? randomBytes3(Fp.BYTES) : ent;
-      seedArgs.push(ensureBytes("extraEntropy", e));
+      const e4 = ent === true ? randomBytes3(Fp.BYTES) : ent;
+      seedArgs.push(ensureBytes("extraEntropy", e4));
     }
     const seed = concatBytes3(...seedArgs);
     const m = h1int;
@@ -6409,13 +6409,13 @@ function weierstrass(curveDef) {
       const r = modN2(q.x);
       if (r === _0n5)
         return;
-      const s = modN2(ik * modN2(m + r * d));
-      if (s === _0n5)
+      const s2 = modN2(ik * modN2(m + r * d));
+      if (s2 === _0n5)
         return;
       let recovery = (q.x === r ? 0 : 2) | Number(q.y & _1n5);
-      let normS = s;
-      if (lowS && isBiggerThanHalfOrder(s)) {
-        normS = normalizeS(s);
+      let normS = s2;
+      if (lowS && isBiggerThanHalfOrder(s2)) {
+        normS = normalizeS(s2);
         recovery ^= 1;
       }
       return new Signature(r, normS, recovery);
@@ -6446,7 +6446,7 @@ function weierstrass(curveDef) {
     if (!isHex2 && !isObj)
       throw new Error("invalid signature, expected Uint8Array, hex string or Signature instance");
     let _sig = void 0;
-    let P;
+    let P2;
     try {
       if (isObj)
         _sig = new Signature(sg.r, sg.s);
@@ -6461,7 +6461,7 @@ function weierstrass(curveDef) {
         if (!_sig && format2 !== "der")
           _sig = Signature.fromCompact(sg);
       }
-      P = Point2.fromHex(publicKey);
+      P2 = Point2.fromHex(publicKey);
     } catch (error62) {
       return false;
     }
@@ -6471,12 +6471,12 @@ function weierstrass(curveDef) {
       return false;
     if (prehash)
       msgHash = CURVE.hash(msgHash);
-    const { r, s } = _sig;
+    const { r, s: s2 } = _sig;
     const h = bits2int_modN(msgHash);
-    const is = invN(s);
+    const is = invN(s2);
     const u1 = modN2(h * is);
     const u2 = modN2(r * is);
-    const R = Point2.BASE.multiplyAndAddUnsafe(P, u1, u2)?.toAffine();
+    const R = Point2.BASE.multiplyAndAddUnsafe(P2, u1, u2)?.toAffine();
     if (!R)
       return false;
     const v = modN2(R.x);
@@ -6496,7 +6496,7 @@ function weierstrass(curveDef) {
 function SWUFpSqrtRatio(Fp, Z) {
   const q = Fp.ORDER;
   let l = _0n5;
-  for (let o = q - _1n5; o % _2n3 === _0n5; o /= _2n3)
+  for (let o2 = q - _1n5; o2 % _2n3 === _0n5; o2 /= _2n3)
     l += _1n5;
   const c1 = l;
   const _2n_pow_c1_1 = _2n3 << c1 - _1n5 - _1n5;
@@ -6820,13 +6820,13 @@ function hash_to_field(msg, count, options) {
   }
   const u = new Array(count);
   for (let i = 0; i < count; i++) {
-    const e = new Array(m);
+    const e4 = new Array(m);
     for (let j = 0; j < m; j++) {
       const elm_offset = L * (j + i * m);
       const tv = prb.subarray(elm_offset, elm_offset + L);
-      e[j] = mod(os2ip(tv), p);
+      e4[j] = mod(os2ip(tv), p);
     }
-    u[i] = e;
+    u[i] = e4;
   }
   return u;
 }
@@ -6847,11 +6847,11 @@ function createHasher2(Point2, mapToCurve, defaults) {
     return Point2.fromAffine(mapToCurve(num2));
   }
   function clear(initial) {
-    const P = initial.clearCofactor();
-    if (P.equals(Point2.ZERO))
+    const P2 = initial.clearCofactor();
+    if (P2.equals(Point2.ZERO))
       return Point2.ZERO;
-    P.assertValidity();
-    return P;
+    P2.assertValidity();
+    return P2;
   }
   return {
     defaults,
@@ -6900,26 +6900,26 @@ __export(secp256k1_exports, {
   secp256k1_hasher: () => secp256k1_hasher
 });
 function sqrtMod(y) {
-  const P = secp256k1P;
+  const P2 = secp256k1P;
   const _3n3 = BigInt(3), _6n = BigInt(6), _11n = BigInt(11), _22n = BigInt(22);
   const _23n = BigInt(23), _44n = BigInt(44), _88n = BigInt(88);
-  const b2 = y * y * y % P;
-  const b3 = b2 * b2 * y % P;
-  const b6 = pow2(b3, _3n3, P) * b3 % P;
-  const b9 = pow2(b6, _3n3, P) * b3 % P;
-  const b11 = pow2(b9, _2n4, P) * b2 % P;
-  const b22 = pow2(b11, _11n, P) * b11 % P;
-  const b44 = pow2(b22, _22n, P) * b22 % P;
-  const b88 = pow2(b44, _44n, P) * b44 % P;
-  const b176 = pow2(b88, _88n, P) * b88 % P;
-  const b220 = pow2(b176, _44n, P) * b44 % P;
-  const b223 = pow2(b220, _3n3, P) * b3 % P;
-  const t1 = pow2(b223, _23n, P) * b22 % P;
-  const t2 = pow2(t1, _6n, P) * b2 % P;
-  const root = pow2(t2, _2n4, P);
-  if (!Fpk1.eql(Fpk1.sqr(root), y))
+  const b2 = y * y * y % P2;
+  const b3 = b2 * b2 * y % P2;
+  const b6 = pow2(b3, _3n3, P2) * b3 % P2;
+  const b9 = pow2(b6, _3n3, P2) * b3 % P2;
+  const b11 = pow2(b9, _2n4, P2) * b2 % P2;
+  const b22 = pow2(b11, _11n, P2) * b11 % P2;
+  const b44 = pow2(b22, _22n, P2) * b22 % P2;
+  const b88 = pow2(b44, _44n, P2) * b44 % P2;
+  const b176 = pow2(b88, _88n, P2) * b88 % P2;
+  const b220 = pow2(b176, _44n, P2) * b44 % P2;
+  const b223 = pow2(b220, _3n3, P2) * b3 % P2;
+  const t1 = pow2(b223, _23n, P2) * b22 % P2;
+  const t2 = pow2(t1, _6n, P2) * b2 % P2;
+  const root2 = pow2(t2, _2n4, P2);
+  if (!Fpk1.eql(Fpk1.sqr(root2), y))
     throw new Error("Cannot find square root");
-  return root;
+  return root2;
 }
 function taggedHash(tag, ...messages) {
   let tagP = TAGGED_HASH_PREFIXES[tag];
@@ -6963,10 +6963,10 @@ function schnorrSign(message, privateKey, auxRand = randomBytes(32)) {
   if (k_ === _0n6)
     throw new Error("sign failed: k is zero");
   const { bytes: rx, scalar: k } = schnorrGetExtPubKey(k_);
-  const e = challenge(rx, px, m);
+  const e4 = challenge(rx, px, m);
   const sig = new Uint8Array(64);
   sig.set(rx, 0);
-  sig.set(numTo32b(modN(k + e * d)), 32);
+  sig.set(numTo32b(modN(k + e4 * d)), 32);
   if (!schnorrVerify(sig, m, px))
     throw new Error("sign: Invalid signature produced");
   return sig;
@@ -6976,15 +6976,15 @@ function schnorrVerify(signature, message, publicKey) {
   const m = ensureBytes("message", message);
   const pub = ensureBytes("publicKey", publicKey, 32);
   try {
-    const P = lift_x(num(pub));
+    const P2 = lift_x(num(pub));
     const r = num(sig.subarray(0, 32));
     if (!inRange(r, _1n6, secp256k1P))
       return false;
-    const s = num(sig.subarray(32, 64));
-    if (!inRange(s, _1n6, secp256k1N))
+    const s2 = num(sig.subarray(32, 64));
+    if (!inRange(s2, _1n6, secp256k1N))
       return false;
-    const e = challenge(numTo32b(r), pointToBytes(P), m);
-    const R = GmulAdd(P, s, modN(-e));
+    const e4 = challenge(numTo32b(r), pointToBytes(P2), m);
+    const R = GmulAdd(P2, s2, modN(-e4));
     if (!R || !R.hasEvenY() || R.toAffine().x !== r)
       return false;
     return true;
@@ -7312,7 +7312,7 @@ var init_node = __esm({
 // node_modules/viem/_esm/utils/errors/getNodeError.js
 function getNodeError(err, args) {
   const message = (err.details || "").toLowerCase();
-  const executionRevertedError = err instanceof BaseError2 ? err.walk((e) => e?.code === ExecutionRevertedError.code) : err;
+  const executionRevertedError = err instanceof BaseError2 ? err.walk((e4) => e4?.code === ExecutionRevertedError.code) : err;
   if (executionRevertedError instanceof BaseError2)
     return new ExecutionRevertedError({
       cause: err,
@@ -7526,12 +7526,12 @@ function serializeStateOverride(parameters) {
   if (!parameters)
     return void 0;
   const rpcStateOverride = {};
-  for (const { address: address2, ...accountState } of parameters) {
-    if (!isAddress(address2, { strict: false }))
-      throw new InvalidAddressError({ address: address2 });
-    if (rpcStateOverride[address2])
-      throw new AccountStateConflictError({ address: address2 });
-    rpcStateOverride[address2] = serializeAccountStateOverride(accountState);
+  for (const { address: address3, ...accountState } of parameters) {
+    if (!isAddress(address3, { strict: false }))
+      throw new InvalidAddressError({ address: address3 });
+    if (rpcStateOverride[address3])
+      throw new AccountStateConflictError({ address: address3 });
+    rpcStateOverride[address3] = serializeAccountStateOverride(accountState);
   }
   return rpcStateOverride;
 }
@@ -9189,13 +9189,13 @@ var init_getCallError = __esm({
 
 // node_modules/viem/_esm/utils/promise/withResolvers.js
 function withResolvers() {
-  let resolve = () => void 0;
+  let resolve2 = () => void 0;
   let reject = () => void 0;
   const promise2 = new Promise((resolve_, reject_) => {
-    resolve = resolve_;
+    resolve2 = resolve_;
     reject = reject_;
   });
-  return { promise: promise2, resolve, reject };
+  return { promise: promise2, resolve: resolve2, reject };
 }
 var init_withResolvers = __esm({
   "node_modules/viem/_esm/utils/promise/withResolvers.js"() {
@@ -9215,8 +9215,8 @@ function createBatchScheduler({ fn, id, shouldSplitBatch, wait: wait2 = 0, sort 
       if (sort && Array.isArray(data))
         data.sort(sort);
       for (let i = 0; i < scheduler.length; i++) {
-        const { resolve } = scheduler[i];
-        resolve?.([data[i], data]);
+        const { resolve: resolve2 } = scheduler[i];
+        resolve2?.([data[i], data]);
       }
     }).catch((err) => {
       for (let i = 0; i < scheduler.length; i++) {
@@ -9232,16 +9232,16 @@ function createBatchScheduler({ fn, id, shouldSplitBatch, wait: wait2 = 0, sort 
   return {
     flush,
     async schedule(args) {
-      const { promise: promise2, resolve, reject } = withResolvers();
+      const { promise: promise2, resolve: resolve2, reject } = withResolvers();
       const split2 = shouldSplitBatch?.([...getBatchedArgs(), args]);
       if (split2)
         exec();
       const hasActiveScheduler = getScheduler().length > 0;
       if (hasActiveScheduler) {
-        setScheduler({ args, resolve, reject });
+        setScheduler({ args, resolve: resolve2, reject });
         return promise2;
       }
-      setScheduler({ args, resolve, reject });
+      setScheduler({ args, resolve: resolve2, reject });
       setTimeout(exec, wait2);
       return promise2;
     }
@@ -9814,10 +9814,10 @@ function getMulticallAddress(client, parameters) {
     });
   throw new ClientChainNotConfiguredError();
 }
-function hasStateOverrideForAddress(rpcStateOverride, address2) {
+function hasStateOverrideForAddress(rpcStateOverride, address3) {
   if (!rpcStateOverride)
     return false;
-  return Object.keys(rpcStateOverride).some((stateOverrideAddress) => isAddressEqual(stateOverrideAddress, address2));
+  return Object.keys(rpcStateOverride).some((stateOverrideAddress) => isAddressEqual(stateOverrideAddress, address3));
 }
 function toDeploylessCallViaBytecodeData(parameters) {
   const { code, data } = parameters;
@@ -9873,8 +9873,8 @@ var init_call = __esm({
 });
 
 // src/cli.ts
-import { realpathSync as realpathSync4 } from "fs";
-import { fileURLToPath as fileURLToPath4 } from "url";
+import { realpathSync as realpathSync3 } from "fs";
+import { fileURLToPath as fileURLToPath3 } from "url";
 import { parseArgs } from "util";
 
 // node_modules/zod/v4/classic/external.js
@@ -10743,10 +10743,10 @@ var allowsEval = /* @__PURE__ */ cached(() => {
     return false;
   }
 });
-function isPlainObject(o) {
-  if (isObject(o) === false)
+function isPlainObject(o2) {
+  if (isObject(o2) === false)
     return false;
-  const ctor = o.constructor;
+  const ctor = o2.constructor;
   if (ctor === void 0)
     return true;
   if (typeof ctor !== "function")
@@ -10759,16 +10759,16 @@ function isPlainObject(o) {
   }
   return true;
 }
-function shallowClone(o) {
-  if (isPlainObject(o))
-    return { ...o };
-  if (Array.isArray(o))
-    return [...o];
-  if (o instanceof Map)
-    return new Map(o);
-  if (o instanceof Set)
-    return new Set(o);
-  return o;
+function shallowClone(o2) {
+  if (isPlainObject(o2))
+    return { ...o2 };
+  if (Array.isArray(o2))
+    return [...o2];
+  if (o2 instanceof Map)
+    return new Map(o2);
+  if (o2 instanceof Set)
+    return new Set(o2);
+  return o2;
 }
 function numKeys(data) {
   let keyCount = 0;
@@ -11626,9 +11626,9 @@ var _parse = (_Err) => {
       throw new $ZodAsyncError();
     }
     if (result.issues.length) {
-      const e = new (_params?.Err ?? _Err)(result.issues.map((iss) => finalizeIssue(iss, ctx, config())));
-      captureStackTrace(e, _params?.callee ?? fn);
-      throw e;
+      const e4 = new (_params?.Err ?? _Err)(result.issues.map((iss) => finalizeIssue(iss, ctx, config())));
+      captureStackTrace(e4, _params?.callee ?? fn);
+      throw e4;
     }
     return result.value;
   };
@@ -11642,9 +11642,9 @@ var _parseAsync = (_Err) => {
     if (result instanceof Promise)
       result = await result;
     if (result.issues.length) {
-      const e = new (params?.Err ?? _Err)(result.issues.map((iss) => finalizeIssue(iss, ctx, config())));
-      captureStackTrace(e, params?.callee ?? fn);
-      throw e;
+      const e4 = new (params?.Err ?? _Err)(result.issues.map((iss) => finalizeIssue(iss, ctx, config())));
+      captureStackTrace(e4, params?.callee ?? fn);
+      throw e4;
     }
     return result.value;
   };
@@ -11672,8 +11672,8 @@ function failure(Err, issues, ctx) {
       }
       return error62;
     },
-    set error(e) {
-      error62 = e;
+    set error(e4) {
+      error62 = e4;
       issues = void 0;
       ctx = void 0;
     }
@@ -12847,7 +12847,7 @@ function isValidCIDRv6(value) {
   const parts = value.split("/");
   if (parts.length !== 2)
     return false;
-  const [address2, prefix] = parts;
+  const [address3, prefix] = parts;
   if (!prefix)
     return false;
   const prefixNum = Number(prefix);
@@ -12855,7 +12855,7 @@ function isValidCIDRv6(value) {
     return false;
   if (prefixNum < 0 || prefixNum > 128)
     return false;
-  return isValidIPv6(address2);
+  return isValidIPv6(address3);
 }
 var $ZodCIDRv6 = /* @__PURE__ */ $constructor("$ZodCIDRv6", (inst, def) => {
   def.pattern ?? (def.pattern = cidrv6);
@@ -13400,7 +13400,7 @@ var $ZodObject = /* @__PURE__ */ $constructor("$ZodObject", (inst, def) => {
     }
     return propValues;
   });
-  const isObject2 = isObject;
+  const isObject3 = isObject;
   const catchall = def.catchall;
   let value;
   const memo2 = globalConfig.memoizer;
@@ -13408,7 +13408,7 @@ var $ZodObject = /* @__PURE__ */ $constructor("$ZodObject", (inst, def) => {
   inst._zod.parse = (payload, ctx) => {
     value ?? (value = _normalized.value);
     const input2 = payload.value;
-    if (!isObject2(input2)) {
+    if (!isObject3(input2)) {
       payload.issues.push({
         expected: "object",
         code: "invalid_type",
@@ -13544,7 +13544,7 @@ var $ZodObjectJIT = /* @__PURE__ */ $constructor("$ZodObjectJIT", (inst, def) =>
     return doc.compile();
   };
   let fastpass;
-  const isObject2 = isObject;
+  const isObject3 = isObject;
   const jit = !globalConfig.jitless;
   const allowsEval2 = allowsEval;
   const fastEnabled = jit && allowsEval2.value;
@@ -13553,7 +13553,7 @@ var $ZodObjectJIT = /* @__PURE__ */ $constructor("$ZodObjectJIT", (inst, def) =>
   inst._zod.parse = (payload, ctx) => {
     value ?? (value = _normalized.value);
     const input2 = payload.value;
-    if (!isObject2(input2)) {
+    if (!isObject3(input2)) {
       payload.issues.push({
         expected: "object",
         code: "invalid_type",
@@ -13595,17 +13595,17 @@ function handleUnionResults(results, final, inst, ctx) {
 }
 var $ZodUnion = /* @__PURE__ */ $constructor("$ZodUnion", (inst, def) => {
   $ZodType.init(inst, def);
-  defineLazyInternal(inst, "optin", (zod) => zod.def.options.some((o) => o._zod.optin === "defaulted") ? "defaulted" : zod.def.options.some((o) => o._zod.optin !== void 0) ? "optional" : void 0);
-  defineLazyInternal(inst, "optout", (zod) => zod.def.options.some((o) => o._zod.optout === "optional") ? "optional" : void 0);
+  defineLazyInternal(inst, "optin", (zod) => zod.def.options.some((o2) => o2._zod.optin === "defaulted") ? "defaulted" : zod.def.options.some((o2) => o2._zod.optin !== void 0) ? "optional" : void 0);
+  defineLazyInternal(inst, "optout", (zod) => zod.def.options.some((o2) => o2._zod.optout === "optional") ? "optional" : void 0);
   defineLazyInternal(inst, "values", (zod) => {
-    if (zod.def.options.every((o) => o._zod.values)) {
+    if (zod.def.options.every((o2) => o2._zod.values)) {
       return new Set(zod.def.options.flatMap((option) => Array.from(option._zod.values)));
     }
     return void 0;
   });
   defineLazyInternal(inst, "pattern", (zod) => {
-    if (zod.def.options.every((o) => o._zod.pattern)) {
-      const patterns = zod.def.options.map((o) => o._zod.pattern);
+    if (zod.def.options.every((o2) => o2._zod.pattern)) {
+      const patterns = zod.def.options.map((o2) => o2._zod.pattern);
       return new RegExp(`^(${patterns.map((p) => cleanRegex(p.source)).join("|")})$`);
     }
     return void 0;
@@ -14302,7 +14302,7 @@ var $ZodEnum = /* @__PURE__ */ $constructor("$ZodEnum", (inst, def) => {
   inst._zod.values = valuesSet;
   defineLazyInternal(inst, "pattern", (zod) => {
     const patternValues = getEnumValues(zod.def.entries).filter((k) => propertyKeyTypes.has(typeof k));
-    return new RegExp(patternValues.length ? `^(${patternValues.map((o) => escapeRegex(o.toString())).join("|")})$` : "^[^\\s\\S]$");
+    return new RegExp(patternValues.length ? `^(${patternValues.map((o2) => escapeRegex(o2.toString())).join("|")})$` : "^[^\\s\\S]$");
   });
   inst._zod.parse = (payload, _ctx) => {
     const input2 = payload.value;
@@ -14324,7 +14324,7 @@ var $ZodLiteral = /* @__PURE__ */ $constructor("$ZodLiteral", (inst, def) => {
   inst._zod.values = values;
   defineLazyInternal(inst, "pattern", (zod) => {
     const vals = zod.def.values;
-    return new RegExp(vals.length ? `^(${vals.map((o) => typeof o === "string" ? escapeRegex(o) : o ? escapeRegex(o.toString()) : String(o)).join("|")})$` : "^[^\\s\\S]$");
+    return new RegExp(vals.length ? `^(${vals.map((o2) => typeof o2 === "string" ? escapeRegex(o2) : o2 ? escapeRegex(o2.toString()) : String(o2)).join("|")})$` : "^[^\\s\\S]$");
   });
   inst._zod.parse = (payload, _ctx) => {
     const input2 = payload.value;
@@ -14705,7 +14705,7 @@ function partPattern(schema) {
   if (def.options) {
     const sources = def.options.map(partPattern);
     if (sources.every(Boolean))
-      return `^(${sources.map((s) => cleanRegex(s)).join("|")})$`;
+      return `^(${sources.map((s2) => cleanRegex(s2)).join("|")})$`;
   }
   return leafPattern(schema);
 }
@@ -14903,7 +14903,7 @@ var recursive = /* @__PURE__ */ new WeakMap();
 var NONE = 0;
 var ASSUMED = 1;
 var PROVEN = 2;
-function isRecursive(inst, stack, resolve) {
+function isRecursive(inst, stack, resolve2) {
   const cached3 = recursive.get(inst);
   if (cached3 !== void 0)
     return cached3 ? PROVEN : NONE;
@@ -14913,7 +14913,7 @@ function isRecursive(inst, stack, resolve) {
   let result = NONE;
   const check2 = (child) => {
     if (result !== PROVEN && child?._zod) {
-      const answer = isRecursive(child, stack, resolve);
+      const answer = isRecursive(child, stack, resolve2);
       if (answer > result)
         result = answer;
     }
@@ -14924,7 +14924,7 @@ function isRecursive(inst, stack, resolve) {
       const desc = Object.getOwnPropertyDescriptor(sh, key);
       if (spread && !desc.enumerable)
         continue;
-      const child = desc.get ? ASSUMED : desc.value?._zod ? isRecursive(desc.value, stack, resolve) : NONE;
+      const child = desc.get ? ASSUMED : desc.value?._zod ? isRecursive(desc.value, stack, resolve2) : NONE;
       if (child > answer)
         answer = child;
     }
@@ -14988,7 +14988,7 @@ function isRecursive(inst, stack, resolve) {
       break;
     // `$ZodLazy` caches its inner on the def, so a resolved edge is followed exactly
     case "lazy": {
-      const inner = def._cachedInner ?? (resolve ? inst._zod.innerType : void 0);
+      const inner = def._cachedInner ?? (resolve2 ? inst._zod.innerType : void 0);
       merge2(inner ? isRecursive(inner, stack, false) : ASSUMED);
       break;
     }
@@ -15844,7 +15844,7 @@ var error5 = () => {
         return `${issue2.origin} \u098F \u0985\u09AC\u09C8\u09A7 \u0995\u09C0`;
       case "invalid_union":
         if (issue2.options && Array.isArray(issue2.options) && issue2.options.length > 0) {
-          const opts = issue2.options.map((o) => `'${o}'`).join(" | ");
+          const opts = issue2.options.map((o2) => `'${o2}'`).join(" | ");
           return `\u0985\u09AC\u09C8\u09A7 \u09A1\u09BF\u09B8\u0995\u09CD\u09B0\u09BF\u09AE\u09BF\u09A8\u09C7\u099F\u09B0 \u09AE\u09BE\u09A8\u0964 \u09AA\u09CD\u09B0\u09A4\u09CD\u09AF\u09BE\u09B6\u09BF\u09A4 ${opts}`;
         }
         return "\u0985\u09AC\u09C8\u09A7 \u0987\u09A8\u09AA\u09C1\u099F";
@@ -16091,7 +16091,7 @@ var error7 = () => {
         return `\u06A9\u0644\u06CC\u0644\u06CC \u0646\u0627\u062F\u0631\u0648\u0633\u062A \u0644\u06D5 ${issue2.origin}`;
       case "invalid_union":
         if (issue2.options && Array.isArray(issue2.options) && issue2.options.length > 0) {
-          const opts = issue2.options.map((o) => `'${o}'`).join(" | ");
+          const opts = issue2.options.map((o2) => `'${o2}'`).join(" | ");
           return `\u0628\u06D5\u0647\u0627\u06CC \u0646\u06D5\u0646\u0627\u0633\u0631\u0627\u0648 \u0647\u06D5\u06CC\u06D5. \u0628\u06D5\u0647\u0627\u06CC \u0686\u0627\u0648\u06D5\u0695\u0648\u0627\u0646\u06A9\u0631\u0627\u0648: ${opts}`;
         }
         return "\u06CC\u06D5\u06A9\u06AF\u0631\u062A\u0646\u06CC \u0646\u0627\u062F\u0631\u0648\u0633\u062A";
@@ -16678,7 +16678,7 @@ var error12 = () => {
         return `Invalid key in ${issue2.origin}`;
       case "invalid_union":
         if (issue2.options && Array.isArray(issue2.options) && issue2.options.length > 0) {
-          const opts = issue2.options.map((o) => `'${o}'`).join(" | ");
+          const opts = issue2.options.map((o2) => `'${o2}'`).join(" | ");
           return `Invalid discriminator value. Expected ${opts}`;
         }
         if (issue2.inclusive === false) {
@@ -17528,7 +17528,7 @@ var error19 = () => {
         return `${issue2.origin} \u0AAE\u0ABE\u0A82 \u0A85\u0AAE\u0ABE\u0AA8\u0ACD\u0AAF \u0A95\u0AC0`;
       case "invalid_union":
         if (issue2.options && Array.isArray(issue2.options) && issue2.options.length > 0) {
-          const opts = issue2.options.map((o) => `'${o}'`).join(" | ");
+          const opts = issue2.options.map((o2) => `'${o2}'`).join(" | ");
           return `\u0A85\u0AAE\u0ABE\u0AA8\u0ACD\u0AAF \u0AA1\u0ABF\u0AB8\u0ACD\u0A95\u0ACD\u0AB0\u0ABF\u0AAE\u0ABF\u0AA8\u0AC7\u0A9F\u0AB0 \u0AAE\u0AC2\u0AB2\u0ACD\u0AAF. \u0A85\u0AAA\u0AC7\u0A95\u0ACD\u0AB7\u0ABF\u0AA4 ${opts}`;
         }
         return "\u0A85\u0AAE\u0ABE\u0AA8\u0ACD\u0AAF \u0A87\u0AA8\u0AAA\u0AC1\u0A9F";
@@ -17577,15 +17577,15 @@ var error20 = () => {
   };
   const typeEntry = (t) => t ? TypeNames[t] : void 0;
   const typeLabel = (t) => {
-    const e = typeEntry(t);
-    if (e)
-      return e.label;
+    const e4 = typeEntry(t);
+    if (e4)
+      return e4.label;
     return t ?? TypeNames.unknown.label;
   };
   const withDefinite = (t) => `\u05D4${typeLabel(t)}`;
   const verbFor = (t) => {
-    const e = typeEntry(t);
-    const gender = e?.gender ?? "m";
+    const e4 = typeEntry(t);
+    const gender = e4?.gender ?? "m";
     return gender === "f" ? "\u05E6\u05E8\u05D9\u05DB\u05D4 \u05DC\u05D4\u05D9\u05D5\u05EA" : "\u05E6\u05E8\u05D9\u05DA \u05DC\u05D4\u05D9\u05D5\u05EA";
   };
   const getSizing = (origin) => {
@@ -17842,7 +17842,7 @@ var error21 = () => {
         return `\u0905\u092E\u093E\u0928\u094D\u092F \u0915\u0941\u0902\u091C\u0940: ${issue2.origin} \u092E\u0947\u0902`;
       case "invalid_union":
         if (issue2.options && Array.isArray(issue2.options) && issue2.options.length > 0) {
-          const opts = issue2.options.map((o) => `'${o}'`).join(" | ");
+          const opts = issue2.options.map((o2) => `'${o2}'`).join(" | ");
           return `\u0905\u092E\u093E\u0928\u094D\u092F \u0921\u093F\u0938\u094D\u0915\u094D\u0930\u093F\u092E\u093F\u0928\u0947\u091F\u0930 \u092E\u093E\u0928: \u0905\u092A\u0947\u0915\u094D\u0937\u093F\u0924 ${opts}`;
         }
         return "\u0905\u092E\u093E\u0928\u094D\u092F \u0907\u0928\u092A\u0941\u091F";
@@ -19051,7 +19051,7 @@ var error31 = () => {
         return `\u0C85\u0CAE\u0CBE\u0CA8\u0CCD\u0CAF\u0CB5\u0CBE\u0CA6 \u0C95\u0CC0 \u0C87\u0CA8\u0CCD ${issue2.origin}`;
       case "invalid_union":
         if (issue2.options && Array.isArray(issue2.options) && issue2.options.length > 0) {
-          const opts = issue2.options.map((o) => `'${o}'`).join(" | ");
+          const opts = issue2.options.map((o2) => `'${o2}'`).join(" | ");
           return `\u0C85\u0CAE\u0CBE\u0CA8\u0CCD\u0CAF \u0CA4\u0CBE\u0CB0\u0CA4\u0CAE\u0CCD\u0CAF \u0CAE\u0CCC\u0CB2\u0CCD\u0CAF. \u0CA8\u0CBF\u0CB0\u0CC0\u0C95\u0CCD\u0CB7\u0CBF\u0CB8\u0CB2\u0CBE\u0C97\u0CBF\u0CA6\u0CC6 ${opts}`;
         }
         return "\u0C85\u0CAE\u0CBE\u0CA8\u0CCD\u0CAF \u0C87\u0CA8\u0CCD\u200C\u0CAA\u0CC1\u0C9F\u0CCD";
@@ -19716,7 +19716,7 @@ var error36 = () => {
         return `\u0905\u092E\u093E\u0928\u094D\u092F \u0915\u0941\u091E\u094D\u091C\u0940: ${issue2.origin} \u092E\u093E`;
       case "invalid_union":
         if (issue2.options && Array.isArray(issue2.options) && issue2.options.length > 0) {
-          const opts = issue2.options.map((o) => `'${o}'`).join(" | ");
+          const opts = issue2.options.map((o2) => `'${o2}'`).join(" | ");
           return `\u0905\u092E\u093E\u0928\u094D\u092F \u0921\u093F\u0938\u094D\u0915\u094D\u0930\u093F\u092E\u093F\u0928\u0947\u091F\u0930 \u092E\u093E\u0928: \u0905\u092A\u0947\u0915\u094D\u0937\u093F\u0924 ${opts}`;
         }
         return "\u0905\u092E\u093E\u0928\u094D\u092F \u0907\u0928\u092A\u0941\u091F";
@@ -20554,7 +20554,7 @@ var error43 = () => {
         return `Entrada inv\xE1lida n${translateOriginWithArticle(issue2.origin, "definite")}`;
       case "invalid_union":
         if (issue2.options && Array.isArray(issue2.options) && issue2.options.length > 0) {
-          const opts = issue2.options.map((o) => `'${o}'`).join(" | ");
+          const opts = issue2.options.map((o2) => `'${o2}'`).join(" | ");
           return `Valor de discrimina\xE7\xE3o inv\xE1lido. Esperava ${opts}`;
         }
         return "Entrada inv\xE1lida";
@@ -20699,7 +20699,7 @@ var error44 = () => {
         return `Entrada inv\xE1lida n${translateOriginWithArticle(issue2.origin, "definite")}`;
       case "invalid_union":
         if (issue2.options && Array.isArray(issue2.options) && issue2.options.length > 0) {
-          const opts = issue2.options.map((o) => `'${o}'`).join(" | ");
+          const opts = issue2.options.map((o2) => `'${o2}'`).join(" | ");
           return `Valor de discrimina\xE7\xE3o inv\xE1lido. Esperava ${opts}`;
         }
         return "Entrada inv\xE1lida";
@@ -21572,7 +21572,7 @@ var error51 = () => {
         return `\u041A\u0430\u043B\u0438\u0434\u0438 \u043D\u043E\u0434\u0443\u0440\u0443\u0441\u0442 \u0434\u0430\u0440 ${issue2.origin}`;
       case "invalid_union":
         if (issue2.options && Array.isArray(issue2.options) && issue2.options.length > 0) {
-          const opts = issue2.options.map((o) => `'${o}'`).join(" | ");
+          const opts = issue2.options.map((o2) => `'${o2}'`).join(" | ");
           return `\u049A\u0438\u043C\u0430\u0442\u0438 \u043D\u043E\u0434\u0443\u0440\u0443\u0441\u0442\u0438 \u0434\u0438\u0441\u043A\u0440\u0438\u043C\u0438\u043D\u0430\u0442\u043E\u0440: ${opts} \u0438\u043D\u0442\u0438\u0437\u043E\u0440 \u043C\u0435\u0440\u0430\u0444\u0442`;
         }
         return "\u0412\u0443\u0440\u0443\u0434\u0438 \u043D\u043E\u0434\u0443\u0440\u0443\u0441\u0442";
@@ -25544,8 +25544,8 @@ function encodeJSONPointerSegment(segment) {
   return segment.replace(/~/g, "~0").replace(/\//g, "~1");
 }
 function extractDefs(ctx, schema) {
-  const root = ctx.seen.get(schema);
-  if (!root)
+  const root2 = ctx.seen.get(schema);
+  if (!root2)
     throw new Error("Unprocessed schema. This is a bug in Zod.");
   if (ctx.external && ctx.sharedDefsExtractedFor === ctx.external)
     return;
@@ -25574,7 +25574,7 @@ function extractDefs(ctx, schema) {
     }
     const uriPrefix = `#`;
     const defUriPrefix = `${uriPrefix}/${defsSegment}/`;
-    if (entry[1] === root && !entry[1].schema.id) {
+    if (entry[1] === root2 && !entry[1].schema.id) {
       return { ref: uriPrefix };
     }
     const defId = entry[1].schema.id ?? `__schema${ctx.counter++}`;
@@ -25745,8 +25745,8 @@ function foldIntersection(json2) {
   assignProps(json2, folded);
 }
 function finalize(ctx, schema) {
-  const root = ctx.seen.get(schema);
-  if (!root)
+  const root2 = ctx.seen.get(schema);
+  if (!root2)
     throw new Error("Unprocessed schema. This is a bug in Zod.");
   const flattenRef = (zodSchema) => {
     const seen = ctx.seen.get(zodSchema);
@@ -25857,7 +25857,7 @@ function finalize(ctx, schema) {
       throw new Error("Schema is missing an `id` property");
     result.$id = ctx.external.uri(id);
   }
-  assignProps(result, root.defId ? root.schema : root.def ?? root.schema);
+  assignProps(result, root2.defId ? root2.schema : root2.def ?? root2.schema);
   const rootMetaId = ctx.metadataRegistry.get(schema)?.id;
   if (rootMetaId !== void 0 && result.id === rootMetaId)
     delete result.id;
@@ -29226,12 +29226,12 @@ function convertSchema(schema, ctx) {
   let baseSchema = convertBaseSchema(schema, ctx);
   const hasExplicitType = schema.type || schema.enum !== void 0 || schema.const !== void 0;
   if (schema.anyOf && Array.isArray(schema.anyOf)) {
-    const options = schema.anyOf.map((s) => convertSchema(s, ctx));
+    const options = schema.anyOf.map((s2) => convertSchema(s2, ctx));
     const anyOfUnion = z.union(options);
     baseSchema = hasExplicitType ? z.intersection(baseSchema, anyOfUnion) : anyOfUnion;
   }
   if (schema.oneOf && Array.isArray(schema.oneOf)) {
-    const options = schema.oneOf.map((s) => convertSchema(s, ctx));
+    const options = schema.oneOf.map((s2) => convertSchema(s2, ctx));
     const oneOfUnion = z.xor(options);
     baseSchema = hasExplicitType ? z.intersection(baseSchema, oneOfUnion) : oneOfUnion;
   }
@@ -29331,24 +29331,24 @@ function visit(schema, fnOrHandlers) {
     return h ? h(node2, rewritten) : node2;
   };
   const cache = /* @__PURE__ */ new Map();
-  function run2(s) {
-    const cached3 = cache.get(s);
+  function run2(s2) {
+    const cached3 = cache.get(s2);
     if (cached3 === RESOLVING) {
       return new $ZodLazy({
         type: "lazy",
-        getter: () => cache.get(s)
+        getter: () => cache.get(s2)
       });
     }
     if (cached3 !== void 0)
       return cached3;
-    cache.set(s, RESOLVING);
-    const inner = mapInner(s);
-    const mapped = fn(inner, inner !== s);
-    cache.set(s, mapped);
+    cache.set(s2, RESOLVING);
+    const inner = mapInner(s2);
+    const mapped = fn(inner, inner !== s2);
+    cache.set(s2, mapped);
     return mapped;
   }
-  function mapInner(s) {
-    const def = s._zod.def;
+  function mapInner(s2) {
+    const def = s2._zod.def;
     const kind = def.type;
     switch (kind) {
       case "object": {
@@ -29368,11 +29368,11 @@ function visit(schema, fnOrHandlers) {
           if (newCatchall !== def.catchall)
             changed = true;
         }
-        return changed ? clone(s, { ...def, shape: newShape, catchall: newCatchall }) : s;
+        return changed ? clone(s2, { ...def, shape: newShape, catchall: newCatchall }) : s2;
       }
       case "array": {
         const mapped = run2(def.element);
-        return mapped === def.element ? s : clone(s, { ...def, element: mapped });
+        return mapped === def.element ? s2 : clone(s2, { ...def, element: mapped });
       }
       case "tuple": {
         const oldItems = def.items;
@@ -29390,17 +29390,17 @@ function visit(schema, fnOrHandlers) {
           if (newRest !== def.rest)
             changed = true;
         }
-        return changed ? clone(s, { ...def, items: newItems, rest: newRest }) : s;
+        return changed ? clone(s2, { ...def, items: newItems, rest: newRest }) : s2;
       }
       case "record":
       case "map": {
         const newKey = run2(def.keyType);
         const newVal = run2(def.valueType);
-        return newKey === def.keyType && newVal === def.valueType ? s : clone(s, { ...def, keyType: newKey, valueType: newVal });
+        return newKey === def.keyType && newVal === def.valueType ? s2 : clone(s2, { ...def, keyType: newKey, valueType: newVal });
       }
       case "set": {
         const newVal = run2(def.valueType);
-        return newVal === def.valueType ? s : clone(s, { ...def, valueType: newVal });
+        return newVal === def.valueType ? s2 : clone(s2, { ...def, valueType: newVal });
       }
       case "union": {
         const oldOptions = def.options;
@@ -29412,12 +29412,12 @@ function visit(schema, fnOrHandlers) {
             changed = true;
           newOptions.push(mapped);
         }
-        return changed ? clone(s, { ...def, options: newOptions }) : s;
+        return changed ? clone(s2, { ...def, options: newOptions }) : s2;
       }
       case "intersection": {
         const newLeft = run2(def.left);
         const newRight = run2(def.right);
-        return newLeft === def.left && newRight === def.right ? s : clone(s, { ...def, left: newLeft, right: newRight });
+        return newLeft === def.left && newRight === def.right ? s2 : clone(s2, { ...def, left: newLeft, right: newRight });
       }
       case "optional":
       case "nullable":
@@ -29429,22 +29429,22 @@ function visit(schema, fnOrHandlers) {
       case "promise":
       case "success": {
         const newInner = run2(def.innerType);
-        return newInner === def.innerType ? s : clone(s, { ...def, innerType: newInner });
+        return newInner === def.innerType ? s2 : clone(s2, { ...def, innerType: newInner });
       }
       case "pipe": {
         const newIn = run2(def.in);
         const newOut = run2(def.out);
-        return newIn === def.in && newOut === def.out ? s : clone(s, { ...def, in: newIn, out: newOut });
+        return newIn === def.in && newOut === def.out ? s2 : clone(s2, { ...def, in: newIn, out: newOut });
       }
       case "function": {
         const newInput = run2(def.input);
         const newOutput = run2(def.output);
-        return newInput === def.input && newOutput === def.output ? s : clone(s, { ...def, input: newInput, output: newOutput });
+        return newInput === def.input && newOutput === def.output ? s2 : clone(s2, { ...def, input: newInput, output: newOutput });
       }
       case "lazy": {
         const original = def.getter;
         const { _cachedInner, ...rest } = def;
-        return clone(s, { ...rest, getter: () => run2(original()) });
+        return clone(s2, { ...rest, getter: () => run2(original()) });
       }
       // A leaf by choice: `parts` are regex fragments, not data positions.
       case "template_literal":
@@ -29468,10 +29468,10 @@ function visit(schema, fnOrHandlers) {
       case "file":
       case "transform":
       case "custom":
-        return s;
+        return s2;
       default: {
         kind;
-        return s;
+        return s2;
       }
     }
   }
@@ -29481,11 +29481,11 @@ function visit(schema, fnOrHandlers) {
 // node_modules/zod/v4/classic/deep-partial.js
 function deepPartial(schema) {
   return visit(schema, {
-    object: (s) => s.partial(),
+    object: (s2) => s2.partial(),
     // Every partialed option now admits `undefined`, which the constructor rejects as a duplicate.
-    union: (s) => {
-      const def = s._zod.def;
-      return def.discriminator === void 0 ? s : union(def.options);
+    union: (s2) => {
+      const def = s2._zod.def;
+      return def.discriminator === void 0 ? s2 : union(def.options);
     }
   });
 }
@@ -29505,18 +29505,18 @@ function inSide(def) {
 }
 function input(schema) {
   return visit(schema, {
-    pipe: (s) => inSide(s._zod.def),
+    pipe: (s2) => inSide(s2._zod.def),
     // A default value belongs to the output side, so a rewritten inner type leaves it stranded. `.default()` widens the declared input type with `undefined`, and `optional` is what carries that across.
-    default: (s, rewritten) => rewritten ? optional(s._zod.def.innerType) : s,
+    default: (s2, rewritten) => rewritten ? optional(s2._zod.def.innerType) : s2,
     // A catch value is output-side too, but `.catch()` leaves the declared input type alone, so the inner schema stands on its own.
-    catch: (s, rewritten) => rewritten ? s._zod.def.innerType : s
+    catch: (s2, rewritten) => rewritten ? s2._zod.def.innerType : s2
   });
 }
 function output(schema) {
   return visit(schema, {
-    pipe: (s) => outSide(s._zod.def),
+    pipe: (s2) => outSide(s2._zod.def),
     // A prefault value is fed through the schema, which makes it input-side, so a rewritten inner type leaves it stranded.
-    prefault: (s, rewritten) => rewritten ? s._zod.def.innerType : s
+    prefault: (s2, rewritten) => rewritten ? s2._zod.def.innerType : s2
   });
 }
 
@@ -29546,32 +29546,32 @@ function date4(params) {
 }
 
 // src/redact.ts
-function describeError(e, max = 200) {
-  const anyE = e;
-  let s;
+function describeError(e4, max = 200) {
+  const anyE = e4;
+  let s2;
   if (anyE && typeof anyE.shortMessage === "string" && anyE.shortMessage.length > 0) {
-    s = anyE.shortMessage;
-    if (typeof anyE.details === "string" && anyE.details.length > 0 && !s.includes(anyE.details)) s = `${s} ${anyE.details}`;
-  } else if (anyE && typeof anyE.message === "string" && anyE.message.length > 0) s = anyE.message;
-  else s = String(e);
-  s = redactEndpoints(s);
-  const firstLine = s.split("\n").find((l) => l.trim().length > 0) ?? s;
+    s2 = anyE.shortMessage;
+    if (typeof anyE.details === "string" && anyE.details.length > 0 && !s2.includes(anyE.details)) s2 = `${s2} ${anyE.details}`;
+  } else if (anyE && typeof anyE.message === "string" && anyE.message.length > 0) s2 = anyE.message;
+  else s2 = String(e4);
+  s2 = redactEndpoints(s2);
+  const firstLine = s2.split("\n").find((l) => l.trim().length > 0) ?? s2;
   return firstLine.length > max ? `${firstLine.slice(0, max)}\u2026` : firstLine;
 }
 var secretSource = () => [];
 function registerSecretSource(f) {
   secretSource = f;
 }
-function redactSecrets(s, secrets = secretSource()) {
-  let out = s;
+function redactSecrets(s2, secrets = secretSource()) {
+  let out = s2;
   for (const sec of secrets) {
     if (!sec || sec.length < 8) continue;
     out = out.split(sec).join("<redacted>");
   }
   return out;
 }
-function redactEndpoints(s) {
-  return redactSecrets(s).replace(/\b[a-z][a-z0-9+.-]*:\/\/[^\s"'`)\]]+/gi, "<rpc endpoint>").replace(
+function redactEndpoints(s2) {
+  return redactSecrets(s2).replace(/\b[a-z][a-z0-9+.-]*:\/\/[^\s"'`)\]]+/gi, "<rpc endpoint>").replace(
     /\b(ENOTFOUND|EAI_AGAIN|ECONNREFUSED|ECONNRESET|ETIMEDOUT)\s+((?:[a-z0-9-]+\.)+[a-z]{2,}(?::\d+)?(?:\/\S*)?)/gi,
     (m, errno, host) => /^(localhost|127\.|10\.|192\.168\.|172\.(1[6-9]|2\d|3[01])\.)/i.test(host) ? m : `${errno} <rpc endpoint>`
   ).replace(/\b(x-api-key|api[-_]?key|authorization)\b\s*[:=]\s*.*/gi, "$1: <redacted>").replace(/^\s*(URL|Request body|Raw Call Arguments):.*$/gim, "").replace(/\n{2,}/g, "\n");
@@ -29665,7 +29665,7 @@ function createFilterRequestScope(client, { method }) {
 
 // node_modules/viem/_esm/actions/public/createContractEventFilter.js
 async function createContractEventFilter(client, parameters) {
-  const { address: address2, abi: abi2, args, eventName, fromBlock, strict, toBlock } = parameters;
+  const { address: address3, abi: abi2, args, eventName, fromBlock, strict, toBlock } = parameters;
   const getRequest = createFilterRequestScope(client, {
     method: "eth_newFilter"
   });
@@ -29678,7 +29678,7 @@ async function createContractEventFilter(client, parameters) {
     method: "eth_newFilter",
     params: [
       {
-        address: address2,
+        address: address3,
         fromBlock: typeof fromBlock === "bigint" ? numberToHex(fromBlock) : fromBlock,
         toBlock: typeof toBlock === "bigint" ? numberToHex(toBlock) : toBlock,
         topics
@@ -29707,8 +29707,8 @@ init_contract();
 init_request();
 init_rpc();
 var EXECUTION_REVERTED_ERROR_CODE = 3;
-function getContractError(err, { abi: abi2, address: address2, args, docsPath: docsPath8, functionName, sender }) {
-  const error62 = err instanceof RawContractError ? err : err instanceof BaseError2 ? err.walk((err2) => "data" in err2) || err.walk() : {};
+function getContractError(err, { abi: abi2, address: address3, args, docsPath: docsPath8, functionName, sender }) {
+  const error62 = err instanceof RawContractError ? err : err instanceof BaseError2 ? err.walk((err2) => typeof err2 === "object" && err2 !== null && "data" in err2) || err.walk() : {};
   const { code, data, details, message, shortMessage } = error62;
   const cause = (() => {
     if (err instanceof AbiDecodingZeroDataError)
@@ -29727,7 +29727,7 @@ function getContractError(err, { abi: abi2, address: address2, args, docsPath: d
   return new ContractFunctionExecutionError(cause, {
     abi: abi2,
     args,
-    contractAddress: address2,
+    contractAddress: address3,
     docsPath: docsPath8,
     functionName,
     sender
@@ -29742,8 +29742,8 @@ init_base();
 init_getAddress();
 init_keccak256();
 function publicKeyToAddress(publicKey) {
-  const address2 = keccak256(`0x${publicKey.substring(4)}`).substring(26);
-  return checksumAddress(`0x${address2}`);
+  const address3 = keccak256(`0x${publicKey.substring(4)}`).substring(26);
+  return checksumAddress(`0x${address3}`);
 }
 
 // node_modules/viem/_esm/utils/signature/recoverPublicKey.js
@@ -29756,10 +29756,10 @@ async function recoverPublicKey({ hash: hash4, signature }) {
   const { secp256k1: secp256k12 } = await Promise.resolve().then(() => (init_secp256k1(), secp256k1_exports));
   const signature_ = (() => {
     if (typeof signature === "object" && "r" in signature && "s" in signature) {
-      const { r, s, v, yParity } = signature;
+      const { r, s: s2, v, yParity } = signature;
       const yParityOrV2 = Number(yParity ?? v);
       const recoveryBit2 = toRecoveryBit(yParityOrV2);
-      return new secp256k12.Signature(hexToBigInt(r), hexToBigInt(s)).addRecoveryBit(recoveryBit2);
+      return new secp256k12.Signature(hexToBigInt(r), hexToBigInt(s2)).addRecoveryBit(recoveryBit2);
     }
     const signatureHex = isHex(signature) ? signature : toHex(signature);
     if (size(signatureHex) !== 65)
@@ -29888,12 +29888,12 @@ function getSizeOfLength(length) {
 init_keccak256();
 function hashAuthorization(parameters) {
   const { chainId, nonce, to } = parameters;
-  const address2 = parameters.contractAddress ?? parameters.address;
+  const address3 = parameters.contractAddress ?? parameters.address;
   const hash4 = keccak256(concatHex([
     "0x05",
     toRlp([
       chainId ? numberToHex(chainId) : "0x",
-      address2,
+      address3,
       nonce ? numberToHex(nonce) : "0x"
     ])
   ]));
@@ -30249,7 +30249,7 @@ async function internal_estimateFeesPerGas(client, args) {
 // node_modules/viem/_esm/actions/public/getTransactionCount.js
 init_formatBlockParameter();
 init_fromHex();
-async function getTransactionCount(client, { address: address2, blockHash, blockNumber, blockTag = "latest", requireCanonical }) {
+async function getTransactionCount(client, { address: address3, blockHash, blockNumber, blockTag = "latest", requireCanonical }) {
   const block = formatBlockParameter({
     blockHash,
     blockNumber,
@@ -30258,7 +30258,7 @@ async function getTransactionCount(client, { address: address2, blockHash, block
   });
   const count = await client.request({
     method: "eth_getTransactionCount",
-    params: [address2, block]
+    params: [address3, block]
   }, {
     dedupe: typeof blockNumber === "bigint" || blockHash !== void 0
   });
@@ -30716,21 +30716,21 @@ async function prepareTransactionRequest(client, args) {
       ...shouldUseFilledFeeToken ? { feeToken } : {},
       ...result.capabilities ? { _capabilities: result.capabilities } : {}
     };
-  }).catch((e) => {
-    const error62 = e;
+  }).catch((e4) => {
+    const error62 = e4;
     if (error62.name !== "TransactionExecutionError")
       return request;
     const nonceMismatch = error62.walk?.((error63) => error63 instanceof FeePayerNonceMismatchError);
     if (nonceMismatch)
-      throw e;
-    const executionReverted = error62.walk?.((e2) => {
-      const error63 = e2;
+      throw e4;
+    const executionReverted = error62.walk?.((e5) => {
+      const error63 = e5;
       return error63.name === "ExecutionRevertedError";
     });
     if (executionReverted)
-      throw e;
-    const unsupported = error62.walk?.((e2) => {
-      const error63 = e2;
+      throw e4;
+    const unsupported = error62.walk?.((e5) => {
+      const error63 = e5;
       return error63.name === "MethodNotFoundRpcError" || error63.name === "MethodNotSupportedRpcError" || error63.message?.includes("eth_fillTransaction is not available");
     });
     if (unsupported)
@@ -30916,7 +30916,7 @@ async function estimateGas(client, args) {
 
 // node_modules/viem/_esm/actions/public/estimateContractGas.js
 async function estimateContractGas(client, parameters) {
-  const { abi: abi2, address: address2, args, functionName, dataSuffix = typeof client.dataSuffix === "string" ? client.dataSuffix : client.dataSuffix?.value, ...request } = parameters;
+  const { abi: abi2, address: address3, args, functionName, dataSuffix = typeof client.dataSuffix === "string" ? client.dataSuffix : client.dataSuffix?.value, ...request } = parameters;
   const data = encodeFunctionData({
     abi: abi2,
     args,
@@ -30925,7 +30925,7 @@ async function estimateContractGas(client, parameters) {
   try {
     const gas = await getAction(client, estimateGas, "estimateGas")({
       data: `${data}${dataSuffix ? dataSuffix.replace("0x", "") : ""}`,
-      to: address2,
+      to: address3,
       ...request
     });
     return gas;
@@ -30933,7 +30933,7 @@ async function estimateContractGas(client, parameters) {
     const account = request.account ? parseAccount(request.account) : void 0;
     throw getContractError(error62, {
       abi: abi2,
-      address: address2,
+      address: address3,
       args,
       docsPath: "/docs/contract/estimateContractGas",
       functionName,
@@ -31167,7 +31167,7 @@ function includesArgs(parameters) {
 
 // node_modules/viem/_esm/actions/public/getLogs.js
 init_toHex();
-async function getLogs(client, { address: address2, blockHash, fromBlock, toBlock, event, events: events_, args, strict: strict_ } = {}) {
+async function getLogs(client, { address: address3, blockHash, fromBlock, toBlock, event, events: events_, args, strict: strict_ } = {}) {
   const strict = strict_ ?? false;
   const events = events_ ?? (event ? [event] : void 0);
   let topics = [];
@@ -31185,14 +31185,14 @@ async function getLogs(client, { address: address2, blockHash, fromBlock, toBloc
   if (blockHash) {
     logs = await client.request({
       method: "eth_getLogs",
-      params: [{ address: address2, topics, blockHash }]
+      params: [{ address: address3, topics, blockHash }]
     });
   } else {
     logs = await client.request({
       method: "eth_getLogs",
       params: [
         {
-          address: address2,
+          address: address3,
           topics,
           fromBlock: typeof fromBlock === "bigint" ? numberToHex(fromBlock) : fromBlock,
           toBlock: typeof toBlock === "bigint" ? numberToHex(toBlock) : toBlock
@@ -31213,11 +31213,11 @@ async function getLogs(client, { address: address2, blockHash, fromBlock, toBloc
 
 // node_modules/viem/_esm/actions/public/getContractEvents.js
 async function getContractEvents(client, parameters) {
-  const { abi: abi2, address: address2, args, blockHash, eventName, fromBlock, toBlock, strict } = parameters;
+  const { abi: abi2, address: address3, args, blockHash, eventName, fromBlock, toBlock, strict } = parameters;
   const event = eventName ? getAbiItem({ abi: abi2, name: eventName }) : void 0;
   const events = !event ? abi2.filter((x) => x.type === "event") : void 0;
   return getAction(client, getLogs, "getLogs")({
-    address: address2,
+    address: address3,
     args,
     blockHash,
     event,
@@ -31233,7 +31233,7 @@ init_decodeFunctionResult();
 init_encodeFunctionData();
 init_call();
 async function readContract(client, parameters) {
-  const { abi: abi2, address: address2, args, functionName, ...rest } = parameters;
+  const { abi: abi2, address: address3, args, functionName, ...rest } = parameters;
   const calldata = encodeFunctionData({
     abi: abi2,
     args,
@@ -31243,7 +31243,7 @@ async function readContract(client, parameters) {
     const { data } = await getAction(client, call, "call")({
       ...rest,
       data: calldata,
-      to: address2
+      to: address3
     });
     return decodeFunctionResult({
       abi: abi2,
@@ -31254,7 +31254,7 @@ async function readContract(client, parameters) {
   } catch (error62) {
     throw getContractError(error62, {
       abi: abi2,
-      address: address2,
+      address: address3,
       args,
       docsPath: "/docs/contract/readContract",
       functionName
@@ -31268,14 +31268,14 @@ init_decodeFunctionResult();
 init_encodeFunctionData();
 init_call();
 async function simulateContract(client, parameters) {
-  const { abi: abi2, address: address2, args, functionName, dataSuffix = typeof client.dataSuffix === "string" ? client.dataSuffix : client.dataSuffix?.value, ...callRequest } = parameters;
+  const { abi: abi2, address: address3, args, functionName, dataSuffix = typeof client.dataSuffix === "string" ? client.dataSuffix : client.dataSuffix?.value, ...callRequest } = parameters;
   const account = callRequest.account ? parseAccount(callRequest.account) : client.account;
   const calldata = encodeFunctionData({ abi: abi2, args, functionName });
   try {
     const { data } = await getAction(client, call, "call")({
       batch: false,
       data: `${calldata}${dataSuffix ? dataSuffix.replace("0x", "") : ""}`,
-      to: address2,
+      to: address3,
       ...callRequest,
       account
     });
@@ -31290,7 +31290,7 @@ async function simulateContract(client, parameters) {
       result,
       request: {
         abi: minimizedAbi,
-        address: address2,
+        address: address3,
         args,
         dataSuffix,
         functionName,
@@ -31301,7 +31301,7 @@ async function simulateContract(client, parameters) {
   } catch (error62) {
     throw getContractError(error62, {
       abi: abi2,
-      address: address2,
+      address: address3,
       args,
       docsPath: "/docs/contract/simulateContract",
       functionName,
@@ -31370,7 +31370,7 @@ function observe(observerId, callbacks, fn) {
 // node_modules/viem/_esm/utils/wait.js
 init_utils3();
 async function wait(time3, { signal } = {}) {
-  return new Promise((resolve, reject) => {
+  return new Promise((resolve2, reject) => {
     if (signal?.aborted) {
       reject(getAbortError(signal));
       return;
@@ -31378,7 +31378,7 @@ async function wait(time3, { signal } = {}) {
     const cleanup = () => signal?.removeEventListener("abort", onAbort);
     const timeout = setTimeout(() => {
       cleanup();
-      resolve();
+      resolve2();
     }, time3);
     const onAbort = () => {
       clearTimeout(timeout);
@@ -31495,7 +31495,7 @@ async function uninstallFilter(_client, { filter }) {
 
 // node_modules/viem/_esm/actions/public/watchContractEvent.js
 function watchContractEvent(client, parameters) {
-  const { abi: abi2, address: address2, args, batch = true, eventName, fromBlock, onError, onLogs, poll: poll_, pollingInterval = client.pollingInterval, strict: strict_ } = parameters;
+  const { abi: abi2, address: address3, args, batch = true, eventName, fromBlock, onError, onLogs, poll: poll_, pollingInterval = client.pollingInterval, strict: strict_ } = parameters;
   const enablePolling = (() => {
     if (typeof poll_ !== "undefined")
       return poll_;
@@ -31511,7 +31511,7 @@ function watchContractEvent(client, parameters) {
     const strict = strict_ ?? false;
     const observerId = stringify([
       "watchContractEvent",
-      address2,
+      address3,
       args,
       batch,
       client.uid,
@@ -31531,7 +31531,7 @@ function watchContractEvent(client, parameters) {
           try {
             filter = await getAction(client, createContractEventFilter, "createContractEventFilter")({
               abi: abi2,
-              address: address2,
+              address: address3,
               args,
               eventName,
               strict,
@@ -31551,7 +31551,7 @@ function watchContractEvent(client, parameters) {
             if (previousBlockNumber && previousBlockNumber < blockNumber) {
               logs = await getAction(client, getContractEvents, "getContractEvents")({
                 abi: abi2,
-                address: address2,
+                address: address3,
                 args,
                 eventName,
                 fromBlock: previousBlockNumber + 1n,
@@ -31590,7 +31590,7 @@ function watchContractEvent(client, parameters) {
     const strict = strict_ ?? false;
     const observerId = stringify([
       "watchContractEvent",
-      address2,
+      address3,
       args,
       batch,
       client.uid,
@@ -31619,7 +31619,7 @@ function watchContractEvent(client, parameters) {
             args
           }) : [];
           const { unsubscribe: unsubscribe_ } = await transport.subscribe({
-            params: ["logs", { address: address2, topics }],
+            params: ["logs", { address: address3, topics }],
             onData(data) {
               if (!active)
                 return;
@@ -31695,7 +31695,7 @@ async function sendRawTransaction(client, { serializedTransaction }) {
 // node_modules/viem/_esm/utils/promise/withRetry.js
 init_utils3();
 function withRetry(fn, { delay: delay_ = 100, retryCount = 2, shouldRetry: shouldRetry2 = () => true, signal } = {}) {
-  return new Promise((resolve, reject) => {
+  return new Promise((resolve2, reject) => {
     const attemptRetry = async ({ count = 0 } = {}) => {
       if (signal?.aborted) {
         reject(getAbortError(signal));
@@ -31715,7 +31715,7 @@ function withRetry(fn, { delay: delay_ = 100, retryCount = 2, shouldRetry: shoul
       };
       try {
         const data = await fn();
-        resolve(data);
+        resolve2(data);
       } catch (err) {
         if (signal?.aborted) {
           reject(getAbortError(signal));
@@ -31878,7 +31878,7 @@ init_contract();
 function isNullUniversalResolverError(err) {
   if (!(err instanceof BaseError2))
     return false;
-  const cause = err.walk((e) => e instanceof ContractFunctionRevertedError);
+  const cause = err.walk((e4) => e4 instanceof ContractFunctionRevertedError);
   if (!(cause instanceof ContractFunctionRevertedError))
     return false;
   if (cause.data?.errorName === "HttpError")
@@ -32019,12 +32019,12 @@ async function getEnsAddress(client, parameters) {
     const res = await readContractAction(readContractParameters);
     if (res[0] === "0x")
       return null;
-    const address2 = decodeAddress2({ coinType, data: res[0], args });
-    if (address2 === "0x")
+    const address3 = decodeAddress2({ coinType, data: res[0], args });
+    if (address3 === "0x")
       return null;
-    if (trim(address2) === "0x00")
+    if (trim(address3) === "0x00")
       return null;
-    return address2;
+    return address3;
   } catch (err) {
     if (strict)
       throw err;
@@ -32044,9 +32044,9 @@ function decodeAddress2({ coinType, data, args }) {
   } catch (err) {
     if (coinType == null)
       throw err;
-    const address2 = trim(data);
-    if (size(address2) === 20)
-      return getAddress(address2);
+    const address3 = trim(data);
+    if (size(address3) === 20)
+      return getAddress(address3);
     throw err;
   }
 }
@@ -32102,13 +32102,13 @@ async function isImageUri(uri) {
     }
     if (!Object.hasOwn(globalThis, "Image"))
       return false;
-    return new Promise((resolve) => {
+    return new Promise((resolve2) => {
       const img = new Image();
       img.onload = () => {
-        resolve(true);
+        resolve2(true);
       };
       img.onerror = () => {
-        resolve(false);
+        resolve2(false);
       };
       img.src = uri;
     });
@@ -32372,7 +32372,7 @@ init_abis();
 init_getChainContractAddress();
 init_localBatchGatewayRequest();
 async function getEnsName(client, parameters) {
-  const { address: address2, blockNumber, blockTag, coinType = 60n, gatewayUrls, strict } = parameters;
+  const { address: address3, blockNumber, blockTag, coinType = 60n, gatewayUrls, strict } = parameters;
   const { chain } = client;
   const universalResolverAddress = (() => {
     if (parameters.universalResolverAddress)
@@ -32389,7 +32389,7 @@ async function getEnsName(client, parameters) {
     const readContractParameters = {
       address: universalResolverAddress,
       abi: universalResolverReverseAbi,
-      args: [address2, coinType, gatewayUrls ?? [localBatchGatewayUrl]],
+      args: [address3, coinType, gatewayUrls ?? [localBatchGatewayUrl]],
       functionName: "reverseWithGateways",
       blockNumber,
       blockTag
@@ -32515,7 +32515,7 @@ async function createBlockFilter(client) {
 
 // node_modules/viem/_esm/actions/public/createEventFilter.js
 init_toHex();
-async function createEventFilter(client, { address: address2, args, event, events: events_, fromBlock, strict, toBlock } = {}) {
+async function createEventFilter(client, { address: address3, args, event, events: events_, fromBlock, strict, toBlock } = {}) {
   const events = events_ ?? (event ? [event] : void 0);
   const getRequest = createFilterRequestScope(client, {
     method: "eth_newFilter"
@@ -32535,7 +32535,7 @@ async function createEventFilter(client, { address: address2, args, event, event
     method: "eth_newFilter",
     params: [
       {
-        address: address2,
+        address: address3,
         fromBlock: typeof fromBlock === "bigint" ? numberToHex(fromBlock) : fromBlock,
         toBlock: typeof toBlock === "bigint" ? numberToHex(toBlock) : toBlock,
         ...topics.length ? { topics } : {}
@@ -32572,7 +32572,7 @@ init_decodeFunctionResult();
 init_encodeFunctionData();
 init_formatBlockParameter();
 init_call();
-async function getBalance(client, { address: address2, blockHash, blockNumber, blockTag = client.experimental_blockTag ?? "latest", requireCanonical }) {
+async function getBalance(client, { address: address3, blockHash, blockNumber, blockTag = client.experimental_blockTag ?? "latest", requireCanonical }) {
   const block = formatBlockParameter({
     blockHash,
     blockNumber,
@@ -32584,7 +32584,7 @@ async function getBalance(client, { address: address2, blockHash, blockNumber, b
     const calldata = encodeFunctionData({
       abi: multicall3Abi,
       functionName: "getEthBalance",
-      args: [address2]
+      args: [address3]
     });
     const { data } = await getAction(client, call, "call")({
       to: multicall3Address,
@@ -32597,13 +32597,13 @@ async function getBalance(client, { address: address2, blockHash, blockNumber, b
     return decodeFunctionResult({
       abi: multicall3Abi,
       functionName: "getEthBalance",
-      args: [address2],
+      args: [address3],
       data: data || "0x"
     });
   }
   const balance = await client.request({
     method: "eth_getBalance",
-    params: [address2, block]
+    params: [address3, block]
   });
   return BigInt(balance);
 }
@@ -32652,7 +32652,7 @@ async function getBlockTransactionCount(client, { blockHash, blockNumber, blockT
 
 // node_modules/viem/_esm/actions/public/getCode.js
 init_formatBlockParameter();
-async function getCode(client, { address: address2, blockHash, blockNumber, blockTag = "latest", requireCanonical }) {
+async function getCode(client, { address: address3, blockHash, blockNumber, blockTag = "latest", requireCanonical }) {
   const block = formatBlockParameter({
     blockHash,
     blockNumber,
@@ -32661,7 +32661,7 @@ async function getCode(client, { address: address2, blockHash, blockNumber, bloc
   });
   const hex3 = await client.request({
     method: "eth_getCode",
-    params: [address2, block]
+    params: [address3, block]
   }, {
     dedupe: typeof blockNumber === "bigint" || blockHash !== void 0
   });
@@ -32674,9 +32674,9 @@ async function getCode(client, { address: address2, blockHash, blockNumber, bloc
 init_getAddress();
 init_size();
 init_slice();
-async function getDelegation(client, { address: address2, blockNumber, blockTag = "latest" }) {
+async function getDelegation(client, { address: address3, blockNumber, blockTag = "latest" }) {
   const code = await getCode(client, {
-    address: address2,
+    address: address3,
     ...blockNumber !== void 0 ? { blockNumber } : { blockTag }
   });
   if (!code)
@@ -32691,11 +32691,11 @@ async function getDelegation(client, { address: address2, blockNumber, blockTag 
 // node_modules/viem/_esm/errors/eip712.js
 init_base();
 var Eip712DomainNotFoundError = class extends BaseError2 {
-  constructor({ address: address2 }) {
-    super(`No EIP-712 domain found on contract "${address2}".`, {
+  constructor({ address: address3 }) {
+    super(`No EIP-712 domain found on contract "${address3}".`, {
       metaMessages: [
         "Ensure that:",
-        `- The contract is deployed at the address "${address2}".`,
+        `- The contract is deployed at the address "${address3}".`,
         "- `eip712Domain()` function exists on the contract.",
         "- `eip712Domain()` function matches signature to ERC-5267 specification."
       ],
@@ -32706,11 +32706,11 @@ var Eip712DomainNotFoundError = class extends BaseError2 {
 
 // node_modules/viem/_esm/actions/public/getEip712Domain.js
 async function getEip712Domain(client, parameters) {
-  const { address: address2, factory, factoryData } = parameters;
+  const { address: address3, factory, factoryData } = parameters;
   try {
     const [fields, name, version5, chainId, verifyingContract, salt, extensions] = await getAction(client, readContract, "readContract")({
       abi,
-      address: address2,
+      address: address3,
       functionName: "eip712Domain",
       factory,
       factoryData
@@ -32726,10 +32726,10 @@ async function getEip712Domain(client, parameters) {
       extensions,
       fields
     };
-  } catch (e) {
-    const error62 = e;
+  } catch (e4) {
+    const error62 = e4;
     if (error62.name === "ContractFunctionExecutionError" && error62.cause.name === "ContractFunctionZeroDataError") {
-      throw new Eip712DomainNotFoundError({ address: address2 });
+      throw new Eip712DomainNotFoundError({ address: address3 });
     }
     throw error62;
   }
@@ -32826,9 +32826,9 @@ function assertTransactionEIP7702(transaction) {
   if (authorizationList) {
     for (const authorization of authorizationList) {
       const { chainId } = authorization;
-      const address2 = authorization.address;
-      if (!isAddress(address2))
-        throw new InvalidAddressError({ address: address2 });
+      const address3 = authorization.address;
+      if (!isAddress(address3))
+        throw new InvalidAddressError({ address: address3 });
       if (chainId < 0)
         throw new InvalidChainIdError({ chainId });
     }
@@ -32897,16 +32897,16 @@ function serializeAccessList(accessList) {
     return [];
   const serializedAccessList = [];
   for (let i = 0; i < accessList.length; i++) {
-    const { address: address2, storageKeys } = accessList[i];
+    const { address: address3, storageKeys } = accessList[i];
     for (let j = 0; j < storageKeys.length; j++) {
       if (storageKeys[j].length - 2 !== 64) {
         throw new InvalidStorageKeySizeError({ storageKey: storageKeys[j] });
       }
     }
-    if (!isAddress(address2, { strict: false })) {
-      throw new InvalidAddressError({ address: address2 });
+    if (!isAddress(address3, { strict: false })) {
+      throw new InvalidAddressError({ address: address3 });
     }
-    serializedAccessList.push([address2, storageKeys]);
+    serializedAccessList.push([address3, storageKeys]);
   }
   return serializedAccessList;
 }
@@ -33071,12 +33071,12 @@ function serializeTransactionLegacy(transaction, signature) {
       return v2;
     })();
     const r = trim(signature.r);
-    const s = trim(signature.s);
+    const s2 = trim(signature.s);
     serializedTransaction = [
       ...serializedTransaction,
       numberToHex(v),
       r === "0x00" ? "0x" : r,
-      s === "0x00" ? "0x" : s
+      s2 === "0x00" ? "0x" : s2
     ];
   } else if (chainId > 0) {
     serializedTransaction = [
@@ -33098,7 +33098,7 @@ function toYParitySignatureArray(transaction, signature_) {
   if (typeof v === "undefined" && typeof yParity === "undefined")
     return [];
   const r = trim(signature.r);
-  const s = trim(signature.s);
+  const s2 = trim(signature.s);
   const yParity_ = (() => {
     if (typeof yParity === "number")
       return yParity ? numberToHex(1) : "0x";
@@ -33108,7 +33108,7 @@ function toYParitySignatureArray(transaction, signature_) {
       return numberToHex(1);
     return v === 27n ? "0x" : numberToHex(1);
   })();
-  return [yParity_, r === "0x00" ? "0x" : r, s === "0x00" ? "0x" : s];
+  return [yParity_, r === "0x00" ? "0x" : r, s2 === "0x00" ? "0x" : s2];
 }
 
 // node_modules/viem/_esm/utils/authorization/serializeAuthorizationList.js
@@ -33132,8 +33132,8 @@ function serializeAuthorizationList(authorizationList) {
 // node_modules/viem/_esm/utils/authorization/verifyAuthorization.js
 init_getAddress();
 init_isAddressEqual();
-async function verifyAuthorization({ address: address2, authorization, signature }) {
-  return isAddressEqual(getAddress(address2), await recoverAuthorizationAddress({
+async function verifyAuthorization({ address: address3, authorization, signature }) {
+  return isAddressEqual(getAddress(address3), await recoverAuthorizationAddress({
     authorization,
     signature
   }));
@@ -33376,7 +33376,7 @@ init_utils3();
 // node_modules/viem/_esm/utils/promise/withTimeout.js
 init_utils3();
 function withTimeout(fn, { errorInstance = new Error("timed out"), timeout, signal }) {
-  return new Promise((resolve, reject) => {
+  return new Promise((resolve2, reject) => {
     ;
     (async () => {
       let timeoutId;
@@ -33391,7 +33391,7 @@ function withTimeout(fn, { errorInstance = new Error("timed out"), timeout, sign
             }
           }, timeout);
         }
-        resolve(await fn({ signal: controller?.signal || null }));
+        resolve2(await fn({ signal: controller?.signal || null }));
       } catch (err) {
         if (controller?.signal.aborted && isAbortError(err)) {
           reject(errorInstance);
@@ -34080,11 +34080,11 @@ function assert5(value, options = {}) {
       });
   }
 }
-function checksum2(address2) {
-  if (checksum.has(address2))
-    return checksum.get(address2);
-  assert5(address2, { strict: false });
-  const hexAddress = address2.substring(2).toLowerCase();
+function checksum2(address3) {
+  if (checksum.has(address3))
+    return checksum.get(address3);
+  assert5(address3, { strict: false });
+  const hexAddress = address3.substring(2).toLowerCase();
   const hash4 = keccak2562(fromString(hexAddress), { as: "Bytes" });
   const characters = hexAddress.split("");
   for (let i = 0; i < 40; i += 2) {
@@ -34096,32 +34096,32 @@ function checksum2(address2) {
     }
   }
   const result = `0x${characters.join("")}`;
-  checksum.set(address2, result);
+  checksum.set(address3, result);
   return result;
 }
-function from5(address2, options = {}) {
+function from5(address3, options = {}) {
   const { checksum: checksumVal = false } = options;
-  assert5(address2);
+  assert5(address3);
   if (checksumVal)
-    return checksum2(address2);
-  return address2;
+    return checksum2(address3);
+  return address3;
 }
 function fromPublicKey(publicKey, options = {}) {
-  const address2 = keccak2562(`0x${toHex2(publicKey).slice(4)}`).substring(26);
-  return from5(`0x${address2}`, options);
+  const address3 = keccak2562(`0x${toHex2(publicKey).slice(4)}`).substring(26);
+  return from5(`0x${address3}`, options);
 }
-function validate4(address2, options = {}) {
+function validate4(address3, options = {}) {
   const { strict = true } = options ?? {};
   try {
-    assert5(address2, { strict });
+    assert5(address3, { strict });
     return true;
   } catch {
     return false;
   }
 }
 var InvalidAddressError2 = class extends BaseError3 {
-  constructor({ address: address2, cause }) {
-    super(`Address "${address2}" is invalid.`, {
+  constructor({ address: address3, cause }) {
+    super(`Address "${address3}" is invalid.`, {
       cause
     });
     Object.defineProperty(this, "name", {
@@ -34296,7 +34296,7 @@ var sizeOfOffset2 = 32;
 function decodeAddress3(cursor, options = {}) {
   const { checksum: checksum3 = false } = options;
   const value = cursor.readBytes(32);
-  const wrap3 = (address2) => checksum3 ? checksum2(address2) : address2;
+  const wrap3 = (address3) => checksum3 ? checksum2(address3) : address3;
   return [wrap3(fromBytes(slice2(value, -20))), 32];
 }
 function decodeArray2(cursor, param, options) {
@@ -34931,9 +34931,9 @@ function encodePacked(types, values) {
 (function(encodePacked2) {
   function encode6(type, value, isArray = false) {
     if (type === "address") {
-      const address2 = value;
-      assert5(address2);
-      return padLeft(address2.toLowerCase(), isArray ? 32 : 0);
+      const address3 = value;
+      assert5(address3);
+      return padLeft(address3.toLowerCase(), isArray ? 32 : 0);
     }
     if (type === "string")
       return fromString2(value);
@@ -35195,7 +35195,7 @@ function fromHex4(signature) {
   if (signature.length !== 130 && signature.length !== 132)
     throw new InvalidSerializedSizeError2({ signature });
   const r = BigInt(slice3(signature, 0, 32));
-  const s = BigInt(slice3(signature, 32, 64));
+  const s2 = BigInt(slice3(signature, 32, 64));
   const yParity = (() => {
     const yParity2 = Number(`0x${signature.slice(130)}`);
     if (Number.isNaN(yParity2))
@@ -35209,11 +35209,11 @@ function fromHex4(signature) {
   if (typeof yParity === "undefined")
     return {
       r,
-      s
+      s: s2
     };
   return {
     r,
-    s,
+    s: s2,
     yParity
   };
 }
@@ -35267,11 +35267,11 @@ function fromRpc2(signature) {
   };
 }
 function toTuple(signature) {
-  const { r, s, yParity } = signature;
+  const { r, s: s2, yParity } = signature;
   return [
     yParity ? "0x01" : "0x",
     r === 0n ? "0x" : trimLeft2(fromNumber(r)),
-    s === 0n ? "0x" : trimLeft2(fromNumber(s))
+    s2 === 0n ? "0x" : trimLeft2(fromNumber(s2))
   ];
 }
 function vToYParity(v) {
@@ -35362,10 +35362,10 @@ function from9(authorization, options = {}) {
   return { ...authorization, ...options.signature };
 }
 function fromRpc3(authorization) {
-  const { address: address2, chainId, nonce } = authorization;
+  const { address: address3, chainId, nonce } = authorization;
   const signature = extract2(authorization);
   return {
-    address: address2,
+    address: address3,
     chainId: Number(chainId),
     nonce: BigInt(nonce),
     ...signature
@@ -35383,11 +35383,11 @@ function hash3(authorization, options = {}) {
   } : authorization))));
 }
 function toTuple2(authorization) {
-  const { address: address2, chainId, nonce } = authorization;
+  const { address: address3, chainId, nonce } = authorization;
   const signature = extract2(authorization);
   return [
     chainId ? fromNumber(chainId) : "0x",
-    address2,
+    address3,
     nonce ? fromNumber(nonce) : "0x",
     ...signature ? toTuple(signature) : []
   ];
@@ -35406,8 +35406,8 @@ function recoverAddress2(options) {
 }
 function recoverPublicKey2(options) {
   const { payload, signature } = options;
-  const { r, s, yParity } = signature;
-  const signature_ = new secp256k1.Signature(BigInt(r), BigInt(s)).addRecoveryBit(yParity);
+  const { r, s: s2, yParity } = signature;
+  const signature_ = new secp256k1.Signature(BigInt(r), BigInt(s2)).addRecoveryBit(yParity);
   const point = signature_.recoverPublicKey(from3(payload).substring(2));
   return from4(point);
 }
@@ -35495,8 +35495,8 @@ async function recoverMessageAddress({ message, signature }) {
 // node_modules/viem/_esm/utils/signature/verifyMessage.js
 init_getAddress();
 init_isAddressEqual();
-async function verifyMessage({ address: address2, message, signature }) {
-  return isAddressEqual(getAddress(address2), await recoverMessageAddress({ message, signature }));
+async function verifyMessage({ address: address3, message, signature }) {
+  return isAddressEqual(getAddress(address3), await recoverMessageAddress({ message, signature }));
 }
 
 // node_modules/viem/_esm/utils/unit/formatUnits.js
@@ -35528,7 +35528,7 @@ function formatProof(proof) {
 }
 
 // node_modules/viem/_esm/actions/public/getProof.js
-async function getProof(client, { address: address2, blockHash, blockNumber, blockTag = "latest", requireCanonical, storageKeys }) {
+async function getProof(client, { address: address3, blockHash, blockNumber, blockTag = "latest", requireCanonical, storageKeys }) {
   const block = formatBlockParameter({
     blockHash,
     blockNumber,
@@ -35537,7 +35537,7 @@ async function getProof(client, { address: address2, blockHash, blockNumber, blo
   });
   const proof = await client.request({
     method: "eth_getProof",
-    params: [address2, storageKeys, block]
+    params: [address3, storageKeys, block]
   });
   return formatProof(proof);
 }
@@ -35556,7 +35556,7 @@ async function getRawTransaction(client, { hash: hash4 }) {
 
 // node_modules/viem/_esm/actions/public/getStorageAt.js
 init_formatBlockParameter();
-async function getStorageAt(client, { address: address2, blockHash, blockNumber, blockTag = "latest", requireCanonical, slot }) {
+async function getStorageAt(client, { address: address3, blockHash, blockNumber, blockTag = "latest", requireCanonical, slot }) {
   const block = formatBlockParameter({
     blockHash,
     blockNumber,
@@ -35565,7 +35565,7 @@ async function getStorageAt(client, { address: address2, blockHash, blockNumber,
   });
   const data = await client.request({
     method: "eth_getStorageAt",
-    params: [address2, slot, block]
+    params: [address3, slot, block]
   });
   return data;
 }
@@ -35685,7 +35685,7 @@ async function multicall(client, parameters) {
   let currentChunk = 0;
   let currentChunkSize = 0;
   for (let i = 0; i < contracts2.length; i++) {
-    const { abi: abi2, address: address2, args, functionName } = contracts2[i];
+    const { abi: abi2, address: address3, args, functionName } = contracts2[i];
     try {
       const callData = encodeFunctionData({ abi: abi2, args, functionName });
       currentChunkSize += (callData.length - 2) / 2;
@@ -35704,13 +35704,13 @@ async function multicall(client, parameters) {
         {
           allowFailure: true,
           callData,
-          target: address2
+          target: address3
         }
       ];
     } catch (err) {
       const error62 = getContractError(err, {
         abi: abi2,
-        address: address2,
+        address: address3,
         args,
         docsPath: "/docs/contract/multicall",
         functionName,
@@ -35723,7 +35723,7 @@ async function multicall(client, parameters) {
         {
           allowFailure: true,
           callData: "0x",
-          target: address2
+          target: address3
         }
       ];
     }
@@ -35779,7 +35779,7 @@ async function multicall(client, parameters) {
     for (let j = 0; j < aggregate3Result.length; j++) {
       const { returnData, success: success2 } = aggregate3Result[j];
       const { callData } = batches[i][j];
-      const { abi: abi2, address: address2, functionName, args } = contracts2[results.length];
+      const { abi: abi2, address: address3, functionName, args } = contracts2[results.length];
       try {
         if (callData === "0x")
           throw new AbiDecodingZeroDataError();
@@ -35795,7 +35795,7 @@ async function multicall(client, parameters) {
       } catch (err) {
         const error62 = getContractError(err, {
           abi: abi2,
-          address: address2,
+          address: address3,
           args,
           docsPath: "/docs/contract/multicall",
           functionName
@@ -35930,8 +35930,8 @@ async function simulateBlocks(client, parameters) {
         };
       })
     }));
-  } catch (e) {
-    const cause = e;
+  } catch (e4) {
+    const cause = e4;
     const error62 = getNodeError(cause, {});
     if (error62 instanceof UnknownNodeError)
       throw cause;
@@ -36362,11 +36362,11 @@ async function simulateCalls(client, parameters) {
       // Candidates without code fall out at `isBalance`.
       ...parameters.calls.map((call2) => call2.to?.toLowerCase())
     ])
-  ].filter((address2) => Boolean(address2) && address2 !== ethAddress && address2 !== zeroAddress) : [];
+  ].filter((address3) => Boolean(address3) && address3 !== ethAddress && address3 !== zeroAddress) : [];
   const staticCallAddress = getStaticCallAddress([
     ...account ? [account.address] : [],
     ...assetAddresses,
-    ...stateOverrides?.map(({ address: address2 }) => address2) ?? []
+    ...stateOverrides?.map(({ address: address3 }) => address3) ?? []
   ]);
   const staticCallStateOverrides = [
     { address: staticCallAddress, code: staticCallCode }
@@ -36379,9 +36379,9 @@ async function simulateCalls(client, parameters) {
         data: getBalanceData,
         stateOverride: stateOverrides
       }),
-      ...assetAddresses.map((address2) => readBalance(client, {
+      ...assetAddresses.map((address3) => readBalance(client, {
         account: account.address,
-        address: address2,
+        address: address3,
         ...block_,
         data: encodeData2(balanceOfFunction, [
           account.address
@@ -36407,10 +36407,10 @@ async function simulateCalls(client, parameters) {
           },
           // Asset post balances
           {
-            calls: assetAddresses.map((address2) => ({
+            calls: assetAddresses.map((address3) => ({
               to: staticCallAddress,
               gas: assetProbeGas,
-              data: encodeStaticCall(address2, encodeData2(balanceOfFunction, [
+              data: encodeStaticCall(address3, encodeData2(balanceOfFunction, [
                 account.address
               ]))
             })),
@@ -36418,28 +36418,28 @@ async function simulateCalls(client, parameters) {
           },
           // Decimals
           {
-            calls: assetAddresses.map((address2) => ({
+            calls: assetAddresses.map((address3) => ({
               to: staticCallAddress,
               gas: assetProbeGas,
-              data: encodeStaticCall(address2, encodeData2(decimalsFunction))
+              data: encodeStaticCall(address3, encodeData2(decimalsFunction))
             })),
             stateOverrides: staticCallStateOverrides
           },
           // Token URI
           {
-            calls: assetAddresses.map((address2) => ({
+            calls: assetAddresses.map((address3) => ({
               to: staticCallAddress,
               gas: assetProbeGas,
-              data: encodeStaticCall(address2, encodeData2(tokenUriFunction, [0n]))
+              data: encodeStaticCall(address3, encodeData2(tokenUriFunction, [0n]))
             })),
             stateOverrides: staticCallStateOverrides
           },
           // Symbols
           {
-            calls: assetAddresses.map((address2) => ({
+            calls: assetAddresses.map((address3) => ({
               to: staticCallAddress,
               gas: assetProbeGas,
-              data: encodeStaticCall(address2, encodeData2(symbolFunction))
+              data: encodeStaticCall(address3, encodeData2(symbolFunction))
             })),
             stateOverrides: staticCallStateOverrides
           }
@@ -36501,8 +36501,8 @@ async function simulateCalls(client, parameters) {
     results
   };
 }
-function encodeStaticCall(address2, data) {
-  return encodeData2(staticCallFunction, [address2, data]);
+function encodeStaticCall(address3, data) {
+  return encodeData2(staticCallFunction, [address3, data]);
 }
 function tokensFromLogs(logs, account) {
   const account_ = pad(account.toLowerCase(), { size: 32 });
@@ -36527,16 +36527,16 @@ function decodeAssetResult(call2, abiFunction) {
   }
 }
 async function readBalance(client, parameters) {
-  const { account, address: address2, blockNumber, blockTag, data, staticCallAddress, stateOverride } = parameters;
+  const { account, address: address3, blockNumber, blockTag, data, staticCallAddress, stateOverride } = parameters;
   try {
     const result = await call({ ...client, ccipRead: false }, {
-      account: address2 ? zeroAddress : account,
-      data: address2 ? encodeStaticCall(address2, data) : data,
-      stateOverride: address2 && staticCallAddress ? [
+      account: address3 ? zeroAddress : account,
+      data: address3 ? encodeStaticCall(address3, data) : data,
+      stateOverride: address3 && staticCallAddress ? [
         ...stateOverride ?? [],
         { address: staticCallAddress, code: staticCallCode }
       ] : stateOverride,
-      ...address2 ? { gas: assetProbeGas, to: staticCallAddress } : {},
+      ...address3 ? { gas: assetProbeGas, to: staticCallAddress } : {},
       ...typeof blockNumber === "bigint" ? { blockNumber } : { blockTag }
     });
     return { data: result.data ?? "0x", status: "success" };
@@ -36547,7 +36547,7 @@ async function readBalance(client, parameters) {
   }
 }
 function getStaticCallAddress(addresses) {
-  const occupied = new Set(addresses.map((address2) => address2.toLowerCase()));
+  const occupied = new Set(addresses.map((address3) => address3.toLowerCase()));
   let value = staticCallAddressBase;
   while (occupied.has(`0x${value.toString(16).padStart(40, "0")}`))
     value++;
@@ -36674,7 +36674,7 @@ init_toHex();
 init_secp256k1();
 init_fromHex();
 init_toBytes();
-function serializeSignature({ r, s, to = "hex", v, yParity }) {
+function serializeSignature({ r, s: s2, to = "hex", v, yParity }) {
   const yParity_ = (() => {
     if (yParity === 0 || yParity === 1)
       return yParity;
@@ -36682,7 +36682,7 @@ function serializeSignature({ r, s, to = "hex", v, yParity }) {
       return v % 2n === 0n ? 1 : 0;
     throw new Error("Invalid `v` or `yParity` value");
   })();
-  const signature = `0x${new secp256k1.Signature(hexToBigInt(r), hexToBigInt(s)).toCompactHex()}${yParity_ === 0 ? "1b" : "1c"}`;
+  const signature = `0x${new secp256k1.Signature(hexToBigInt(r), hexToBigInt(s2)).toCompactHex()}${yParity_ === 0 ? "1b" : "1c"}`;
   if (to === "hex")
     return signature;
   return hexToBytes(signature);
@@ -36691,7 +36691,7 @@ function serializeSignature({ r, s, to = "hex", v, yParity }) {
 // node_modules/viem/_esm/actions/public/verifyHash.js
 init_call();
 async function verifyHash(client, parameters) {
-  const { address: address2, chain = client.chain, hash: hash4, erc6492VerifierAddress: verifierAddress = parameters.universalSignatureVerifierAddress ?? chain?.contracts?.erc6492Verifier?.address, multicallAddress = parameters.multicallAddress ?? chain?.contracts?.multicall3?.address, mode = "auto" } = parameters;
+  const { address: address3, chain = client.chain, hash: hash4, erc6492VerifierAddress: verifierAddress = parameters.universalSignatureVerifierAddress ?? chain?.contracts?.erc6492Verifier?.address, multicallAddress = parameters.multicallAddress ?? chain?.contracts?.multicall3?.address, mode = "auto" } = parameters;
   if (chain?.verifyHash)
     return await chain.verifyHash(client, parameters);
   const signature = (() => {
@@ -36705,7 +36705,7 @@ async function verifyHash(client, parameters) {
   try {
     if (mode === "eoa") {
       try {
-        const verified = isAddressEqual(getAddress(address2), await recoverAddress({ hash: hash4, signature }));
+        const verified = isAddressEqual(getAddress(address3), await recoverAddress({ hash: hash4, signature }));
         if (verified)
           return true;
       } catch {
@@ -36725,7 +36725,7 @@ async function verifyHash(client, parameters) {
   } catch (error62) {
     if (mode !== "eoa") {
       try {
-        const verified = isAddressEqual(getAddress(address2), await recoverAddress({ hash: hash4, signature }));
+        const verified = isAddressEqual(getAddress(address3), await recoverAddress({ hash: hash4, signature }));
         if (verified)
           return true;
       } catch {
@@ -36738,10 +36738,10 @@ async function verifyHash(client, parameters) {
   }
 }
 async function verifyErc8010(client, parameters) {
-  const { address: address2, blockHash, blockNumber, blockTag, hash: hash4, multicallAddress, requireCanonical } = parameters;
+  const { address: address3, blockHash, blockNumber, blockTag, hash: hash4, multicallAddress, requireCanonical } = parameters;
   const { authorization: authorization_ox, data: initData, signature, to } = SignatureErc8010_exports.unwrap(parameters.signature);
   const code = await getCode(client, {
-    address: address2,
+    address: address3,
     blockHash,
     blockNumber,
     blockTag,
@@ -36761,7 +36761,7 @@ async function verifyErc8010(client, parameters) {
     yParity: authorization_ox.yParity
   };
   const valid = await verifyAuthorization({
-    address: address2,
+    address: address3,
     authorization
   });
   if (!valid)
@@ -36780,13 +36780,13 @@ async function verifyErc8010(client, parameters) {
         ...initData ? [
           {
             allowFailure: true,
-            target: to ?? address2,
+            target: to ?? address3,
             callData: initData
           }
         ] : [],
         {
           allowFailure: true,
-          target: address2,
+          target: address3,
           callData: encodeFunctionData({
             abi: erc1271Abi,
             functionName: "isValidSignature",
@@ -36802,7 +36802,7 @@ async function verifyErc8010(client, parameters) {
   throw new VerificationError();
 }
 async function verifyErc6492(client, parameters) {
-  const { address: address2, factory, factoryData, hash: hash4, signature, verifierAddress, ...rest } = parameters;
+  const { address: address3, factory, factoryData, hash: hash4, signature, verifierAddress, ...rest } = parameters;
   const wrappedSignature = await (async () => {
     if (!factory && !factoryData)
       return signature;
@@ -36819,13 +36819,13 @@ async function verifyErc6492(client, parameters) {
     data: encodeFunctionData({
       abi: erc6492SignatureValidatorAbi,
       functionName: "isValidSig",
-      args: [address2, hash4, wrappedSignature]
+      args: [address3, hash4, wrappedSignature]
     }),
     ...rest
   } : {
     data: encodeDeployData({
       abi: erc6492SignatureValidatorAbi,
-      args: [address2, hash4, wrappedSignature],
+      args: [address3, hash4, wrappedSignature],
       bytecode: erc6492SignatureValidatorByteCode
     }),
     ...rest
@@ -36840,9 +36840,9 @@ async function verifyErc6492(client, parameters) {
   throw new VerificationError();
 }
 async function verifyErc1271(client, parameters) {
-  const { address: address2, blockHash, blockNumber, blockTag, hash: hash4, requireCanonical, signature } = parameters;
+  const { address: address3, blockHash, blockNumber, blockTag, hash: hash4, requireCanonical, signature } = parameters;
   const result = await getAction(client, readContract, "readContract")({
-    address: address2,
+    address: address3,
     abi: erc1271Abi,
     args: [hash4, signature],
     blockHash,
@@ -36863,10 +36863,10 @@ var VerificationError = class extends Error {
 };
 
 // node_modules/viem/_esm/actions/public/verifyMessage.js
-async function verifyMessage2(client, { address: address2, message, factory, factoryData, signature, ...callRequest }) {
+async function verifyMessage2(client, { address: address3, message, factory, factoryData, signature, ...callRequest }) {
   const hash4 = hashMessage(message);
   return getAction(client, verifyHash, "verifyHash")({
-    address: address2,
+    address: address3,
     factory,
     factoryData,
     hash: hash4,
@@ -36877,10 +36877,10 @@ async function verifyMessage2(client, { address: address2, message, factory, fac
 
 // node_modules/viem/_esm/actions/public/verifyTypedData.js
 async function verifyTypedData(client, parameters) {
-  const { address: address2, factory, factoryData, signature, message, primaryType, types, domain: domain2, ...callRequest } = parameters;
+  const { address: address3, factory, factoryData, signature, message, primaryType, types, domain: domain2, ...callRequest } = parameters;
   const hash4 = hashTypedData({ message, primaryType, types, domain: domain2 });
   return getAction(client, verifyHash, "verifyHash")({
-    address: address2,
+    address: address3,
     factory,
     factoryData,
     hash: hash4,
@@ -37028,13 +37028,13 @@ async function waitForTransactionReceipt(client, parameters) {
   let retrying = false;
   let _unobserve;
   let _unwatch;
-  const { promise: promise2, resolve, reject } = withResolvers();
+  const { promise: promise2, resolve: resolve2, reject } = withResolvers();
   const timer = timeout ? setTimeout(() => {
     _unwatch?.();
     _unobserve?.();
     reject(new WaitForTransactionReceiptTimeoutError({ hash: hash4 }));
   }, timeout) : void 0;
-  _unobserve = observe(observerId, { onReplaced, resolve, reject }, async (emit) => {
+  _unobserve = observe(observerId, { onReplaced, resolve: resolve2, reject }, async (emit) => {
     receipt = await getAction(client, getTransactionReceipt, "getTransactionReceipt")({ hash: hash4 }).catch(() => void 0);
     if (receipt && confirmations <= 1) {
       clearTimeout(timer);
@@ -37098,7 +37098,7 @@ async function waitForTransactionReceipt(client, parameters) {
                 shouldRetry: ({ error: error62 }) => error62 instanceof BlockNotFoundError
               });
               retrying = false;
-              const replacementTransaction = block.transactions.find(({ from: from16, nonce }) => from16 === replacedTransaction.from && nonce === replacedTransaction.nonce);
+              const replacementTransaction = block.transactions.find(({ from: from16, hash: hash5, nonce }) => from16 === replacedTransaction.from && hash5 !== replacedTransaction.hash && nonce === replacedTransaction.nonce);
               if (!replacementTransaction)
                 return;
               receipt = await getAction(client, getTransactionReceipt, "getTransactionReceipt")({
@@ -37315,7 +37315,7 @@ function watchBlocks(client, { blockTag = client.experimental_blockTag ?? "lates
 init_abi();
 init_rpc();
 init_stringify();
-function watchEvent(client, { address: address2, args, batch = true, event, events, fromBlock, onError, onLogs, poll: poll_, pollingInterval = client.pollingInterval, strict: strict_ }) {
+function watchEvent(client, { address: address3, args, batch = true, event, events, fromBlock, onError, onLogs, poll: poll_, pollingInterval = client.pollingInterval, strict: strict_ }) {
   const enablePolling = (() => {
     if (typeof poll_ !== "undefined")
       return poll_;
@@ -37331,7 +37331,7 @@ function watchEvent(client, { address: address2, args, batch = true, event, even
   const pollEvent = () => {
     const observerId = stringify([
       "watchEvent",
-      address2,
+      address3,
       args,
       batch,
       client.uid,
@@ -37349,7 +37349,7 @@ function watchEvent(client, { address: address2, args, batch = true, event, even
         if (!initialized) {
           try {
             filter = await getAction(client, createEventFilter, "createEventFilter")({
-              address: address2,
+              address: address3,
               args,
               event,
               events,
@@ -37369,7 +37369,7 @@ function watchEvent(client, { address: address2, args, batch = true, event, even
             const blockNumber = await getAction(client, getBlockNumber, "getBlockNumber")({});
             if (previousBlockNumber && previousBlockNumber !== blockNumber) {
               logs = await getAction(client, getLogs, "getLogs")({
-                address: address2,
+                address: address3,
                 args,
                 event,
                 events,
@@ -37431,7 +37431,7 @@ function watchEvent(client, { address: address2, args, batch = true, event, even
             topics = topics[0];
         }
         const { unsubscribe: unsubscribe_ } = await transport.subscribe({
-          params: ["logs", { address: address2, topics }],
+          params: ["logs", { address: address3, topics }],
           onData(data) {
             if (!active)
               return;
@@ -37588,7 +37588,7 @@ var suffixRegex = /(?:URI: (?<uri>.+))\n(?:Version: (?<version>.+))\n(?:Chain ID
 init_isAddress();
 init_isAddressEqual();
 function validateSiweMessage(parameters) {
-  const { address: address2, domain: domain2, message, nonce, scheme, time: time3 = /* @__PURE__ */ new Date() } = parameters;
+  const { address: address3, domain: domain2, message, nonce, scheme, time: time3 = /* @__PURE__ */ new Date() } = parameters;
   if (domain2 && message.domain !== domain2)
     return false;
   if (nonce && message.nonce !== nonce)
@@ -37614,7 +37614,7 @@ function validateSiweMessage(parameters) {
       return false;
     if (!isAddress(message.address, { strict: false }))
       return false;
-    if (address2 && !isAddressEqual(message.address, address2))
+    if (address3 && !isAddressEqual(message.address, address3))
       return false;
   } catch {
     return false;
@@ -37624,12 +37624,12 @@ function validateSiweMessage(parameters) {
 
 // node_modules/viem/_esm/actions/siwe/verifySiweMessage.js
 async function verifySiweMessage(client, parameters) {
-  const { address: address2, domain: domain2, message, nonce, scheme, signature, time: time3 = /* @__PURE__ */ new Date(), ...callRequest } = parameters;
+  const { address: address3, domain: domain2, message, nonce, scheme, signature, time: time3 = /* @__PURE__ */ new Date(), ...callRequest } = parameters;
   const parsed = parseSiweMessage(message);
   if (!parsed.address)
     return false;
   const isValid = validateSiweMessage({
-    address: address2,
+    address: address3,
     domain: domain2,
     message: parsed,
     nonce,
@@ -37686,11 +37686,11 @@ function findDeclaredToken(client, token) {
   return void 0;
 }
 function resolveTokenForChain(token, chainId) {
-  const address2 = token.addresses[chainId];
-  if (!address2)
+  const address3 = token.addresses[chainId];
+  if (!address3)
     return void 0;
   return {
-    address: address2,
+    address: address3,
     currency: token.currency,
     decimals: token.decimals,
     name: token.name,
@@ -37706,26 +37706,26 @@ function findTokenBySymbol(tokens, symbol2) {
   }
   return void 0;
 }
-function inferDecimals(client, address2) {
+function inferDecimals(client, address3) {
   const tokens = client.tokens;
   const chainId = client.chain?.id;
   if (tokens && chainId !== void 0)
     for (const token of tokens) {
       const resolved = resolveTokenForChain(token, chainId);
-      if (resolved && isAddressEqual(resolved.address, address2))
+      if (resolved && isAddressEqual(resolved.address, address3))
         return resolved.decimals;
     }
   return void 0;
 }
 async function resolveTokenWithDecimals(client, parameters) {
-  const { address: address2, decimals } = resolveToken(client, parameters);
+  const { address: address3, decimals } = resolveToken(client, parameters);
   if (decimals !== void 0)
-    return { address: address2, decimals };
+    return { address: address3, decimals };
   return {
-    address: address2,
+    address: address3,
     decimals: await readContract(client, {
       abi: erc20Abi,
-      address: address2,
+      address: address3,
       functionName: "decimals"
     })
   };
@@ -37820,25 +37820,25 @@ async function getBalance2(client, parameters) {
 init_abis();
 async function getMetadata(client, parameters) {
   const { token, ...rest } = parameters;
-  const { address: address2 } = resolveToken(client, { token });
+  const { address: address3 } = resolveToken(client, { token });
   const declared = findDeclaredToken(client, token);
   const [decimals_, name, symbol2] = await Promise.all([
     declared?.decimals ?? readContract(client, {
       ...rest,
       abi: erc20Abi,
-      address: address2,
+      address: address3,
       functionName: "decimals"
     }),
     declared?.name ?? readContract(client, {
       ...rest,
       abi: erc20Abi,
-      address: address2,
+      address: address3,
       functionName: "name"
     }),
     declared?.symbol ?? readContract(client, {
       ...rest,
       abi: erc20Abi,
-      address: address2,
+      address: address3,
       functionName: "symbol"
     })
   ]);
@@ -38292,6 +38292,72 @@ var basePreconf = /* @__PURE__ */ defineChain({
   }
 });
 
+// node_modules/viem/_esm/chains/definitions/mainnet.js
+var mainnet = /* @__PURE__ */ defineChain({
+  id: 1,
+  name: "Ethereum",
+  nativeCurrency: { name: "Ether", symbol: "ETH", decimals: 18 },
+  blockTime: 12e3,
+  rpcUrls: {
+    default: {
+      http: ["https://ethereum.reth.rs/rpc"]
+    }
+  },
+  blockExplorers: {
+    default: {
+      name: "Etherscan",
+      url: "https://etherscan.io",
+      apiUrl: "https://api.etherscan.io/api"
+    }
+  },
+  contracts: {
+    ensUniversalResolver: {
+      address: "0xeeeeeeee14d718c2b47d9923deab1335e144eeee",
+      blockCreated: 23085558
+    },
+    multicall3: {
+      address: "0xca11bde05977b3631167028862be2a173976ca11",
+      blockCreated: 14353601
+    }
+  }
+});
+
+// node_modules/viem/_esm/chains/definitions/monad.js
+var monad = /* @__PURE__ */ defineChain({
+  id: 143,
+  name: "Monad",
+  blockTime: 400,
+  nativeCurrency: {
+    name: "Monad",
+    symbol: "MON",
+    decimals: 18
+  },
+  rpcUrls: {
+    default: {
+      http: ["https://rpc.monad.xyz", "https://rpc1.monad.xyz"],
+      webSocket: ["wss://rpc.monad.xyz", "wss://rpc1.monad.xyz"]
+    }
+  },
+  blockExplorers: {
+    default: {
+      name: "Monadscan",
+      url: "https://monadscan.com",
+      apiUrl: "https://api.etherscan.io/v2/api?chainid=143"
+    },
+    monadvision: {
+      name: "MonadVision",
+      url: "https://monadvision.com"
+    }
+  },
+  testnet: false,
+  contracts: {
+    multicall3: {
+      address: "0xcA11bde05977b3631167028862bE2a173976CA11",
+      blockCreated: 9248132
+    }
+  }
+});
+
 // node_modules/viem/_esm/chains/definitions/robinhood.js
 var robinhood = /* @__PURE__ */ defineChain({
   id: 4663,
@@ -38322,7 +38388,7 @@ var robinhood = /* @__PURE__ */ defineChain({
 });
 
 // src/client.ts
-var chains = { 8453: base, 42161: arbitrum, 4663: robinhood };
+var chains = { 8453: base, 42161: arbitrum, 4663: robinhood, 1: mainnet, 143: monad };
 function isSupportedChainId(id) {
   return id in chains;
 }
@@ -38341,16 +38407,55 @@ var CHAIN_INFO = {
     rpcEnv: ["TREASURY_RPC_ROBINHOOD", "ROBINHOOD_RPC_URL"],
     logsRpcEnv: "TREASURY_LOGS_RPC_ROBINHOOD",
     publicRpc: "https://rpc.mainnet.chain.robinhood.com"
+  },
+  1: {
+    key: "ethereum",
+    name: "Ethereum",
+    rpcEnv: ["TREASURY_RPC_ETHEREUM", "ETHEREUM_RPC_URL"],
+    logsRpcEnv: "TREASURY_LOGS_RPC_ETHEREUM",
+    publicRpc: "https://ethereum.reth.rs/rpc"
+  },
+  143: {
+    key: "monad",
+    name: "Monad",
+    rpcEnv: ["TREASURY_RPC_MONAD", "MONAD_RPC_URL"],
+    logsRpcEnv: "TREASURY_LOGS_RPC_MONAD",
+    publicRpc: "https://rpc.monad.xyz"
   }
 };
-var supportedChainIds = [8453, 42161, 4663];
+var SOLANA_INFO = {
+  key: "solana",
+  name: "Solana",
+  rpcEnv: ["TREASURY_RPC_SOLANA", "SOLANA_RPC_URL"],
+  publicRpc: "https://api.mainnet-beta.solana.com"
+};
+function solanaRpcUrlFromEnv() {
+  for (const k of SOLANA_INFO.rpcEnv) {
+    const v = rpcUrlFromEnvValue(process.env[k]);
+    if (v) return v;
+  }
+  return SOLANA_INFO.publicRpc;
+}
+function solanaRpcSourceForEnv() {
+  for (const k of SOLANA_INFO.rpcEnv) {
+    if (rpcUrlFromEnvValue(process.env[k])) return { source: k, configured: true };
+  }
+  return { source: "public default", configured: false };
+}
+function solanaPublicRpcHint() {
+  if (solanaRpcSourceForEnv().configured) return void 0;
+  return `No RPC was configured for Solana, so this used the public endpoint (${new URL(SOLANA_INFO.publicRpc).hostname}), which rate-limits after a handful of calls \u2014 that is the most likely cause of the failure above, not the vault. Set ${SOLANA_INFO.rpcEnv[0]} to a keyed Solana RPC URL (Helius, QuickNode, Alchemy or your own node) and retry.`;
+}
+var supportedChainIds = [8453, 42161, 4663, 1, 143];
 function chainIdForKey(key) {
   return supportedChainIds.find((id) => CHAIN_INFO[id].key === key);
 }
 var PUBLIC_RPC = {
   8453: CHAIN_INFO[8453].publicRpc,
   42161: CHAIN_INFO[42161].publicRpc,
-  4663: CHAIN_INFO[4663].publicRpc
+  4663: CHAIN_INFO[4663].publicRpc,
+  1: CHAIN_INFO[1].publicRpc,
+  143: CHAIN_INFO[143].publicRpc
 };
 var RATE_LIMIT_WAIT_MS = 15500;
 var RPC_TIMEOUT_MS = 1e4;
@@ -38419,7 +38524,7 @@ function rpcSourceForEnv(chainId) {
 }
 function resolvedRpcSecrets() {
   const out = /* @__PURE__ */ new Set();
-  const chainWords = new Set(supportedChainIds.map((id) => CHAIN_INFO[id].key));
+  const chainWords = /* @__PURE__ */ new Set([...supportedChainIds.map((id) => CHAIN_INFO[id].key), SOLANA_INFO.key]);
   const add = (v) => {
     if (!v || v.length < 8) return;
     if (chainWords.has(v.toLowerCase())) return;
@@ -38431,7 +38536,7 @@ function resolvedRpcSecrets() {
     }
   };
   const urls = /* @__PURE__ */ new Set();
-  const names = [...supportedChainIds.flatMap((id) => [...CHAIN_INFO[id].rpcEnv, CHAIN_INFO[id].logsRpcEnv]), "TREASURY_LOGS_FALLBACK"];
+  const names = [...supportedChainIds.flatMap((id) => [...CHAIN_INFO[id].rpcEnv, CHAIN_INFO[id].logsRpcEnv]), ...SOLANA_INFO.rpcEnv, "TREASURY_LOGS_FALLBACK"];
   for (const k of names) {
     const v = rpcUrlFromEnvValue(process.env[k]);
     if (v) urls.add(v);
@@ -38476,8 +38581,8 @@ async function endpointChainId(client, rpcUrl, timeoutMs = CHAIN_PROBE_MS) {
   }
 }
 async function firstEndpointOnWrongChain(chainId, endpoints) {
-  const asked = endpoints.filter((e) => e.url !== PUBLIC_RPC[chainId]);
-  const said = await Promise.all(asked.map((e) => endpointChainId(e.client, e.url)));
+  const asked = endpoints.filter((e4) => e4.url !== PUBLIC_RPC[chainId]);
+  const said = await Promise.all(asked.map((e4) => endpointChainId(e4.client, e4.url)));
   for (const [i, id] of said.entries()) {
     if (id !== void 0 && id !== chainId) return { source: asked[i].source, answersFor: id };
   }
@@ -38488,12 +38593,5101 @@ function logsRpcSourceForEnv(chainId) {
   return rpcUrlFromEnvValue(process.env[k]) ? { source: k, configured: true } : rpcSourceForEnv(chainId);
 }
 
-// src/registry.ts
-import { readFileSync, realpathSync } from "fs";
-import { fileURLToPath, pathToFileURL } from "url";
+// node_modules/@solana/errors/dist/index.node.mjs
+var SOLANA_ERROR__BLOCK_HEIGHT_EXCEEDED = 1;
+var SOLANA_ERROR__INVALID_NONCE = 2;
+var SOLANA_ERROR__NONCE_ACCOUNT_NOT_FOUND = 3;
+var SOLANA_ERROR__BLOCKHASH_STRING_LENGTH_OUT_OF_RANGE = 4;
+var SOLANA_ERROR__INVALID_BLOCKHASH_BYTE_LENGTH = 5;
+var SOLANA_ERROR__LAMPORTS_OUT_OF_RANGE = 6;
+var SOLANA_ERROR__MALFORMED_BIGINT_STRING = 7;
+var SOLANA_ERROR__MALFORMED_NUMBER_STRING = 8;
+var SOLANA_ERROR__TIMESTAMP_OUT_OF_RANGE = 9;
+var SOLANA_ERROR__MALFORMED_JSON_RPC_ERROR = 10;
+var SOLANA_ERROR__FAILED_TO_SEND_TRANSACTION = 11;
+var SOLANA_ERROR__FAILED_TO_SEND_TRANSACTIONS = 12;
+var SOLANA_ERROR__FAILED_TO_SIGN_TRANSACTION = 13;
+var SOLANA_ERROR__FAILED_TO_SIGN_TRANSACTIONS = 14;
+var SOLANA_ERROR__JSON_RPC__PARSE_ERROR = -32700;
+var SOLANA_ERROR__JSON_RPC__INTERNAL_ERROR = -32603;
+var SOLANA_ERROR__JSON_RPC__INVALID_PARAMS = -32602;
+var SOLANA_ERROR__JSON_RPC__METHOD_NOT_FOUND = -32601;
+var SOLANA_ERROR__JSON_RPC__INVALID_REQUEST = -32600;
+var SOLANA_ERROR__JSON_RPC__SERVER_ERROR_NO_SLOT_HISTORY = -32021;
+var SOLANA_ERROR__JSON_RPC__SERVER_ERROR_FILTER_TRANSACTION_NOT_FOUND = -32020;
+var SOLANA_ERROR__JSON_RPC__SERVER_ERROR_LONG_TERM_STORAGE_UNREACHABLE = -32019;
+var SOLANA_ERROR__JSON_RPC__SERVER_ERROR_SLOT_NOT_EPOCH_BOUNDARY = -32018;
+var SOLANA_ERROR__JSON_RPC__SERVER_ERROR_EPOCH_REWARDS_PERIOD_ACTIVE = -32017;
+var SOLANA_ERROR__JSON_RPC__SERVER_ERROR_MIN_CONTEXT_SLOT_NOT_REACHED = -32016;
+var SOLANA_ERROR__JSON_RPC__SERVER_ERROR_UNSUPPORTED_TRANSACTION_VERSION = -32015;
+var SOLANA_ERROR__JSON_RPC__SERVER_ERROR_BLOCK_STATUS_NOT_AVAILABLE_YET = -32014;
+var SOLANA_ERROR__JSON_RPC__SERVER_ERROR_TRANSACTION_SIGNATURE_LEN_MISMATCH = -32013;
+var SOLANA_ERROR__JSON_RPC__SCAN_ERROR = -32012;
+var SOLANA_ERROR__JSON_RPC__SERVER_ERROR_TRANSACTION_HISTORY_NOT_AVAILABLE = -32011;
+var SOLANA_ERROR__JSON_RPC__SERVER_ERROR_KEY_EXCLUDED_FROM_SECONDARY_INDEX = -32010;
+var SOLANA_ERROR__JSON_RPC__SERVER_ERROR_LONG_TERM_STORAGE_SLOT_SKIPPED = -32009;
+var SOLANA_ERROR__JSON_RPC__SERVER_ERROR_NO_SNAPSHOT = -32008;
+var SOLANA_ERROR__JSON_RPC__SERVER_ERROR_SLOT_SKIPPED = -32007;
+var SOLANA_ERROR__JSON_RPC__SERVER_ERROR_TRANSACTION_PRECOMPILE_VERIFICATION_FAILURE = -32006;
+var SOLANA_ERROR__JSON_RPC__SERVER_ERROR_NODE_UNHEALTHY = -32005;
+var SOLANA_ERROR__JSON_RPC__SERVER_ERROR_BLOCK_NOT_AVAILABLE = -32004;
+var SOLANA_ERROR__JSON_RPC__SERVER_ERROR_TRANSACTION_SIGNATURE_VERIFICATION_FAILURE = -32003;
+var SOLANA_ERROR__JSON_RPC__SERVER_ERROR_SEND_TRANSACTION_PREFLIGHT_FAILURE = -32002;
+var SOLANA_ERROR__JSON_RPC__SERVER_ERROR_BLOCK_CLEANED_UP = -32001;
+var SOLANA_ERROR__ADDRESSES__INVALID_BYTE_LENGTH = 28e5;
+var SOLANA_ERROR__ADDRESSES__STRING_LENGTH_OUT_OF_RANGE = 2800001;
+var SOLANA_ERROR__ADDRESSES__INVALID_BASE58_ENCODED_ADDRESS = 2800002;
+var SOLANA_ERROR__ADDRESSES__INVALID_ED25519_PUBLIC_KEY = 2800003;
+var SOLANA_ERROR__ADDRESSES__MALFORMED_PDA = 2800004;
+var SOLANA_ERROR__ADDRESSES__PDA_BUMP_SEED_OUT_OF_RANGE = 2800005;
+var SOLANA_ERROR__ADDRESSES__MAX_NUMBER_OF_PDA_SEEDS_EXCEEDED = 2800006;
+var SOLANA_ERROR__ADDRESSES__MAX_PDA_SEED_LENGTH_EXCEEDED = 2800007;
+var SOLANA_ERROR__ADDRESSES__INVALID_SEEDS_POINT_ON_CURVE = 2800008;
+var SOLANA_ERROR__ADDRESSES__FAILED_TO_FIND_VIABLE_PDA_BUMP_SEED = 2800009;
+var SOLANA_ERROR__ADDRESSES__PDA_ENDS_WITH_PDA_MARKER = 2800010;
+var SOLANA_ERROR__ADDRESSES__INVALID_OFF_CURVE_ADDRESS = 2800011;
+var SOLANA_ERROR__ACCOUNTS__ACCOUNT_NOT_FOUND = 323e4;
+var SOLANA_ERROR__ACCOUNTS__ONE_OR_MORE_ACCOUNTS_NOT_FOUND = 32300001;
+var SOLANA_ERROR__ACCOUNTS__FAILED_TO_DECODE_ACCOUNT = 3230002;
+var SOLANA_ERROR__ACCOUNTS__EXPECTED_DECODED_ACCOUNT = 3230003;
+var SOLANA_ERROR__ACCOUNTS__EXPECTED_ALL_ACCOUNTS_TO_BE_DECODED = 3230004;
+var SOLANA_ERROR__SUBTLE_CRYPTO__DISALLOWED_IN_INSECURE_CONTEXT = 361e4;
+var SOLANA_ERROR__SUBTLE_CRYPTO__DIGEST_UNIMPLEMENTED = 3610001;
+var SOLANA_ERROR__SUBTLE_CRYPTO__ED25519_ALGORITHM_UNIMPLEMENTED = 3610002;
+var SOLANA_ERROR__SUBTLE_CRYPTO__EXPORT_FUNCTION_UNIMPLEMENTED = 3610003;
+var SOLANA_ERROR__SUBTLE_CRYPTO__GENERATE_FUNCTION_UNIMPLEMENTED = 3610004;
+var SOLANA_ERROR__SUBTLE_CRYPTO__SIGN_FUNCTION_UNIMPLEMENTED = 3610005;
+var SOLANA_ERROR__SUBTLE_CRYPTO__VERIFY_FUNCTION_UNIMPLEMENTED = 3610006;
+var SOLANA_ERROR__SUBTLE_CRYPTO__CANNOT_EXPORT_NON_EXTRACTABLE_KEY = 3610007;
+var SOLANA_ERROR__CRYPTO__RANDOM_VALUES_FUNCTION_UNIMPLEMENTED = 3611e3;
+var SOLANA_ERROR__KEYS__INVALID_KEY_PAIR_BYTE_LENGTH = 3704e3;
+var SOLANA_ERROR__KEYS__INVALID_PRIVATE_KEY_BYTE_LENGTH = 3704001;
+var SOLANA_ERROR__KEYS__INVALID_SIGNATURE_BYTE_LENGTH = 3704002;
+var SOLANA_ERROR__KEYS__SIGNATURE_STRING_LENGTH_OUT_OF_RANGE = 3704003;
+var SOLANA_ERROR__KEYS__PUBLIC_KEY_MUST_MATCH_PRIVATE_KEY = 3704004;
+var SOLANA_ERROR__KEYS__INVALID_BASE58_IN_GRIND_REGEX = 3704005;
+var SOLANA_ERROR__KEYS__WRITE_KEY_PAIR_UNSUPPORTED_ENVIRONMENT = 3704006;
+var SOLANA_ERROR__FS__UNSUPPORTED_ENVIRONMENT = 3712e3;
+var SOLANA_ERROR__INSTRUCTION__EXPECTED_TO_HAVE_ACCOUNTS = 4128e3;
+var SOLANA_ERROR__INSTRUCTION__EXPECTED_TO_HAVE_DATA = 4128001;
+var SOLANA_ERROR__INSTRUCTION__PROGRAM_ID_MISMATCH = 4128002;
+var SOLANA_ERROR__INSTRUCTION_ERROR__UNKNOWN = 4615e3;
+var SOLANA_ERROR__INSTRUCTION_ERROR__GENERIC_ERROR = 4615001;
+var SOLANA_ERROR__INSTRUCTION_ERROR__INVALID_ARGUMENT = 4615002;
+var SOLANA_ERROR__INSTRUCTION_ERROR__INVALID_INSTRUCTION_DATA = 4615003;
+var SOLANA_ERROR__INSTRUCTION_ERROR__INVALID_ACCOUNT_DATA = 4615004;
+var SOLANA_ERROR__INSTRUCTION_ERROR__ACCOUNT_DATA_TOO_SMALL = 4615005;
+var SOLANA_ERROR__INSTRUCTION_ERROR__INSUFFICIENT_FUNDS = 4615006;
+var SOLANA_ERROR__INSTRUCTION_ERROR__INCORRECT_PROGRAM_ID = 4615007;
+var SOLANA_ERROR__INSTRUCTION_ERROR__MISSING_REQUIRED_SIGNATURE = 4615008;
+var SOLANA_ERROR__INSTRUCTION_ERROR__ACCOUNT_ALREADY_INITIALIZED = 4615009;
+var SOLANA_ERROR__INSTRUCTION_ERROR__UNINITIALIZED_ACCOUNT = 4615010;
+var SOLANA_ERROR__INSTRUCTION_ERROR__UNBALANCED_INSTRUCTION = 4615011;
+var SOLANA_ERROR__INSTRUCTION_ERROR__MODIFIED_PROGRAM_ID = 4615012;
+var SOLANA_ERROR__INSTRUCTION_ERROR__EXTERNAL_ACCOUNT_LAMPORT_SPEND = 4615013;
+var SOLANA_ERROR__INSTRUCTION_ERROR__EXTERNAL_ACCOUNT_DATA_MODIFIED = 4615014;
+var SOLANA_ERROR__INSTRUCTION_ERROR__READONLY_LAMPORT_CHANGE = 4615015;
+var SOLANA_ERROR__INSTRUCTION_ERROR__READONLY_DATA_MODIFIED = 4615016;
+var SOLANA_ERROR__INSTRUCTION_ERROR__DUPLICATE_ACCOUNT_INDEX = 4615017;
+var SOLANA_ERROR__INSTRUCTION_ERROR__EXECUTABLE_MODIFIED = 4615018;
+var SOLANA_ERROR__INSTRUCTION_ERROR__RENT_EPOCH_MODIFIED = 4615019;
+var SOLANA_ERROR__INSTRUCTION_ERROR__NOT_ENOUGH_ACCOUNT_KEYS = 4615020;
+var SOLANA_ERROR__INSTRUCTION_ERROR__ACCOUNT_DATA_SIZE_CHANGED = 4615021;
+var SOLANA_ERROR__INSTRUCTION_ERROR__ACCOUNT_NOT_EXECUTABLE = 4615022;
+var SOLANA_ERROR__INSTRUCTION_ERROR__ACCOUNT_BORROW_FAILED = 4615023;
+var SOLANA_ERROR__INSTRUCTION_ERROR__ACCOUNT_BORROW_OUTSTANDING = 4615024;
+var SOLANA_ERROR__INSTRUCTION_ERROR__DUPLICATE_ACCOUNT_OUT_OF_SYNC = 4615025;
+var SOLANA_ERROR__INSTRUCTION_ERROR__CUSTOM = 4615026;
+var SOLANA_ERROR__INSTRUCTION_ERROR__INVALID_ERROR = 4615027;
+var SOLANA_ERROR__INSTRUCTION_ERROR__EXECUTABLE_DATA_MODIFIED = 4615028;
+var SOLANA_ERROR__INSTRUCTION_ERROR__EXECUTABLE_LAMPORT_CHANGE = 4615029;
+var SOLANA_ERROR__INSTRUCTION_ERROR__EXECUTABLE_ACCOUNT_NOT_RENT_EXEMPT = 4615030;
+var SOLANA_ERROR__INSTRUCTION_ERROR__UNSUPPORTED_PROGRAM_ID = 4615031;
+var SOLANA_ERROR__INSTRUCTION_ERROR__CALL_DEPTH = 4615032;
+var SOLANA_ERROR__INSTRUCTION_ERROR__MISSING_ACCOUNT = 4615033;
+var SOLANA_ERROR__INSTRUCTION_ERROR__REENTRANCY_NOT_ALLOWED = 4615034;
+var SOLANA_ERROR__INSTRUCTION_ERROR__MAX_SEED_LENGTH_EXCEEDED = 4615035;
+var SOLANA_ERROR__INSTRUCTION_ERROR__INVALID_SEEDS = 4615036;
+var SOLANA_ERROR__INSTRUCTION_ERROR__INVALID_REALLOC = 4615037;
+var SOLANA_ERROR__INSTRUCTION_ERROR__COMPUTATIONAL_BUDGET_EXCEEDED = 4615038;
+var SOLANA_ERROR__INSTRUCTION_ERROR__PRIVILEGE_ESCALATION = 4615039;
+var SOLANA_ERROR__INSTRUCTION_ERROR__PROGRAM_ENVIRONMENT_SETUP_FAILURE = 4615040;
+var SOLANA_ERROR__INSTRUCTION_ERROR__PROGRAM_FAILED_TO_COMPLETE = 4615041;
+var SOLANA_ERROR__INSTRUCTION_ERROR__PROGRAM_FAILED_TO_COMPILE = 4615042;
+var SOLANA_ERROR__INSTRUCTION_ERROR__IMMUTABLE = 4615043;
+var SOLANA_ERROR__INSTRUCTION_ERROR__INCORRECT_AUTHORITY = 4615044;
+var SOLANA_ERROR__INSTRUCTION_ERROR__BORSH_IO_ERROR = 4615045;
+var SOLANA_ERROR__INSTRUCTION_ERROR__ACCOUNT_NOT_RENT_EXEMPT = 4615046;
+var SOLANA_ERROR__INSTRUCTION_ERROR__INVALID_ACCOUNT_OWNER = 4615047;
+var SOLANA_ERROR__INSTRUCTION_ERROR__ARITHMETIC_OVERFLOW = 4615048;
+var SOLANA_ERROR__INSTRUCTION_ERROR__UNSUPPORTED_SYSVAR = 4615049;
+var SOLANA_ERROR__INSTRUCTION_ERROR__ILLEGAL_OWNER = 4615050;
+var SOLANA_ERROR__INSTRUCTION_ERROR__MAX_ACCOUNTS_DATA_ALLOCATIONS_EXCEEDED = 4615051;
+var SOLANA_ERROR__INSTRUCTION_ERROR__MAX_ACCOUNTS_EXCEEDED = 4615052;
+var SOLANA_ERROR__INSTRUCTION_ERROR__MAX_INSTRUCTION_TRACE_LENGTH_EXCEEDED = 4615053;
+var SOLANA_ERROR__INSTRUCTION_ERROR__BUILTIN_PROGRAMS_MUST_CONSUME_COMPUTE_UNITS = 4615054;
+var SOLANA_ERROR__SIGNER__ADDRESS_CANNOT_HAVE_MULTIPLE_SIGNERS = 5508e3;
+var SOLANA_ERROR__SIGNER__EXPECTED_KEY_PAIR_SIGNER = 5508001;
+var SOLANA_ERROR__SIGNER__EXPECTED_MESSAGE_SIGNER = 5508002;
+var SOLANA_ERROR__SIGNER__EXPECTED_MESSAGE_MODIFYING_SIGNER = 5508003;
+var SOLANA_ERROR__SIGNER__EXPECTED_MESSAGE_PARTIAL_SIGNER = 5508004;
+var SOLANA_ERROR__SIGNER__EXPECTED_TRANSACTION_SIGNER = 5508005;
+var SOLANA_ERROR__SIGNER__EXPECTED_TRANSACTION_MODIFYING_SIGNER = 5508006;
+var SOLANA_ERROR__SIGNER__EXPECTED_TRANSACTION_PARTIAL_SIGNER = 5508007;
+var SOLANA_ERROR__SIGNER__EXPECTED_TRANSACTION_SENDING_SIGNER = 5508008;
+var SOLANA_ERROR__SIGNER__TRANSACTION_CANNOT_HAVE_MULTIPLE_SENDING_SIGNERS = 5508009;
+var SOLANA_ERROR__SIGNER__TRANSACTION_SENDING_SIGNER_MISSING = 5508010;
+var SOLANA_ERROR__SIGNER__WALLET_MULTISIGN_UNIMPLEMENTED = 5508011;
+var SOLANA_ERROR__SIGNER__WALLET_ACCOUNT_CANNOT_SIGN_TRANSACTION = 5508012;
+var SOLANA_ERROR__OFFCHAIN_MESSAGE__MAXIMUM_LENGTH_EXCEEDED = 5607e3;
+var SOLANA_ERROR__OFFCHAIN_MESSAGE__RESTRICTED_ASCII_BODY_CHARACTER_OUT_OF_RANGE = 5607001;
+var SOLANA_ERROR__OFFCHAIN_MESSAGE__APPLICATION_DOMAIN_STRING_LENGTH_OUT_OF_RANGE = 5607002;
+var SOLANA_ERROR__OFFCHAIN_MESSAGE__INVALID_APPLICATION_DOMAIN_BYTE_LENGTH = 5607003;
+var SOLANA_ERROR__OFFCHAIN_MESSAGE__NUM_SIGNATURES_MISMATCH = 5607004;
+var SOLANA_ERROR__OFFCHAIN_MESSAGE__NUM_REQUIRED_SIGNERS_CANNOT_BE_ZERO = 5607005;
+var SOLANA_ERROR__OFFCHAIN_MESSAGE__VERSION_NUMBER_NOT_SUPPORTED = 5607006;
+var SOLANA_ERROR__OFFCHAIN_MESSAGE__MESSAGE_FORMAT_MISMATCH = 5607007;
+var SOLANA_ERROR__OFFCHAIN_MESSAGE__MESSAGE_LENGTH_MISMATCH = 5607008;
+var SOLANA_ERROR__OFFCHAIN_MESSAGE__MESSAGE_MUST_BE_NON_EMPTY = 5607009;
+var SOLANA_ERROR__OFFCHAIN_MESSAGE__NUM_ENVELOPE_SIGNATURES_CANNOT_BE_ZERO = 5607010;
+var SOLANA_ERROR__OFFCHAIN_MESSAGE__SIGNATURES_MISSING = 5607011;
+var SOLANA_ERROR__OFFCHAIN_MESSAGE__ENVELOPE_SIGNERS_MISMATCH = 5607012;
+var SOLANA_ERROR__OFFCHAIN_MESSAGE__ADDRESSES_CANNOT_SIGN_OFFCHAIN_MESSAGE = 5607013;
+var SOLANA_ERROR__OFFCHAIN_MESSAGE__UNEXPECTED_VERSION = 5607014;
+var SOLANA_ERROR__OFFCHAIN_MESSAGE__SIGNATORIES_MUST_BE_SORTED = 5607015;
+var SOLANA_ERROR__OFFCHAIN_MESSAGE__SIGNATORIES_MUST_BE_UNIQUE = 5607016;
+var SOLANA_ERROR__OFFCHAIN_MESSAGE__SIGNATURE_VERIFICATION_FAILURE = 5607017;
+var SOLANA_ERROR__OFFCHAIN_MESSAGE__CONTENT_DOES_NOT_MATCH_EXPECTED = 5607018;
+var SOLANA_ERROR__OFFCHAIN_MESSAGE__REQUIRED_SIGNATORIES_DO_NOT_MATCH_EXPECTED = 5607019;
+var SOLANA_ERROR__TRANSACTION__INVOKED_PROGRAMS_CANNOT_PAY_FEES = 5663e3;
+var SOLANA_ERROR__TRANSACTION__INVOKED_PROGRAMS_MUST_NOT_BE_WRITABLE = 5663001;
+var SOLANA_ERROR__TRANSACTION__EXPECTED_BLOCKHASH_LIFETIME = 5663002;
+var SOLANA_ERROR__TRANSACTION__EXPECTED_NONCE_LIFETIME = 5663003;
+var SOLANA_ERROR__TRANSACTION__VERSION_NUMBER_OUT_OF_RANGE = 5663004;
+var SOLANA_ERROR__TRANSACTION__FAILED_TO_DECOMPILE_ADDRESS_LOOKUP_TABLE_CONTENTS_MISSING = 5663005;
+var SOLANA_ERROR__TRANSACTION__FAILED_TO_DECOMPILE_ADDRESS_LOOKUP_TABLE_INDEX_OUT_OF_RANGE = 5663006;
+var SOLANA_ERROR__TRANSACTION__FAILED_TO_DECOMPILE_INSTRUCTION_PROGRAM_ADDRESS_NOT_FOUND = 5663007;
+var SOLANA_ERROR__TRANSACTION__FAILED_TO_DECOMPILE_FEE_PAYER_MISSING = 5663008;
+var SOLANA_ERROR__TRANSACTION__SIGNATURES_MISSING = 5663009;
+var SOLANA_ERROR__TRANSACTION__ADDRESS_MISSING = 5663010;
+var SOLANA_ERROR__TRANSACTION__FEE_PAYER_MISSING = 5663011;
+var SOLANA_ERROR__TRANSACTION__FEE_PAYER_SIGNATURE_MISSING = 5663012;
+var SOLANA_ERROR__TRANSACTION__INVALID_NONCE_TRANSACTION_INSTRUCTIONS_MISSING = 5663013;
+var SOLANA_ERROR__TRANSACTION__INVALID_NONCE_TRANSACTION_FIRST_INSTRUCTION_MUST_BE_ADVANCE_NONCE = 5663014;
+var SOLANA_ERROR__TRANSACTION__ADDRESSES_CANNOT_SIGN_TRANSACTION = 5663015;
+var SOLANA_ERROR__TRANSACTION__CANNOT_ENCODE_WITH_EMPTY_SIGNATURES = 5663016;
+var SOLANA_ERROR__TRANSACTION__MESSAGE_SIGNATURES_MISMATCH = 5663017;
+var SOLANA_ERROR__TRANSACTION__FAILED_TO_ESTIMATE_COMPUTE_LIMIT = 5663018;
+var SOLANA_ERROR__TRANSACTION__FAILED_WHEN_SIMULATING_TO_ESTIMATE_COMPUTE_LIMIT = 5663019;
+var SOLANA_ERROR__TRANSACTION__EXCEEDS_SIZE_LIMIT = 5663020;
+var SOLANA_ERROR__TRANSACTION__VERSION_NUMBER_NOT_SUPPORTED = 5663021;
+var SOLANA_ERROR__TRANSACTION__NONCE_ACCOUNT_CANNOT_BE_IN_LOOKUP_TABLE = 5663022;
+var SOLANA_ERROR__TRANSACTION__MALFORMED_MESSAGE_BYTES = 5663023;
+var SOLANA_ERROR__TRANSACTION__CANNOT_ENCODE_WITH_EMPTY_MESSAGE_BYTES = 5663024;
+var SOLANA_ERROR__TRANSACTION__CANNOT_DECODE_EMPTY_TRANSACTION_BYTES = 5663025;
+var SOLANA_ERROR__TRANSACTION__VERSION_ZERO_MUST_BE_ENCODED_WITH_SIGNATURES_FIRST = 5663026;
+var SOLANA_ERROR__TRANSACTION__SIGNATURE_COUNT_TOO_HIGH_FOR_TRANSACTION_BYTES = 5663027;
+var SOLANA_ERROR__TRANSACTION__INVALID_CONFIG_MASK_PRIORITY_FEE_BITS = 5663028;
+var SOLANA_ERROR__TRANSACTION__INVALID_NONCE_ACCOUNT_INDEX = 5663029;
+var SOLANA_ERROR__TRANSACTION__INVALID_CONFIG_VALUE_KIND = 5663030;
+var SOLANA_ERROR__TRANSACTION__INSTRUCTION_HEADERS_PAYLOADS_MISMATCH = 5663031;
+var SOLANA_ERROR__TRANSACTION__TOO_MANY_SIGNER_ADDRESSES = 5663032;
+var SOLANA_ERROR__TRANSACTION__TOO_MANY_ACCOUNT_ADDRESSES = 5663033;
+var SOLANA_ERROR__TRANSACTION__TOO_MANY_INSTRUCTIONS = 5663034;
+var SOLANA_ERROR__TRANSACTION__TOO_MANY_ACCOUNTS_IN_INSTRUCTION = 5663035;
+var SOLANA_ERROR__TRANSACTION__FAILED_TO_ESTIMATE_LOADED_ACCOUNTS_DATA_SIZE_LIMIT = 5663036;
+var SOLANA_ERROR__TRANSACTION__FAILED_WHEN_SIMULATING_TO_ESTIMATE_RESOURCE_LIMITS = 5663037;
+var SOLANA_ERROR__TRANSACTION__FAILED_TO_DECOMPILE_INSTRUCTION_ACCOUNT_INDEX_OUT_OF_RANGE = 5663038;
+var SOLANA_ERROR__TRANSACTION__COMPUTE_UNIT_LIMIT_OUT_OF_RANGE = 5663039;
+var SOLANA_ERROR__TRANSACTION__INVALID_HEAP_SIZE = 5663040;
+var SOLANA_ERROR__TRANSACTION_INTROSPECTION__CANNOT_DECODE_JSON_PARSED_TRANSACTION = 5664e3;
+var SOLANA_ERROR__TRANSACTION_INTROSPECTION__UNRECOGNIZED_GET_TRANSACTION_RESPONSE = 5664001;
+var SOLANA_ERROR__TRANSACTION_ERROR__UNKNOWN = 705e4;
+var SOLANA_ERROR__TRANSACTION_ERROR__ACCOUNT_IN_USE = 7050001;
+var SOLANA_ERROR__TRANSACTION_ERROR__ACCOUNT_LOADED_TWICE = 7050002;
+var SOLANA_ERROR__TRANSACTION_ERROR__ACCOUNT_NOT_FOUND = 7050003;
+var SOLANA_ERROR__TRANSACTION_ERROR__PROGRAM_ACCOUNT_NOT_FOUND = 7050004;
+var SOLANA_ERROR__TRANSACTION_ERROR__INSUFFICIENT_FUNDS_FOR_FEE = 7050005;
+var SOLANA_ERROR__TRANSACTION_ERROR__INVALID_ACCOUNT_FOR_FEE = 7050006;
+var SOLANA_ERROR__TRANSACTION_ERROR__ALREADY_PROCESSED = 7050007;
+var SOLANA_ERROR__TRANSACTION_ERROR__BLOCKHASH_NOT_FOUND = 7050008;
+var SOLANA_ERROR__TRANSACTION_ERROR__CALL_CHAIN_TOO_DEEP = 7050009;
+var SOLANA_ERROR__TRANSACTION_ERROR__MISSING_SIGNATURE_FOR_FEE = 7050010;
+var SOLANA_ERROR__TRANSACTION_ERROR__INVALID_ACCOUNT_INDEX = 7050011;
+var SOLANA_ERROR__TRANSACTION_ERROR__SIGNATURE_FAILURE = 7050012;
+var SOLANA_ERROR__TRANSACTION_ERROR__INVALID_PROGRAM_FOR_EXECUTION = 7050013;
+var SOLANA_ERROR__TRANSACTION_ERROR__SANITIZE_FAILURE = 7050014;
+var SOLANA_ERROR__TRANSACTION_ERROR__CLUSTER_MAINTENANCE = 7050015;
+var SOLANA_ERROR__TRANSACTION_ERROR__ACCOUNT_BORROW_OUTSTANDING = 7050016;
+var SOLANA_ERROR__TRANSACTION_ERROR__WOULD_EXCEED_MAX_BLOCK_COST_LIMIT = 7050017;
+var SOLANA_ERROR__TRANSACTION_ERROR__UNSUPPORTED_VERSION = 7050018;
+var SOLANA_ERROR__TRANSACTION_ERROR__INVALID_WRITABLE_ACCOUNT = 7050019;
+var SOLANA_ERROR__TRANSACTION_ERROR__WOULD_EXCEED_MAX_ACCOUNT_COST_LIMIT = 7050020;
+var SOLANA_ERROR__TRANSACTION_ERROR__WOULD_EXCEED_ACCOUNT_DATA_BLOCK_LIMIT = 7050021;
+var SOLANA_ERROR__TRANSACTION_ERROR__TOO_MANY_ACCOUNT_LOCKS = 7050022;
+var SOLANA_ERROR__TRANSACTION_ERROR__ADDRESS_LOOKUP_TABLE_NOT_FOUND = 7050023;
+var SOLANA_ERROR__TRANSACTION_ERROR__INVALID_ADDRESS_LOOKUP_TABLE_OWNER = 7050024;
+var SOLANA_ERROR__TRANSACTION_ERROR__INVALID_ADDRESS_LOOKUP_TABLE_DATA = 7050025;
+var SOLANA_ERROR__TRANSACTION_ERROR__INVALID_ADDRESS_LOOKUP_TABLE_INDEX = 7050026;
+var SOLANA_ERROR__TRANSACTION_ERROR__INVALID_RENT_PAYING_ACCOUNT = 7050027;
+var SOLANA_ERROR__TRANSACTION_ERROR__WOULD_EXCEED_MAX_VOTE_COST_LIMIT = 7050028;
+var SOLANA_ERROR__TRANSACTION_ERROR__WOULD_EXCEED_ACCOUNT_DATA_TOTAL_LIMIT = 7050029;
+var SOLANA_ERROR__TRANSACTION_ERROR__DUPLICATE_INSTRUCTION = 7050030;
+var SOLANA_ERROR__TRANSACTION_ERROR__INSUFFICIENT_FUNDS_FOR_RENT = 7050031;
+var SOLANA_ERROR__TRANSACTION_ERROR__MAX_LOADED_ACCOUNTS_DATA_SIZE_EXCEEDED = 7050032;
+var SOLANA_ERROR__TRANSACTION_ERROR__INVALID_LOADED_ACCOUNTS_DATA_SIZE_LIMIT = 7050033;
+var SOLANA_ERROR__TRANSACTION_ERROR__RESANITIZATION_NEEDED = 7050034;
+var SOLANA_ERROR__TRANSACTION_ERROR__PROGRAM_EXECUTION_TEMPORARILY_RESTRICTED = 7050035;
+var SOLANA_ERROR__TRANSACTION_ERROR__UNBALANCED_TRANSACTION = 7050036;
+var SOLANA_ERROR__INSTRUCTION_PLANS__MESSAGE_CANNOT_ACCOMMODATE_PLAN = 7618e3;
+var SOLANA_ERROR__INSTRUCTION_PLANS__MESSAGE_PACKER_ALREADY_COMPLETE = 7618001;
+var SOLANA_ERROR__INSTRUCTION_PLANS__EMPTY_INSTRUCTION_PLAN = 7618002;
+var SOLANA_ERROR__INSTRUCTION_PLANS__FAILED_TO_EXECUTE_TRANSACTION_PLAN = 7618003;
+var SOLANA_ERROR__INSTRUCTION_PLANS__NON_DIVISIBLE_TRANSACTION_PLANS_NOT_SUPPORTED = 7618004;
+var SOLANA_ERROR__INSTRUCTION_PLANS__FAILED_SINGLE_TRANSACTION_PLAN_RESULT_NOT_FOUND = 7618005;
+var SOLANA_ERROR__INSTRUCTION_PLANS__UNEXPECTED_INSTRUCTION_PLAN = 7618006;
+var SOLANA_ERROR__INSTRUCTION_PLANS__UNEXPECTED_TRANSACTION_PLAN = 7618007;
+var SOLANA_ERROR__INSTRUCTION_PLANS__UNEXPECTED_TRANSACTION_PLAN_RESULT = 7618008;
+var SOLANA_ERROR__INSTRUCTION_PLANS__EXPECTED_SUCCESSFUL_TRANSACTION_PLAN_RESULT = 7618009;
+var SOLANA_ERROR__INSTRUCTION_PLANS__MAX_INSTRUCTIONS_PER_TRANSACTION_EXCEEDED = 7618010;
+var SOLANA_ERROR__INSTRUCTION_PLANS__INVALID_MAX_INSTRUCTIONS_PER_TRANSACTION = 7618011;
+var SOLANA_ERROR__INSTRUCTION_PLANS__MESSAGE_REJECTED_BY_PACKER = 7618012;
+var SOLANA_ERROR__CODECS__CANNOT_DECODE_EMPTY_BYTE_ARRAY = 8078e3;
+var SOLANA_ERROR__CODECS__INVALID_BYTE_LENGTH = 8078001;
+var SOLANA_ERROR__CODECS__EXPECTED_FIXED_LENGTH = 8078002;
+var SOLANA_ERROR__CODECS__EXPECTED_VARIABLE_LENGTH = 8078003;
+var SOLANA_ERROR__CODECS__ENCODER_DECODER_SIZE_COMPATIBILITY_MISMATCH = 8078004;
+var SOLANA_ERROR__CODECS__ENCODER_DECODER_FIXED_SIZE_MISMATCH = 8078005;
+var SOLANA_ERROR__CODECS__ENCODER_DECODER_MAX_SIZE_MISMATCH = 8078006;
+var SOLANA_ERROR__CODECS__INVALID_NUMBER_OF_ITEMS = 8078007;
+var SOLANA_ERROR__CODECS__ENUM_DISCRIMINATOR_OUT_OF_RANGE = 8078008;
+var SOLANA_ERROR__CODECS__INVALID_DISCRIMINATED_UNION_VARIANT = 8078009;
+var SOLANA_ERROR__CODECS__INVALID_ENUM_VARIANT = 8078010;
+var SOLANA_ERROR__CODECS__NUMBER_OUT_OF_RANGE = 8078011;
+var SOLANA_ERROR__CODECS__INVALID_STRING_FOR_BASE = 8078012;
+var SOLANA_ERROR__CODECS__EXPECTED_POSITIVE_BYTE_LENGTH = 8078013;
+var SOLANA_ERROR__CODECS__OFFSET_OUT_OF_RANGE = 8078014;
+var SOLANA_ERROR__CODECS__INVALID_LITERAL_UNION_VARIANT = 8078015;
+var SOLANA_ERROR__CODECS__LITERAL_UNION_DISCRIMINATOR_OUT_OF_RANGE = 8078016;
+var SOLANA_ERROR__CODECS__UNION_VARIANT_OUT_OF_RANGE = 8078017;
+var SOLANA_ERROR__CODECS__INVALID_CONSTANT = 8078018;
+var SOLANA_ERROR__CODECS__EXPECTED_ZERO_VALUE_TO_MATCH_ITEM_FIXED_SIZE = 8078019;
+var SOLANA_ERROR__CODECS__ENCODED_BYTES_MUST_NOT_INCLUDE_SENTINEL = 8078020;
+var SOLANA_ERROR__CODECS__SENTINEL_MISSING_IN_DECODED_BYTES = 8078021;
+var SOLANA_ERROR__CODECS__CANNOT_USE_LEXICAL_VALUES_AS_ENUM_DISCRIMINATORS = 8078022;
+var SOLANA_ERROR__CODECS__EXPECTED_DECODER_TO_CONSUME_ENTIRE_BYTE_ARRAY = 8078023;
+var SOLANA_ERROR__CODECS__INVALID_PATTERN_MATCH_VALUE = 8078024;
+var SOLANA_ERROR__CODECS__INVALID_PATTERN_MATCH_BYTES = 8078025;
+var SOLANA_ERROR__CODECS__INVALID_UTF8_BYTES = 8078026;
+var SOLANA_ERROR__CODECS__INVALID_UTF8_STRING = 8078027;
+var SOLANA_ERROR__CODECS__SENTINEL_MISSING_AT_END_OF_BYTES = 8078028;
+var SOLANA_ERROR__CODECS__SENTINEL_MUST_NOT_BE_EMPTY = 8078029;
+var SOLANA_ERROR__FIXED_POINTS__INVALID_TOTAL_BITS = 809e4;
+var SOLANA_ERROR__FIXED_POINTS__INVALID_FRACTIONAL_BITS = 8090001;
+var SOLANA_ERROR__FIXED_POINTS__INVALID_DECIMALS = 8090002;
+var SOLANA_ERROR__FIXED_POINTS__FRACTIONAL_BITS_EXCEED_TOTAL_BITS = 8090003;
+var SOLANA_ERROR__FIXED_POINTS__VALUE_OUT_OF_RANGE = 8090004;
+var SOLANA_ERROR__FIXED_POINTS__INVALID_STRING = 8090005;
+var SOLANA_ERROR__FIXED_POINTS__INVALID_ZERO_DENOMINATOR_RATIO = 8090006;
+var SOLANA_ERROR__FIXED_POINTS__ARITHMETIC_OVERFLOW = 8090007;
+var SOLANA_ERROR__FIXED_POINTS__SHAPE_MISMATCH = 8090008;
+var SOLANA_ERROR__FIXED_POINTS__DIVISION_BY_ZERO = 8090009;
+var SOLANA_ERROR__FIXED_POINTS__STRICT_MODE_PRECISION_LOSS = 8090010;
+var SOLANA_ERROR__FIXED_POINTS__MALFORMED_RAW_VALUE = 8090011;
+var SOLANA_ERROR__FIXED_POINTS__TOTAL_BITS_NOT_BYTE_ALIGNED = 8090012;
+var SOLANA_ERROR__RPC__INTEGER_OVERFLOW = 81e5;
+var SOLANA_ERROR__RPC__TRANSPORT_HTTP_HEADER_FORBIDDEN = 8100001;
+var SOLANA_ERROR__RPC__TRANSPORT_HTTP_ERROR = 8100002;
+var SOLANA_ERROR__RPC__API_PLAN_MISSING_FOR_RPC_METHOD = 8100003;
+var SOLANA_ERROR__RPC_SUBSCRIPTIONS__CANNOT_CREATE_SUBSCRIPTION_PLAN = 819e4;
+var SOLANA_ERROR__RPC_SUBSCRIPTIONS__EXPECTED_SERVER_SUBSCRIPTION_ID = 8190001;
+var SOLANA_ERROR__RPC_SUBSCRIPTIONS__CHANNEL_CLOSED_BEFORE_MESSAGE_BUFFERED = 8190002;
+var SOLANA_ERROR__RPC_SUBSCRIPTIONS__CHANNEL_CONNECTION_CLOSED = 8190003;
+var SOLANA_ERROR__RPC_SUBSCRIPTIONS__CHANNEL_FAILED_TO_CONNECT = 8190004;
+var SOLANA_ERROR__SUBSCRIBABLE__RETRY_NOT_SUPPORTED = 8195e3;
+var SOLANA_ERROR__SUBSCRIBABLE__STREAM_CLOSED_WITHOUT_ERROR = 8195001;
+var SOLANA_ERROR__PROGRAM_CLIENTS__INSUFFICIENT_ACCOUNT_METAS = 85e5;
+var SOLANA_ERROR__PROGRAM_CLIENTS__UNRECOGNIZED_INSTRUCTION_TYPE = 8500001;
+var SOLANA_ERROR__PROGRAM_CLIENTS__FAILED_TO_IDENTIFY_INSTRUCTION = 8500002;
+var SOLANA_ERROR__PROGRAM_CLIENTS__UNEXPECTED_RESOLVED_INSTRUCTION_INPUT_TYPE = 8500003;
+var SOLANA_ERROR__PROGRAM_CLIENTS__RESOLVED_INSTRUCTION_INPUT_MUST_BE_NON_NULL = 8500004;
+var SOLANA_ERROR__PROGRAM_CLIENTS__UNRECOGNIZED_ACCOUNT_TYPE = 8500005;
+var SOLANA_ERROR__PROGRAM_CLIENTS__FAILED_TO_IDENTIFY_ACCOUNT = 8500006;
+var SOLANA_ERROR__PROGRAM_CLIENTS__RESOLVED_INSTRUCTION_INPUT_MUST_BE_SIGNER = 8500007;
+var SOLANA_ERROR__WALLET__NOT_CONNECTED = 89e5;
+var SOLANA_ERROR__WALLET__NO_SIGNER_CONNECTED = 8900001;
+var SOLANA_ERROR__WALLET__SIGNER_NOT_AVAILABLE = 8900002;
+var SOLANA_ERROR__WALLET__ACCOUNT_NOT_AVAILABLE = 8900003;
+var SOLANA_ERROR__REACT__MISSING_PROVIDER = 9e6;
+var SOLANA_ERROR__REACT__MISSING_CAPABILITY = 9000001;
+var SOLANA_ERROR__REACT__SUBSCRIPTION_CLOSED_WITHOUT_ERROR = 9000002;
+var SOLANA_ERROR__INVARIANT_VIOLATION__SUBSCRIPTION_ITERATOR_STATE_MISSING = 99e5;
+var SOLANA_ERROR__INVARIANT_VIOLATION__SUBSCRIPTION_ITERATOR_MUST_NOT_POLL_BEFORE_RESOLVING_EXISTING_MESSAGE_PROMISE = 9900001;
+var SOLANA_ERROR__INVARIANT_VIOLATION__CACHED_ABORTABLE_ITERABLE_CACHE_ENTRY_MISSING = 9900002;
+var SOLANA_ERROR__INVARIANT_VIOLATION__SWITCH_MUST_BE_EXHAUSTIVE = 9900003;
+var SOLANA_ERROR__INVARIANT_VIOLATION__DATA_PUBLISHER_CHANNEL_UNIMPLEMENTED = 9900004;
+var SOLANA_ERROR__INVARIANT_VIOLATION__INVALID_INSTRUCTION_PLAN_KIND = 9900005;
+var SOLANA_ERROR__INVARIANT_VIOLATION__INVALID_TRANSACTION_PLAN_KIND = 9900006;
+function encodeValue(value) {
+  if (Array.isArray(value)) {
+    const commaSeparatedValues = value.map(encodeValue).join(
+      "%2C%20"
+      /* ", " */
+    );
+    return "%5B" + commaSeparatedValues + /* "]" */
+    "%5D";
+  } else if (typeof value === "bigint") {
+    return `${value}n`;
+  } else {
+    return encodeURIComponent(
+      String(
+        value != null && Object.getPrototypeOf(value) === null ? (
+          // Plain objects with no prototype don't have a `toString` method.
+          // Convert them before stringifying them.
+          { ...value }
+        ) : value
+      )
+    );
+  }
+}
+function encodeObjectContextEntry([key, value]) {
+  return `${key}=${encodeValue(value)}`;
+}
+function encodeContextObject(context) {
+  const searchParamsString = Object.entries(context).map(encodeObjectContextEntry).join("&");
+  return Buffer.from(searchParamsString, "utf8").toString("base64");
+}
+var SolanaErrorMessages = {
+  [SOLANA_ERROR__ACCOUNTS__ACCOUNT_NOT_FOUND]: "Account not found at address: $address",
+  [SOLANA_ERROR__ACCOUNTS__EXPECTED_ALL_ACCOUNTS_TO_BE_DECODED]: "Not all accounts were decoded. Encoded accounts found at addresses: $addresses.",
+  [SOLANA_ERROR__ACCOUNTS__EXPECTED_DECODED_ACCOUNT]: "Expected decoded account at address: $address",
+  [SOLANA_ERROR__ACCOUNTS__FAILED_TO_DECODE_ACCOUNT]: "Failed to decode account data at address: $address",
+  [SOLANA_ERROR__ACCOUNTS__ONE_OR_MORE_ACCOUNTS_NOT_FOUND]: "Accounts not found at addresses: $addresses",
+  [SOLANA_ERROR__ADDRESSES__FAILED_TO_FIND_VIABLE_PDA_BUMP_SEED]: "Unable to find a viable program address bump seed.",
+  [SOLANA_ERROR__ADDRESSES__INVALID_BASE58_ENCODED_ADDRESS]: "$putativeAddress is not a base58-encoded address.",
+  [SOLANA_ERROR__ADDRESSES__INVALID_BYTE_LENGTH]: "Expected base58 encoded address to decode to a byte array of length 32. Actual length: $actualLength.",
+  [SOLANA_ERROR__ADDRESSES__INVALID_ED25519_PUBLIC_KEY]: "The `CryptoKey` must be an `Ed25519` public key.",
+  [SOLANA_ERROR__ADDRESSES__INVALID_OFF_CURVE_ADDRESS]: "$putativeOffCurveAddress is not a base58-encoded off-curve address.",
+  [SOLANA_ERROR__ADDRESSES__INVALID_SEEDS_POINT_ON_CURVE]: "Invalid seeds; point must fall off the Ed25519 curve.",
+  [SOLANA_ERROR__ADDRESSES__MALFORMED_PDA]: "Expected given program derived address to have the following format: [Address, ProgramDerivedAddressBump].",
+  [SOLANA_ERROR__ADDRESSES__MAX_NUMBER_OF_PDA_SEEDS_EXCEEDED]: "A maximum of $maxSeeds seeds, including the bump seed, may be supplied when creating an address. Received: $actual.",
+  [SOLANA_ERROR__ADDRESSES__MAX_PDA_SEED_LENGTH_EXCEEDED]: "The seed at index $index with length $actual exceeds the maximum length of $maxSeedLength bytes.",
+  [SOLANA_ERROR__ADDRESSES__PDA_BUMP_SEED_OUT_OF_RANGE]: "Expected program derived address bump to be in the range [0, 255], got: $bump.",
+  [SOLANA_ERROR__ADDRESSES__PDA_ENDS_WITH_PDA_MARKER]: "Program address cannot end with PDA marker.",
+  [SOLANA_ERROR__ADDRESSES__STRING_LENGTH_OUT_OF_RANGE]: "Expected base58-encoded address string of length in the range [32, 44]. Actual length: $actualLength.",
+  [SOLANA_ERROR__BLOCKHASH_STRING_LENGTH_OUT_OF_RANGE]: "Expected base58-encoded blockhash string of length in the range [32, 44]. Actual length: $actualLength.",
+  [SOLANA_ERROR__BLOCK_HEIGHT_EXCEEDED]: "The network has progressed past the last block for which this transaction could have been committed.",
+  [SOLANA_ERROR__CODECS__CANNOT_DECODE_EMPTY_BYTE_ARRAY]: "Codec [$codecDescription] cannot decode empty byte arrays.",
+  [SOLANA_ERROR__CODECS__CANNOT_USE_LEXICAL_VALUES_AS_ENUM_DISCRIMINATORS]: "Enum codec cannot use lexical values [$stringValues] as discriminators. Either remove all lexical values or set `useValuesAsDiscriminators` to `false`.",
+  [SOLANA_ERROR__CODECS__ENCODED_BYTES_MUST_NOT_INCLUDE_SENTINEL]: "Sentinel [$hexSentinel] must not be present in encoded bytes [$hexEncodedBytes].",
+  [SOLANA_ERROR__CODECS__ENCODER_DECODER_FIXED_SIZE_MISMATCH]: "Encoder and decoder must have the same fixed size, got [$encoderFixedSize] and [$decoderFixedSize].",
+  [SOLANA_ERROR__CODECS__ENCODER_DECODER_MAX_SIZE_MISMATCH]: "Encoder and decoder must have the same max size, got [$encoderMaxSize] and [$decoderMaxSize].",
+  [SOLANA_ERROR__CODECS__ENCODER_DECODER_SIZE_COMPATIBILITY_MISMATCH]: "Encoder and decoder must either both be fixed-size or variable-size.",
+  [SOLANA_ERROR__CODECS__ENUM_DISCRIMINATOR_OUT_OF_RANGE]: "Enum discriminator out of range. Expected a number in [$formattedValidDiscriminators], got $discriminator.",
+  [SOLANA_ERROR__CODECS__EXPECTED_FIXED_LENGTH]: "Expected a fixed-size codec, got a variable-size one.",
+  [SOLANA_ERROR__CODECS__EXPECTED_POSITIVE_BYTE_LENGTH]: "Codec [$codecDescription] expected a positive byte length, got $bytesLength.",
+  [SOLANA_ERROR__CODECS__EXPECTED_VARIABLE_LENGTH]: "Expected a variable-size codec, got a fixed-size one.",
+  [SOLANA_ERROR__CODECS__EXPECTED_ZERO_VALUE_TO_MATCH_ITEM_FIXED_SIZE]: "Codec [$codecDescription] expected zero-value [$hexZeroValue] to have the same size as the provided fixed-size item [$expectedSize bytes].",
+  [SOLANA_ERROR__CODECS__INVALID_BYTE_LENGTH]: "Codec [$codecDescription] expected $expected bytes, got $bytesLength.",
+  [SOLANA_ERROR__CODECS__INVALID_CONSTANT]: "Expected byte array constant [$hexConstant] to be present in data [$hexData] at offset [$offset].",
+  [SOLANA_ERROR__CODECS__INVALID_DISCRIMINATED_UNION_VARIANT]: "Invalid discriminated union variant. Expected one of [$variants], got $value.",
+  [SOLANA_ERROR__CODECS__INVALID_ENUM_VARIANT]: "Invalid enum variant. Expected one of [$stringValues] or a number in [$formattedNumericalValues], got $variant.",
+  [SOLANA_ERROR__CODECS__INVALID_LITERAL_UNION_VARIANT]: "Invalid literal union variant. Expected one of [$variants], got $value.",
+  [SOLANA_ERROR__CODECS__INVALID_NUMBER_OF_ITEMS]: "Expected [$codecDescription] to have $expected items, got $actual.",
+  [SOLANA_ERROR__CODECS__INVALID_STRING_FOR_BASE]: "Invalid value $value for base $base with alphabet $alphabet.",
+  [SOLANA_ERROR__CODECS__INVALID_UTF8_BYTES]: "Invalid UTF-8 byte sequence at offset $offset.",
+  [SOLANA_ERROR__CODECS__INVALID_UTF8_STRING]: "Invalid UTF-8 string. Found a lone surrogate at index $index.",
+  [SOLANA_ERROR__CODECS__LITERAL_UNION_DISCRIMINATOR_OUT_OF_RANGE]: "Literal union discriminator out of range. Expected a number between $minRange and $maxRange, got $discriminator.",
+  [SOLANA_ERROR__CODECS__NUMBER_OUT_OF_RANGE]: "Codec [$codecDescription] expected number to be in the range [$min, $max], got $value.",
+  [SOLANA_ERROR__CODECS__OFFSET_OUT_OF_RANGE]: "Codec [$codecDescription] expected offset to be in the range [0, $bytesLength], got $offset.",
+  [SOLANA_ERROR__CODECS__SENTINEL_MISSING_AT_END_OF_BYTES]: "Codec [$codecDescription] expected sentinel [$hexSentinel] to terminate the collection, but reached the end of the byte array without it.",
+  [SOLANA_ERROR__CODECS__SENTINEL_MISSING_IN_DECODED_BYTES]: "Expected sentinel [$hexSentinel] to be present in decoded bytes [$hexDecodedBytes].",
+  [SOLANA_ERROR__CODECS__SENTINEL_MUST_NOT_BE_EMPTY]: "The sentinel must not be empty.",
+  [SOLANA_ERROR__CODECS__UNION_VARIANT_OUT_OF_RANGE]: "Union variant out of range. Expected an index between $minRange and $maxRange, got $variant.",
+  [SOLANA_ERROR__CODECS__EXPECTED_DECODER_TO_CONSUME_ENTIRE_BYTE_ARRAY]: "This decoder expected a byte array of exactly $expectedLength bytes, but $numExcessBytes unexpected excess bytes remained after decoding. Are you sure that you have chosen the correct decoder for this data?",
+  [SOLANA_ERROR__CODECS__INVALID_PATTERN_MATCH_VALUE]: "Invalid pattern match value. The provided value does not match any of the specified patterns.",
+  [SOLANA_ERROR__CODECS__INVALID_PATTERN_MATCH_BYTES]: "Invalid pattern match bytes. The provided byte array does not match any of the specified patterns.",
+  [SOLANA_ERROR__CRYPTO__RANDOM_VALUES_FUNCTION_UNIMPLEMENTED]: "No random values implementation could be found.",
+  [SOLANA_ERROR__FAILED_TO_SEND_TRANSACTION]: "Failed to send transaction$causeMessage",
+  [SOLANA_ERROR__FAILED_TO_SEND_TRANSACTIONS]: "Failed to send transactions$causeMessages",
+  [SOLANA_ERROR__FAILED_TO_SIGN_TRANSACTION]: "Failed to sign transaction$causeMessage",
+  [SOLANA_ERROR__FAILED_TO_SIGN_TRANSACTIONS]: "Failed to sign transactions$causeMessages",
+  [SOLANA_ERROR__FIXED_POINTS__ARITHMETIC_OVERFLOW]: "Fixed-point operation `$operation` of kind `$kind` overflowed. Expected a raw bigint in [$min, $max], got $result.",
+  [SOLANA_ERROR__FIXED_POINTS__DIVISION_BY_ZERO]: "Fixed-point division by zero for value of kind `$kind` ($signedness, $totalBits bits).",
+  [SOLANA_ERROR__FIXED_POINTS__FRACTIONAL_BITS_EXCEED_TOTAL_BITS]: "`fractionalBits` ($fractionalBits) must not exceed `totalBits` ($totalBits).",
+  [SOLANA_ERROR__FIXED_POINTS__INVALID_DECIMALS]: "Invalid `decimals`. Expected a non-negative integer, got $decimals.",
+  [SOLANA_ERROR__FIXED_POINTS__INVALID_FRACTIONAL_BITS]: "Invalid `fractionalBits`. Expected a non-negative integer, got $fractionalBits.",
+  [SOLANA_ERROR__FIXED_POINTS__INVALID_STRING]: "Invalid string `$input` for fixed-point value of kind `$kind`.",
+  [SOLANA_ERROR__FIXED_POINTS__INVALID_TOTAL_BITS]: "Invalid `totalBits`. Expected a positive integer, got $totalBits.",
+  [SOLANA_ERROR__FIXED_POINTS__INVALID_ZERO_DENOMINATOR_RATIO]: "Invalid ratio $numerator/$denominator for fixed-point value of kind `$kind`. Denominator must be non-zero.",
+  [SOLANA_ERROR__FIXED_POINTS__MALFORMED_RAW_VALUE]: "Fixed-point value of kind `$kind` has a malformed `raw` field. Expected a bigint, got `$raw`.",
+  [SOLANA_ERROR__FIXED_POINTS__SHAPE_MISMATCH]: "Fixed-point `$operation` operation expected $expectedKind ($expectedSignedness, $expectedTotalBits bits, $expectedScale $expectedScaleLabel); got $actualKind ($actualSignedness, $actualTotalBits bits, $actualScale $actualScaleLabel).",
+  [SOLANA_ERROR__FIXED_POINTS__STRICT_MODE_PRECISION_LOSS]: "Fixed-point operation `$operation` of kind `$kind` cannot be performed exactly; pass a rounding mode other than `strict` to allow a rounded result.",
+  [SOLANA_ERROR__FIXED_POINTS__TOTAL_BITS_NOT_BYTE_ALIGNED]: "Fixed-point codec of kind `$kind` requires `totalBits` to be a multiple of 8; got $totalBits.",
+  [SOLANA_ERROR__FIXED_POINTS__VALUE_OUT_OF_RANGE]: "Fixed-point value of kind `$kind` is out of range for $signedness $totalBits-bit storage. Expected a raw bigint in [$min, $max], got $raw.",
+  [SOLANA_ERROR__FS__UNSUPPORTED_ENVIRONMENT]: "Filesystem operation `$operation` is not supported in this environment.",
+  [SOLANA_ERROR__INSTRUCTION_ERROR__ACCOUNT_ALREADY_INITIALIZED]: "Instruction requires an uninitialized account",
+  [SOLANA_ERROR__INSTRUCTION_ERROR__ACCOUNT_BORROW_FAILED]: "Instruction tries to borrow reference for an account which is already borrowed",
+  [SOLANA_ERROR__INSTRUCTION_ERROR__ACCOUNT_BORROW_OUTSTANDING]: "Instruction left account with an outstanding borrowed reference",
+  [SOLANA_ERROR__INSTRUCTION_ERROR__ACCOUNT_DATA_SIZE_CHANGED]: "Program other than the account's owner changed the size of the account data",
+  [SOLANA_ERROR__INSTRUCTION_ERROR__ACCOUNT_DATA_TOO_SMALL]: "Account data too small for instruction",
+  [SOLANA_ERROR__INSTRUCTION_ERROR__ACCOUNT_NOT_EXECUTABLE]: "Instruction expected an executable account",
+  [SOLANA_ERROR__INSTRUCTION_ERROR__ACCOUNT_NOT_RENT_EXEMPT]: "An account does not have enough lamports to be rent-exempt",
+  [SOLANA_ERROR__INSTRUCTION_ERROR__ARITHMETIC_OVERFLOW]: "Program arithmetic overflowed",
+  [SOLANA_ERROR__INSTRUCTION_ERROR__BORSH_IO_ERROR]: "Failed to serialize or deserialize account data",
+  [SOLANA_ERROR__INSTRUCTION_ERROR__BUILTIN_PROGRAMS_MUST_CONSUME_COMPUTE_UNITS]: "Builtin programs must consume compute units",
+  [SOLANA_ERROR__INSTRUCTION_ERROR__CALL_DEPTH]: "Cross-program invocation call depth too deep",
+  [SOLANA_ERROR__INSTRUCTION_ERROR__COMPUTATIONAL_BUDGET_EXCEEDED]: "Computational budget exceeded",
+  [SOLANA_ERROR__INSTRUCTION_ERROR__CUSTOM]: "Custom program error: #$code",
+  [SOLANA_ERROR__INSTRUCTION_ERROR__DUPLICATE_ACCOUNT_INDEX]: "Instruction contains duplicate accounts",
+  [SOLANA_ERROR__INSTRUCTION_ERROR__DUPLICATE_ACCOUNT_OUT_OF_SYNC]: "Instruction modifications of multiply-passed account differ",
+  [SOLANA_ERROR__INSTRUCTION_ERROR__EXECUTABLE_ACCOUNT_NOT_RENT_EXEMPT]: "Executable accounts must be rent exempt",
+  [SOLANA_ERROR__INSTRUCTION_ERROR__EXECUTABLE_DATA_MODIFIED]: "Instruction changed executable accounts data",
+  [SOLANA_ERROR__INSTRUCTION_ERROR__EXECUTABLE_LAMPORT_CHANGE]: "Instruction changed the balance of an executable account",
+  [SOLANA_ERROR__INSTRUCTION_ERROR__EXECUTABLE_MODIFIED]: "Instruction changed executable bit of an account",
+  [SOLANA_ERROR__INSTRUCTION_ERROR__EXTERNAL_ACCOUNT_DATA_MODIFIED]: "Instruction modified data of an account it does not own",
+  [SOLANA_ERROR__INSTRUCTION_ERROR__EXTERNAL_ACCOUNT_LAMPORT_SPEND]: "Instruction spent from the balance of an account it does not own",
+  [SOLANA_ERROR__INSTRUCTION_ERROR__GENERIC_ERROR]: "Generic instruction error",
+  [SOLANA_ERROR__INSTRUCTION_ERROR__ILLEGAL_OWNER]: "Provided owner is not allowed",
+  [SOLANA_ERROR__INSTRUCTION_ERROR__IMMUTABLE]: "Account is immutable",
+  [SOLANA_ERROR__INSTRUCTION_ERROR__INCORRECT_AUTHORITY]: "Incorrect authority provided",
+  [SOLANA_ERROR__INSTRUCTION_ERROR__INCORRECT_PROGRAM_ID]: "Incorrect program id for instruction",
+  [SOLANA_ERROR__INSTRUCTION_ERROR__INSUFFICIENT_FUNDS]: "Insufficient funds for instruction",
+  [SOLANA_ERROR__INSTRUCTION_ERROR__INVALID_ACCOUNT_DATA]: "Invalid account data for instruction",
+  [SOLANA_ERROR__INSTRUCTION_ERROR__INVALID_ACCOUNT_OWNER]: "Invalid account owner",
+  [SOLANA_ERROR__INSTRUCTION_ERROR__INVALID_ARGUMENT]: "Invalid program argument",
+  [SOLANA_ERROR__INSTRUCTION_ERROR__INVALID_ERROR]: "Program returned invalid error code",
+  [SOLANA_ERROR__INSTRUCTION_ERROR__INVALID_INSTRUCTION_DATA]: "Invalid instruction data",
+  [SOLANA_ERROR__INSTRUCTION_ERROR__INVALID_REALLOC]: "Failed to reallocate account data",
+  [SOLANA_ERROR__INSTRUCTION_ERROR__INVALID_SEEDS]: "Provided seeds do not result in a valid address",
+  [SOLANA_ERROR__INSTRUCTION_ERROR__MAX_ACCOUNTS_DATA_ALLOCATIONS_EXCEEDED]: "Accounts data allocations exceeded the maximum allowed per transaction",
+  [SOLANA_ERROR__INSTRUCTION_ERROR__MAX_ACCOUNTS_EXCEEDED]: "Max accounts exceeded",
+  [SOLANA_ERROR__INSTRUCTION_ERROR__MAX_INSTRUCTION_TRACE_LENGTH_EXCEEDED]: "Max instruction trace length exceeded",
+  [SOLANA_ERROR__INSTRUCTION_ERROR__MAX_SEED_LENGTH_EXCEEDED]: "Length of the seed is too long for address generation",
+  [SOLANA_ERROR__INSTRUCTION_ERROR__MISSING_ACCOUNT]: "An account required by the instruction is missing",
+  [SOLANA_ERROR__INSTRUCTION_ERROR__MISSING_REQUIRED_SIGNATURE]: "Missing required signature for instruction",
+  [SOLANA_ERROR__INSTRUCTION_ERROR__MODIFIED_PROGRAM_ID]: "Instruction illegally modified the program id of an account",
+  [SOLANA_ERROR__INSTRUCTION_ERROR__NOT_ENOUGH_ACCOUNT_KEYS]: "Insufficient account keys for instruction",
+  [SOLANA_ERROR__INSTRUCTION_ERROR__PRIVILEGE_ESCALATION]: "Cross-program invocation with unauthorized signer or writable account",
+  [SOLANA_ERROR__INSTRUCTION_ERROR__PROGRAM_ENVIRONMENT_SETUP_FAILURE]: "Failed to create program execution environment",
+  [SOLANA_ERROR__INSTRUCTION_ERROR__PROGRAM_FAILED_TO_COMPILE]: "Program failed to compile",
+  [SOLANA_ERROR__INSTRUCTION_ERROR__PROGRAM_FAILED_TO_COMPLETE]: "Program failed to complete",
+  [SOLANA_ERROR__INSTRUCTION_ERROR__READONLY_DATA_MODIFIED]: "Instruction modified data of a read-only account",
+  [SOLANA_ERROR__INSTRUCTION_ERROR__READONLY_LAMPORT_CHANGE]: "Instruction changed the balance of a read-only account",
+  [SOLANA_ERROR__INSTRUCTION_ERROR__REENTRANCY_NOT_ALLOWED]: "Cross-program invocation reentrancy not allowed for this instruction",
+  [SOLANA_ERROR__INSTRUCTION_ERROR__RENT_EPOCH_MODIFIED]: "Instruction modified rent epoch of an account",
+  [SOLANA_ERROR__INSTRUCTION_ERROR__UNBALANCED_INSTRUCTION]: "Sum of account balances before and after instruction do not match",
+  [SOLANA_ERROR__INSTRUCTION_ERROR__UNINITIALIZED_ACCOUNT]: "Instruction requires an initialized account",
+  [SOLANA_ERROR__INSTRUCTION_ERROR__UNKNOWN]: "The instruction failed with the error: $errorName",
+  [SOLANA_ERROR__INSTRUCTION_ERROR__UNSUPPORTED_PROGRAM_ID]: "Unsupported program id",
+  [SOLANA_ERROR__INSTRUCTION_ERROR__UNSUPPORTED_SYSVAR]: "Unsupported sysvar",
+  [SOLANA_ERROR__INVARIANT_VIOLATION__INVALID_INSTRUCTION_PLAN_KIND]: "Invalid instruction plan kind: $kind.",
+  [SOLANA_ERROR__INSTRUCTION_PLANS__EMPTY_INSTRUCTION_PLAN]: "The provided instruction plan is empty.",
+  [SOLANA_ERROR__INSTRUCTION_PLANS__FAILED_SINGLE_TRANSACTION_PLAN_RESULT_NOT_FOUND]: "No failed transaction plan result was found in the provided transaction plan result.",
+  [SOLANA_ERROR__INSTRUCTION_PLANS__NON_DIVISIBLE_TRANSACTION_PLANS_NOT_SUPPORTED]: "This transaction plan executor does not support non-divisible sequential plans. To support them, you may create your own executor such that multi-transaction atomicity is preserved \u2014 e.g. by targetting RPCs that support transaction bundles.",
+  [SOLANA_ERROR__INSTRUCTION_PLANS__FAILED_TO_EXECUTE_TRANSACTION_PLAN]: "The provided transaction plan failed to execute. See the `transactionPlanResult` attribute for more details. Note that the `cause` property is deprecated, and a future version will not set it.",
+  [SOLANA_ERROR__INSTRUCTION_PLANS__INVALID_MAX_INSTRUCTIONS_PER_TRANSACTION]: "The configured maximum of $maxInstructions instructions per transaction is invalid. It must be a positive integer no greater than the transaction format limit of $transactionInstructionLimit instructions per transaction. Provide a `maxInstructionsPerTransaction` (on the transaction planner) or `maxInstructions` (on the message packer) value between 1 and $transactionInstructionLimit.",
+  [SOLANA_ERROR__INSTRUCTION_PLANS__MAX_INSTRUCTIONS_PER_TRANSACTION_EXCEEDED]: "Planning this transaction message would require $numInstructions instructions, which exceeds the configured maximum of $maxInstructions instructions per transaction. This limit is configurable, and intended to leave headroom for inner instructions which are included in the maximum instruction limit for transactions. Increase `maxInstructionsPerTransaction` on the transaction planner (or `maxInstructions` on the message packer) to allow more instructions per transaction.",
+  [SOLANA_ERROR__INSTRUCTION_PLANS__MESSAGE_CANNOT_ACCOMMODATE_PLAN]: "The provided message has insufficient capacity to accommodate the next instruction(s) in this plan. Expected at least $numBytesRequired free byte(s), got $numFreeBytes byte(s).",
+  [SOLANA_ERROR__INVARIANT_VIOLATION__INVALID_TRANSACTION_PLAN_KIND]: "Invalid transaction plan kind: $kind.",
+  [SOLANA_ERROR__INSTRUCTION_PLANS__MESSAGE_PACKER_ALREADY_COMPLETE]: "No more instructions to pack; the message packer has completed the instruction plan.",
+  [SOLANA_ERROR__INSTRUCTION_PLANS__MESSAGE_REJECTED_BY_PACKER]: "The message packer rejected the provided transaction message: $reason.",
+  [SOLANA_ERROR__INSTRUCTION_PLANS__UNEXPECTED_INSTRUCTION_PLAN]: "Unexpected instruction plan. Expected $expectedKind plan, got $actualKind plan.",
+  [SOLANA_ERROR__INSTRUCTION_PLANS__UNEXPECTED_TRANSACTION_PLAN]: "Unexpected transaction plan. Expected $expectedKind plan, got $actualKind plan.",
+  [SOLANA_ERROR__INSTRUCTION_PLANS__UNEXPECTED_TRANSACTION_PLAN_RESULT]: "Unexpected transaction plan result. Expected $expectedKind plan, got $actualKind plan.",
+  [SOLANA_ERROR__INSTRUCTION_PLANS__EXPECTED_SUCCESSFUL_TRANSACTION_PLAN_RESULT]: "Expected a successful transaction plan result. I.e. there is at least one failed or cancelled transaction in the plan.",
+  [SOLANA_ERROR__INSTRUCTION__EXPECTED_TO_HAVE_ACCOUNTS]: "The instruction does not have any accounts.",
+  [SOLANA_ERROR__INSTRUCTION__EXPECTED_TO_HAVE_DATA]: "The instruction does not have any data.",
+  [SOLANA_ERROR__INSTRUCTION__PROGRAM_ID_MISMATCH]: "Expected instruction to have progress address $expectedProgramAddress, got $actualProgramAddress.",
+  [SOLANA_ERROR__INVALID_BLOCKHASH_BYTE_LENGTH]: "Expected base58 encoded blockhash to decode to a byte array of length 32. Actual length: $actualLength.",
+  [SOLANA_ERROR__INVALID_NONCE]: "The nonce `$expectedNonceValue` is no longer valid. It has advanced to `$actualNonceValue`",
+  [SOLANA_ERROR__INVARIANT_VIOLATION__CACHED_ABORTABLE_ITERABLE_CACHE_ENTRY_MISSING]: "Invariant violation: Found no abortable iterable cache entry for key `$cacheKey`. It should be impossible to hit this error; please file an issue at https://sola.na/web3invariant",
+  [SOLANA_ERROR__INVARIANT_VIOLATION__DATA_PUBLISHER_CHANNEL_UNIMPLEMENTED]: "Invariant violation: This data publisher does not publish to the channel named `$channelName`. Supported channels include $supportedChannelNames.",
+  [SOLANA_ERROR__INVARIANT_VIOLATION__SUBSCRIPTION_ITERATOR_MUST_NOT_POLL_BEFORE_RESOLVING_EXISTING_MESSAGE_PROMISE]: "Invariant violation: WebSocket message iterator state is corrupt; iterated without first resolving existing message promise. It should be impossible to hit this error; please file an issue at https://sola.na/web3invariant",
+  [SOLANA_ERROR__INVARIANT_VIOLATION__SUBSCRIPTION_ITERATOR_STATE_MISSING]: "Invariant violation: WebSocket message iterator is missing state storage. It should be impossible to hit this error; please file an issue at https://sola.na/web3invariant",
+  [SOLANA_ERROR__INVARIANT_VIOLATION__SWITCH_MUST_BE_EXHAUSTIVE]: "Invariant violation: Switch statement non-exhaustive. Received unexpected value `$unexpectedValue`. It should be impossible to hit this error; please file an issue at https://sola.na/web3invariant",
+  [SOLANA_ERROR__JSON_RPC__INTERNAL_ERROR]: "JSON-RPC error: Internal JSON-RPC error ($__serverMessage)",
+  [SOLANA_ERROR__JSON_RPC__INVALID_PARAMS]: "JSON-RPC error: Invalid method parameter(s) ($__serverMessage)",
+  [SOLANA_ERROR__JSON_RPC__INVALID_REQUEST]: "JSON-RPC error: The JSON sent is not a valid `Request` object ($__serverMessage)",
+  [SOLANA_ERROR__JSON_RPC__METHOD_NOT_FOUND]: "JSON-RPC error: The method does not exist / is not available ($__serverMessage)",
+  [SOLANA_ERROR__JSON_RPC__PARSE_ERROR]: "JSON-RPC error: An error occurred on the server while parsing the JSON text ($__serverMessage)",
+  [SOLANA_ERROR__JSON_RPC__SCAN_ERROR]: "$__serverMessage",
+  [SOLANA_ERROR__JSON_RPC__SERVER_ERROR_BLOCK_CLEANED_UP]: "$__serverMessage",
+  [SOLANA_ERROR__JSON_RPC__SERVER_ERROR_BLOCK_NOT_AVAILABLE]: "$__serverMessage",
+  [SOLANA_ERROR__JSON_RPC__SERVER_ERROR_BLOCK_STATUS_NOT_AVAILABLE_YET]: "$__serverMessage",
+  [SOLANA_ERROR__JSON_RPC__SERVER_ERROR_EPOCH_REWARDS_PERIOD_ACTIVE]: "Epoch rewards period still active at slot $slot",
+  [SOLANA_ERROR__JSON_RPC__SERVER_ERROR_FILTER_TRANSACTION_NOT_FOUND]: "$__serverMessage",
+  [SOLANA_ERROR__JSON_RPC__SERVER_ERROR_KEY_EXCLUDED_FROM_SECONDARY_INDEX]: "$__serverMessage",
+  [SOLANA_ERROR__JSON_RPC__SERVER_ERROR_LONG_TERM_STORAGE_SLOT_SKIPPED]: "$__serverMessage",
+  [SOLANA_ERROR__JSON_RPC__SERVER_ERROR_LONG_TERM_STORAGE_UNREACHABLE]: "Failed to query long-term storage; please try again",
+  [SOLANA_ERROR__JSON_RPC__SERVER_ERROR_MIN_CONTEXT_SLOT_NOT_REACHED]: "Minimum context slot has not been reached",
+  [SOLANA_ERROR__JSON_RPC__SERVER_ERROR_NODE_UNHEALTHY]: "Node is unhealthy; behind by $numSlotsBehind slots",
+  [SOLANA_ERROR__JSON_RPC__SERVER_ERROR_NO_SLOT_HISTORY]: "No slot history",
+  [SOLANA_ERROR__JSON_RPC__SERVER_ERROR_NO_SNAPSHOT]: "No snapshot",
+  [SOLANA_ERROR__JSON_RPC__SERVER_ERROR_SEND_TRANSACTION_PREFLIGHT_FAILURE]: "Transaction simulation failed",
+  [SOLANA_ERROR__JSON_RPC__SERVER_ERROR_SLOT_NOT_EPOCH_BOUNDARY]: "Rewards cannot be found because slot $slot is not the epoch boundary. This may be due to gap in the queried node's local ledger or long-term storage",
+  [SOLANA_ERROR__JSON_RPC__SERVER_ERROR_SLOT_SKIPPED]: "$__serverMessage",
+  [SOLANA_ERROR__JSON_RPC__SERVER_ERROR_TRANSACTION_HISTORY_NOT_AVAILABLE]: "Transaction history is not available from this node",
+  [SOLANA_ERROR__JSON_RPC__SERVER_ERROR_TRANSACTION_PRECOMPILE_VERIFICATION_FAILURE]: "$__serverMessage",
+  [SOLANA_ERROR__JSON_RPC__SERVER_ERROR_TRANSACTION_SIGNATURE_LEN_MISMATCH]: "Transaction signature length mismatch",
+  [SOLANA_ERROR__JSON_RPC__SERVER_ERROR_TRANSACTION_SIGNATURE_VERIFICATION_FAILURE]: "Transaction signature verification failure",
+  [SOLANA_ERROR__JSON_RPC__SERVER_ERROR_UNSUPPORTED_TRANSACTION_VERSION]: "$__serverMessage",
+  [SOLANA_ERROR__KEYS__INVALID_BASE58_IN_GRIND_REGEX]: "The grind regex `/$source/` contains the character `$character`, which is not in the base58 alphabet and can never match a Solana address.",
+  [SOLANA_ERROR__KEYS__INVALID_KEY_PAIR_BYTE_LENGTH]: "Key pair bytes must be of length 64, got $byteLength.",
+  [SOLANA_ERROR__KEYS__INVALID_PRIVATE_KEY_BYTE_LENGTH]: "Expected private key bytes with length 32. Actual length: $actualLength.",
+  [SOLANA_ERROR__KEYS__INVALID_SIGNATURE_BYTE_LENGTH]: "Expected base58-encoded signature to decode to a byte array of length 64. Actual length: $actualLength.",
+  [SOLANA_ERROR__KEYS__PUBLIC_KEY_MUST_MATCH_PRIVATE_KEY]: "The provided private key does not match the provided public key.",
+  [SOLANA_ERROR__KEYS__SIGNATURE_STRING_LENGTH_OUT_OF_RANGE]: "Expected base58-encoded signature string of length in the range [64, 88]. Actual length: $actualLength.",
+  [SOLANA_ERROR__KEYS__WRITE_KEY_PAIR_UNSUPPORTED_ENVIRONMENT]: "Writing a key pair to disk is not supported in this environment.",
+  [SOLANA_ERROR__LAMPORTS_OUT_OF_RANGE]: "Lamports value must be in the range [0, 2e64-1]",
+  [SOLANA_ERROR__MALFORMED_BIGINT_STRING]: "`$value` cannot be parsed as a `BigInt`",
+  [SOLANA_ERROR__MALFORMED_JSON_RPC_ERROR]: "$message",
+  [SOLANA_ERROR__MALFORMED_NUMBER_STRING]: "`$value` cannot be parsed as a `Number`",
+  [SOLANA_ERROR__NONCE_ACCOUNT_NOT_FOUND]: "No nonce account could be found at address `$nonceAccountAddress`",
+  [SOLANA_ERROR__OFFCHAIN_MESSAGE__INVALID_APPLICATION_DOMAIN_BYTE_LENGTH]: "Expected base58 encoded application domain to decode to a byte array of length 32. Actual length: $actualLength.",
+  [SOLANA_ERROR__OFFCHAIN_MESSAGE__ADDRESSES_CANNOT_SIGN_OFFCHAIN_MESSAGE]: "Attempted to sign an offchain message with an address that is not a signer for it",
+  [SOLANA_ERROR__OFFCHAIN_MESSAGE__APPLICATION_DOMAIN_STRING_LENGTH_OUT_OF_RANGE]: "Expected base58-encoded application domain string of length in the range [32, 44]. Actual length: $actualLength.",
+  [SOLANA_ERROR__OFFCHAIN_MESSAGE__CONTENT_DOES_NOT_MATCH_EXPECTED]: "The content of the offchain message does not match the content that was expected. Expected content with a byte-length of $expectedBytes; got content with a byte-length of $actualBytes. The signer may have signed different data than was requested; do not trust its signature.",
+  [SOLANA_ERROR__OFFCHAIN_MESSAGE__ENVELOPE_SIGNERS_MISMATCH]: "The signer addresses in this offchain message envelope do not match the list of required signers in the message preamble. These unexpected signers were present in the envelope: `[$unexpectedSigners]`. These required signers were missing from the envelope `[$missingSigners]`.",
+  [SOLANA_ERROR__OFFCHAIN_MESSAGE__MAXIMUM_LENGTH_EXCEEDED]: "The message body provided has a byte-length of $actualBytes. The maximum allowable byte-length is $maxBytes",
+  [SOLANA_ERROR__OFFCHAIN_MESSAGE__MESSAGE_FORMAT_MISMATCH]: "Expected message format $expectedMessageFormat, got $actualMessageFormat",
+  [SOLANA_ERROR__OFFCHAIN_MESSAGE__MESSAGE_LENGTH_MISMATCH]: "The message length specified in the message preamble is $specifiedLength bytes. The actual length of the message is $actualLength bytes.",
+  [SOLANA_ERROR__OFFCHAIN_MESSAGE__MESSAGE_MUST_BE_NON_EMPTY]: "Offchain message content must be non-empty",
+  [SOLANA_ERROR__OFFCHAIN_MESSAGE__NUM_REQUIRED_SIGNERS_CANNOT_BE_ZERO]: "Offchain message must specify the address of at least one required signer",
+  [SOLANA_ERROR__OFFCHAIN_MESSAGE__NUM_ENVELOPE_SIGNATURES_CANNOT_BE_ZERO]: "Offchain message envelope must reserve space for at least one signature",
+  [SOLANA_ERROR__OFFCHAIN_MESSAGE__NUM_SIGNATURES_MISMATCH]: "The offchain message preamble specifies $numRequiredSignatures required signature(s), got $signaturesLength.",
+  [SOLANA_ERROR__OFFCHAIN_MESSAGE__REQUIRED_SIGNATORIES_DO_NOT_MATCH_EXPECTED]: "The offchain message lists different required signatories than was expected. Expected [$expectedAddresses]. Got [$actualAddresses]. The signer may have signed different data than was requested; do not trust its signature.",
+  [SOLANA_ERROR__OFFCHAIN_MESSAGE__SIGNATORIES_MUST_BE_SORTED]: "The signatories of this offchain message must be listed in lexicographical order",
+  [SOLANA_ERROR__OFFCHAIN_MESSAGE__SIGNATORIES_MUST_BE_UNIQUE]: "An address must be listed no more than once among the signatories of an offchain message",
+  [SOLANA_ERROR__OFFCHAIN_MESSAGE__SIGNATURES_MISSING]: "Offchain message is missing signatures for addresses: $addresses.",
+  [SOLANA_ERROR__OFFCHAIN_MESSAGE__SIGNATURE_VERIFICATION_FAILURE]: "Offchain message signature verification failed. Signature mismatch for required signatories [$signatoriesWithInvalidSignatures]. Missing signatures for signatories [$signatoriesWithMissingSignatures]",
+  [SOLANA_ERROR__OFFCHAIN_MESSAGE__RESTRICTED_ASCII_BODY_CHARACTER_OUT_OF_RANGE]: "The message body provided contains characters whose codes fall outside the allowed range. In order to ensure clear-signing compatiblity with hardware wallets, the message may only contain line feeds and characters in the range [\\x20-\\x7e].",
+  [SOLANA_ERROR__OFFCHAIN_MESSAGE__UNEXPECTED_VERSION]: "Expected offchain message version $expectedVersion. Got $actualVersion.",
+  [SOLANA_ERROR__OFFCHAIN_MESSAGE__VERSION_NUMBER_NOT_SUPPORTED]: "This version of Kit does not support decoding offchain messages with version $unsupportedVersion. The current max supported version is 0.",
+  [SOLANA_ERROR__PROGRAM_CLIENTS__FAILED_TO_IDENTIFY_ACCOUNT]: "The provided account could not be identified as an account from the $programName program.",
+  [SOLANA_ERROR__PROGRAM_CLIENTS__FAILED_TO_IDENTIFY_INSTRUCTION]: "The provided instruction could not be identified as an instruction from the $programName program.",
+  [SOLANA_ERROR__PROGRAM_CLIENTS__INSUFFICIENT_ACCOUNT_METAS]: "The provided instruction is missing some accounts. Expected at least $expectedAccountMetas account(s), got $actualAccountMetas.",
+  [SOLANA_ERROR__PROGRAM_CLIENTS__RESOLVED_INSTRUCTION_INPUT_MUST_BE_NON_NULL]: "Expected resolved instruction input '$inputName' to be non-null.",
+  [SOLANA_ERROR__PROGRAM_CLIENTS__RESOLVED_INSTRUCTION_INPUT_MUST_BE_SIGNER]: "Expected resolved instruction input '$inputName' to be a `TransactionSigner` because the instruction requires this account to sign the transaction. If its signature is provided by other means, use `createNoopSigner()` from `@solana/signers` to satisfy this requirement.",
+  [SOLANA_ERROR__PROGRAM_CLIENTS__UNEXPECTED_RESOLVED_INSTRUCTION_INPUT_TYPE]: "Expected resolved instruction input '$inputName' to be of type `$expectedType`.",
+  [SOLANA_ERROR__PROGRAM_CLIENTS__UNRECOGNIZED_ACCOUNT_TYPE]: "Unrecognized account type '$accountType' for the $programName program.",
+  [SOLANA_ERROR__PROGRAM_CLIENTS__UNRECOGNIZED_INSTRUCTION_TYPE]: "Unrecognized instruction type '$instructionType' for the $programName program.",
+  [SOLANA_ERROR__RPC_SUBSCRIPTIONS__CANNOT_CREATE_SUBSCRIPTION_PLAN]: "The notification name must end in 'Notifications' and the API must supply a subscription plan creator function for the notification '$notificationName'.",
+  [SOLANA_ERROR__RPC_SUBSCRIPTIONS__CHANNEL_CLOSED_BEFORE_MESSAGE_BUFFERED]: "WebSocket was closed before payload could be added to the send buffer",
+  [SOLANA_ERROR__RPC_SUBSCRIPTIONS__CHANNEL_CONNECTION_CLOSED]: "WebSocket connection closed",
+  [SOLANA_ERROR__RPC_SUBSCRIPTIONS__CHANNEL_FAILED_TO_CONNECT]: "WebSocket failed to connect",
+  [SOLANA_ERROR__RPC_SUBSCRIPTIONS__EXPECTED_SERVER_SUBSCRIPTION_ID]: "Failed to obtain a subscription id from the server",
+  [SOLANA_ERROR__RPC__API_PLAN_MISSING_FOR_RPC_METHOD]: "Could not find an API plan for RPC method: `$method`",
+  [SOLANA_ERROR__RPC__INTEGER_OVERFLOW]: "The $argumentLabel argument to the `$methodName` RPC method$optionalPathLabel was `$value`. This number is unsafe for use with the Solana JSON-RPC because it exceeds `Number.MAX_SAFE_INTEGER`.",
+  [SOLANA_ERROR__RPC__TRANSPORT_HTTP_ERROR]: "HTTP error ($statusCode): $message",
+  [SOLANA_ERROR__RPC__TRANSPORT_HTTP_HEADER_FORBIDDEN]: "HTTP header(s) forbidden: $headers. Learn more at https://developer.mozilla.org/en-US/docs/Glossary/Forbidden_header_name.",
+  [SOLANA_ERROR__SIGNER__ADDRESS_CANNOT_HAVE_MULTIPLE_SIGNERS]: "Multiple distinct signers were identified for address `$address`. Please ensure that you are using the same signer instance for each address.",
+  [SOLANA_ERROR__SIGNER__EXPECTED_KEY_PAIR_SIGNER]: "The provided value does not implement the `KeyPairSigner` interface",
+  [SOLANA_ERROR__SIGNER__EXPECTED_MESSAGE_MODIFYING_SIGNER]: "The provided value does not implement the `MessageModifyingSigner` interface",
+  [SOLANA_ERROR__SIGNER__EXPECTED_MESSAGE_PARTIAL_SIGNER]: "The provided value does not implement the `MessagePartialSigner` interface",
+  [SOLANA_ERROR__SIGNER__EXPECTED_MESSAGE_SIGNER]: "The provided value does not implement any of the `MessageSigner` interfaces",
+  [SOLANA_ERROR__SIGNER__EXPECTED_TRANSACTION_MODIFYING_SIGNER]: "The provided value does not implement the `TransactionModifyingSigner` interface",
+  [SOLANA_ERROR__SIGNER__EXPECTED_TRANSACTION_PARTIAL_SIGNER]: "The provided value does not implement the `TransactionPartialSigner` interface",
+  [SOLANA_ERROR__SIGNER__EXPECTED_TRANSACTION_SENDING_SIGNER]: "The provided value does not implement the `TransactionSendingSigner` interface",
+  [SOLANA_ERROR__SIGNER__EXPECTED_TRANSACTION_SIGNER]: "The provided value does not implement any of the `TransactionSigner` interfaces",
+  [SOLANA_ERROR__SIGNER__TRANSACTION_CANNOT_HAVE_MULTIPLE_SENDING_SIGNERS]: "More than one `TransactionSendingSigner` was identified.",
+  [SOLANA_ERROR__SIGNER__TRANSACTION_SENDING_SIGNER_MISSING]: "No `TransactionSendingSigner` was identified. Please provide a valid `TransactionWithSingleSendingSigner` transaction.",
+  [SOLANA_ERROR__SIGNER__WALLET_ACCOUNT_CANNOT_SIGN_TRANSACTION]: "The wallet account $address cannot be used to create a transaction signer because it does not implement either the `solana:signTransaction` or `solana:signAndSendTransaction` feature. At least one of these features is required. The account supports the following features: $supportedFeatures.",
+  [SOLANA_ERROR__SIGNER__WALLET_MULTISIGN_UNIMPLEMENTED]: "Wallet account signers do not support signing multiple messages/transactions in a single operation",
+  [SOLANA_ERROR__SUBSCRIBABLE__RETRY_NOT_SUPPORTED]: "This `ReactiveStreamStore` does not support retry. Use `createReactiveStoreFromDataPublisherFactory` to construct a retryable store.",
+  [SOLANA_ERROR__SUBSCRIBABLE__STREAM_CLOSED_WITHOUT_ERROR]: "The stream store closed in an error state but did not report an error.",
+  [SOLANA_ERROR__SUBTLE_CRYPTO__CANNOT_EXPORT_NON_EXTRACTABLE_KEY]: "Cannot export a non-extractable key.",
+  [SOLANA_ERROR__SUBTLE_CRYPTO__DIGEST_UNIMPLEMENTED]: "No digest implementation could be found.",
+  [SOLANA_ERROR__SUBTLE_CRYPTO__DISALLOWED_IN_INSECURE_CONTEXT]: "Cryptographic operations are only allowed in secure browser contexts. Read more here: https://developer.mozilla.org/en-US/docs/Web/Security/Secure_Contexts.",
+  [SOLANA_ERROR__SUBTLE_CRYPTO__ED25519_ALGORITHM_UNIMPLEMENTED]: "This runtime does not support the generation of Ed25519 key pairs.\n\nInstall @solana/webcrypto-ed25519-polyfill and call its `install` function before generating keys in environments that do not support Ed25519.\n\nFor a list of runtimes that currently support Ed25519 operations, visit https://github.com/WICG/webcrypto-secure-curves/issues/20.",
+  [SOLANA_ERROR__SUBTLE_CRYPTO__EXPORT_FUNCTION_UNIMPLEMENTED]: "No key export implementation could be found.",
+  [SOLANA_ERROR__SUBTLE_CRYPTO__GENERATE_FUNCTION_UNIMPLEMENTED]: "No key generation implementation could be found.",
+  [SOLANA_ERROR__SUBTLE_CRYPTO__SIGN_FUNCTION_UNIMPLEMENTED]: "No signing implementation could be found.",
+  [SOLANA_ERROR__SUBTLE_CRYPTO__VERIFY_FUNCTION_UNIMPLEMENTED]: "No signature verification implementation could be found.",
+  [SOLANA_ERROR__TIMESTAMP_OUT_OF_RANGE]: "Timestamp value must be in the range [-(2n ** 63n), (2n ** 63n) - 1]. `$value` given",
+  [SOLANA_ERROR__TRANSACTION_ERROR__ACCOUNT_BORROW_OUTSTANDING]: "Transaction processing left an account with an outstanding borrowed reference",
+  [SOLANA_ERROR__TRANSACTION_ERROR__ACCOUNT_IN_USE]: "Account in use",
+  [SOLANA_ERROR__TRANSACTION_ERROR__ACCOUNT_LOADED_TWICE]: "Account loaded twice",
+  [SOLANA_ERROR__TRANSACTION_ERROR__ACCOUNT_NOT_FOUND]: "Attempt to debit an account but found no record of a prior credit.",
+  [SOLANA_ERROR__TRANSACTION_ERROR__ADDRESS_LOOKUP_TABLE_NOT_FOUND]: "Transaction loads an address table account that doesn't exist",
+  [SOLANA_ERROR__TRANSACTION_ERROR__ALREADY_PROCESSED]: "This transaction has already been processed",
+  [SOLANA_ERROR__TRANSACTION_ERROR__BLOCKHASH_NOT_FOUND]: "Blockhash not found",
+  [SOLANA_ERROR__TRANSACTION_ERROR__CALL_CHAIN_TOO_DEEP]: "Loader call chain is too deep",
+  [SOLANA_ERROR__TRANSACTION_ERROR__CLUSTER_MAINTENANCE]: "Transactions are currently disabled due to cluster maintenance",
+  [SOLANA_ERROR__TRANSACTION_ERROR__DUPLICATE_INSTRUCTION]: "Transaction contains a duplicate instruction ($index) that is not allowed",
+  [SOLANA_ERROR__TRANSACTION_ERROR__INSUFFICIENT_FUNDS_FOR_FEE]: "Insufficient funds for fee",
+  [SOLANA_ERROR__TRANSACTION_ERROR__INSUFFICIENT_FUNDS_FOR_RENT]: "Transaction results in an account ($accountIndex) with insufficient funds for rent",
+  [SOLANA_ERROR__TRANSACTION_ERROR__INVALID_ACCOUNT_FOR_FEE]: "This account may not be used to pay transaction fees",
+  [SOLANA_ERROR__TRANSACTION_ERROR__INVALID_ACCOUNT_INDEX]: "Transaction contains an invalid account reference",
+  [SOLANA_ERROR__TRANSACTION_ERROR__INVALID_ADDRESS_LOOKUP_TABLE_DATA]: "Transaction loads an address table account with invalid data",
+  [SOLANA_ERROR__TRANSACTION_ERROR__INVALID_ADDRESS_LOOKUP_TABLE_INDEX]: "Transaction address table lookup uses an invalid index",
+  [SOLANA_ERROR__TRANSACTION_ERROR__INVALID_ADDRESS_LOOKUP_TABLE_OWNER]: "Transaction loads an address table account with an invalid owner",
+  [SOLANA_ERROR__TRANSACTION_ERROR__INVALID_LOADED_ACCOUNTS_DATA_SIZE_LIMIT]: "LoadedAccountsDataSizeLimit set for transaction must be greater than 0.",
+  [SOLANA_ERROR__TRANSACTION_ERROR__INVALID_PROGRAM_FOR_EXECUTION]: "This program may not be used for executing instructions",
+  [SOLANA_ERROR__TRANSACTION_ERROR__INVALID_RENT_PAYING_ACCOUNT]: "Transaction leaves an account with a lower balance than rent-exempt minimum",
+  [SOLANA_ERROR__TRANSACTION_ERROR__INVALID_WRITABLE_ACCOUNT]: "Transaction loads a writable account that cannot be written",
+  [SOLANA_ERROR__TRANSACTION_ERROR__MAX_LOADED_ACCOUNTS_DATA_SIZE_EXCEEDED]: "Transaction exceeded max loaded accounts data size cap",
+  [SOLANA_ERROR__TRANSACTION_ERROR__MISSING_SIGNATURE_FOR_FEE]: "Transaction requires a fee but has no signature present",
+  [SOLANA_ERROR__TRANSACTION_ERROR__PROGRAM_ACCOUNT_NOT_FOUND]: "Attempt to load a program that does not exist",
+  [SOLANA_ERROR__TRANSACTION_ERROR__PROGRAM_EXECUTION_TEMPORARILY_RESTRICTED]: "Execution of the program referenced by account at index $accountIndex is temporarily restricted.",
+  [SOLANA_ERROR__TRANSACTION_ERROR__RESANITIZATION_NEEDED]: "ResanitizationNeeded",
+  [SOLANA_ERROR__TRANSACTION_ERROR__SANITIZE_FAILURE]: "Transaction failed to sanitize accounts offsets correctly",
+  [SOLANA_ERROR__TRANSACTION_ERROR__SIGNATURE_FAILURE]: "Transaction did not pass signature verification",
+  [SOLANA_ERROR__TRANSACTION_ERROR__TOO_MANY_ACCOUNT_LOCKS]: "Transaction locked too many accounts",
+  [SOLANA_ERROR__TRANSACTION_ERROR__UNBALANCED_TRANSACTION]: "Sum of account balances before and after transaction do not match",
+  [SOLANA_ERROR__TRANSACTION_ERROR__UNKNOWN]: "The transaction failed with the error `$errorName`",
+  [SOLANA_ERROR__TRANSACTION_ERROR__UNSUPPORTED_VERSION]: "Transaction version is unsupported",
+  [SOLANA_ERROR__TRANSACTION_ERROR__WOULD_EXCEED_ACCOUNT_DATA_BLOCK_LIMIT]: "Transaction would exceed account data limit within the block",
+  [SOLANA_ERROR__TRANSACTION_ERROR__WOULD_EXCEED_ACCOUNT_DATA_TOTAL_LIMIT]: "Transaction would exceed total account data limit",
+  [SOLANA_ERROR__TRANSACTION_ERROR__WOULD_EXCEED_MAX_ACCOUNT_COST_LIMIT]: "Transaction would exceed max account limit within the block",
+  [SOLANA_ERROR__TRANSACTION_ERROR__WOULD_EXCEED_MAX_BLOCK_COST_LIMIT]: "Transaction would exceed max Block Cost Limit",
+  [SOLANA_ERROR__TRANSACTION_ERROR__WOULD_EXCEED_MAX_VOTE_COST_LIMIT]: "Transaction would exceed max Vote Cost Limit",
+  [SOLANA_ERROR__TRANSACTION__ADDRESSES_CANNOT_SIGN_TRANSACTION]: "Attempted to sign a transaction with an address that is not a signer for it",
+  [SOLANA_ERROR__TRANSACTION__ADDRESS_MISSING]: "Transaction is missing an address at index: $index.",
+  [SOLANA_ERROR__TRANSACTION__CANNOT_ENCODE_WITH_EMPTY_SIGNATURES]: "Transaction has no expected signers therefore it cannot be encoded",
+  [SOLANA_ERROR__TRANSACTION__COMPUTE_UNIT_LIMIT_OUT_OF_RANGE]: "Transaction compute unit limit must be an integer in the range [0, $maxComputeUnitLimit]. `$computeUnitLimit` given",
+  [SOLANA_ERROR__TRANSACTION__EXCEEDS_SIZE_LIMIT]: "Transaction size $transactionSize exceeds limit of $transactionSizeLimit bytes",
+  [SOLANA_ERROR__TRANSACTION__EXPECTED_BLOCKHASH_LIFETIME]: "Transaction does not have a blockhash lifetime",
+  [SOLANA_ERROR__TRANSACTION__EXPECTED_NONCE_LIFETIME]: "Transaction is not a durable nonce transaction",
+  [SOLANA_ERROR__TRANSACTION__FAILED_TO_DECOMPILE_ADDRESS_LOOKUP_TABLE_CONTENTS_MISSING]: "Contents of these address lookup tables unknown: $lookupTableAddresses",
+  [SOLANA_ERROR__TRANSACTION__FAILED_TO_DECOMPILE_ADDRESS_LOOKUP_TABLE_INDEX_OUT_OF_RANGE]: "Lookup of address at index $highestRequestedIndex failed for lookup table `$lookupTableAddress`. Highest known index is $highestKnownIndex. The lookup table may have been extended since its contents were retrieved",
+  [SOLANA_ERROR__TRANSACTION__FAILED_TO_DECOMPILE_FEE_PAYER_MISSING]: "No fee payer set in CompiledTransaction",
+  [SOLANA_ERROR__TRANSACTION__FAILED_TO_DECOMPILE_INSTRUCTION_PROGRAM_ADDRESS_NOT_FOUND]: "Could not find program address at index $index",
+  [SOLANA_ERROR__TRANSACTION__FAILED_TO_ESTIMATE_COMPUTE_LIMIT]: "Failed to estimate the compute unit consumption for this transaction message. This is likely because simulating the transaction failed. Inspect the `cause` property of this error to learn more",
+  [SOLANA_ERROR__TRANSACTION__FAILED_TO_ESTIMATE_LOADED_ACCOUNTS_DATA_SIZE_LIMIT]: "Failed to estimate the loaded accounts data size for this transaction message. The RPC did not return a `loadedAccountsDataSize` value from simulation. This value is required for version 1 transactions",
+  [SOLANA_ERROR__TRANSACTION__FAILED_WHEN_SIMULATING_TO_ESTIMATE_COMPUTE_LIMIT]: "Transaction failed when it was simulated in order to estimate the compute unit consumption. The compute unit estimate provided is for a transaction that failed when simulated and may not be representative of the compute units this transaction would consume if successful. Inspect the `cause` property of this error to learn more",
+  [SOLANA_ERROR__TRANSACTION__FAILED_WHEN_SIMULATING_TO_ESTIMATE_RESOURCE_LIMITS]: "Transaction failed when it was simulated in order to estimate its resource limits. The resource limit estimates provided are for a transaction that failed when simulated and may not be representative of the resources this transaction would consume if successful. Inspect the `cause` property of this error to learn more",
+  [SOLANA_ERROR__TRANSACTION__FEE_PAYER_MISSING]: "Transaction is missing a fee payer.",
+  [SOLANA_ERROR__TRANSACTION__FEE_PAYER_SIGNATURE_MISSING]: "Could not determine this transaction's signature. Make sure that the transaction has been signed by its fee payer.",
+  [SOLANA_ERROR__TRANSACTION__INVALID_NONCE_TRANSACTION_FIRST_INSTRUCTION_MUST_BE_ADVANCE_NONCE]: "Transaction first instruction is not advance nonce account instruction.",
+  [SOLANA_ERROR__TRANSACTION__INVALID_NONCE_TRANSACTION_INSTRUCTIONS_MISSING]: "Transaction with no instructions cannot be durable nonce transaction.",
+  [SOLANA_ERROR__TRANSACTION__INVOKED_PROGRAMS_CANNOT_PAY_FEES]: "This transaction includes an address (`$programAddress`) which is both invoked and set as the fee payer. Program addresses may not pay fees",
+  [SOLANA_ERROR__TRANSACTION__INVOKED_PROGRAMS_MUST_NOT_BE_WRITABLE]: "This transaction includes an address (`$programAddress`) which is both invoked and marked writable. Program addresses may not be writable",
+  [SOLANA_ERROR__TRANSACTION__MESSAGE_SIGNATURES_MISMATCH]: "The transaction message expected the transaction to have $numRequiredSignatures signatures, got $signaturesLength.",
+  [SOLANA_ERROR__TRANSACTION__SIGNATURES_MISSING]: "Transaction is missing signatures for addresses: $addresses.",
+  [SOLANA_ERROR__TRANSACTION__VERSION_NUMBER_OUT_OF_RANGE]: "Transaction version must be in the range [0, 127]. `$actualVersion` given",
+  [SOLANA_ERROR__TRANSACTION__VERSION_NUMBER_NOT_SUPPORTED]: "This version of Kit does not support decoding transactions with version $unsupportedVersion. The current max supported version is 1.",
+  [SOLANA_ERROR__TRANSACTION__NONCE_ACCOUNT_CANNOT_BE_IN_LOOKUP_TABLE]: "The transaction has a durable nonce lifetime (with nonce `$nonce`), but the nonce account address is in a lookup table. The lifetime constraint cannot be constructed without fetching the lookup tables for the transaction.",
+  [SOLANA_ERROR__TRANSACTION__INVALID_CONFIG_MASK_PRIORITY_FEE_BITS]: "Invalid transaction config mask: $mask. Bits 0 and 1 must match (both set or both unset)",
+  [SOLANA_ERROR__TRANSACTION__MALFORMED_MESSAGE_BYTES]: "Transaction message bytes are malformed: $messageBytes",
+  [SOLANA_ERROR__TRANSACTION__CANNOT_ENCODE_WITH_EMPTY_MESSAGE_BYTES]: "Transaction message bytes are empty, so the transaction cannot be encoded",
+  [SOLANA_ERROR__TRANSACTION__CANNOT_DECODE_EMPTY_TRANSACTION_BYTES]: "Transaction bytes are empty, so no transaction can be decoded",
+  [SOLANA_ERROR__TRANSACTION__VERSION_ZERO_MUST_BE_ENCODED_WITH_SIGNATURES_FIRST]: "Transaction version 0 must be encoded with signatures first. This transaction was encoded with first byte $firstByte, which is expected to be a signature count for v0 transactions.",
+  [SOLANA_ERROR__TRANSACTION__SIGNATURE_COUNT_TOO_HIGH_FOR_TRANSACTION_BYTES]: "The provided transaction bytes expect that there should be $numExpectedSignatures signatures, but the bytes are not long enough to contain a transaction message with this many signatures. The provided bytes are $transactionBytesLength bytes long.",
+  [SOLANA_ERROR__TRANSACTION__INVALID_HEAP_SIZE]: "Transaction heap size must be an integer multiple of $multipleOf bytes in the range [$minHeapSize, $maxHeapSize]. `$heapSize` given",
+  [SOLANA_ERROR__TRANSACTION__INVALID_NONCE_ACCOUNT_INDEX]: "The transaction has a durable nonce lifetime, but the nonce account index is invalid. Expected a nonce account index less than $numberOfStaticAccounts, got $nonceAccountIndex.",
+  [SOLANA_ERROR__TRANSACTION__INVALID_CONFIG_VALUE_KIND]: "The transaction config value for $configName has the incorrect kind. Expected $expectedKind, got $actualKind.",
+  [SOLANA_ERROR__TRANSACTION__INSTRUCTION_HEADERS_PAYLOADS_MISMATCH]: "The transaction does not have the same number of instruction headers and instruction payloads. Got $numInstructionHeaders instruction headers, and $numInstructionPayloads instruction payloads.",
+  [SOLANA_ERROR__TRANSACTION__TOO_MANY_SIGNER_ADDRESSES]: "Transaction has $actualCount unique signer addresses but the maximum allowed is $maxAllowed",
+  [SOLANA_ERROR__TRANSACTION__TOO_MANY_ACCOUNT_ADDRESSES]: "Transaction has $actualCount unique account addresses but the maximum allowed is $maxAllowed",
+  [SOLANA_ERROR__TRANSACTION__TOO_MANY_INSTRUCTIONS]: "Transaction has $actualCount instructions but the maximum allowed is $maxAllowed",
+  [SOLANA_ERROR__TRANSACTION__TOO_MANY_ACCOUNTS_IN_INSTRUCTION]: "The instruction at index $instructionIndex has $actualCount account references but the maximum allowed is $maxAllowed",
+  [SOLANA_ERROR__TRANSACTION__FAILED_TO_DECOMPILE_INSTRUCTION_ACCOUNT_INDEX_OUT_OF_RANGE]: "Could not find an account address at index $index while decompiling an instruction",
+  [SOLANA_ERROR__TRANSACTION_INTROSPECTION__CANNOT_DECODE_JSON_PARSED_TRANSACTION]: "`getTransaction` responses fetched with `encoding: 'jsonParsed'` cannot be decoded. Re-fetch the transaction with `encoding: 'base64'`, `'base58'`, or `'json'`",
+  [SOLANA_ERROR__TRANSACTION_INTROSPECTION__UNRECOGNIZED_GET_TRANSACTION_RESPONSE]: "Could not recognize the shape of this `getTransaction` response. Expected a response fetched with `encoding: 'base64'`, `'base58'`, or `'json'`",
+  [SOLANA_ERROR__REACT__MISSING_CAPABILITY]: "`$hookName` requires the following capabilities to be installed on the client: [$capabilities]. $providerHint",
+  [SOLANA_ERROR__REACT__MISSING_PROVIDER]: "`$hookName` was called outside of a `ClientProvider`. Mount a `<ClientProvider client={client}>` in the ancestor tree.",
+  [SOLANA_ERROR__REACT__SUBSCRIPTION_CLOSED_WITHOUT_ERROR]: "The subscription closed in an error state but did not report an error.",
+  [SOLANA_ERROR__WALLET__NOT_CONNECTED]: "Cannot $operation: no wallet connected",
+  [SOLANA_ERROR__WALLET__NO_SIGNER_CONNECTED]: "No signing wallet connected (status: $status)",
+  [SOLANA_ERROR__WALLET__SIGNER_NOT_AVAILABLE]: "Connected wallet does not support signing",
+  [SOLANA_ERROR__WALLET__ACCOUNT_NOT_AVAILABLE]: 'Account $address is not available in wallet "$walletName"'
+};
+var INSTRUCTION_ERROR_RANGE_SIZE = 1e3;
+var START_INDEX = "i";
+var TYPE = "t";
+function getHumanReadableErrorMessage(code, context = {}) {
+  const messageFormatString = SolanaErrorMessages[code];
+  if (messageFormatString.length === 0) {
+    return "";
+  }
+  let state;
+  function commitStateUpTo(endIndex) {
+    if (state[TYPE] === 2) {
+      const variableName = messageFormatString.slice(state[START_INDEX] + 1, endIndex);
+      fragments.push(
+        variableName in context ? (
+          // eslint-disable-next-line @typescript-eslint/restrict-template-expressions
+          `${context[variableName]}`
+        ) : `$${variableName}`
+      );
+    } else if (state[TYPE] === 1) {
+      fragments.push(messageFormatString.slice(state[START_INDEX], endIndex));
+    }
+  }
+  const fragments = [];
+  messageFormatString.split("").forEach((char, ii) => {
+    if (ii === 0) {
+      state = {
+        [START_INDEX]: 0,
+        [TYPE]: messageFormatString[0] === "\\" ? 0 : messageFormatString[0] === "$" ? 2 : 1
+        /* Text */
+      };
+      return;
+    }
+    let nextState;
+    switch (state[TYPE]) {
+      case 0:
+        nextState = {
+          [START_INDEX]: ii,
+          [TYPE]: 1
+          /* Text */
+        };
+        break;
+      case 1:
+        if (char === "\\") {
+          nextState = {
+            [START_INDEX]: ii,
+            [TYPE]: 0
+            /* EscapeSequence */
+          };
+        } else if (char === "$") {
+          nextState = {
+            [START_INDEX]: ii,
+            [TYPE]: 2
+            /* Variable */
+          };
+        }
+        break;
+      case 2:
+        if (char === "\\") {
+          nextState = {
+            [START_INDEX]: ii,
+            [TYPE]: 0
+            /* EscapeSequence */
+          };
+        } else if (char === "$") {
+          nextState = {
+            [START_INDEX]: ii,
+            [TYPE]: 2
+            /* Variable */
+          };
+        } else if (!char.match(/\w/)) {
+          nextState = {
+            [START_INDEX]: ii,
+            [TYPE]: 1
+            /* Text */
+          };
+        }
+        break;
+    }
+    if (nextState) {
+      if (state !== nextState) {
+        commitStateUpTo(ii);
+      }
+      state = nextState;
+    }
+  });
+  commitStateUpTo();
+  let message = fragments.join("");
+  if (code >= SOLANA_ERROR__INSTRUCTION_ERROR__UNKNOWN && code < SOLANA_ERROR__INSTRUCTION_ERROR__UNKNOWN + INSTRUCTION_ERROR_RANGE_SIZE && "index" in context) {
+    message += ` (instruction #${context.index + 1})`;
+  }
+  return message;
+}
+function getErrorMessage(code, context = {}) {
+  if (process.env.NODE_ENV !== "production") {
+    return getHumanReadableErrorMessage(code, context);
+  } else {
+    let decodingAdviceMessage = `Solana error #${code}; Decode this error by running \`npx @solana/errors decode -- ${code}`;
+    if (Object.keys(context).length) {
+      decodingAdviceMessage += ` '${encodeContextObject(context)}'`;
+    }
+    return `${decodingAdviceMessage}\``;
+  }
+}
+function isSolanaError(e4, code) {
+  const isSolanaError2 = e4 instanceof Error && e4.name === "SolanaError";
+  if (isSolanaError2) {
+    if (code !== void 0) {
+      return e4.context.__code === code;
+    }
+    return true;
+  }
+  return false;
+}
+var SolanaError = class extends Error {
+  /**
+   * Indicates the root cause of this {@link SolanaError}, if any.
+   *
+   * For example, a transaction error might have an instruction error as its root cause. In this
+   * case, you will be able to access the instruction error on the transaction error as `cause`.
+   */
+  cause = this.cause;
+  /**
+   * Contains context that can assist in understanding or recovering from a {@link SolanaError}.
+   */
+  context;
+  constructor(...[code, contextAndErrorOptions]) {
+    let context;
+    let errorOptions;
+    if (contextAndErrorOptions) {
+      Object.entries(Object.getOwnPropertyDescriptors(contextAndErrorOptions)).forEach(([name, descriptor]) => {
+        if (name === "cause") {
+          errorOptions = { cause: descriptor.value };
+        } else {
+          if (context === void 0) {
+            context = {
+              __code: code
+            };
+          }
+          Object.defineProperty(context, name, descriptor);
+        }
+      });
+    }
+    const message = getErrorMessage(code, context);
+    super(message, errorOptions);
+    this.context = Object.freeze(
+      context === void 0 ? {
+        __code: code
+      } : context
+    );
+    this.name = "SolanaError";
+  }
+};
+function safeCaptureStackTrace(...args) {
+  if ("captureStackTrace" in Error && typeof Error.captureStackTrace === "function") {
+    Error.captureStackTrace(...args);
+  }
+}
+function getSolanaErrorFromRpcError({ errorCodeBaseOffset, getErrorContext, orderedErrorNames, rpcEnumError }, constructorOpt) {
+  let rpcErrorName;
+  let rpcErrorContext;
+  if (typeof rpcEnumError === "string") {
+    rpcErrorName = rpcEnumError;
+  } else {
+    rpcErrorName = Object.keys(rpcEnumError)[0];
+    rpcErrorContext = rpcEnumError[rpcErrorName];
+  }
+  const codeOffset = orderedErrorNames.indexOf(rpcErrorName);
+  const errorCode = errorCodeBaseOffset + codeOffset;
+  const errorContext = getErrorContext(errorCode, rpcErrorName, rpcErrorContext);
+  const err = new SolanaError(errorCode, errorContext);
+  safeCaptureStackTrace(err, constructorOpt);
+  return err;
+}
+var ORDERED_ERROR_NAMES = [
+  // Keep synced with RPC source: https://github.com/anza-xyz/solana-sdk/blob/master/instruction-error/src/lib.rs
+  // If this list ever gets too large, consider implementing a compression strategy like this:
+  // https://gist.github.com/steveluscher/aaa7cbbb5433b1197983908a40860c47
+  "GenericError",
+  "InvalidArgument",
+  "InvalidInstructionData",
+  "InvalidAccountData",
+  "AccountDataTooSmall",
+  "InsufficientFunds",
+  "IncorrectProgramId",
+  "MissingRequiredSignature",
+  "AccountAlreadyInitialized",
+  "UninitializedAccount",
+  "UnbalancedInstruction",
+  "ModifiedProgramId",
+  "ExternalAccountLamportSpend",
+  "ExternalAccountDataModified",
+  "ReadonlyLamportChange",
+  "ReadonlyDataModified",
+  "DuplicateAccountIndex",
+  "ExecutableModified",
+  "RentEpochModified",
+  "NotEnoughAccountKeys",
+  "AccountDataSizeChanged",
+  "AccountNotExecutable",
+  "AccountBorrowFailed",
+  "AccountBorrowOutstanding",
+  "DuplicateAccountOutOfSync",
+  "Custom",
+  "InvalidError",
+  "ExecutableDataModified",
+  "ExecutableLamportChange",
+  "ExecutableAccountNotRentExempt",
+  "UnsupportedProgramId",
+  "CallDepth",
+  "MissingAccount",
+  "ReentrancyNotAllowed",
+  "MaxSeedLengthExceeded",
+  "InvalidSeeds",
+  "InvalidRealloc",
+  "ComputationalBudgetExceeded",
+  "PrivilegeEscalation",
+  "ProgramEnvironmentSetupFailure",
+  "ProgramFailedToComplete",
+  "ProgramFailedToCompile",
+  "Immutable",
+  "IncorrectAuthority",
+  "BorshIoError",
+  "AccountNotRentExempt",
+  "InvalidAccountOwner",
+  "ArithmeticOverflow",
+  "UnsupportedSysvar",
+  "IllegalOwner",
+  "MaxAccountsDataAllocationsExceeded",
+  "MaxAccountsExceeded",
+  "MaxInstructionTraceLengthExceeded",
+  "BuiltinProgramsMustConsumeComputeUnits"
+];
+function getSolanaErrorFromInstructionError(index2, instructionError) {
+  const numberIndex = Number(index2);
+  return getSolanaErrorFromRpcError(
+    {
+      errorCodeBaseOffset: 4615001,
+      getErrorContext(errorCode, rpcErrorName, rpcErrorContext) {
+        if (errorCode === SOLANA_ERROR__INSTRUCTION_ERROR__UNKNOWN) {
+          return {
+            errorName: rpcErrorName,
+            index: numberIndex,
+            ...rpcErrorContext !== void 0 ? { instructionErrorContext: rpcErrorContext } : null
+          };
+        } else if (errorCode === SOLANA_ERROR__INSTRUCTION_ERROR__CUSTOM) {
+          return {
+            code: Number(rpcErrorContext),
+            index: numberIndex
+          };
+        }
+        return { index: numberIndex };
+      },
+      orderedErrorNames: ORDERED_ERROR_NAMES,
+      rpcEnumError: instructionError
+    },
+    getSolanaErrorFromInstructionError
+  );
+}
+var ORDERED_ERROR_NAMES2 = [
+  // Keep synced with RPC source: https://github.com/anza-xyz/agave/blob/master/sdk/src/transaction/error.rs
+  // If this list ever gets too large, consider implementing a compression strategy like this:
+  // https://gist.github.com/steveluscher/aaa7cbbb5433b1197983908a40860c47
+  "AccountInUse",
+  "AccountLoadedTwice",
+  "AccountNotFound",
+  "ProgramAccountNotFound",
+  "InsufficientFundsForFee",
+  "InvalidAccountForFee",
+  "AlreadyProcessed",
+  "BlockhashNotFound",
+  // `InstructionError` intentionally omitted; delegated to `getSolanaErrorFromInstructionError`
+  "CallChainTooDeep",
+  "MissingSignatureForFee",
+  "InvalidAccountIndex",
+  "SignatureFailure",
+  "InvalidProgramForExecution",
+  "SanitizeFailure",
+  "ClusterMaintenance",
+  "AccountBorrowOutstanding",
+  "WouldExceedMaxBlockCostLimit",
+  "UnsupportedVersion",
+  "InvalidWritableAccount",
+  "WouldExceedMaxAccountCostLimit",
+  "WouldExceedAccountDataBlockLimit",
+  "TooManyAccountLocks",
+  "AddressLookupTableNotFound",
+  "InvalidAddressLookupTableOwner",
+  "InvalidAddressLookupTableData",
+  "InvalidAddressLookupTableIndex",
+  "InvalidRentPayingAccount",
+  "WouldExceedMaxVoteCostLimit",
+  "WouldExceedAccountDataTotalLimit",
+  "DuplicateInstruction",
+  "InsufficientFundsForRent",
+  "MaxLoadedAccountsDataSizeExceeded",
+  "InvalidLoadedAccountsDataSizeLimit",
+  "ResanitizationNeeded",
+  "ProgramExecutionTemporarilyRestricted",
+  "UnbalancedTransaction"
+];
+function getSolanaErrorFromTransactionError(transactionError) {
+  if (typeof transactionError === "object" && "InstructionError" in transactionError) {
+    return getSolanaErrorFromInstructionError(
+      ...transactionError.InstructionError
+    );
+  }
+  return getSolanaErrorFromRpcError(
+    {
+      errorCodeBaseOffset: 7050001,
+      getErrorContext(errorCode, rpcErrorName, rpcErrorContext) {
+        if (errorCode === SOLANA_ERROR__TRANSACTION_ERROR__UNKNOWN) {
+          return {
+            errorName: rpcErrorName,
+            ...rpcErrorContext !== void 0 ? { transactionErrorContext: rpcErrorContext } : null
+          };
+        } else if (errorCode === SOLANA_ERROR__TRANSACTION_ERROR__DUPLICATE_INSTRUCTION) {
+          return {
+            index: Number(rpcErrorContext)
+          };
+        } else if (errorCode === SOLANA_ERROR__TRANSACTION_ERROR__INSUFFICIENT_FUNDS_FOR_RENT || errorCode === SOLANA_ERROR__TRANSACTION_ERROR__PROGRAM_EXECUTION_TEMPORARILY_RESTRICTED) {
+          return {
+            accountIndex: Number(rpcErrorContext.account_index)
+          };
+        }
+      },
+      orderedErrorNames: ORDERED_ERROR_NAMES2,
+      rpcEnumError: transactionError
+    },
+    getSolanaErrorFromTransactionError
+  );
+}
+function getSolanaErrorFromJsonRpcError(putativeErrorResponse) {
+  let out;
+  if (isRpcErrorResponse(putativeErrorResponse)) {
+    const { code: rawCode, data, message } = putativeErrorResponse;
+    const code = Number(rawCode);
+    if (code === SOLANA_ERROR__JSON_RPC__SERVER_ERROR_SEND_TRANSACTION_PREFLIGHT_FAILURE) {
+      const { err, ...preflightErrorContext } = data;
+      const causeObject = err ? { cause: getSolanaErrorFromTransactionError(err) } : null;
+      out = new SolanaError(SOLANA_ERROR__JSON_RPC__SERVER_ERROR_SEND_TRANSACTION_PREFLIGHT_FAILURE, {
+        ...preflightErrorContext,
+        ...causeObject
+      });
+    } else {
+      let errorContext;
+      switch (code) {
+        case SOLANA_ERROR__JSON_RPC__INTERNAL_ERROR:
+        case SOLANA_ERROR__JSON_RPC__INVALID_PARAMS:
+        case SOLANA_ERROR__JSON_RPC__INVALID_REQUEST:
+        case SOLANA_ERROR__JSON_RPC__METHOD_NOT_FOUND:
+        case SOLANA_ERROR__JSON_RPC__PARSE_ERROR:
+        case SOLANA_ERROR__JSON_RPC__SCAN_ERROR:
+        case SOLANA_ERROR__JSON_RPC__SERVER_ERROR_BLOCK_CLEANED_UP:
+        case SOLANA_ERROR__JSON_RPC__SERVER_ERROR_BLOCK_NOT_AVAILABLE:
+        case SOLANA_ERROR__JSON_RPC__SERVER_ERROR_BLOCK_STATUS_NOT_AVAILABLE_YET:
+        case SOLANA_ERROR__JSON_RPC__SERVER_ERROR_FILTER_TRANSACTION_NOT_FOUND:
+        case SOLANA_ERROR__JSON_RPC__SERVER_ERROR_KEY_EXCLUDED_FROM_SECONDARY_INDEX:
+        case SOLANA_ERROR__JSON_RPC__SERVER_ERROR_LONG_TERM_STORAGE_SLOT_SKIPPED:
+        case SOLANA_ERROR__JSON_RPC__SERVER_ERROR_SLOT_SKIPPED:
+        case SOLANA_ERROR__JSON_RPC__SERVER_ERROR_TRANSACTION_PRECOMPILE_VERIFICATION_FAILURE:
+        case SOLANA_ERROR__JSON_RPC__SERVER_ERROR_UNSUPPORTED_TRANSACTION_VERSION:
+          errorContext = { __serverMessage: message };
+          break;
+        default:
+          if (typeof data === "object" && !Array.isArray(data)) {
+            errorContext = data;
+          }
+      }
+      out = new SolanaError(code, errorContext);
+    }
+  } else {
+    const message = typeof putativeErrorResponse === "object" && putativeErrorResponse !== null && "message" in putativeErrorResponse && typeof putativeErrorResponse.message === "string" ? putativeErrorResponse.message : "Malformed JSON-RPC error with no message attribute";
+    out = new SolanaError(SOLANA_ERROR__MALFORMED_JSON_RPC_ERROR, { error: putativeErrorResponse, message });
+  }
+  safeCaptureStackTrace(out, getSolanaErrorFromJsonRpcError);
+  return out;
+}
+function isRpcErrorResponse(value) {
+  return typeof value === "object" && value !== null && "code" in value && "message" in value && (typeof value.code === "number" || typeof value.code === "bigint") && typeof value.message === "string";
+}
+
+// node_modules/@solana/codecs-core/dist/index.node.mjs
+function padBytes2(bytes, length) {
+  if (bytes.length >= length) return bytes;
+  const paddedBytes = new Uint8Array(length).fill(0);
+  paddedBytes.set(bytes);
+  return paddedBytes;
+}
+var fixBytes = (bytes, length) => padBytes2(bytes.length <= length ? bytes : bytes.slice(0, length), length);
+function containsBytes(data, bytes, offset) {
+  const slice4 = (offset === 0 || offset <= -data.byteLength) && data.length === bytes.length ? data : data.slice(offset, offset + bytes.length);
+  return bytesEqual(slice4, bytes);
+}
+function bytesEqual(bytes1, bytes2) {
+  return bytes1.length === bytes2.length && bytes1.every((value, index2) => value === bytes2[index2]);
+}
+function getEncodedSize(value, encoder6) {
+  return "fixedSize" in encoder6 ? encoder6.fixedSize : encoder6.getSizeFromValue(value);
+}
+function createEncoder(encoder6) {
+  return Object.freeze({
+    ...encoder6,
+    encode: (value) => {
+      const bytes = new Uint8Array(getEncodedSize(value, encoder6));
+      encoder6.write(value, bytes, 0);
+      return bytes;
+    }
+  });
+}
+function createDecoder(decoder2) {
+  return Object.freeze({
+    ...decoder2,
+    decode: (bytes, offset = 0) => decoder2.read(bytes, offset)[0]
+  });
+}
+function isFixedSize(codec2) {
+  return "fixedSize" in codec2 && typeof codec2.fixedSize === "number";
+}
+function assertIsFixedSize(codec2) {
+  if (!isFixedSize(codec2)) {
+    throw new SolanaError(SOLANA_ERROR__CODECS__EXPECTED_FIXED_LENGTH);
+  }
+}
+function isVariableSize(codec2) {
+  return !isFixedSize(codec2);
+}
+function combineCodec(encoder6, decoder2) {
+  if (isFixedSize(encoder6) !== isFixedSize(decoder2)) {
+    throw new SolanaError(SOLANA_ERROR__CODECS__ENCODER_DECODER_SIZE_COMPATIBILITY_MISMATCH);
+  }
+  if (isFixedSize(encoder6) && isFixedSize(decoder2) && encoder6.fixedSize !== decoder2.fixedSize) {
+    throw new SolanaError(SOLANA_ERROR__CODECS__ENCODER_DECODER_FIXED_SIZE_MISMATCH, {
+      decoderFixedSize: decoder2.fixedSize,
+      encoderFixedSize: encoder6.fixedSize
+    });
+  }
+  if (!isFixedSize(encoder6) && !isFixedSize(decoder2) && encoder6.maxSize !== decoder2.maxSize) {
+    throw new SolanaError(SOLANA_ERROR__CODECS__ENCODER_DECODER_MAX_SIZE_MISMATCH, {
+      decoderMaxSize: decoder2.maxSize,
+      encoderMaxSize: encoder6.maxSize
+    });
+  }
+  return {
+    ...decoder2,
+    ...encoder6,
+    decode: decoder2.decode,
+    encode: encoder6.encode,
+    read: decoder2.read,
+    write: encoder6.write
+  };
+}
+function assertByteArrayIsNotEmptyForCodec(codecDescription, bytes, offset = 0) {
+  if (bytes.length - offset <= 0) {
+    throw new SolanaError(SOLANA_ERROR__CODECS__CANNOT_DECODE_EMPTY_BYTE_ARRAY, {
+      codecDescription
+    });
+  }
+}
+function assertByteArrayHasEnoughBytesForCodec(codecDescription, expected, bytes, offset = 0) {
+  const bytesLength = bytes.length - offset;
+  if (bytesLength < expected) {
+    throw new SolanaError(SOLANA_ERROR__CODECS__INVALID_BYTE_LENGTH, {
+      bytesLength,
+      codecDescription,
+      expected
+    });
+  }
+}
+function assertByteArrayOffsetIsNotOutOfRange(codecDescription, offset, bytesLength) {
+  if (offset < 0 || offset > bytesLength) {
+    throw new SolanaError(SOLANA_ERROR__CODECS__OFFSET_OUT_OF_RANGE, {
+      bytesLength,
+      codecDescription,
+      offset
+    });
+  }
+}
+function addEncoderSizePrefix(encoder6, prefix) {
+  const write = ((value, bytes, offset) => {
+    const encoderBytes = encoder6.encode(value);
+    offset = prefix.write(encoderBytes.length, bytes, offset);
+    bytes.set(encoderBytes, offset);
+    return offset + encoderBytes.length;
+  });
+  if (isFixedSize(prefix) && isFixedSize(encoder6)) {
+    return createEncoder({ ...encoder6, fixedSize: prefix.fixedSize + encoder6.fixedSize, write });
+  }
+  const prefixMaxSize = isFixedSize(prefix) ? prefix.fixedSize : prefix.maxSize ?? null;
+  const encoderMaxSize = isFixedSize(encoder6) ? encoder6.fixedSize : encoder6.maxSize ?? null;
+  const maxSize = prefixMaxSize !== null && encoderMaxSize !== null ? prefixMaxSize + encoderMaxSize : null;
+  return createEncoder({
+    ...encoder6,
+    ...maxSize !== null ? { maxSize } : {},
+    getSizeFromValue: (value) => {
+      const encoderSize = getEncodedSize(value, encoder6);
+      return getEncodedSize(encoderSize, prefix) + encoderSize;
+    },
+    write
+  });
+}
+function addDecoderSizePrefix(decoder2, prefix) {
+  const read = ((bytes, offset) => {
+    const [bigintSize, decoderOffset] = prefix.read(bytes, offset);
+    const size5 = Number(bigintSize);
+    offset = decoderOffset;
+    if (offset > 0 || bytes.length > size5) {
+      bytes = bytes.slice(offset, offset + size5);
+    }
+    assertByteArrayHasEnoughBytesForCodec("addDecoderSizePrefix", size5, bytes);
+    return [decoder2.decode(bytes), offset + size5];
+  });
+  if (isFixedSize(prefix) && isFixedSize(decoder2)) {
+    return createDecoder({ ...decoder2, fixedSize: prefix.fixedSize + decoder2.fixedSize, read });
+  }
+  const prefixMaxSize = isFixedSize(prefix) ? prefix.fixedSize : prefix.maxSize ?? null;
+  const decoderMaxSize = isFixedSize(decoder2) ? decoder2.fixedSize : decoder2.maxSize ?? null;
+  const maxSize = prefixMaxSize !== null && decoderMaxSize !== null ? prefixMaxSize + decoderMaxSize : null;
+  return createDecoder({ ...decoder2, ...maxSize !== null ? { maxSize } : {}, read });
+}
+function toArrayBuffer(bytes, offset, length) {
+  let bytesOffset = bytes.byteOffset + (offset ?? 0);
+  const bytesLength = length ?? bytes.byteLength;
+  let buffer2;
+  if (typeof SharedArrayBuffer === "undefined") {
+    buffer2 = bytes.buffer;
+  } else if (bytes.buffer instanceof SharedArrayBuffer) {
+    buffer2 = new ArrayBuffer(bytes.length);
+    new Uint8Array(buffer2).set(new Uint8Array(bytes));
+    bytesOffset = offset ?? 0;
+  } else {
+    buffer2 = bytes.buffer;
+  }
+  return (bytesOffset === 0 || bytesOffset === -buffer2.byteLength) && bytesLength === buffer2.byteLength ? buffer2 : buffer2.slice(bytesOffset, bytesOffset + bytesLength);
+}
+function fixEncoderSize(encoder6, fixedBytes) {
+  return createEncoder({
+    fixedSize: fixedBytes,
+    write: (value, bytes, offset) => {
+      const variableByteArray = encoder6.encode(value);
+      const fixedByteArray = variableByteArray.length > fixedBytes ? variableByteArray.slice(0, fixedBytes) : variableByteArray;
+      bytes.set(fixedByteArray, offset);
+      return offset + fixedBytes;
+    }
+  });
+}
+function fixDecoderSize(decoder2, fixedBytes) {
+  return createDecoder({
+    fixedSize: fixedBytes,
+    read: (bytes, offset) => {
+      assertByteArrayHasEnoughBytesForCodec("fixCodecSize", fixedBytes, bytes, offset);
+      if (offset > 0 || bytes.length > fixedBytes) {
+        bytes = bytes.slice(offset, offset + fixedBytes);
+      }
+      if (isFixedSize(decoder2)) {
+        bytes = fixBytes(bytes, decoder2.fixedSize);
+      }
+      const [value] = decoder2.read(bytes, 0);
+      return [value, offset + fixedBytes];
+    }
+  });
+}
+function offsetDecoder(decoder2, config2) {
+  return createDecoder({
+    ...decoder2,
+    read: (bytes, preOffset) => {
+      const wrapBytes = (offset) => modulo(offset, bytes.length);
+      const newPreOffset = config2.preOffset ? config2.preOffset({ bytes, preOffset, wrapBytes }) : preOffset;
+      assertByteArrayOffsetIsNotOutOfRange("offsetDecoder", newPreOffset, bytes.length);
+      const [value, postOffset] = decoder2.read(bytes, newPreOffset);
+      const newPostOffset = config2.postOffset ? config2.postOffset({ bytes, newPreOffset, postOffset, preOffset, wrapBytes }) : postOffset;
+      assertByteArrayOffsetIsNotOutOfRange("offsetDecoder", newPostOffset, bytes.length);
+      return [value, newPostOffset];
+    }
+  });
+}
+function modulo(dividend, divisor) {
+  if (divisor === 0) return 0;
+  return (dividend % divisor + divisor) % divisor;
+}
+function resizeDecoder(decoder2, resize) {
+  if (isFixedSize(decoder2)) {
+    const fixedSize = resize(decoder2.fixedSize);
+    if (fixedSize < 0) {
+      throw new SolanaError(SOLANA_ERROR__CODECS__EXPECTED_POSITIVE_BYTE_LENGTH, {
+        bytesLength: fixedSize,
+        codecDescription: "resizeDecoder"
+      });
+    }
+    return createDecoder({ ...decoder2, fixedSize });
+  }
+  return decoder2;
+}
+function padRightDecoder(decoder2, offset) {
+  return offsetDecoder(
+    resizeDecoder(decoder2, (size5) => size5 + offset),
+    { postOffset: ({ postOffset }) => postOffset + offset }
+  );
+}
+function transformEncoder(encoder6, unmap) {
+  return createEncoder({
+    ...isVariableSize(encoder6) ? { ...encoder6, getSizeFromValue: (value) => encoder6.getSizeFromValue(unmap(value)) } : encoder6,
+    write: (value, bytes, offset) => encoder6.write(unmap(value), bytes, offset)
+  });
+}
+function transformDecoder(decoder2, map2) {
+  return createDecoder({
+    ...decoder2,
+    read: (bytes, offset) => {
+      const [value, newOffset] = decoder2.read(bytes, offset);
+      return [map2(value, bytes, offset), newOffset];
+    }
+  });
+}
+
+// node_modules/@solana/codecs-strings/dist/index.node.mjs
+function assertValidBaseString(alphabet4, testValue, givenValue = testValue) {
+  if (!testValue.match(new RegExp(`^[${alphabet4}]*$`))) {
+    throw new SolanaError(SOLANA_ERROR__CODECS__INVALID_STRING_FOR_BASE, {
+      alphabet: alphabet4,
+      base: alphabet4.length,
+      value: givenValue
+    });
+  }
+}
+var getBaseXEncoder = (alphabet4) => {
+  return createEncoder({
+    getSizeFromValue: (value) => {
+      const [leadingZeroes, tailChars] = partitionLeadingZeroes(value, alphabet4[0]);
+      if (!tailChars) return value.length;
+      const base10Number = getBigIntFromBaseX(tailChars, alphabet4);
+      return leadingZeroes.length + Math.ceil(base10Number.toString(16).length / 2);
+    },
+    write(value, bytes, offset) {
+      assertValidBaseString(alphabet4, value);
+      if (value === "") return offset;
+      const [leadingZeroes, tailChars] = partitionLeadingZeroes(value, alphabet4[0]);
+      if (!tailChars) {
+        bytes.set(new Uint8Array(leadingZeroes.length).fill(0), offset);
+        return offset + leadingZeroes.length;
+      }
+      let base10Number = getBigIntFromBaseX(tailChars, alphabet4);
+      const tailBytes = [];
+      while (base10Number > 0n) {
+        tailBytes.unshift(Number(base10Number % 256n));
+        base10Number /= 256n;
+      }
+      const bytesToAdd = [...Array(leadingZeroes.length).fill(0), ...tailBytes];
+      bytes.set(bytesToAdd, offset);
+      return offset + bytesToAdd.length;
+    }
+  });
+};
+var getBaseXDecoder = (alphabet4) => {
+  return createDecoder({
+    read(rawBytes, offset) {
+      const bytes = offset === 0 || offset <= -rawBytes.byteLength ? rawBytes : rawBytes.slice(offset);
+      if (bytes.length === 0) return ["", rawBytes.length];
+      let trailIndex = bytes.findIndex((n) => n !== 0);
+      trailIndex = trailIndex === -1 ? bytes.length : trailIndex;
+      const leadingZeroes = alphabet4[0].repeat(trailIndex);
+      if (trailIndex === bytes.length) return [leadingZeroes, rawBytes.length];
+      const base10Number = bytes.slice(trailIndex).reduce((sum, byte) => sum * 256n + BigInt(byte), 0n);
+      const tailChars = getBaseXFromBigInt(base10Number, alphabet4);
+      return [leadingZeroes + tailChars, rawBytes.length];
+    }
+  });
+};
+function partitionLeadingZeroes(value, zeroCharacter) {
+  const [leadingZeros, tailChars] = value.split(new RegExp(`((?!${zeroCharacter}).*)`));
+  return [leadingZeros, tailChars];
+}
+function getBigIntFromBaseX(value, alphabet4) {
+  const base2 = BigInt(alphabet4.length);
+  let sum = 0n;
+  for (const char of value) {
+    sum *= base2;
+    sum += BigInt(alphabet4.indexOf(char));
+  }
+  return sum;
+}
+function getBaseXFromBigInt(value, alphabet4) {
+  const base2 = BigInt(alphabet4.length);
+  const tailChars = [];
+  while (value > 0n) {
+    tailChars.unshift(alphabet4[Number(value % base2)]);
+    value /= base2;
+  }
+  return tailChars.join("");
+}
+var alphabet2 = "123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz";
+var getBase58Encoder = () => getBaseXEncoder(alphabet2);
+var getBase58Decoder = () => getBaseXDecoder(alphabet2);
+var alphabet3 = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
+var getBase64Encoder = () => {
+  {
+    return createEncoder({
+      getSizeFromValue: (value) => Buffer.from(value, "base64").length,
+      write(value, bytes, offset) {
+        assertValidBaseString(alphabet3, value.replace(/=/g, ""));
+        const buffer2 = Buffer.from(value, "base64");
+        bytes.set(buffer2, offset);
+        return buffer2.length + offset;
+      }
+    });
+  }
+};
+var getBase64Decoder = () => {
+  {
+    return createDecoder({
+      read: (bytes, offset = 0) => [Buffer.from(toArrayBuffer(bytes), offset).toString("base64"), bytes.length]
+    });
+  }
+};
+var e = globalThis.TextDecoder;
+var o = globalThis.TextEncoder;
+
+// node_modules/@solana/assertions/dist/index.node.mjs
+function assertDigestCapabilityIsAvailable() {
+  if (typeof globalThis.crypto === "undefined" || typeof globalThis.crypto.subtle?.digest !== "function") {
+    throw new SolanaError(SOLANA_ERROR__SUBTLE_CRYPTO__DIGEST_UNIMPLEMENTED);
+  }
+}
+function assertVerificationCapabilityIsAvailable() {
+  if (typeof globalThis.crypto === "undefined" || typeof globalThis.crypto.subtle?.verify !== "function") {
+    throw new SolanaError(SOLANA_ERROR__SUBTLE_CRYPTO__VERIFY_FUNCTION_UNIMPLEMENTED);
+  }
+}
+
+// node_modules/@solana/addresses/dist/index.node.mjs
+var memoizedBase58Encoder;
+var memoizedBase58Decoder;
+function getMemoizedBase58Encoder() {
+  if (!memoizedBase58Encoder) memoizedBase58Encoder = getBase58Encoder();
+  return memoizedBase58Encoder;
+}
+function getMemoizedBase58Decoder() {
+  if (!memoizedBase58Decoder) memoizedBase58Decoder = getBase58Decoder();
+  return memoizedBase58Decoder;
+}
+function isAddress2(putativeAddress) {
+  if (
+    // Lowest address (32 bytes of zeroes)
+    putativeAddress.length < 32 || // Highest address (32 bytes of 255)
+    putativeAddress.length > 44
+  ) {
+    return false;
+  }
+  const base58Encoder = getMemoizedBase58Encoder();
+  try {
+    return base58Encoder.encode(putativeAddress).byteLength === 32;
+  } catch {
+    return false;
+  }
+}
+function assertIsAddress(putativeAddress) {
+  if (
+    // Lowest address (32 bytes of zeroes)
+    putativeAddress.length < 32 || // Highest address (32 bytes of 255)
+    putativeAddress.length > 44
+  ) {
+    throw new SolanaError(SOLANA_ERROR__ADDRESSES__STRING_LENGTH_OUT_OF_RANGE, {
+      actualLength: putativeAddress.length
+    });
+  }
+  const base58Encoder = getMemoizedBase58Encoder();
+  const bytes = base58Encoder.encode(putativeAddress);
+  const numBytes = bytes.byteLength;
+  if (numBytes !== 32) {
+    throw new SolanaError(SOLANA_ERROR__ADDRESSES__INVALID_BYTE_LENGTH, {
+      actualLength: numBytes
+    });
+  }
+}
+function address(putativeAddress) {
+  assertIsAddress(putativeAddress);
+  return putativeAddress;
+}
+function getAddressEncoder() {
+  return transformEncoder(
+    fixEncoderSize(getMemoizedBase58Encoder(), 32),
+    (putativeAddress) => address(putativeAddress)
+  );
+}
+function getAddressDecoder() {
+  return fixDecoderSize(getMemoizedBase58Decoder(), 32);
+}
+function getAddressCodec() {
+  return combineCodec(getAddressEncoder(), getAddressDecoder());
+}
+function getAddressComparator() {
+  return new Intl.Collator("en", {
+    caseFirst: "lower",
+    ignorePunctuation: false,
+    localeMatcher: "best fit",
+    numeric: false,
+    sensitivity: "variant",
+    usage: "sort"
+  }).compare;
+}
+var D = 37095705934669439343138083508754565189542113879843219016388785533085940283555n;
+var P = 57896044618658097711785492504343953926634992332820282019728792003956564819949n;
+var RM1 = 19681161376707505956807079304988542015446066515923890162744021073123829784752n;
+function mod2(a) {
+  const r = a % P;
+  return r >= 0n ? r : P + r;
+}
+function pow22(x, power) {
+  let r = x;
+  while (power-- > 0n) {
+    r *= r;
+    r %= P;
+  }
+  return r;
+}
+function pow_2_252_3(x) {
+  const x2 = x * x % P;
+  const b2 = x2 * x % P;
+  const b4 = pow22(b2, 2n) * b2 % P;
+  const b5 = pow22(b4, 1n) * x % P;
+  const b10 = pow22(b5, 5n) * b5 % P;
+  const b20 = pow22(b10, 10n) * b10 % P;
+  const b40 = pow22(b20, 20n) * b20 % P;
+  const b80 = pow22(b40, 40n) * b40 % P;
+  const b160 = pow22(b80, 80n) * b80 % P;
+  const b240 = pow22(b160, 80n) * b80 % P;
+  const b250 = pow22(b240, 10n) * b10 % P;
+  const pow_p_5_8 = pow22(b250, 2n) * x % P;
+  return pow_p_5_8;
+}
+function uvRatio(u, v) {
+  const v3 = mod2(v * v * v);
+  const v7 = mod2(v3 * v3 * v);
+  const pow = pow_2_252_3(u * v7);
+  let x = mod2(u * v3 * pow);
+  const vx2 = mod2(v * x * x);
+  const root1 = x;
+  const root2 = mod2(x * RM1);
+  const useRoot1 = vx2 === u;
+  const useRoot2 = vx2 === mod2(-u);
+  const noRoot = vx2 === mod2(-u * RM1);
+  if (useRoot1) x = root1;
+  if (useRoot2 || noRoot) x = root2;
+  if ((mod2(x) & 1n) === 1n) x = mod2(-x);
+  if (!useRoot1 && !useRoot2) {
+    return null;
+  }
+  return x;
+}
+function pointIsOnCurve(y, lastByte) {
+  const y2 = mod2(y * y);
+  const u = mod2(y2 - 1n);
+  const v = mod2(D * y2 + 1n);
+  const x = uvRatio(u, v);
+  if (x === null) {
+    return false;
+  }
+  const isLastByteOdd = (lastByte & 128) !== 0;
+  if (x === 0n && isLastByteOdd) {
+    return false;
+  }
+  return true;
+}
+function byteToHex(byte) {
+  const hexString = byte.toString(16);
+  if (hexString.length === 1) {
+    return `0${hexString}`;
+  } else {
+    return hexString;
+  }
+}
+function decompressPointBytes(bytes) {
+  const hexString = bytes.reduce((acc, byte, ii) => `${byteToHex(ii === 31 ? byte & -129 : byte)}${acc}`, "");
+  const integerLiteralString = `0x${hexString}`;
+  return BigInt(integerLiteralString);
+}
+function compressedPointBytesAreOnCurve(bytes) {
+  if (bytes.byteLength !== 32) {
+    return false;
+  }
+  const y = decompressPointBytes(bytes);
+  return pointIsOnCurve(y, bytes[31]);
+}
+var MAX_SEED_LENGTH = 32;
+var MAX_SEEDS = 16;
+var PDA_MARKER_BYTES = [
+  // The string 'ProgramDerivedAddress'
+  80,
+  114,
+  111,
+  103,
+  114,
+  97,
+  109,
+  68,
+  101,
+  114,
+  105,
+  118,
+  101,
+  100,
+  65,
+  100,
+  100,
+  114,
+  101,
+  115,
+  115
+];
+async function createProgramDerivedAddress({ programAddress, seeds }) {
+  assertDigestCapabilityIsAvailable();
+  if (seeds.length > MAX_SEEDS) {
+    throw new SolanaError(SOLANA_ERROR__ADDRESSES__MAX_NUMBER_OF_PDA_SEEDS_EXCEEDED, {
+      actual: seeds.length,
+      maxSeeds: MAX_SEEDS
+    });
+  }
+  let textEncoder;
+  const seedBytes = seeds.reduce((acc, seed, ii) => {
+    const bytes = typeof seed === "string" ? (textEncoder ||= new TextEncoder()).encode(seed) : seed;
+    if (bytes.byteLength > MAX_SEED_LENGTH) {
+      throw new SolanaError(SOLANA_ERROR__ADDRESSES__MAX_PDA_SEED_LENGTH_EXCEEDED, {
+        actual: bytes.byteLength,
+        index: ii,
+        maxSeedLength: MAX_SEED_LENGTH
+      });
+    }
+    acc.push(...bytes);
+    return acc;
+  }, []);
+  const base58EncodedAddressCodec = getAddressCodec();
+  const programAddressBytes = base58EncodedAddressCodec.encode(programAddress);
+  const addressBytesBuffer = await crypto.subtle.digest(
+    "SHA-256",
+    new Uint8Array([...seedBytes, ...programAddressBytes, ...PDA_MARKER_BYTES])
+  );
+  const addressBytes = new Uint8Array(addressBytesBuffer);
+  if (compressedPointBytesAreOnCurve(addressBytes)) {
+    throw new SolanaError(SOLANA_ERROR__ADDRESSES__INVALID_SEEDS_POINT_ON_CURVE);
+  }
+  return base58EncodedAddressCodec.decode(addressBytes);
+}
+async function getProgramDerivedAddress({
+  programAddress,
+  seeds
+}) {
+  let bumpSeed = 255;
+  while (bumpSeed > 0) {
+    try {
+      const address22 = await createProgramDerivedAddress({
+        programAddress,
+        seeds: [...seeds, new Uint8Array([bumpSeed])]
+      });
+      return [address22, bumpSeed];
+    } catch (e4) {
+      if (isSolanaError(e4, SOLANA_ERROR__ADDRESSES__INVALID_SEEDS_POINT_ON_CURVE)) {
+        bumpSeed--;
+      } else {
+        throw e4;
+      }
+    }
+  }
+  throw new SolanaError(SOLANA_ERROR__ADDRESSES__FAILED_TO_FIND_VIABLE_PDA_BUMP_SEED);
+}
+async function getPublicKeyFromAddress(address22) {
+  const addressBytes = getAddressEncoder().encode(address22);
+  return await crypto.subtle.importKey("raw", addressBytes, { name: "Ed25519" }, true, ["verify"]);
+}
+
+// node_modules/@solana/codecs-numbers/dist/index.node.mjs
+function assertNumberIsBetweenForCodec(codecDescription, min, max, value) {
+  if (value < min || value > max) {
+    throw new SolanaError(SOLANA_ERROR__CODECS__NUMBER_OUT_OF_RANGE, {
+      codecDescription,
+      max,
+      min,
+      value
+    });
+  }
+}
+function isLittleEndian(config2) {
+  return config2?.endian === 1 ? false : true;
+}
+function numberEncoderFactory(input2) {
+  return createEncoder({
+    fixedSize: input2.size,
+    write(value, bytes, offset) {
+      if (input2.range) {
+        assertNumberIsBetweenForCodec(input2.name, input2.range[0], input2.range[1], value);
+      }
+      const arrayBuffer = new ArrayBuffer(input2.size);
+      input2.set(new DataView(arrayBuffer), value, isLittleEndian(input2.config));
+      bytes.set(new Uint8Array(arrayBuffer), offset);
+      return offset + input2.size;
+    }
+  });
+}
+function numberDecoderFactory(input2) {
+  return createDecoder({
+    fixedSize: input2.size,
+    read(bytes, offset = 0) {
+      assertByteArrayIsNotEmptyForCodec(input2.name, bytes, offset);
+      assertByteArrayHasEnoughBytesForCodec(input2.name, input2.size, bytes, offset);
+      const view2 = new DataView(toArrayBuffer(bytes, offset, input2.size));
+      return [input2.get(view2, isLittleEndian(input2.config)), offset + input2.size];
+    }
+  });
+}
+var MAX_SHORT_U16_VALUE = 65535;
+var getShortU16Encoder = () => createEncoder({
+  getSizeFromValue: (value) => {
+    if (value <= 127) return 1;
+    if (value <= 16383) return 2;
+    return 3;
+  },
+  maxSize: 3,
+  write: (value, bytes, offset) => {
+    assertNumberIsBetweenForCodec("shortU16", 0, 65535, value);
+    const shortU16Bytes = [0];
+    for (let ii = 0; ; ii += 1) {
+      const alignedValue = Number(value) >> ii * 7;
+      if (alignedValue === 0) {
+        break;
+      }
+      const nextSevenBits = 127 & alignedValue;
+      shortU16Bytes[ii] = nextSevenBits;
+      if (ii > 0) {
+        shortU16Bytes[ii - 1] |= 128;
+      }
+    }
+    bytes.set(shortU16Bytes, offset);
+    return offset + shortU16Bytes.length;
+  }
+});
+var getShortU16Decoder = () => createDecoder({
+  maxSize: 3,
+  read: (bytes, offset) => {
+    let value = 0;
+    let byteCount = 0;
+    while (++byteCount <= 3) {
+      assertByteArrayHasEnoughBytesForCodec("shortU16", byteCount, bytes, offset);
+      const byteIndex = byteCount - 1;
+      const currentByte = bytes[offset + byteIndex];
+      const nextSevenBits = 127 & currentByte;
+      value |= nextSevenBits << byteIndex * 7;
+      if ((currentByte & 128) === 0) {
+        assertNumberIsBetweenForCodec("shortU16", 0, MAX_SHORT_U16_VALUE, value);
+        return [value, offset + byteCount];
+      }
+    }
+    throw new SolanaError(SOLANA_ERROR__CODECS__INVALID_BYTE_LENGTH, {
+      bytesLength: 4,
+      codecDescription: "shortU16",
+      expected: 3
+    });
+  }
+});
+var getU16Encoder = (config2 = {}) => numberEncoderFactory({
+  config: config2,
+  name: "u16",
+  range: [0, Number("0xffff")],
+  set: (view2, value, le) => view2.setUint16(0, Number(value), le),
+  size: 2
+});
+var getU16Decoder = (config2 = {}) => numberDecoderFactory({
+  config: config2,
+  get: (view2, le) => view2.getUint16(0, le),
+  name: "u16",
+  size: 2
+});
+var getU32Encoder = (config2 = {}) => numberEncoderFactory({
+  config: config2,
+  name: "u32",
+  range: [0, Number("0xffffffff")],
+  set: (view2, value, le) => view2.setUint32(0, Number(value), le),
+  size: 4
+});
+var getU32Decoder = (config2 = {}) => numberDecoderFactory({
+  config: config2,
+  get: (view2, le) => view2.getUint32(0, le),
+  name: "u32",
+  size: 4
+});
+var getU64Encoder = (config2 = {}) => numberEncoderFactory({
+  config: config2,
+  name: "u64",
+  range: [0n, BigInt("0xffffffffffffffff")],
+  set: (view2, value, le) => view2.setBigUint64(0, BigInt(value), le),
+  size: 8
+});
+var getU64Decoder = (config2 = {}) => numberDecoderFactory({
+  config: config2,
+  get: (view2, le) => view2.getBigUint64(0, le),
+  name: "u64",
+  size: 8
+});
+var getU8Encoder = () => numberEncoderFactory({
+  name: "u8",
+  range: [0, Number("0xff")],
+  set: (view2, value) => view2.setUint8(0, Number(value)),
+  size: 1
+});
+var getU8Decoder = () => numberDecoderFactory({
+  get: (view2) => view2.getUint8(0),
+  name: "u8",
+  size: 1
+});
+
+// node_modules/@solana/codecs-data-structures/dist/index.node.mjs
+function assertValidNumberOfItemsForCodec(codecDescription, expected, actual) {
+  if (expected !== actual) {
+    throw new SolanaError(SOLANA_ERROR__CODECS__INVALID_NUMBER_OF_ITEMS, {
+      actual,
+      codecDescription,
+      expected
+    });
+  }
+}
+function maxCodecSizes(sizes) {
+  return sizes.reduce(
+    (all, size5) => all === null || size5 === null ? null : Math.max(all, size5),
+    0
+  );
+}
+function sumCodecSizes(sizes) {
+  return sizes.reduce((all, size5) => all === null || size5 === null ? null : all + size5, 0);
+}
+function getFixedSize(codec2) {
+  return isFixedSize(codec2) ? codec2.fixedSize : null;
+}
+function getMaxSize(codec2) {
+  return isFixedSize(codec2) ? codec2.fixedSize : codec2.maxSize ?? null;
+}
+function getArrayEncoder(item, config2 = {}) {
+  const size5 = config2.size ?? getU32Encoder();
+  assertValidSize(size5);
+  const fixedSize = computeArrayLikeCodecSize(size5, getFixedSize(item));
+  const maxSize = computeArrayLikeCodecSize(size5, getMaxSize(item)) ?? void 0;
+  return createEncoder({
+    ...fixedSize !== null ? { fixedSize } : {
+      getSizeFromValue: (array2) => {
+        const prefixSize = isPrefixSize(size5) ? getEncodedSize(array2.length, size5) : 0;
+        const suffixSize = isSentinelSize(size5) && size5.strategy !== "omitted" ? size5.sentinel.length : 0;
+        return prefixSize + suffixSize + [...array2].reduce((all, value) => all + getEncodedSize(value, item), 0);
+      },
+      maxSize
+    },
+    write: (array2, bytes, offset) => {
+      if (typeof size5 === "number") {
+        assertValidNumberOfItemsForCodec(config2.description ?? "array", size5, array2.length);
+      }
+      if (isPrefixSize(size5)) {
+        offset = size5.write(array2.length, bytes, offset);
+      }
+      array2.forEach((value) => {
+        offset = item.write(value, bytes, offset);
+      });
+      if (isSentinelSize(size5) && size5.strategy !== "omitted") {
+        bytes.set(size5.sentinel, offset);
+        offset += size5.sentinel.length;
+      }
+      return offset;
+    }
+  });
+}
+function getArrayDecoder(item, config2 = {}) {
+  const size5 = config2.size ?? getU32Decoder();
+  assertValidSize(size5);
+  const itemSize = getFixedSize(item);
+  const fixedSize = computeArrayLikeCodecSize(size5, itemSize);
+  const maxSize = computeArrayLikeCodecSize(size5, getMaxSize(item)) ?? void 0;
+  return createDecoder({
+    ...fixedSize !== null ? { fixedSize } : { maxSize },
+    read: (bytes, offset) => {
+      const array2 = [];
+      if (isPrefixSize(size5) && !config2.requireSizePrefix && offset >= bytes.length) {
+        return [array2, offset];
+      }
+      if (size5 === "remainder") {
+        while (offset < bytes.length) {
+          const [value, newOffset2] = item.read(bytes, offset);
+          offset = newOffset2;
+          array2.push(value);
+        }
+        return [array2, offset];
+      }
+      if (isSentinelSize(size5)) {
+        const { sentinel, strategy = "required" } = size5;
+        while (true) {
+          if (offset + sentinel.length > bytes.length) {
+            if (strategy === "required") {
+              throw new SolanaError(SOLANA_ERROR__CODECS__SENTINEL_MISSING_AT_END_OF_BYTES, {
+                codecDescription: config2.description ?? "array",
+                hexSentinel: hexBytes(sentinel),
+                sentinel
+              });
+            }
+            break;
+          }
+          if (containsBytes(bytes, sentinel, offset)) {
+            offset += sentinel.length;
+            break;
+          }
+          const [value, newOffset2] = item.read(bytes, offset);
+          offset = newOffset2;
+          array2.push(value);
+        }
+        return [array2, offset];
+      }
+      const [resolvedSize, newOffset] = typeof size5 === "number" ? [size5, offset] : size5.read(bytes, offset);
+      offset = newOffset;
+      for (let i = 0; i < resolvedSize; i += 1) {
+        const [value, newOffset2] = item.read(bytes, offset);
+        offset = newOffset2;
+        array2.push(value);
+      }
+      return [array2, offset];
+    }
+  });
+}
+function computeArrayLikeCodecSize(size5, itemSize) {
+  if (typeof size5 !== "number") return null;
+  if (size5 === 0) return 0;
+  return itemSize === null ? null : itemSize * size5;
+}
+function isPrefixSize(size5) {
+  return typeof size5 === "object" && size5 !== null && !isSentinelSize(size5);
+}
+function isSentinelSize(size5) {
+  return typeof size5 === "object" && size5 !== null && "__kind" in size5 && size5.__kind === "sentinel";
+}
+function assertValidSize(size5) {
+  if (isSentinelSize(size5) && size5.sentinel.length === 0) {
+    throw new SolanaError(SOLANA_ERROR__CODECS__SENTINEL_MUST_NOT_BE_EMPTY);
+  }
+}
+function hexBytes(bytes) {
+  return bytes.reduce((str, byte) => str + byte.toString(16).padStart(2, "0"), "");
+}
+function getBooleanEncoder(config2 = {}) {
+  return transformEncoder(config2.size ?? getU8Encoder(), (value) => value ? 1 : 0);
+}
+function getBytesEncoder() {
+  return createEncoder({
+    getSizeFromValue: (value) => value.length,
+    write: (value, bytes, offset) => {
+      bytes.set(value, offset);
+      return offset + value.length;
+    }
+  });
+}
+function getBytesDecoder() {
+  return createDecoder({
+    read: (bytes, offset) => {
+      const slice4 = bytes.slice(offset);
+      return [slice4, offset + slice4.length];
+    }
+  });
+}
+function getConstantEncoder(constant) {
+  return createEncoder({
+    fixedSize: constant.length,
+    write: (_, bytes, offset) => {
+      bytes.set(constant, offset);
+      return offset + constant.length;
+    }
+  });
+}
+function getTupleEncoder(items, config2) {
+  const fixedSize = sumCodecSizes(items.map(getFixedSize));
+  const maxSize = sumCodecSizes(items.map(getMaxSize)) ?? void 0;
+  return createEncoder({
+    ...fixedSize === null ? {
+      getSizeFromValue: (value) => items.map((item, index2) => getEncodedSize(value[index2], item)).reduce((all, one) => all + one, 0),
+      maxSize
+    } : { fixedSize },
+    write: (value, bytes, offset) => {
+      assertValidNumberOfItemsForCodec(config2?.description ?? "tuple", items.length, value.length);
+      items.forEach((item, index2) => {
+        offset = item.write(value[index2], bytes, offset);
+      });
+      return offset;
+    }
+  });
+}
+function getTupleDecoder(items) {
+  const fixedSize = sumCodecSizes(items.map(getFixedSize));
+  const maxSize = sumCodecSizes(items.map(getMaxSize)) ?? void 0;
+  return createDecoder({
+    ...fixedSize === null ? { maxSize } : { fixedSize },
+    read: (bytes, offset) => {
+      const values = [];
+      items.forEach((item) => {
+        const [newValue, newOffset] = item.read(bytes, offset);
+        values.push(newValue);
+        offset = newOffset;
+      });
+      return [values, offset];
+    }
+  });
+}
+function getUnionEncoder(variants, getIndexFromValue) {
+  const fixedSize = getUnionFixedSize(variants);
+  const write = (variant, bytes, offset) => {
+    const index2 = getIndexFromValue(variant);
+    assertValidVariantIndex(variants, index2);
+    return variants[index2].write(variant, bytes, offset);
+  };
+  if (fixedSize !== null) {
+    return createEncoder({ fixedSize, write });
+  }
+  const maxSize = getUnionMaxSize(variants);
+  return createEncoder({
+    ...maxSize !== null ? { maxSize } : {},
+    getSizeFromValue: (variant) => {
+      const index2 = getIndexFromValue(variant);
+      assertValidVariantIndex(variants, index2);
+      return getEncodedSize(variant, variants[index2]);
+    },
+    write
+  });
+}
+function getUnionDecoder(variants, getIndexFromBytes) {
+  const fixedSize = getUnionFixedSize(variants);
+  const read = (bytes, offset) => {
+    const index2 = getIndexFromBytes(bytes, offset);
+    assertValidVariantIndex(variants, index2);
+    return variants[index2].read(bytes, offset);
+  };
+  if (fixedSize !== null) {
+    return createDecoder({ fixedSize, read });
+  }
+  const maxSize = getUnionMaxSize(variants);
+  return createDecoder({ ...maxSize !== null ? { maxSize } : {}, read });
+}
+function assertValidVariantIndex(variants, index2) {
+  if (typeof variants[index2] === "undefined") {
+    throw new SolanaError(SOLANA_ERROR__CODECS__UNION_VARIANT_OUT_OF_RANGE, {
+      maxRange: variants.length - 1,
+      minRange: 0,
+      variant: index2
+    });
+  }
+}
+function getUnionFixedSize(variants) {
+  if (variants.length === 0) return 0;
+  if (!isFixedSize(variants[0])) return null;
+  const variantSize = variants[0].fixedSize;
+  const sameSizedVariants = variants.every((variant) => isFixedSize(variant) && variant.fixedSize === variantSize);
+  return sameSizedVariants ? variantSize : null;
+}
+function getUnionMaxSize(variants) {
+  return maxCodecSizes(variants.map((variant) => getMaxSize(variant)));
+}
+function getUnitEncoder() {
+  return createEncoder({
+    fixedSize: 0,
+    write: (_value, _bytes, offset) => offset
+  });
+}
+function getUnitDecoder() {
+  return createDecoder({
+    fixedSize: 0,
+    read: (_bytes, offset) => [void 0, offset]
+  });
+}
+function getNullableEncoder(item, config2 = {}) {
+  const prefix = (() => {
+    if (config2.prefix === null) {
+      return transformEncoder(getUnitEncoder(), (_boolean2) => void 0);
+    }
+    return getBooleanEncoder({ size: config2.prefix ?? getU8Encoder() });
+  })();
+  const noneValue = (() => {
+    if (config2.noneValue === "zeroes") {
+      assertIsFixedSize(item);
+      return fixEncoderSize(getUnitEncoder(), item.fixedSize);
+    }
+    if (!config2.noneValue) {
+      return getUnitEncoder();
+    }
+    return getConstantEncoder(config2.noneValue);
+  })();
+  return getUnionEncoder(
+    [
+      transformEncoder(getTupleEncoder([prefix, noneValue]), (_value) => [
+        false,
+        void 0
+      ]),
+      transformEncoder(getTupleEncoder([prefix, item]), (value) => [true, value])
+    ],
+    (variant) => Number(variant !== null)
+  );
+}
+function getPatternMatchEncoder(patterns) {
+  return getUnionEncoder(
+    patterns.map(([, encoder6]) => encoder6),
+    (value) => {
+      const index2 = patterns.findIndex(([predicate]) => predicate(value));
+      if (index2 === -1) {
+        throw new SolanaError(SOLANA_ERROR__CODECS__INVALID_PATTERN_MATCH_VALUE);
+      }
+      return index2;
+    }
+  );
+}
+function getPatternMatchDecoder(patterns) {
+  return getUnionDecoder(
+    patterns.map(([, decoder2]) => decoder2),
+    (value) => {
+      const index2 = patterns.findIndex(([predicate]) => predicate(value));
+      if (index2 === -1) {
+        throw new SolanaError(SOLANA_ERROR__CODECS__INVALID_PATTERN_MATCH_BYTES, {
+          bytes: value
+        });
+      }
+      return index2;
+    }
+  );
+}
+function getPredicateEncoder(predicate, ifTrue, ifFalse) {
+  return getUnionEncoder(
+    [ifTrue, ifFalse],
+    (value) => predicate(value) ? 0 : 1
+  );
+}
+function getPredicateDecoder(predicate, ifTrue, ifFalse) {
+  return getUnionDecoder(
+    [ifTrue, ifFalse],
+    (value) => predicate(value) ? 0 : 1
+  );
+}
+function getStructEncoder(fields) {
+  const fieldCodecs = fields.map(([, codec2]) => codec2);
+  const fixedSize = sumCodecSizes(fieldCodecs.map(getFixedSize));
+  const maxSize = sumCodecSizes(fieldCodecs.map(getMaxSize)) ?? void 0;
+  return createEncoder({
+    ...fixedSize === null ? {
+      getSizeFromValue: (value) => fields.map(([key, codec2]) => getEncodedSize(value[key], codec2)).reduce((all, one) => all + one, 0),
+      maxSize
+    } : { fixedSize },
+    write: (struct, bytes, offset) => {
+      fields.forEach(([key, codec2]) => {
+        offset = codec2.write(struct[key], bytes, offset);
+      });
+      return offset;
+    }
+  });
+}
+function getStructDecoder(fields) {
+  const fieldCodecs = fields.map(([, codec2]) => codec2);
+  const fixedSize = sumCodecSizes(fieldCodecs.map(getFixedSize));
+  const maxSize = sumCodecSizes(fieldCodecs.map(getMaxSize)) ?? void 0;
+  return createDecoder({
+    ...fixedSize === null ? { maxSize } : { fixedSize },
+    read: (bytes, offset) => {
+      const struct = {};
+      fields.forEach(([key, codec2]) => {
+        const [value, newOffset] = codec2.read(bytes, offset);
+        offset = newOffset;
+        struct[key] = value;
+      });
+      return [struct, offset];
+    }
+  });
+}
+
+// node_modules/@solana/functional/dist/index.node.mjs
+function pipe2(init, ...fns) {
+  return fns.reduce((acc, fn) => fn(acc), init);
+}
+
+// node_modules/@solana/instructions/dist/index.node.mjs
+var AccountRole = /* @__PURE__ */ ((AccountRole2) => {
+  AccountRole2[AccountRole2["WRITABLE_SIGNER"] = /* 3 */
+  3] = "WRITABLE_SIGNER";
+  AccountRole2[AccountRole2["READONLY_SIGNER"] = /* 2 */
+  2] = "READONLY_SIGNER";
+  AccountRole2[AccountRole2["WRITABLE"] = /* 1 */
+  1] = "WRITABLE";
+  AccountRole2[AccountRole2["READONLY"] = /* 0 */
+  0] = "READONLY";
+  return AccountRole2;
+})(AccountRole || {});
+var IS_WRITABLE_BITMASK = 1;
+function isSignerRole(role) {
+  return role >= 2;
+}
+function isWritableRole(role) {
+  return (role & IS_WRITABLE_BITMASK) !== 0;
+}
+function mergeRoles(roleA, roleB) {
+  return roleA | roleB;
+}
+
+// node_modules/@solana/rpc-types/dist/index.node.mjs
+function isBlockhash(putativeBlockhash) {
+  return isAddress2(putativeBlockhash);
+}
+
+// node_modules/@solana/transaction-messages/dist/index.node.mjs
+function isTransactionMessageWithBlockhashLifetime(transactionMessage) {
+  return "lifetimeConstraint" in transactionMessage && typeof transactionMessage.lifetimeConstraint.blockhash === "string" && typeof transactionMessage.lifetimeConstraint.lastValidBlockHeight === "bigint" && isBlockhash(transactionMessage.lifetimeConstraint.blockhash);
+}
+function setTransactionMessageLifetimeUsingBlockhash(blockhashLifetimeConstraint, transactionMessage) {
+  if ("lifetimeConstraint" in transactionMessage && transactionMessage.lifetimeConstraint && "blockhash" in transactionMessage.lifetimeConstraint && transactionMessage.lifetimeConstraint.blockhash === blockhashLifetimeConstraint.blockhash && transactionMessage.lifetimeConstraint.lastValidBlockHeight === blockhashLifetimeConstraint.lastValidBlockHeight) {
+    return transactionMessage;
+  }
+  return Object.freeze({
+    ...transactionMessage,
+    lifetimeConstraint: Object.freeze(blockhashLifetimeConstraint)
+  });
+}
+var MAX_SUPPORTED_TRANSACTION_VERSION = 1;
+var memoizedU8Encoder;
+function getMemoizedU8Encoder() {
+  if (!memoizedU8Encoder) memoizedU8Encoder = getU8Encoder();
+  return memoizedU8Encoder;
+}
+var memoizedU8Decoder;
+function getMemoizedU8Decoder() {
+  if (!memoizedU8Decoder) memoizedU8Decoder = getU8Decoder();
+  return memoizedU8Decoder;
+}
+function getMessageHeaderEncoder() {
+  return getStructEncoder([
+    ["numSignerAccounts", getMemoizedU8Encoder()],
+    ["numReadonlySignerAccounts", getMemoizedU8Encoder()],
+    ["numReadonlyNonSignerAccounts", getMemoizedU8Encoder()]
+  ]);
+}
+function getMessageHeaderDecoder() {
+  return getStructDecoder([
+    ["numSignerAccounts", getMemoizedU8Decoder()],
+    ["numReadonlySignerAccounts", getMemoizedU8Decoder()],
+    ["numReadonlyNonSignerAccounts", getMemoizedU8Decoder()]
+  ]);
+}
+var memoizedGetInstructionEncoder;
+function getInstructionEncoder() {
+  if (!memoizedGetInstructionEncoder) {
+    memoizedGetInstructionEncoder = transformEncoder(
+      getStructEncoder([
+        ["programAddressIndex", getU8Encoder()],
+        ["accountIndices", getArrayEncoder(getU8Encoder(), { size: getShortU16Encoder() })],
+        ["data", addEncoderSizePrefix(getBytesEncoder(), getShortU16Encoder())]
+      ]),
+      // Convert an instruction to have all fields defined
+      (instruction) => {
+        if (instruction.accountIndices !== void 0 && instruction.data !== void 0) {
+          return instruction;
+        }
+        return {
+          ...instruction,
+          accountIndices: instruction.accountIndices ?? [],
+          data: instruction.data ?? new Uint8Array(0)
+        };
+      }
+    );
+  }
+  return memoizedGetInstructionEncoder;
+}
+var memoizedGetInstructionDecoder;
+function getInstructionDecoder() {
+  if (!memoizedGetInstructionDecoder) {
+    memoizedGetInstructionDecoder = transformDecoder(
+      getStructDecoder([
+        ["programAddressIndex", getU8Decoder()],
+        ["accountIndices", getArrayDecoder(getU8Decoder(), { size: getShortU16Decoder() })],
+        [
+          "data",
+          addDecoderSizePrefix(getBytesDecoder(), getShortU16Decoder())
+        ]
+      ]),
+      // Convert an instruction to exclude optional fields if they are empty
+      (instruction) => {
+        if (instruction.accountIndices.length && instruction.data.byteLength) {
+          return instruction;
+        }
+        const { accountIndices, data, ...rest } = instruction;
+        return {
+          ...rest,
+          ...accountIndices.length ? { accountIndices } : null,
+          ...data.byteLength ? { data } : null
+        };
+      }
+    );
+  }
+  return memoizedGetInstructionDecoder;
+}
+function assertValidBaseString2(alphabet4, testValue, givenValue = testValue) {
+  if (!testValue.match(new RegExp(`^[${alphabet4}]*$`))) {
+    throw new SolanaError(SOLANA_ERROR__CODECS__INVALID_STRING_FOR_BASE, {
+      alphabet: alphabet4,
+      base: alphabet4.length,
+      value: givenValue
+    });
+  }
+}
+var getBaseXEncoder2 = (alphabet4) => {
+  return createEncoder({
+    getSizeFromValue: (value) => {
+      const [leadingZeroes, tailChars] = partitionLeadingZeroes2(value, alphabet4[0]);
+      if (!tailChars) return value.length;
+      const base10Number = getBigIntFromBaseX2(tailChars, alphabet4);
+      return leadingZeroes.length + Math.ceil(base10Number.toString(16).length / 2);
+    },
+    write(value, bytes, offset) {
+      assertValidBaseString2(alphabet4, value);
+      if (value === "") return offset;
+      const [leadingZeroes, tailChars] = partitionLeadingZeroes2(value, alphabet4[0]);
+      if (!tailChars) {
+        bytes.set(new Uint8Array(leadingZeroes.length).fill(0), offset);
+        return offset + leadingZeroes.length;
+      }
+      let base10Number = getBigIntFromBaseX2(tailChars, alphabet4);
+      const tailBytes = [];
+      while (base10Number > 0n) {
+        tailBytes.unshift(Number(base10Number % 256n));
+        base10Number /= 256n;
+      }
+      const bytesToAdd = [...Array(leadingZeroes.length).fill(0), ...tailBytes];
+      bytes.set(bytesToAdd, offset);
+      return offset + bytesToAdd.length;
+    }
+  });
+};
+var getBaseXDecoder2 = (alphabet4) => {
+  return createDecoder({
+    read(rawBytes, offset) {
+      const bytes = offset === 0 || offset <= -rawBytes.byteLength ? rawBytes : rawBytes.slice(offset);
+      if (bytes.length === 0) return ["", rawBytes.length];
+      let trailIndex = bytes.findIndex((n) => n !== 0);
+      trailIndex = trailIndex === -1 ? bytes.length : trailIndex;
+      const leadingZeroes = alphabet4[0].repeat(trailIndex);
+      if (trailIndex === bytes.length) return [leadingZeroes, rawBytes.length];
+      const base10Number = bytes.slice(trailIndex).reduce((sum, byte) => sum * 256n + BigInt(byte), 0n);
+      const tailChars = getBaseXFromBigInt2(base10Number, alphabet4);
+      return [leadingZeroes + tailChars, rawBytes.length];
+    }
+  });
+};
+function partitionLeadingZeroes2(value, zeroCharacter) {
+  const [leadingZeros, tailChars] = value.split(new RegExp(`((?!${zeroCharacter}).*)`));
+  return [leadingZeros, tailChars];
+}
+function getBigIntFromBaseX2(value, alphabet4) {
+  const base2 = BigInt(alphabet4.length);
+  let sum = 0n;
+  for (const char of value) {
+    sum *= base2;
+    sum += BigInt(alphabet4.indexOf(char));
+  }
+  return sum;
+}
+function getBaseXFromBigInt2(value, alphabet4) {
+  const base2 = BigInt(alphabet4.length);
+  const tailChars = [];
+  while (value > 0n) {
+    tailChars.unshift(alphabet4[Number(value % base2)]);
+    value /= base2;
+  }
+  return tailChars.join("");
+}
+var alphabet22 = "123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz";
+var getBase58Encoder2 = () => getBaseXEncoder2(alphabet22);
+var getBase58Decoder2 = () => getBaseXDecoder2(alphabet22);
+function getLifetimeTokenEncoder() {
+  return transformEncoder(
+    getNullableEncoder(fixEncoderSize(getBase58Encoder2(), 32), {
+      noneValue: "zeroes",
+      prefix: null
+    }),
+    (token) => token ?? null
+  );
+}
+function getLifetimeTokenDecoder() {
+  return fixDecoderSize(getBase58Decoder2(), 32);
+}
+function getMessageEncoder() {
+  return transformEncoder(
+    getStructEncoder([
+      ["header", getMessageHeaderEncoder()],
+      ["staticAccounts", getArrayEncoder(getAddressEncoder(), { size: getShortU16Encoder() })],
+      ["lifetimeToken", getLifetimeTokenEncoder()],
+      ["instructions", getArrayEncoder(getInstructionEncoder(), { size: getShortU16Encoder() })]
+    ]),
+    (value) => ({
+      ...value,
+      lifetimeToken: "lifetimeToken" in value ? value.lifetimeToken : void 0
+    })
+  );
+}
+function getMessageDecoder() {
+  return transformDecoder(
+    getStructDecoder([
+      ["header", getMessageHeaderDecoder()],
+      ["staticAccounts", getArrayDecoder(getAddressDecoder(), { size: getShortU16Decoder() })],
+      ["lifetimeToken", getLifetimeTokenDecoder()],
+      ["instructions", getArrayDecoder(getInstructionDecoder(), { size: getShortU16Decoder() })]
+    ]),
+    (value) => ({
+      ...value,
+      version: "legacy"
+    })
+  );
+}
+var VERSION_FLAG_MASK = 128;
+function getTransactionVersionEncoder() {
+  return createEncoder({
+    getSizeFromValue: (value) => value === "legacy" ? 0 : 1,
+    maxSize: 1,
+    write: (value, bytes, offset) => {
+      if (value === "legacy") {
+        return offset;
+      }
+      if (value < 0 || value > 127) {
+        throw new SolanaError(SOLANA_ERROR__TRANSACTION__VERSION_NUMBER_OUT_OF_RANGE, {
+          actualVersion: value
+        });
+      }
+      if (value > MAX_SUPPORTED_TRANSACTION_VERSION) {
+        throw new SolanaError(SOLANA_ERROR__TRANSACTION__VERSION_NUMBER_NOT_SUPPORTED, {
+          unsupportedVersion: value
+        });
+      }
+      bytes.set([value | VERSION_FLAG_MASK], offset);
+      return offset + 1;
+    }
+  });
+}
+function getTransactionVersionDecoder() {
+  return createDecoder({
+    maxSize: 1,
+    read: (bytes, offset) => {
+      const firstByte = bytes[offset];
+      if ((firstByte & VERSION_FLAG_MASK) === 0) {
+        return ["legacy", offset];
+      } else {
+        const version5 = firstByte ^ VERSION_FLAG_MASK;
+        if (version5 > MAX_SUPPORTED_TRANSACTION_VERSION) {
+          throw new SolanaError(SOLANA_ERROR__TRANSACTION__VERSION_NUMBER_NOT_SUPPORTED, {
+            unsupportedVersion: version5
+          });
+        }
+        return [version5, offset + 1];
+      }
+    }
+  });
+}
+var memoizedAddressTableLookupEncoder;
+function getAddressTableLookupEncoder() {
+  if (!memoizedAddressTableLookupEncoder) {
+    const indexEncoder = getArrayEncoder(getU8Encoder(), { size: getShortU16Encoder() });
+    memoizedAddressTableLookupEncoder = getStructEncoder([
+      ["lookupTableAddress", getAddressEncoder()],
+      ["writableIndexes", indexEncoder],
+      ["readonlyIndexes", indexEncoder]
+    ]);
+  }
+  return memoizedAddressTableLookupEncoder;
+}
+var memoizedAddressTableLookupDecoder;
+function getAddressTableLookupDecoder() {
+  if (!memoizedAddressTableLookupDecoder) {
+    const indexEncoder = getArrayDecoder(getU8Decoder(), { size: getShortU16Decoder() });
+    memoizedAddressTableLookupDecoder = getStructDecoder([
+      ["lookupTableAddress", getAddressDecoder()],
+      ["writableIndexes", indexEncoder],
+      ["readonlyIndexes", indexEncoder]
+    ]);
+  }
+  return memoizedAddressTableLookupDecoder;
+}
+function getMessageEncoder2() {
+  return transformEncoder(
+    getStructEncoder([
+      ["version", getTransactionVersionEncoder()],
+      ["header", getMessageHeaderEncoder()],
+      ["staticAccounts", getArrayEncoder(getAddressEncoder(), { size: getShortU16Encoder() })],
+      ["lifetimeToken", getLifetimeTokenEncoder()],
+      ["instructions", getArrayEncoder(getInstructionEncoder(), { size: getShortU16Encoder() })],
+      ["addressTableLookups", getArrayEncoder(getAddressTableLookupEncoder(), { size: getShortU16Encoder() })]
+    ]),
+    (value) => ({
+      ...value,
+      addressTableLookups: value.addressTableLookups ?? [],
+      lifetimeToken: "lifetimeToken" in value ? value.lifetimeToken : void 0
+    })
+  );
+}
+function getMessageDecoder2() {
+  return transformDecoder(
+    getStructDecoder([
+      ["version", getTransactionVersionDecoder()],
+      ["header", getMessageHeaderDecoder()],
+      ["staticAccounts", getArrayDecoder(getAddressDecoder(), { size: getShortU16Decoder() })],
+      ["lifetimeToken", getLifetimeTokenDecoder()],
+      ["instructions", getArrayDecoder(getInstructionDecoder(), { size: getShortU16Decoder() })],
+      ["addressTableLookups", getArrayDecoder(getAddressTableLookupDecoder(), { size: getShortU16Decoder() })]
+    ]),
+    ({ addressTableLookups, ...restOfMessage }) => {
+      if (!addressTableLookups?.length) {
+        return { ...restOfMessage, version: 0 };
+      }
+      return { ...restOfMessage, addressTableLookups, version: 0 };
+    }
+  );
+}
+var MIN_HEAP_SIZE = 32 * 1024;
+var MAX_HEAP_SIZE = 256 * 1024;
+function isV1ConfigEmpty(config2) {
+  return config2.computeUnitLimit === void 0 && config2.heapSize === void 0 && config2.loadedAccountsDataSizeLimit === void 0 && config2.priorityFeeLamports === void 0;
+}
+var TRANSACTION_CONFIG_PRIORITY_FEE_LAMPORTS_BIT_MASK = 3;
+var TRANSACTION_CONFIG_COMPUTE_UNIT_LIMIT_BIT_MASK = 4;
+var TRANSACTION_CONFIG_LOADED_ACCOUNTS_DATA_SIZE_LIMIT_BIT_MASK = 8;
+var TRANSACTION_CONFIG_HEAP_SIZE_BIT_MASK = 16;
+function transactionConfigMaskHasPriorityFee(mask) {
+  const priorityFeeBits = mask & TRANSACTION_CONFIG_PRIORITY_FEE_LAMPORTS_BIT_MASK;
+  if (priorityFeeBits === 1 || priorityFeeBits === 2) {
+    throw new SolanaError(SOLANA_ERROR__TRANSACTION__INVALID_CONFIG_MASK_PRIORITY_FEE_BITS, { mask });
+  }
+  return priorityFeeBits === TRANSACTION_CONFIG_PRIORITY_FEE_LAMPORTS_BIT_MASK;
+}
+function transactionConfigMaskHasComputeUnitLimit(mask) {
+  return (mask & TRANSACTION_CONFIG_COMPUTE_UNIT_LIMIT_BIT_MASK) !== 0;
+}
+function transactionConfigMaskHasLoadedAccountsDataSizeLimit(mask) {
+  return (mask & TRANSACTION_CONFIG_LOADED_ACCOUNTS_DATA_SIZE_LIMIT_BIT_MASK) !== 0;
+}
+function transactionConfigMaskHasHeapSize(mask) {
+  return (mask & TRANSACTION_CONFIG_HEAP_SIZE_BIT_MASK) !== 0;
+}
+function getCompiledTransactionConfigValueEncoder() {
+  return getPatternMatchEncoder([
+    [
+      (value) => value.kind === "u32",
+      transformEncoder(getStructEncoder([["value", getU32Encoder()]]), (value) => value)
+    ],
+    [
+      (value) => value.kind === "u64",
+      transformEncoder(getStructEncoder([["value", getU64Encoder()]]), (value) => value)
+    ]
+  ]);
+}
+function getCompiledTransactionConfigValuesEncoder() {
+  return getArrayEncoder(getCompiledTransactionConfigValueEncoder(), { size: "remainder" });
+}
+function getCompiledTransactionConfigValuesDecoder(mask) {
+  const hasPriorityFee = transactionConfigMaskHasPriorityFee(mask);
+  const hasComputeUnitLimit = transactionConfigMaskHasComputeUnitLimit(mask);
+  const hasLoadedAccountsDataSizeLimit = transactionConfigMaskHasLoadedAccountsDataSizeLimit(mask);
+  const hasHeapSize = transactionConfigMaskHasHeapSize(mask);
+  const u32Decoder = transformDecoder(getU32Decoder(), (value) => ({ kind: "u32", value }));
+  const u64Decoder = transformDecoder(getU64Decoder(), (value) => ({ kind: "u64", value }));
+  const unitDecoder = getUnitDecoder();
+  return transformDecoder(
+    getTupleDecoder([
+      hasPriorityFee ? u64Decoder : unitDecoder,
+      hasComputeUnitLimit ? u32Decoder : unitDecoder,
+      hasLoadedAccountsDataSizeLimit ? u32Decoder : unitDecoder,
+      hasHeapSize ? u32Decoder : unitDecoder
+    ]),
+    (arr) => arr.filter(Boolean)
+  );
+}
+function getInstructionHeaderEncoder() {
+  return getStructEncoder([
+    ["programAccountIndex", getU8Encoder()],
+    ["numInstructionAccounts", getU8Encoder()],
+    ["numInstructionDataBytes", getU16Encoder()]
+  ]);
+}
+function getInstructionHeaderDecoder() {
+  return getStructDecoder([
+    ["programAccountIndex", getU8Decoder()],
+    ["numInstructionAccounts", getU8Decoder()],
+    ["numInstructionDataBytes", getU16Decoder()]
+  ]);
+}
+function getInstructionPayloadEncoder() {
+  return getStructEncoder([
+    ["instructionAccountIndices", getArrayEncoder(getU8Encoder(), { size: "remainder" })],
+    ["instructionData", getBytesEncoder()]
+  ]);
+}
+function getInstructionPayloadDecoder(instructionHeader) {
+  return getStructDecoder([
+    [
+      "instructionAccountIndices",
+      getArrayDecoder(getU8Decoder(), { size: instructionHeader.numInstructionAccounts })
+    ],
+    ["instructionData", fixDecoderSize(getBytesDecoder(), instructionHeader.numInstructionDataBytes)]
+  ]);
+}
+function getMessageEncoder3() {
+  return transformEncoder(
+    getStructEncoder([
+      ["version", getTransactionVersionEncoder()],
+      ["header", getMessageHeaderEncoder()],
+      ["configMask", getU32Encoder()],
+      ["lifetimeToken", getLifetimeTokenEncoder()],
+      ["numInstructions", getU8Encoder()],
+      ["numStaticAccounts", getU8Encoder()],
+      ["staticAccounts", getArrayEncoder(getAddressEncoder(), { size: "remainder" })],
+      ["configValues", getCompiledTransactionConfigValuesEncoder()],
+      ["instructionHeaders", getArrayEncoder(getInstructionHeaderEncoder(), { size: "remainder" })],
+      ["instructionPayloads", getArrayEncoder(getInstructionPayloadEncoder(), { size: "remainder" })]
+    ]),
+    (value) => ({
+      ...value,
+      lifetimeToken: "lifetimeToken" in value ? value.lifetimeToken : void 0
+    })
+  );
+}
+function getMessageDecoder3() {
+  return createDecoder({
+    read(bytes, offset) {
+      const [{ header, configMask, lifetimeToken, numInstructions, numStaticAccounts }, afterFixedFields] = getStructDecoder([
+        ["version", getTransactionVersionDecoder()],
+        ["header", getMessageHeaderDecoder()],
+        ["configMask", getU32Decoder()],
+        ["lifetimeToken", getLifetimeTokenDecoder()],
+        ["numInstructions", getU8Decoder()],
+        ["numStaticAccounts", getU8Decoder()]
+      ]).read(bytes, offset);
+      let nextOffset = afterFixedFields;
+      const [staticAccounts, afterAddresses] = getArrayDecoder(getAddressDecoder(), {
+        size: numStaticAccounts
+      }).read(bytes, nextOffset);
+      nextOffset = afterAddresses;
+      const [configValues, afterConfig] = getCompiledTransactionConfigValuesDecoder(configMask).read(
+        bytes,
+        nextOffset
+      );
+      nextOffset = afterConfig;
+      const [instructionHeaders, afterHeaders] = getArrayDecoder(getInstructionHeaderDecoder(), {
+        size: numInstructions
+      }).read(bytes, nextOffset);
+      nextOffset = afterHeaders;
+      const instructionPayloads = [];
+      for (const header2 of instructionHeaders) {
+        const [payload, next] = getInstructionPayloadDecoder(header2).read(bytes, nextOffset);
+        instructionPayloads.push(payload);
+        nextOffset = next;
+      }
+      const compiledMessage = {
+        configMask,
+        configValues,
+        header,
+        instructionHeaders,
+        instructionPayloads,
+        lifetimeToken,
+        numInstructions,
+        numStaticAccounts,
+        staticAccounts,
+        version: 1
+      };
+      return [compiledMessage, nextOffset];
+    }
+  });
+}
+function getCompiledTransactionMessageEncoder() {
+  return transformEncoder(
+    getPatternMatchEncoder([
+      [(m) => m.version === "legacy", getMessageEncoder()],
+      [(m) => m.version === 0, getMessageEncoder2()],
+      [(m) => m.version === 1, getMessageEncoder3()]
+    ]),
+    (value) => {
+      if (value.version !== "legacy" && value.version > MAX_SUPPORTED_TRANSACTION_VERSION) {
+        throw new SolanaError(SOLANA_ERROR__TRANSACTION__VERSION_NUMBER_NOT_SUPPORTED, {
+          unsupportedVersion: value.version
+        });
+      }
+      return value;
+    }
+  );
+}
+function getCompiledTransactionMessageDecoder() {
+  return createDecoder({
+    read(bytes, offset) {
+      const [version5] = getTransactionVersionDecoder().read(bytes, offset);
+      return getPatternMatchDecoder([
+        [() => version5 === "legacy", getMessageDecoder()],
+        [() => version5 === 0, getMessageDecoder2()],
+        [() => version5 === 1, getMessageDecoder3()]
+      ]).read(bytes, offset);
+    }
+  });
+}
+function upsert(addressMap, address3, update) {
+  addressMap[address3] = update(addressMap[address3] ?? { role: AccountRole.READONLY });
+}
+var TYPE2 = /* @__PURE__ */ Symbol("AddressMapTypeProperty");
+function getAddressMapFromInstructions(feePayer, instructions) {
+  const addressMap = {
+    [feePayer]: { [TYPE2]: 0, role: AccountRole.WRITABLE_SIGNER }
+  };
+  const addressesOfInvokedPrograms = /* @__PURE__ */ new Set();
+  for (const instruction of instructions) {
+    upsert(addressMap, instruction.programAddress, (entry) => {
+      addressesOfInvokedPrograms.add(instruction.programAddress);
+      if (TYPE2 in entry) {
+        if (isWritableRole(entry.role)) {
+          switch (entry[TYPE2]) {
+            case 0:
+              throw new SolanaError(SOLANA_ERROR__TRANSACTION__INVOKED_PROGRAMS_CANNOT_PAY_FEES, {
+                programAddress: instruction.programAddress
+              });
+            default:
+              throw new SolanaError(SOLANA_ERROR__TRANSACTION__INVOKED_PROGRAMS_MUST_NOT_BE_WRITABLE, {
+                programAddress: instruction.programAddress
+              });
+          }
+        }
+        if (entry[TYPE2] === 1) {
+          return entry;
+        }
+      }
+      return { [TYPE2]: 1, role: AccountRole.READONLY };
+    });
+    if (!instruction.accounts) {
+      continue;
+    }
+    for (const account of instruction.accounts) {
+      upsert(addressMap, account.address, (entry) => {
+        const {
+          // eslint-disable-next-line @typescript-eslint/no-unused-vars
+          address: _,
+          ...accountMeta
+        } = account;
+        if (TYPE2 in entry) {
+          switch (entry[TYPE2]) {
+            case 0:
+              return entry;
+            case 1: {
+              const nextRole = mergeRoles(entry.role, accountMeta.role);
+              if (
+                // Check to see if this address represents a program that is invoked
+                // in this transaction.
+                addressesOfInvokedPrograms.has(account.address)
+              ) {
+                if (isWritableRole(accountMeta.role)) {
+                  throw new SolanaError(
+                    SOLANA_ERROR__TRANSACTION__INVOKED_PROGRAMS_MUST_NOT_BE_WRITABLE,
+                    {
+                      programAddress: account.address
+                    }
+                  );
+                }
+                if (entry.role !== nextRole) {
+                  return {
+                    ...entry,
+                    role: nextRole
+                  };
+                } else {
+                  return entry;
+                }
+              } else {
+                if (entry.role !== nextRole) {
+                  return {
+                    ...entry,
+                    role: nextRole
+                  };
+                } else {
+                  return entry;
+                }
+              }
+            }
+          }
+        }
+        return {
+          ...accountMeta,
+          [TYPE2]: 1
+          /* STATIC */
+        };
+      });
+    }
+  }
+  return addressMap;
+}
+function getOrderedAccountsFromAddressMap(addressMap) {
+  let addressComparator;
+  const orderedAccounts = Object.entries(addressMap).sort(([leftAddress, leftEntry], [rightAddress, rightEntry]) => {
+    if (leftEntry[TYPE2] !== rightEntry[TYPE2]) {
+      if (leftEntry[TYPE2] === 0) {
+        return -1;
+      } else if (rightEntry[TYPE2] === 0) {
+        return 1;
+      } else if (leftEntry[TYPE2] === 1) {
+        return -1;
+      } else if (rightEntry[TYPE2] === 1) {
+        return 1;
+      }
+    }
+    const leftIsSigner = isSignerRole(leftEntry.role);
+    if (leftIsSigner !== isSignerRole(rightEntry.role)) {
+      return leftIsSigner ? -1 : 1;
+    }
+    const leftIsWritable = isWritableRole(leftEntry.role);
+    if (leftIsWritable !== isWritableRole(rightEntry.role)) {
+      return leftIsWritable ? -1 : 1;
+    }
+    addressComparator ||= getAddressComparator();
+    return addressComparator(leftAddress, rightAddress);
+  }).map(([address3, addressMeta]) => ({
+    address: address3,
+    ...addressMeta
+  }));
+  return orderedAccounts;
+}
+function getCompiledMessageHeader(orderedAccounts) {
+  let numReadonlyNonSignerAccounts = 0;
+  let numReadonlySignerAccounts = 0;
+  let numSignerAccounts = 0;
+  for (const account of orderedAccounts) {
+    if ("lookupTableAddress" in account) {
+      break;
+    }
+    const accountIsWritable = isWritableRole(account.role);
+    if (isSignerRole(account.role)) {
+      numSignerAccounts++;
+      if (!accountIsWritable) {
+        numReadonlySignerAccounts++;
+      }
+    } else if (!accountIsWritable) {
+      numReadonlyNonSignerAccounts++;
+    }
+  }
+  return {
+    numReadonlyNonSignerAccounts,
+    numReadonlySignerAccounts,
+    numSignerAccounts
+  };
+}
+function getAccountIndex(orderedAccounts) {
+  const out = {};
+  for (const [index2, account] of orderedAccounts.entries()) {
+    out[account.address] = index2;
+  }
+  return out;
+}
+function getCompiledInstructions(instructions, orderedAccounts) {
+  const accountIndex = getAccountIndex(orderedAccounts);
+  return instructions.map(({ accounts, data, programAddress }) => {
+    return {
+      programAddressIndex: accountIndex[programAddress],
+      ...accounts ? { accountIndices: accounts.map(({ address: address3 }) => accountIndex[address3]) } : null,
+      ...data ? { data } : null
+    };
+  });
+}
+function getCompiledLifetimeToken(lifetimeConstraint) {
+  if ("nonce" in lifetimeConstraint) {
+    return lifetimeConstraint.nonce;
+  }
+  return lifetimeConstraint.blockhash;
+}
+function compileTransactionMessage(transactionMessage) {
+  const addressMap = getAddressMapFromInstructions(
+    transactionMessage.feePayer.address,
+    transactionMessage.instructions
+  );
+  const orderedAccounts = getOrderedAccountsFromAddressMap(addressMap);
+  const numAccounts = orderedAccounts.length;
+  if (numAccounts > 64) {
+    throw new SolanaError(SOLANA_ERROR__TRANSACTION__TOO_MANY_ACCOUNT_ADDRESSES, {
+      actualCount: numAccounts,
+      maxAllowed: 64
+    });
+  }
+  const numSigners = orderedAccounts.filter((account) => isSignerRole(account.role)).length;
+  if (numSigners > 12) {
+    throw new SolanaError(SOLANA_ERROR__TRANSACTION__TOO_MANY_SIGNER_ADDRESSES, {
+      actualCount: numSigners,
+      maxAllowed: 12
+    });
+  }
+  const numInstructions = transactionMessage.instructions.length;
+  if (numInstructions > 64) {
+    throw new SolanaError(SOLANA_ERROR__TRANSACTION__TOO_MANY_INSTRUCTIONS, {
+      actualCount: numInstructions,
+      maxAllowed: 64
+    });
+  }
+  for (let i = 0; i < transactionMessage.instructions.length; i++) {
+    const numAccountsInInstruction = transactionMessage.instructions[i].accounts?.length ?? 0;
+    if (numAccountsInInstruction > 255) {
+      throw new SolanaError(SOLANA_ERROR__TRANSACTION__TOO_MANY_ACCOUNTS_IN_INSTRUCTION, {
+        actualCount: numAccountsInInstruction,
+        instructionIndex: i,
+        maxAllowed: 255
+      });
+    }
+  }
+  const lifetimeConstraint = transactionMessage.lifetimeConstraint;
+  return {
+    ...lifetimeConstraint ? { lifetimeToken: getCompiledLifetimeToken(lifetimeConstraint) } : null,
+    header: getCompiledMessageHeader(orderedAccounts),
+    instructions: getCompiledInstructions(transactionMessage.instructions, orderedAccounts),
+    staticAccounts: orderedAccounts.map((account) => account.address),
+    version: transactionMessage.version
+  };
+}
+function upsert2(addressMap, address3, update) {
+  addressMap[address3] = update(addressMap[address3] ?? { role: AccountRole.READONLY });
+}
+var TYPE22 = /* @__PURE__ */ Symbol("AddressMapTypeProperty");
+function getAddressMapFromInstructions2(feePayer, instructions) {
+  const addressMap = {
+    [feePayer]: { [TYPE22]: 0, role: AccountRole.WRITABLE_SIGNER }
+  };
+  const addressesOfInvokedPrograms = /* @__PURE__ */ new Set();
+  for (const instruction of instructions) {
+    upsert2(addressMap, instruction.programAddress, (entry) => {
+      addressesOfInvokedPrograms.add(instruction.programAddress);
+      if (TYPE22 in entry) {
+        if (isWritableRole(entry.role)) {
+          switch (entry[TYPE22]) {
+            case 0:
+              throw new SolanaError(SOLANA_ERROR__TRANSACTION__INVOKED_PROGRAMS_CANNOT_PAY_FEES, {
+                programAddress: instruction.programAddress
+              });
+            default:
+              throw new SolanaError(SOLANA_ERROR__TRANSACTION__INVOKED_PROGRAMS_MUST_NOT_BE_WRITABLE, {
+                programAddress: instruction.programAddress
+              });
+          }
+        }
+        if (entry[TYPE22] === 2) {
+          return entry;
+        }
+      }
+      return { [TYPE22]: 2, role: AccountRole.READONLY };
+    });
+    let addressComparator;
+    if (!instruction.accounts) {
+      continue;
+    }
+    for (const account of instruction.accounts) {
+      upsert2(addressMap, account.address, (entry) => {
+        const {
+          // eslint-disable-next-line @typescript-eslint/no-unused-vars
+          address: _,
+          ...accountMeta
+        } = account;
+        if (TYPE22 in entry) {
+          switch (entry[TYPE22]) {
+            case 0:
+              return entry;
+            case 1: {
+              const nextRole = mergeRoles(entry.role, accountMeta.role);
+              if ("lookupTableAddress" in accountMeta) {
+                const shouldReplaceEntry = (
+                  // Consider using the new LOOKUP_TABLE if its address is different...
+                  entry.lookupTableAddress !== accountMeta.lookupTableAddress && // ...and sorts before the existing one.
+                  (addressComparator ||= getAddressComparator())(
+                    accountMeta.lookupTableAddress,
+                    entry.lookupTableAddress
+                  ) < 0
+                );
+                if (shouldReplaceEntry) {
+                  return {
+                    [TYPE22]: 1,
+                    ...accountMeta,
+                    role: nextRole
+                  };
+                }
+              } else if (isSignerRole(accountMeta.role)) {
+                return {
+                  [TYPE22]: 2,
+                  role: nextRole
+                };
+              }
+              if (entry.role !== nextRole) {
+                return {
+                  ...entry,
+                  role: nextRole
+                };
+              } else {
+                return entry;
+              }
+            }
+            case 2: {
+              const nextRole = mergeRoles(entry.role, accountMeta.role);
+              if (
+                // Check to see if this address represents a program that is invoked
+                // in this transaction.
+                addressesOfInvokedPrograms.has(account.address)
+              ) {
+                if (isWritableRole(accountMeta.role)) {
+                  throw new SolanaError(
+                    SOLANA_ERROR__TRANSACTION__INVOKED_PROGRAMS_MUST_NOT_BE_WRITABLE,
+                    {
+                      programAddress: account.address
+                    }
+                  );
+                }
+                if (entry.role !== nextRole) {
+                  return {
+                    ...entry,
+                    role: nextRole
+                  };
+                } else {
+                  return entry;
+                }
+              } else if ("lookupTableAddress" in accountMeta && // Static accounts can be 'upgraded' to lookup table accounts as
+              // long as they are not require to sign the transaction.
+              !isSignerRole(entry.role)) {
+                return {
+                  ...accountMeta,
+                  [TYPE22]: 1,
+                  role: nextRole
+                };
+              } else {
+                if (entry.role !== nextRole) {
+                  return {
+                    ...entry,
+                    role: nextRole
+                  };
+                } else {
+                  return entry;
+                }
+              }
+            }
+          }
+        }
+        if ("lookupTableAddress" in accountMeta) {
+          return {
+            ...accountMeta,
+            [TYPE22]: 1
+            /* LOOKUP_TABLE */
+          };
+        } else {
+          return {
+            ...accountMeta,
+            [TYPE22]: 2
+            /* STATIC */
+          };
+        }
+      });
+    }
+  }
+  return addressMap;
+}
+function getOrderedAccountsFromAddressMap2(addressMap) {
+  let addressComparator;
+  const orderedAccounts = Object.entries(addressMap).sort(([leftAddress, leftEntry], [rightAddress, rightEntry]) => {
+    if (leftEntry[TYPE22] !== rightEntry[TYPE22]) {
+      if (leftEntry[TYPE22] === 0) {
+        return -1;
+      } else if (rightEntry[TYPE22] === 0) {
+        return 1;
+      } else if (leftEntry[TYPE22] === 2) {
+        return -1;
+      } else if (rightEntry[TYPE22] === 2) {
+        return 1;
+      }
+    }
+    const leftIsSigner = isSignerRole(leftEntry.role);
+    if (leftIsSigner !== isSignerRole(rightEntry.role)) {
+      return leftIsSigner ? -1 : 1;
+    }
+    const leftIsWritable = isWritableRole(leftEntry.role);
+    if (leftIsWritable !== isWritableRole(rightEntry.role)) {
+      return leftIsWritable ? -1 : 1;
+    }
+    addressComparator ||= getAddressComparator();
+    if (leftEntry[TYPE22] === 1 && rightEntry[TYPE22] === 1 && leftEntry.lookupTableAddress !== rightEntry.lookupTableAddress) {
+      return addressComparator(leftEntry.lookupTableAddress, rightEntry.lookupTableAddress);
+    } else {
+      return addressComparator(leftAddress, rightAddress);
+    }
+  }).map(([address3, addressMeta]) => ({
+    address: address3,
+    ...addressMeta
+  }));
+  return orderedAccounts;
+}
+function getCompiledAddressTableLookups(orderedAccounts) {
+  const index2 = {};
+  for (const account of orderedAccounts) {
+    if (!("lookupTableAddress" in account)) {
+      continue;
+    }
+    const entry = index2[account.lookupTableAddress] ||= {
+      readonlyIndexes: [],
+      writableIndexes: []
+    };
+    if (account.role === AccountRole.WRITABLE) {
+      entry.writableIndexes.push(account.addressIndex);
+    } else {
+      entry.readonlyIndexes.push(account.addressIndex);
+    }
+  }
+  return Object.keys(index2).sort(getAddressComparator()).map((lookupTableAddress) => ({
+    lookupTableAddress,
+    ...index2[lookupTableAddress]
+  }));
+}
+function getAccountIndex2(orderedAccounts) {
+  const out = {};
+  for (const [index2, account] of orderedAccounts.entries()) {
+    out[account.address] = index2;
+  }
+  return out;
+}
+function getCompiledInstructions2(instructions, orderedAccounts) {
+  const accountIndex = getAccountIndex2(orderedAccounts);
+  return instructions.map(({ accounts, data, programAddress }) => {
+    return {
+      programAddressIndex: accountIndex[programAddress],
+      ...accounts ? { accountIndices: accounts.map(({ address: address3 }) => accountIndex[address3]) } : null,
+      ...data ? { data } : null
+    };
+  });
+}
+function getCompiledStaticAccounts(orderedAccounts) {
+  const firstLookupTableAccountIndex = orderedAccounts.findIndex((account) => "lookupTableAddress" in account);
+  const orderedStaticAccounts = firstLookupTableAccountIndex === -1 ? orderedAccounts : orderedAccounts.slice(0, firstLookupTableAccountIndex);
+  return orderedStaticAccounts.map(({ address: address3 }) => address3);
+}
+function compileTransactionMessage2(transactionMessage) {
+  const addressMap = getAddressMapFromInstructions2(
+    transactionMessage.feePayer.address,
+    transactionMessage.instructions
+  );
+  const orderedAccounts = getOrderedAccountsFromAddressMap2(addressMap);
+  const numAccounts = orderedAccounts.length;
+  if (numAccounts > 64) {
+    throw new SolanaError(SOLANA_ERROR__TRANSACTION__TOO_MANY_ACCOUNT_ADDRESSES, {
+      actualCount: numAccounts,
+      maxAllowed: 64
+    });
+  }
+  const numSigners = orderedAccounts.filter((account) => isSignerRole(account.role)).length;
+  if (numSigners > 12) {
+    throw new SolanaError(SOLANA_ERROR__TRANSACTION__TOO_MANY_SIGNER_ADDRESSES, {
+      actualCount: numSigners,
+      maxAllowed: 12
+    });
+  }
+  const numInstructions = transactionMessage.instructions.length;
+  if (numInstructions > 64) {
+    throw new SolanaError(SOLANA_ERROR__TRANSACTION__TOO_MANY_INSTRUCTIONS, {
+      actualCount: numInstructions,
+      maxAllowed: 64
+    });
+  }
+  for (let i = 0; i < transactionMessage.instructions.length; i++) {
+    const numAccountsInInstruction = transactionMessage.instructions[i].accounts?.length ?? 0;
+    if (numAccountsInInstruction > 255) {
+      throw new SolanaError(SOLANA_ERROR__TRANSACTION__TOO_MANY_ACCOUNTS_IN_INSTRUCTION, {
+        actualCount: numAccountsInInstruction,
+        instructionIndex: i,
+        maxAllowed: 255
+      });
+    }
+  }
+  const lifetimeConstraint = transactionMessage.lifetimeConstraint;
+  return {
+    addressTableLookups: getCompiledAddressTableLookups(orderedAccounts),
+    ...lifetimeConstraint ? { lifetimeToken: getCompiledLifetimeToken(lifetimeConstraint) } : null,
+    header: getCompiledMessageHeader(orderedAccounts),
+    instructions: getCompiledInstructions2(transactionMessage.instructions, orderedAccounts),
+    staticAccounts: getCompiledStaticAccounts(orderedAccounts),
+    version: transactionMessage.version
+  };
+}
+function getTransactionConfigMask(config2) {
+  let mask = 0;
+  if (config2.priorityFeeLamports !== void 0) mask |= TRANSACTION_CONFIG_PRIORITY_FEE_LAMPORTS_BIT_MASK;
+  if (config2.computeUnitLimit !== void 0) mask |= TRANSACTION_CONFIG_COMPUTE_UNIT_LIMIT_BIT_MASK;
+  if (config2.loadedAccountsDataSizeLimit !== void 0)
+    mask |= TRANSACTION_CONFIG_LOADED_ACCOUNTS_DATA_SIZE_LIMIT_BIT_MASK;
+  if (config2.heapSize !== void 0) mask |= TRANSACTION_CONFIG_HEAP_SIZE_BIT_MASK;
+  return mask;
+}
+function getTransactionConfigValues(config2) {
+  const values = [];
+  if (config2.priorityFeeLamports !== void 0) {
+    values.push({ kind: "u64", value: config2.priorityFeeLamports });
+  }
+  if (config2.computeUnitLimit !== void 0) {
+    values.push({ kind: "u32", value: config2.computeUnitLimit });
+  }
+  if (config2.loadedAccountsDataSizeLimit !== void 0) {
+    values.push({ kind: "u32", value: config2.loadedAccountsDataSizeLimit });
+  }
+  if (config2.heapSize !== void 0) {
+    values.push({ kind: "u32", value: config2.heapSize });
+  }
+  return values;
+}
+function getInstructionHeader(instruction, accountIndex) {
+  return {
+    numInstructionAccounts: instruction.accounts?.length ?? 0,
+    numInstructionDataBytes: instruction.data?.byteLength ?? 0,
+    programAccountIndex: accountIndex[instruction.programAddress]
+  };
+}
+function getInstructionPayload(instruction, accountIndex) {
+  return {
+    instructionAccountIndices: instruction.accounts?.map(({ address: address3 }) => accountIndex[address3]) ?? [],
+    instructionData: instruction.data ?? new Uint8Array()
+  };
+}
+function compileTransactionMessage3(transactionMessage) {
+  const addressMap = getAddressMapFromInstructions(
+    transactionMessage.feePayer.address,
+    transactionMessage.instructions
+  );
+  const orderedAccounts = getOrderedAccountsFromAddressMap(addressMap);
+  const numAccounts = orderedAccounts.length;
+  if (numAccounts > 64) {
+    throw new SolanaError(SOLANA_ERROR__TRANSACTION__TOO_MANY_ACCOUNT_ADDRESSES, {
+      actualCount: numAccounts,
+      maxAllowed: 64
+    });
+  }
+  const numSigners = orderedAccounts.filter((account) => isSignerRole(account.role)).length;
+  if (numSigners > 12) {
+    throw new SolanaError(SOLANA_ERROR__TRANSACTION__TOO_MANY_SIGNER_ADDRESSES, {
+      actualCount: numSigners,
+      maxAllowed: 12
+    });
+  }
+  const numInstructions = transactionMessage.instructions.length;
+  if (numInstructions > 64) {
+    throw new SolanaError(SOLANA_ERROR__TRANSACTION__TOO_MANY_INSTRUCTIONS, {
+      actualCount: numInstructions,
+      maxAllowed: 64
+    });
+  }
+  for (let i = 0; i < transactionMessage.instructions.length; i++) {
+    const numAccountsInInstruction = transactionMessage.instructions[i].accounts?.length ?? 0;
+    if (numAccountsInInstruction > 255) {
+      throw new SolanaError(SOLANA_ERROR__TRANSACTION__TOO_MANY_ACCOUNTS_IN_INSTRUCTION, {
+        actualCount: numAccountsInInstruction,
+        instructionIndex: i,
+        maxAllowed: 255
+      });
+    }
+  }
+  const accountIndex = getAccountIndex(orderedAccounts);
+  const lifetimeConstraint = transactionMessage.lifetimeConstraint;
+  return {
+    version: 1,
+    ...lifetimeConstraint ? { lifetimeToken: getCompiledLifetimeToken(lifetimeConstraint) } : null,
+    configMask: getTransactionConfigMask(transactionMessage.config ?? {}),
+    configValues: getTransactionConfigValues(transactionMessage.config ?? {}),
+    header: getCompiledMessageHeader(orderedAccounts),
+    instructionHeaders: transactionMessage.instructions.map(
+      (instruction) => getInstructionHeader(instruction, accountIndex)
+    ),
+    instructionPayloads: transactionMessage.instructions.map(
+      (instruction) => getInstructionPayload(instruction, accountIndex)
+    ),
+    numInstructions: transactionMessage.instructions.length,
+    numStaticAccounts: orderedAccounts.length,
+    staticAccounts: orderedAccounts.map((account) => account.address)
+  };
+}
+function compileTransactionMessage4(transactionMessage) {
+  const version5 = transactionMessage.version;
+  if (version5 === "legacy") {
+    return compileTransactionMessage(transactionMessage);
+  } else if (version5 === 0) {
+    return compileTransactionMessage2(transactionMessage);
+  } else if (version5 === 1) {
+    return compileTransactionMessage3(transactionMessage);
+  } else {
+    throw new SolanaError(SOLANA_ERROR__TRANSACTION__VERSION_NUMBER_NOT_SUPPORTED, {
+      version: version5
+    });
+  }
+}
+function appendTransactionMessageInstructions(instructions, transactionMessage) {
+  return Object.freeze({
+    ...transactionMessage,
+    instructions: Object.freeze([
+      ...transactionMessage.instructions,
+      ...instructions
+    ])
+  });
+}
+function createTransactionMessage(config2) {
+  return Object.freeze({
+    instructions: Object.freeze([]),
+    version: config2.version
+  });
+}
+function setTransactionMessageFeePayer(feePayer, transactionMessage) {
+  if ("feePayer" in transactionMessage && feePayer === transactionMessage.feePayer?.address && isAddressOnlyFeePayer(transactionMessage.feePayer)) {
+    return transactionMessage;
+  }
+  const out = {
+    ...transactionMessage,
+    feePayer: Object.freeze({ address: feePayer })
+  };
+  Object.freeze(out);
+  return out;
+}
+function isAddressOnlyFeePayer(feePayer) {
+  return !!feePayer && "address" in feePayer && typeof feePayer.address === "string" && Object.keys(feePayer).length === 1;
+}
+function getAccountMetas(message) {
+  const { header } = message;
+  const numWritableSignerAccounts = header.numSignerAccounts - header.numReadonlySignerAccounts;
+  const numWritableNonSignerAccounts = message.staticAccounts.length - header.numSignerAccounts - header.numReadonlyNonSignerAccounts;
+  const accountMetas = [];
+  let accountIndex = 0;
+  for (let i = 0; i < numWritableSignerAccounts; i++) {
+    accountMetas.push({
+      address: message.staticAccounts[accountIndex],
+      role: AccountRole.WRITABLE_SIGNER
+    });
+    accountIndex++;
+  }
+  for (let i = 0; i < header.numReadonlySignerAccounts; i++) {
+    accountMetas.push({
+      address: message.staticAccounts[accountIndex],
+      role: AccountRole.READONLY_SIGNER
+    });
+    accountIndex++;
+  }
+  for (let i = 0; i < numWritableNonSignerAccounts; i++) {
+    accountMetas.push({
+      address: message.staticAccounts[accountIndex],
+      role: AccountRole.WRITABLE
+    });
+    accountIndex++;
+  }
+  for (let i = 0; i < header.numReadonlyNonSignerAccounts; i++) {
+    accountMetas.push({
+      address: message.staticAccounts[accountIndex],
+      role: AccountRole.READONLY
+    });
+    accountIndex++;
+  }
+  return accountMetas;
+}
+function convertInstruction(instruction, accountMetas) {
+  const programAddress = accountMetas[instruction.programAddressIndex]?.address;
+  if (!programAddress) {
+    throw new SolanaError(SOLANA_ERROR__TRANSACTION__FAILED_TO_DECOMPILE_INSTRUCTION_PROGRAM_ADDRESS_NOT_FOUND, {
+      index: instruction.programAddressIndex
+    });
+  }
+  const accounts = instruction.accountIndices?.map((accountIndex) => accountMetas[accountIndex]);
+  const { data } = instruction;
+  return Object.freeze({
+    programAddress,
+    ...accounts && accounts.length ? { accounts: Object.freeze(accounts) } : {},
+    ...data && data.length ? { data } : {}
+  });
+}
+function convertInstructions(instructions, accountMetas) {
+  return instructions.map((instruction) => convertInstruction(instruction, accountMetas));
+}
+function getFeePayer(staticAccounts) {
+  const feePayer = staticAccounts[0];
+  if (!feePayer) {
+    throw new SolanaError(SOLANA_ERROR__TRANSACTION__FAILED_TO_DECOMPILE_FEE_PAYER_MISSING);
+  }
+  return feePayer;
+}
+var RECENT_BLOCKHASHES_SYSVAR_ADDRESS = "SysvarRecentB1ockHashes11111111111111111111";
+var SYSTEM_PROGRAM_ADDRESS = "11111111111111111111111111111111";
+function createAdvanceNonceAccountInstruction(nonceAccountAddress, nonceAuthorityAddress) {
+  return {
+    accounts: [
+      { address: nonceAccountAddress, role: AccountRole.WRITABLE },
+      {
+        address: RECENT_BLOCKHASHES_SYSVAR_ADDRESS,
+        role: AccountRole.READONLY
+      },
+      { address: nonceAuthorityAddress, role: AccountRole.READONLY_SIGNER }
+    ],
+    data: new Uint8Array([4, 0, 0, 0]),
+    programAddress: SYSTEM_PROGRAM_ADDRESS
+  };
+}
+function isAdvanceNonceAccountInstruction(instruction) {
+  return instruction.programAddress === SYSTEM_PROGRAM_ADDRESS && // Test for `AdvanceNonceAccount` instruction data
+  instruction.data != null && isAdvanceNonceAccountInstructionData(instruction.data) && // Test for exactly 3 accounts
+  instruction.accounts?.length === 3 && // First account is nonce account address
+  instruction.accounts[0].address != null && instruction.accounts[0].role === AccountRole.WRITABLE && // Second account is recent blockhashes sysvar
+  instruction.accounts[1].address === RECENT_BLOCKHASHES_SYSVAR_ADDRESS && instruction.accounts[1].role === AccountRole.READONLY && // Third account is nonce authority account
+  instruction.accounts[2].address != null && isSignerRole(instruction.accounts[2].role);
+}
+function isAdvanceNonceAccountInstructionData(data) {
+  return data.byteLength === 4 && data[0] === 4 && data[1] === 0 && data[2] === 0 && data[3] === 0;
+}
+function getLifetimeConstraint(messageLifetimeToken, instructions, lastValidBlockHeight) {
+  const firstInstruction = instructions[0];
+  if (!firstInstruction || !isAdvanceNonceAccountInstruction(firstInstruction)) {
+    return {
+      blockhash: messageLifetimeToken,
+      lastValidBlockHeight: lastValidBlockHeight ?? 2n ** 64n - 1n
+      // U64 MAX
+    };
+  } else {
+    const nonceAccountAddress = firstInstruction.accounts[0].address;
+    assertIsAddress(nonceAccountAddress);
+    const nonceAuthorityAddress = firstInstruction.accounts[2].address;
+    assertIsAddress(nonceAuthorityAddress);
+    return {
+      nonce: messageLifetimeToken,
+      nonceAccountAddress,
+      nonceAuthorityAddress
+    };
+  }
+}
+function decompileTransactionMessage(compiledTransactionMessage, config2) {
+  const feePayer = getFeePayer(compiledTransactionMessage.staticAccounts);
+  const accountMetas = getAccountMetas(compiledTransactionMessage);
+  const instructions = convertInstructions(compiledTransactionMessage.instructions, accountMetas);
+  const lifetimeConstraint = getLifetimeConstraint(
+    compiledTransactionMessage.lifetimeToken,
+    instructions,
+    config2?.lastValidBlockHeight
+  );
+  return pipe2(
+    createTransactionMessage({ version: "legacy" }),
+    (m) => setTransactionMessageFeePayer(feePayer, m),
+    (m) => appendTransactionMessageInstructions(instructions, m),
+    (m) => "blockhash" in lifetimeConstraint ? setTransactionMessageLifetimeUsingBlockhash(lifetimeConstraint, m) : setTransactionMessageLifetimeUsingDurableNonce(lifetimeConstraint, m)
+  );
+}
+function isTransactionMessageWithDurableNonceLifetime(transactionMessage) {
+  return "lifetimeConstraint" in transactionMessage && typeof transactionMessage.lifetimeConstraint.nonce === "string" && transactionMessage.instructions[0] != null && isAdvanceNonceAccountInstruction(transactionMessage.instructions[0]);
+}
+function isAdvanceNonceAccountInstructionForNonce(instruction, nonceAccountAddress, nonceAuthorityAddress) {
+  return instruction.accounts[0].address === nonceAccountAddress && instruction.accounts[2].address === nonceAuthorityAddress;
+}
+function setTransactionMessageLifetimeUsingDurableNonce({
+  nonce,
+  nonceAccountAddress,
+  nonceAuthorityAddress
+}, transactionMessage) {
+  let newInstructions;
+  const firstInstruction = transactionMessage.instructions[0];
+  if (firstInstruction && isAdvanceNonceAccountInstruction(firstInstruction)) {
+    if (isAdvanceNonceAccountInstructionForNonce(firstInstruction, nonceAccountAddress, nonceAuthorityAddress)) {
+      if (isTransactionMessageWithDurableNonceLifetime(transactionMessage) && transactionMessage.lifetimeConstraint.nonce === nonce) {
+        return transactionMessage;
+      } else {
+        newInstructions = [firstInstruction, ...transactionMessage.instructions.slice(1)];
+      }
+    } else {
+      newInstructions = [
+        Object.freeze(createAdvanceNonceAccountInstruction(nonceAccountAddress, nonceAuthorityAddress)),
+        ...transactionMessage.instructions.slice(1)
+      ];
+    }
+  } else {
+    newInstructions = [
+      Object.freeze(createAdvanceNonceAccountInstruction(nonceAccountAddress, nonceAuthorityAddress)),
+      ...transactionMessage.instructions
+    ];
+  }
+  return Object.freeze({
+    ...transactionMessage,
+    instructions: Object.freeze(newInstructions),
+    lifetimeConstraint: Object.freeze({ nonce })
+  });
+}
+function getAddressLookupMetas(compiledAddressTableLookups, addressesByLookupTableAddress) {
+  const compiledAddressTableLookupAddresses = compiledAddressTableLookups.map((l) => l.lookupTableAddress);
+  const missing = compiledAddressTableLookupAddresses.filter((a) => addressesByLookupTableAddress[a] === void 0);
+  if (missing.length > 0) {
+    throw new SolanaError(SOLANA_ERROR__TRANSACTION__FAILED_TO_DECOMPILE_ADDRESS_LOOKUP_TABLE_CONTENTS_MISSING, {
+      lookupTableAddresses: missing
+    });
+  }
+  const readOnlyMetas = [];
+  const writableMetas = [];
+  for (const lookup of compiledAddressTableLookups) {
+    const addresses = addressesByLookupTableAddress[lookup.lookupTableAddress];
+    const readonlyIndexes = lookup.readonlyIndexes;
+    const writableIndexes = lookup.writableIndexes;
+    const highestIndex = Math.max(...readonlyIndexes, ...writableIndexes);
+    if (highestIndex >= addresses.length) {
+      throw new SolanaError(
+        SOLANA_ERROR__TRANSACTION__FAILED_TO_DECOMPILE_ADDRESS_LOOKUP_TABLE_INDEX_OUT_OF_RANGE,
+        {
+          highestKnownIndex: addresses.length - 1,
+          highestRequestedIndex: highestIndex,
+          lookupTableAddress: lookup.lookupTableAddress
+        }
+      );
+    }
+    const readOnlyForLookup = readonlyIndexes.map((r) => ({
+      address: addresses[r],
+      addressIndex: r,
+      lookupTableAddress: lookup.lookupTableAddress,
+      role: AccountRole.READONLY
+    }));
+    readOnlyMetas.push(...readOnlyForLookup);
+    const writableForLookup = writableIndexes.map((w) => ({
+      address: addresses[w],
+      addressIndex: w,
+      lookupTableAddress: lookup.lookupTableAddress,
+      role: AccountRole.WRITABLE
+    }));
+    writableMetas.push(...writableForLookup);
+  }
+  return [...writableMetas, ...readOnlyMetas];
+}
+function decompileTransactionMessage2(compiledTransactionMessage, config2) {
+  const feePayer = getFeePayer(compiledTransactionMessage.staticAccounts);
+  const accountMetas = getAccountMetas(compiledTransactionMessage);
+  const accountLookupMetas = "addressTableLookups" in compiledTransactionMessage && compiledTransactionMessage.addressTableLookups !== void 0 && compiledTransactionMessage.addressTableLookups.length > 0 ? getAddressLookupMetas(
+    compiledTransactionMessage.addressTableLookups,
+    config2?.addressesByLookupTableAddress ?? {}
+  ) : [];
+  const transactionMetas = [...accountMetas, ...accountLookupMetas];
+  const instructions = convertInstructions(compiledTransactionMessage.instructions, transactionMetas);
+  const lifetimeConstraint = getLifetimeConstraint(
+    compiledTransactionMessage.lifetimeToken,
+    instructions,
+    config2?.lastValidBlockHeight
+  );
+  return pipe2(
+    createTransactionMessage({ version: 0 }),
+    (m) => setTransactionMessageFeePayer(feePayer, m),
+    (m) => appendTransactionMessageInstructions(instructions, m),
+    (m) => "blockhash" in lifetimeConstraint ? setTransactionMessageLifetimeUsingBlockhash(lifetimeConstraint, m) : setTransactionMessageLifetimeUsingDurableNonce(lifetimeConstraint, m)
+  );
+}
+function decompileTransactionConfig(configMask, configValues) {
+  const supportedConfigs = [
+    ["priorityFeeLamports", "u64", transactionConfigMaskHasPriorityFee],
+    ["computeUnitLimit", "u32", transactionConfigMaskHasComputeUnitLimit],
+    ["loadedAccountsDataSizeLimit", "u32", transactionConfigMaskHasLoadedAccountsDataSizeLimit],
+    ["heapSize", "u32", transactionConfigMaskHasHeapSize]
+  ];
+  const [config2] = supportedConfigs.reduce(
+    ([acc, index2], [name, kind, predicate]) => {
+      if (!predicate(configMask)) return [acc, index2];
+      const configValue = configValues[index2];
+      if (configValue.kind !== kind) {
+        throw new SolanaError(SOLANA_ERROR__TRANSACTION__INVALID_CONFIG_VALUE_KIND, {
+          actualKind: configValue.kind,
+          configName: name,
+          expectedKind: kind
+        });
+      }
+      return [{ ...acc, [name]: configValue.value }, index2 + 1];
+    },
+    [{}, 0]
+  );
+  return config2;
+}
+function decompileInstruction(instructionHeader, instructionPayload, accountMetas) {
+  const programAddress = accountMetas[instructionHeader.programAccountIndex]?.address;
+  if (!programAddress) {
+    throw new SolanaError(SOLANA_ERROR__TRANSACTION__FAILED_TO_DECOMPILE_INSTRUCTION_PROGRAM_ADDRESS_NOT_FOUND, {
+      index: instructionHeader.programAccountIndex
+    });
+  }
+  const accounts = instructionPayload.instructionAccountIndices.map((accountIndex) => accountMetas[accountIndex]);
+  const data = instructionPayload.instructionData;
+  return Object.freeze({
+    programAddress,
+    ...accounts && accounts.length ? { accounts: Object.freeze(accounts) } : {},
+    ...data && data.length ? { data } : {}
+  });
+}
+function decompileInstructions(instructionHeaders, instructionPayloads, accountMetas) {
+  if (instructionHeaders.length !== instructionPayloads.length) {
+    throw new SolanaError(SOLANA_ERROR__TRANSACTION__INSTRUCTION_HEADERS_PAYLOADS_MISMATCH, {
+      numInstructionHeaders: instructionHeaders.length,
+      numInstructionPayloads: instructionPayloads.length
+    });
+  }
+  return instructionHeaders.map(
+    (instructionHeader, index2) => decompileInstruction(instructionHeader, instructionPayloads[index2], accountMetas)
+  );
+}
+function decompileTransactionMessage3(compiledTransactionMessage, config2) {
+  const feePayer = getFeePayer(compiledTransactionMessage.staticAccounts);
+  const accountMetas = getAccountMetas(compiledTransactionMessage);
+  const transactionConfig = decompileTransactionConfig(
+    compiledTransactionMessage.configMask,
+    compiledTransactionMessage.configValues
+  );
+  const instructions = decompileInstructions(
+    compiledTransactionMessage.instructionHeaders,
+    compiledTransactionMessage.instructionPayloads,
+    accountMetas
+  );
+  const lifetimeConstraint = getLifetimeConstraint(
+    compiledTransactionMessage.lifetimeToken,
+    instructions,
+    config2?.lastValidBlockHeight
+  );
+  return pipe2(
+    createTransactionMessage({ version: 1 }),
+    // Attach the decoded config directly instead of going through `setTransactionMessageConfig`,
+    // which validates resource limits. Decoding must not reject a transaction merely because it
+    // carries values the runtime would refuse; callers need to be able to inspect such messages.
+    (m) => isV1ConfigEmpty(transactionConfig) ? m : Object.freeze({ ...m, config: Object.freeze(transactionConfig) }),
+    (m) => setTransactionMessageFeePayer(feePayer, m),
+    (m) => appendTransactionMessageInstructions(instructions, m),
+    (m) => "blockhash" in lifetimeConstraint ? setTransactionMessageLifetimeUsingBlockhash(lifetimeConstraint, m) : setTransactionMessageLifetimeUsingDurableNonce(lifetimeConstraint, m)
+  );
+}
+function decompileTransactionMessage4(compiledTransactionMessage, config2) {
+  const version5 = compiledTransactionMessage.version;
+  if (version5 === "legacy") {
+    return decompileTransactionMessage(compiledTransactionMessage, config2);
+  } else if (version5 === 0) {
+    return decompileTransactionMessage2(compiledTransactionMessage, config2);
+  } else if (version5 === 1) {
+    return decompileTransactionMessage3(compiledTransactionMessage, config2);
+  } else {
+    throw new SolanaError(SOLANA_ERROR__TRANSACTION__VERSION_NUMBER_NOT_SUPPORTED, {
+      version: version5
+    });
+  }
+}
+
+// node_modules/@solana/promises/dist/index.node.mjs
+function isObject2(value) {
+  return value !== null && (typeof value === "object" || typeof value === "function");
+}
+function addRaceContender(contender) {
+  const deferreds = /* @__PURE__ */ new Set();
+  const record2 = { deferreds, settled: false };
+  Promise.resolve(contender).then(
+    (value) => {
+      for (const { resolve: resolve2 } of deferreds) {
+        resolve2(value);
+      }
+      deferreds.clear();
+      record2.settled = true;
+    },
+    (err) => {
+      for (const { reject } of deferreds) {
+        reject(err);
+      }
+      deferreds.clear();
+      record2.settled = true;
+    }
+  );
+  return record2;
+}
+var wm = /* @__PURE__ */ new WeakMap();
+async function safeRace(contenders) {
+  let deferred;
+  const result = new Promise((resolve2, reject) => {
+    deferred = { reject, resolve: resolve2 };
+    for (const contender of contenders) {
+      if (!isObject2(contender)) {
+        Promise.resolve(contender).then(resolve2, reject);
+        continue;
+      }
+      let record2 = wm.get(contender);
+      if (record2 === void 0) {
+        record2 = addRaceContender(contender);
+        record2.deferreds.add(deferred);
+        wm.set(contender, record2);
+      } else if (record2.settled) {
+        Promise.resolve(contender).then(resolve2, reject);
+      } else {
+        record2.deferreds.add(deferred);
+      }
+    }
+  });
+  return await result.finally(() => {
+    for (const contender of contenders) {
+      if (isObject2(contender)) {
+        const record2 = wm.get(contender);
+        record2.deferreds.delete(deferred);
+      }
+    }
+  });
+}
+function getAbortablePromise(promise2, abortSignal) {
+  if (!abortSignal) {
+    return promise2;
+  } else {
+    return safeRace([
+      // This promise only ever rejects if the signal is aborted. Otherwise it idles forever.
+      // It's important that this come before the input promise; in the event of an abort, we
+      // want to throw even if the input promise's result is ready
+      new Promise((_, reject) => {
+        if (abortSignal.aborted) {
+          reject(abortSignal.reason);
+        } else {
+          abortSignal.addEventListener("abort", function() {
+            reject(this.reason);
+          });
+        }
+      }),
+      promise2
+    ]);
+  }
+}
+
+// node_modules/@solana/keys/dist/index.node.mjs
+var ED25519_ALGORITHM_IDENTIFIER = (
+  // Resist the temptation to convert this to a simple string; As of version 133.0.3, Firefox
+  // requires the object form of `AlgorithmIdentifier` and will throw a `DOMException` otherwise.
+  Object.freeze({ name: "Ed25519" })
+);
+async function verifySignature(key, signature2, data) {
+  assertVerificationCapabilityIsAvailable();
+  return await crypto.subtle.verify(ED25519_ALGORITHM_IDENTIFIER, key, toArrayBuffer(signature2), toArrayBuffer(data));
+}
+
+// node_modules/@solana/transactions/dist/index.node.mjs
+function getSignaturesToEncode(signaturesMap) {
+  const signatures = Object.values(signaturesMap);
+  if (signatures.length === 0) {
+    throw new SolanaError(SOLANA_ERROR__TRANSACTION__CANNOT_ENCODE_WITH_EMPTY_SIGNATURES);
+  }
+  return signatures.map((signature) => {
+    if (!signature) {
+      return new Uint8Array(64).fill(0);
+    }
+    return signature;
+  });
+}
+function getSignaturesEncoderWithSizePrefix() {
+  return transformEncoder(
+    getArrayEncoder(fixEncoderSize(getBytesEncoder(), 64), { size: getShortU16Encoder() }),
+    getSignaturesToEncode
+  );
+}
+function getSignaturesEncoderWithLength(size5) {
+  return transformEncoder(
+    getArrayEncoder(fixEncoderSize(getBytesEncoder(), 64), { description: "signatures", size: size5 }),
+    getSignaturesToEncode
+  );
+}
+var SIGNATURE_COUNT_FLAG_MASK = 128;
+var VERSION_FLAG_MASK2 = 127;
+function getEnvelopeShapeFromMessageBytes(messageBytes) {
+  if (messageBytes.length === 0) {
+    throw new SolanaError(SOLANA_ERROR__TRANSACTION__CANNOT_ENCODE_WITH_EMPTY_MESSAGE_BYTES);
+  }
+  const version5 = getTransactionVersionDecoder().decode(messageBytes);
+  return version5 === 1 ? "messageFirst" : "signaturesFirst";
+}
+function getEnvelopeShapeFromTransactionBytes(transactionBytes) {
+  if (transactionBytes.length === 0) {
+    throw new SolanaError(SOLANA_ERROR__TRANSACTION__CANNOT_DECODE_EMPTY_TRANSACTION_BYTES);
+  }
+  const firstByte = transactionBytes[0];
+  if ((firstByte & SIGNATURE_COUNT_FLAG_MASK) === 0) {
+    return "signaturesFirst";
+  }
+  const version5 = firstByte & VERSION_FLAG_MASK2;
+  if (version5 === 0) {
+    throw new SolanaError(SOLANA_ERROR__TRANSACTION__VERSION_ZERO_MUST_BE_ENCODED_WITH_SIGNATURES_FIRST, {
+      firstByte,
+      transactionBytes
+    });
+  }
+  if (version5 === 1) {
+    return "messageFirst";
+  }
+  throw new SolanaError(SOLANA_ERROR__TRANSACTION__VERSION_NUMBER_NOT_SUPPORTED, {
+    unsupportedVersion: version5
+  });
+}
+function getTransactionEncoder() {
+  return getPredicateEncoder(
+    (transaction) => getEnvelopeShapeFromMessageBytes(transaction.messageBytes) === "signaturesFirst",
+    getTransactionEncoderWithSignaturesFirst(),
+    getTransactionEncoderWithMessageFirst()
+  );
+}
+function getTransactionEncoderWithSignaturesFirst() {
+  return getStructEncoder([
+    ["signatures", getSignaturesEncoderWithSizePrefix()],
+    ["messageBytes", getBytesEncoder()]
+  ]);
+}
+function getSignatureCountForVersionedOrThrow(messageBytes, offset) {
+  if (messageBytes.length < offset + 2) {
+    throw new SolanaError(SOLANA_ERROR__TRANSACTION__MALFORMED_MESSAGE_BYTES, {
+      messageBytes
+    });
+  }
+  return messageBytes[offset + 1];
+}
+function getTransactionEncoderWithMessageFirst() {
+  const bytesEncoder = getBytesEncoder();
+  return createEncoder({
+    getSizeFromValue: (transaction) => {
+      const signatureCount = getSignatureCountForVersionedOrThrow(transaction.messageBytes, 0);
+      return transaction.messageBytes.length + signatureCount * 64;
+    },
+    write: (transaction, bytes, offset) => {
+      offset = bytesEncoder.write(transaction.messageBytes, bytes, offset);
+      const signatureCount = getSignatureCountForVersionedOrThrow(transaction.messageBytes, 0);
+      const signaturesEncoder = getSignaturesEncoderWithLength(signatureCount);
+      offset = signaturesEncoder.write(transaction.signatures, bytes, offset);
+      return offset;
+    }
+  });
+}
+function getTransactionDecoder() {
+  return getPredicateDecoder(
+    (transactionBytes) => getEnvelopeShapeFromTransactionBytes(transactionBytes) === "signaturesFirst",
+    getTransactionDecoderWithSignaturesFirst(),
+    getTransactionDecoderWithMessageFirst()
+  );
+}
+function getTransactionDecoderWithSignaturesFirst() {
+  return transformDecoder(
+    getStructDecoder([
+      ["signatures", getArrayDecoder(fixDecoderSize(getBytesDecoder(), 64), { size: getShortU16Decoder() })],
+      ["messageBytes", getBytesDecoder()]
+    ]),
+    decodePartiallyDecodedLegacyOrV0Transaction
+  );
+}
+function getTransactionDecoderWithMessageFirst() {
+  return transformDecoder(
+    getPartiallyDecodedTransactionDecoderWithMessageFirst(),
+    decodePartiallyDecodedV1Transaction
+  );
+}
+function getPartiallyDecodedTransactionDecoderWithMessageFirst() {
+  return createDecoder({
+    read(bytes, offset) {
+      const signatureCount = getSignatureCountForVersionedOrThrow(bytes, offset);
+      const signatureByteLength = signatureCount * 64;
+      const messageBytesLength = bytes.length - offset - signatureByteLength;
+      if (messageBytesLength < 0) {
+        throw new SolanaError(SOLANA_ERROR__TRANSACTION__SIGNATURE_COUNT_TOO_HIGH_FOR_TRANSACTION_BYTES, {
+          numExpectedSignatures: signatureCount,
+          transactionBytes: bytes.subarray(offset),
+          transactionBytesLength: bytes.length - offset
+        });
+      }
+      const messageBytes = bytes.subarray(offset, offset + messageBytesLength);
+      const [signatures, finalOffset] = getArrayDecoder(fixDecoderSize(getBytesDecoder(), 64), {
+        size: signatureCount
+      }).read(bytes, offset + messageBytesLength);
+      return [
+        {
+          messageBytes,
+          signatures
+        },
+        finalOffset
+      ];
+    }
+  });
+}
+function decodePartiallyDecodedLegacyOrV0Transaction(transaction) {
+  const { messageBytes, signatures } = transaction;
+  const signerAddressesDecoder = getTupleDecoder([
+    // read transaction version
+    getTransactionVersionDecoder(),
+    // read first byte of header, `numSignerAccounts`
+    // padRight to skip the next 2 bytes, `numReadOnlySignedAccounts` and `numReadOnlyUnsignedAccounts` which we don't need
+    padRightDecoder(getU8Decoder(), 2),
+    // read static addresses
+    getArrayDecoder(getAddressDecoder(), { size: getShortU16Decoder() })
+  ]);
+  const [_txVersion, numRequiredSignatures, staticAddresses] = signerAddressesDecoder.decode(messageBytes);
+  const signerAddresses = staticAddresses.slice(0, numRequiredSignatures);
+  if (signerAddresses.length !== signatures.length) {
+    throw new SolanaError(SOLANA_ERROR__TRANSACTION__MESSAGE_SIGNATURES_MISMATCH, {
+      numRequiredSignatures,
+      signaturesLength: signatures.length,
+      signerAddresses
+    });
+  }
+  const signaturesMap = makeSignaturesMap(signerAddresses, signatures);
+  return {
+    messageBytes,
+    signatures: Object.freeze(signaturesMap)
+  };
+}
+function decodePartiallyDecodedV1Transaction(transaction) {
+  const { messageBytes, signatures } = transaction;
+  const numRequiredSignatures = messageBytes[1];
+  const staticAddressOffset = 1 + 3 + 4 + 32 + 1 + 1;
+  const signerAddresses = getArrayDecoder(getAddressDecoder(), { size: numRequiredSignatures }).decode(
+    messageBytes,
+    staticAddressOffset
+  );
+  if (signerAddresses.length !== signatures.length) {
+    throw new SolanaError(SOLANA_ERROR__TRANSACTION__MESSAGE_SIGNATURES_MISMATCH, {
+      numRequiredSignatures,
+      signaturesLength: signatures.length,
+      signerAddresses
+    });
+  }
+  const signaturesMap = makeSignaturesMap(signerAddresses, signatures);
+  return {
+    messageBytes,
+    signatures: signaturesMap
+  };
+}
+function makeSignaturesMap(signerAddresses, signatures) {
+  const signaturesMap = {};
+  signerAddresses.forEach((address3, index2) => {
+    const signatureForAddress = signatures[index2];
+    if (signatureForAddress.every((b) => b === 0)) {
+      signaturesMap[address3] = null;
+    } else {
+      signaturesMap[address3] = signatureForAddress;
+    }
+  });
+  return Object.freeze(signaturesMap);
+}
+function compileTransaction(transactionMessage) {
+  const compiledMessage = compileTransactionMessage4(transactionMessage);
+  const messageBytes = getCompiledTransactionMessageEncoder().encode(compiledMessage);
+  const transactionSigners = compiledMessage.staticAccounts.slice(0, compiledMessage.header.numSignerAccounts);
+  const signatures = {};
+  for (const signerAddress of transactionSigners) {
+    signatures[signerAddress] = null;
+  }
+  let lifetimeConstraint;
+  if (isTransactionMessageWithBlockhashLifetime(transactionMessage)) {
+    lifetimeConstraint = {
+      blockhash: transactionMessage.lifetimeConstraint.blockhash,
+      lastValidBlockHeight: transactionMessage.lifetimeConstraint.lastValidBlockHeight
+    };
+  } else if (isTransactionMessageWithDurableNonceLifetime(transactionMessage)) {
+    lifetimeConstraint = {
+      nonce: transactionMessage.lifetimeConstraint.nonce,
+      nonceAccountAddress: transactionMessage.instructions[0].accounts[0].address
+    };
+  }
+  return Object.freeze({
+    ...lifetimeConstraint ? { lifetimeConstraint } : void 0,
+    messageBytes,
+    signatures: Object.freeze(signatures)
+  });
+}
+function getBase64EncodedWireTransaction(transaction) {
+  const wireTransactionBytes = getTransactionEncoder().encode(transaction);
+  return getBase64Decoder().decode(wireTransactionBytes);
+}
+
+// node_modules/@solana/rpc-spec-types/dist/index.node.mjs
+var NODEJS_CUSTOM_INSPECT_SYMBOL = /* @__PURE__ */ Symbol.for("nodejs.util.inspect.custom");
+var JAVASCRIPT_PROTOCOL_PROPERTY_NAMES = /* @__PURE__ */ new Set(
+  [
+    "then",
+    "toJSON",
+    NODEJS_CUSTOM_INSPECT_SYMBOL,
+    Symbol.asyncIterator,
+    Symbol.iterator,
+    Symbol.toPrimitive,
+    Symbol.toStringTag,
+    Symbol.asyncDispose,
+    Symbol.dispose
+  ].filter((propertyName) => propertyName != null)
+);
+var OBJECT_PROTOTYPE_PROPERTY_NAMES = /* @__PURE__ */ new Set([
+  "__defineGetter__",
+  "__defineSetter__",
+  "__lookupGetter__",
+  "__lookupSetter__",
+  "__proto__",
+  "constructor",
+  "hasOwnProperty",
+  "isPrototypeOf",
+  "propertyIsEnumerable",
+  "toLocaleString",
+  "toString",
+  "valueOf"
+]);
+function getNonRpcPropertyValue(propertyName, receiver) {
+  if (JAVASCRIPT_PROTOCOL_PROPERTY_NAMES.has(propertyName)) {
+    return void 0;
+  }
+  return Reflect.get(Object.prototype, propertyName, receiver);
+}
+function isNonRpcPropertyName(propertyName) {
+  return JAVASCRIPT_PROTOCOL_PROPERTY_NAMES.has(propertyName) || OBJECT_PROTOTYPE_PROPERTY_NAMES.has(propertyName);
+}
+var BIGINT_VALUE_OBJECT_PATTERN = /^(-?)(\d+)(?:[eE]\+?(\d+))?$/;
+var MAX_BIGINT_DIGITS = 1e3;
+function parseJsonWithBigInts(json2) {
+  return JSON.parse(wrapIntegersInBigIntValueObject(json2), (_, value) => {
+    return isBigIntValueObject(value) ? unwrapBigIntValueObject(value) : value;
+  });
+}
+function wrapIntegersInBigIntValueObject(json2) {
+  const out = [];
+  let inQuote = false;
+  for (let ii = 0; ii < json2.length; ii++) {
+    let isEscaped = false;
+    if (json2[ii] === "\\") {
+      out.push(json2[ii++]);
+      isEscaped = !isEscaped;
+    }
+    if (json2[ii] === '"') {
+      out.push(json2[ii]);
+      if (!isEscaped) {
+        inQuote = !inQuote;
+      }
+      continue;
+    }
+    if (!inQuote) {
+      const consumedNumber = consumeNumber(json2, ii);
+      if (consumedNumber?.length) {
+        ii += consumedNumber.length - 1;
+        if (consumedNumber.match(/\.|[eE]-/)) {
+          out.push(consumedNumber);
+        } else {
+          out.push(wrapBigIntValueObject(consumedNumber));
+        }
+        continue;
+      }
+    }
+    out.push(json2[ii]);
+  }
+  return out.join("");
+}
+function consumeNumber(json2, ii) {
+  const JSON_NUMBER_REGEX = /^-?(?:0|[1-9]\d*)(?:\.\d+)?(?:[eE][+-]?\d+)?/;
+  if (!json2[ii]?.match(/[-\d]/)) {
+    return null;
+  }
+  const numberMatch = json2.slice(ii).match(JSON_NUMBER_REGEX);
+  return numberMatch ? numberMatch[0] : null;
+}
+function wrapBigIntValueObject(value) {
+  return `{"$n":"${value}"}`;
+}
+function unwrapBigIntValueObject({ $n }) {
+  const match = $n.match(BIGINT_VALUE_OBJECT_PATTERN);
+  if (match) {
+    const [, sign, mantissa, exponent] = match;
+    const digitCount = mantissa.length + (exponent ? Number(exponent) : 0);
+    if (digitCount <= MAX_BIGINT_DIGITS) {
+      return exponent ? BigInt(`${sign}${mantissa}`) * 10n ** BigInt(exponent) : BigInt($n);
+    }
+  }
+  throw new SolanaError(SOLANA_ERROR__MALFORMED_BIGINT_STRING, { value: $n });
+}
+function isBigIntValueObject(value) {
+  return !!value && typeof value === "object" && "$n" in value && typeof value.$n === "string";
+}
+var _nextMessageId = 0n;
+function getNextMessageId() {
+  const id = _nextMessageId;
+  _nextMessageId++;
+  return id.toString();
+}
+function createRpcMessage(request) {
+  return {
+    id: getNextMessageId(),
+    jsonrpc: "2.0",
+    method: request.methodName,
+    params: request.params
+  };
+}
+function stringifyJsonWithBigInts(value, space) {
+  return unwrapBigIntValueObject2(
+    JSON.stringify(value, (_, v) => typeof v === "bigint" ? wrapBigIntValueObject2(v) : v, space)
+  );
+}
+function wrapBigIntValueObject2(value) {
+  return { $n: `${value}` };
+}
+function unwrapBigIntValueObject2(value) {
+  return value.replace(/\{\s*"\$n"\s*:\s*"(-?\d+)"\s*\}/g, "$1");
+}
+
+// node_modules/@solana/subscribable/dist/index.node.mjs
+import { setMaxListeners } from "events";
+var e2 = class extends globalThis.AbortController {
+  constructor(...t) {
+    super(...t), setMaxListeners(Number.MAX_SAFE_INTEGER, this.signal);
+  }
+};
+var s = class extends globalThis.EventTarget {
+  constructor(...t) {
+    super(...t), setMaxListeners(Number.MAX_SAFE_INTEGER, this);
+  }
+};
+var IDLE_STATE = Object.freeze({
+  data: void 0,
+  error: void 0,
+  status: "idle"
+});
+function createReactiveActionStore(fn) {
+  let state = IDLE_STATE;
+  let currentController;
+  const listeners = /* @__PURE__ */ new Set();
+  function setState(next) {
+    if (state.status === next.status && state.data === next.data && state.error === next.error) {
+      return;
+    }
+    state = next;
+    listeners.forEach((listener) => listener());
+  }
+  const dispatchAsyncWithSignal = async (userSignal, ...args) => {
+    currentController?.abort();
+    if (userSignal?.aborted) {
+      setState({ data: state.data, error: userSignal.reason, status: "error" });
+      throw userSignal.reason;
+    }
+    const controller = new e2();
+    currentController = controller;
+    const signal = userSignal ? AbortSignal.any([controller.signal, userSignal]) : controller.signal;
+    const previousData = state.data;
+    const previousError = state.error;
+    setState({ data: previousData, error: previousError, status: "running" });
+    try {
+      const result = await getAbortablePromise(fn(signal, ...args), signal);
+      if (signal.aborted) {
+        throw signal.reason;
+      }
+      setState({ data: result, error: void 0, status: "success" });
+      return result;
+    } catch (error62) {
+      if (controller.signal.aborted) {
+        throw controller.signal.reason;
+      }
+      setState({ data: previousData, error: error62, status: "error" });
+      throw error62;
+    }
+  };
+  const dispatchAsync = (...args) => dispatchAsyncWithSignal(void 0, ...args);
+  const dispatch = (...args) => {
+    dispatchAsync(...args).catch(() => {
+    });
+  };
+  return {
+    dispatch,
+    dispatchAsync,
+    getState: () => state,
+    reset: () => {
+      currentController?.abort();
+      currentController = void 0;
+      setState(IDLE_STATE);
+    },
+    subscribe: (listener) => {
+      listeners.add(listener);
+      return () => {
+        listeners.delete(listener);
+      };
+    },
+    withSignal: (signal) => ({
+      dispatch: (...args) => {
+        dispatchAsyncWithSignal(signal, ...args).catch(() => {
+        });
+      },
+      dispatchAsync: (...args) => dispatchAsyncWithSignal(signal, ...args)
+    })
+  };
+}
+var IDLE_STATE2 = Object.freeze({
+  data: void 0,
+  error: void 0,
+  status: "idle"
+});
+
+// node_modules/@solana/rpc-spec/dist/index.node.mjs
+function createRpc(rpcConfig) {
+  return makeProxy(rpcConfig);
+}
+function makeProxy(rpcConfig) {
+  return new Proxy(rpcConfig.api, {
+    defineProperty() {
+      return false;
+    },
+    deleteProperty() {
+      return false;
+    },
+    get(target, p, receiver) {
+      if (isNonRpcPropertyName(p)) {
+        return getNonRpcPropertyValue(p, receiver);
+      }
+      return function(...rawParams) {
+        const methodName = p.toString();
+        const getApiPlan = Reflect.get(target, methodName, receiver);
+        if (!getApiPlan) {
+          throw new SolanaError(SOLANA_ERROR__RPC__API_PLAN_MISSING_FOR_RPC_METHOD, {
+            method: methodName,
+            params: rawParams
+          });
+        }
+        const apiPlan = getApiPlan(...rawParams);
+        return createPendingRpcRequest(rpcConfig, apiPlan);
+      };
+    }
+  });
+}
+function createPendingRpcRequest({ transport }, plan) {
+  return {
+    reactiveStore() {
+      return createReactiveActionStore((signal) => plan.execute({ signal, transport }));
+    },
+    async send(options) {
+      return await plan.execute({ signal: options?.abortSignal, transport });
+    }
+  };
+}
+function createJsonRpcApi(config2) {
+  return new Proxy({}, {
+    defineProperty() {
+      return false;
+    },
+    deleteProperty() {
+      return false;
+    },
+    get(...args) {
+      const [_, p] = args;
+      if (isNonRpcPropertyName(p)) {
+        return getNonRpcPropertyValue(p, args[2]);
+      }
+      const methodName = p.toString();
+      return function(...rawParams) {
+        const rawRequest = Object.freeze({ methodName, params: rawParams });
+        const request = config2?.requestTransformer ? config2?.requestTransformer(rawRequest) : rawRequest;
+        return Object.freeze({
+          execute: async ({ signal, transport }) => {
+            const payload = createRpcMessage(request);
+            const response = await transport({ payload, signal });
+            if (!config2?.responseTransformer) {
+              return response;
+            }
+            return config2.responseTransformer(response, request);
+          }
+        });
+      };
+    }
+  });
+}
+function isJsonRpcPayload(payload) {
+  if (payload == null || typeof payload !== "object" || Array.isArray(payload)) {
+    return false;
+  }
+  return "jsonrpc" in payload && payload.jsonrpc === "2.0" && "method" in payload && typeof payload.method === "string" && "params" in payload;
+}
+
+// node_modules/@solana/rpc-transformers/dist/index.node.mjs
+function applyDefaultCommitment({
+  commitmentPropertyName,
+  params,
+  optionsObjectPositionInParams,
+  overrideCommitment
+}) {
+  const paramInTargetPosition = params[optionsObjectPositionInParams];
+  if (
+    // There's no config.
+    paramInTargetPosition === void 0 || // There is a config object.
+    paramInTargetPosition && typeof paramInTargetPosition === "object" && !Array.isArray(paramInTargetPosition)
+  ) {
+    if (
+      // The config object already has a commitment set.
+      paramInTargetPosition && commitmentPropertyName in paramInTargetPosition
+    ) {
+      if (!paramInTargetPosition[commitmentPropertyName] || paramInTargetPosition[commitmentPropertyName] === "finalized") {
+        const nextParams = [...params];
+        const {
+          [commitmentPropertyName]: _,
+          // eslint-disable-line @typescript-eslint/no-unused-vars
+          ...rest
+        } = paramInTargetPosition;
+        if (Object.keys(rest).length > 0) {
+          nextParams[optionsObjectPositionInParams] = rest;
+        } else {
+          if (optionsObjectPositionInParams === nextParams.length - 1) {
+            nextParams.length--;
+          } else {
+            nextParams[optionsObjectPositionInParams] = void 0;
+          }
+        }
+        return nextParams;
+      }
+    } else if (overrideCommitment !== "finalized") {
+      const nextParams = [...params];
+      nextParams[optionsObjectPositionInParams] = {
+        ...paramInTargetPosition,
+        [commitmentPropertyName]: overrideCommitment
+      };
+      return nextParams;
+    }
+  }
+  return params;
+}
+function getDefaultCommitmentRequestTransformer({
+  defaultCommitment,
+  optionsObjectPositionByMethod
+}) {
+  return (request) => {
+    const { params, methodName } = request;
+    if (!Array.isArray(params)) {
+      return request;
+    }
+    const optionsObjectPositionInParams = optionsObjectPositionByMethod[methodName];
+    if (optionsObjectPositionInParams == null) {
+      return request;
+    }
+    return Object.freeze({
+      methodName,
+      params: applyDefaultCommitment({
+        commitmentPropertyName: methodName === "sendTransaction" ? "preflightCommitment" : "commitment",
+        optionsObjectPositionInParams,
+        overrideCommitment: defaultCommitment,
+        params
+      })
+    });
+  };
+}
+function getIntegerOverflowNodeVisitor(onIntegerOverflow) {
+  return (value, { keyPath }) => {
+    if (typeof value === "bigint") {
+      if (onIntegerOverflow && (value > Number.MAX_SAFE_INTEGER || value < -Number.MAX_SAFE_INTEGER)) {
+        onIntegerOverflow(keyPath, value);
+      }
+    }
+    return value;
+  };
+}
+var KEYPATH_WILDCARD = {};
+function getTreeWalker(visitors) {
+  return function traverse(node2, state) {
+    if (Array.isArray(node2)) {
+      return node2.map((element, ii) => {
+        const nextState = {
+          ...state,
+          keyPath: [...state.keyPath, ii]
+        };
+        return traverse(element, nextState);
+      });
+    } else if (typeof node2 === "object" && node2 !== null) {
+      const out = {};
+      for (const propName in node2) {
+        if (!Object.prototype.hasOwnProperty.call(node2, propName)) {
+          continue;
+        }
+        const nextState = {
+          ...state,
+          keyPath: [...state.keyPath, propName]
+        };
+        out[propName] = traverse(node2[propName], nextState);
+      }
+      return out;
+    } else {
+      return visitors.reduce((acc, visitNode) => visitNode(acc, state), node2);
+    }
+  };
+}
+function getTreeWalkerRequestTransformer(visitors, initialState) {
+  return (request) => {
+    const traverse = getTreeWalker(visitors);
+    return Object.freeze({
+      ...request,
+      params: traverse(request.params, initialState)
+    });
+  };
+}
+function getTreeWalkerResponseTransformer(visitors, initialState) {
+  return (json2) => getTreeWalker(visitors)(json2, initialState);
+}
+function getIntegerOverflowRequestTransformer(onIntegerOverflow) {
+  return (request) => {
+    const transformer = getTreeWalkerRequestTransformer(
+      [getIntegerOverflowNodeVisitor((...args) => onIntegerOverflow(request, ...args))],
+      { keyPath: [] }
+    );
+    return transformer(request);
+  };
+}
+var OPTIONS_OBJECT_POSITION_BY_METHOD = {
+  accountNotifications: 1,
+  blockNotifications: 1,
+  getAccountInfo: 1,
+  getBalance: 1,
+  getBlock: 1,
+  getBlockHeight: 0,
+  getBlockProduction: 0,
+  getBlocks: 2,
+  getBlocksWithLimit: 2,
+  getEpochInfo: 0,
+  getFeeForMessage: 1,
+  getInflationGovernor: 0,
+  getInflationReward: 1,
+  getLargestAccounts: 0,
+  getLatestBlockhash: 0,
+  getLeaderSchedule: 1,
+  getMinimumBalanceForRentExemption: 1,
+  getMultipleAccounts: 1,
+  getProgramAccounts: 1,
+  getSignaturesForAddress: 1,
+  getSlot: 0,
+  getSlotLeader: 0,
+  getStakeMinimumDelegation: 0,
+  getSupply: 0,
+  getTokenAccountBalance: 1,
+  getTokenAccountsByDelegate: 2,
+  getTokenAccountsByOwner: 2,
+  getTokenLargestAccounts: 1,
+  getTokenSupply: 1,
+  getTransaction: 1,
+  getTransactionCount: 0,
+  getVoteAccounts: 0,
+  isBlockhashValid: 1,
+  logsNotifications: 1,
+  programNotifications: 1,
+  requestAirdrop: 2,
+  sendTransaction: 1,
+  signatureNotifications: 1,
+  simulateTransaction: 1
+};
+function getDefaultRequestTransformerForSolanaRpc(config2) {
+  const handleIntegerOverflow = config2?.onIntegerOverflow;
+  return (request) => {
+    return pipe2(
+      request,
+      handleIntegerOverflow ? getIntegerOverflowRequestTransformer(handleIntegerOverflow) : (r) => r,
+      getDefaultCommitmentRequestTransformer({
+        defaultCommitment: config2?.defaultCommitment,
+        optionsObjectPositionByMethod: OPTIONS_OBJECT_POSITION_BY_METHOD
+      })
+    );
+  };
+}
+function getBigIntUpcastVisitor(allowedNumericKeyPaths) {
+  return function upcastNodeToBigIntIfNumber(value, { keyPath }) {
+    const isInteger = typeof value === "number" && Number.isInteger(value) || typeof value === "bigint";
+    if (!isInteger) return value;
+    if (keyPathIsAllowedToBeNumeric(keyPath, allowedNumericKeyPaths)) {
+      return Number(value);
+    } else {
+      return BigInt(value);
+    }
+  };
+}
+function keyPathIsAllowedToBeNumeric(keyPath, allowedNumericKeyPaths) {
+  return allowedNumericKeyPaths.some((prohibitedKeyPath) => {
+    if (prohibitedKeyPath.length !== keyPath.length) {
+      return false;
+    }
+    for (let ii = keyPath.length - 1; ii >= 0; ii--) {
+      const keyPathPart = keyPath[ii];
+      const prohibitedKeyPathPart = prohibitedKeyPath[ii];
+      if (prohibitedKeyPathPart !== keyPathPart && (prohibitedKeyPathPart !== KEYPATH_WILDCARD || typeof keyPathPart !== "number")) {
+        return false;
+      }
+    }
+    return true;
+  });
+}
+function getBigIntUpcastResponseTransformer(allowedNumericKeyPaths) {
+  return getTreeWalkerResponseTransformer([getBigIntUpcastVisitor(allowedNumericKeyPaths)], { keyPath: [] });
+}
+function getResultResponseTransformer() {
+  return (json2) => json2.result;
+}
+var jsonParsedTokenAccountsConfigs = [
+  // parsed Token/Token22 token account
+  ["data", "parsed", "info", "tokenAmount", "decimals"],
+  ["data", "parsed", "info", "tokenAmount", "uiAmount"],
+  ["data", "parsed", "info", "rentExemptReserve", "decimals"],
+  ["data", "parsed", "info", "rentExemptReserve", "uiAmount"],
+  ["data", "parsed", "info", "delegatedAmount", "decimals"],
+  ["data", "parsed", "info", "delegatedAmount", "uiAmount"],
+  ["data", "parsed", "info", "extensions", KEYPATH_WILDCARD, "state", "olderTransferFee", "transferFeeBasisPoints"],
+  ["data", "parsed", "info", "extensions", KEYPATH_WILDCARD, "state", "newerTransferFee", "transferFeeBasisPoints"],
+  ["data", "parsed", "info", "extensions", KEYPATH_WILDCARD, "state", "preUpdateAverageRate"],
+  ["data", "parsed", "info", "extensions", KEYPATH_WILDCARD, "state", "currentRate"]
+];
+var jsonParsedAccountsConfigs = [
+  ...jsonParsedTokenAccountsConfigs,
+  // parsed AddressTableLookup account
+  ["data", "parsed", "info", "lastExtendedSlotStartIndex"],
+  // parsed Config account
+  ["data", "parsed", "info", "slashPenalty"],
+  ["data", "parsed", "info", "warmupCooldownRate"],
+  // parsed Token/Token22 mint account
+  ["data", "parsed", "info", "decimals"],
+  // parsed Token/Token22 multisig account
+  ["data", "parsed", "info", "numRequiredSigners"],
+  ["data", "parsed", "info", "numValidSigners"],
+  // parsed Stake account
+  ["data", "parsed", "info", "stake", "delegation", "warmupCooldownRate"],
+  // parsed Sysvar rent account
+  ["data", "parsed", "info", "exemptionThreshold"],
+  ["data", "parsed", "info", "burnPercent"],
+  // parsed Vote account
+  ["data", "parsed", "info", "blockRevenueCommissionBps"],
+  ["data", "parsed", "info", "commission"],
+  ["data", "parsed", "info", "inflationRewardsCommissionBps"],
+  ["data", "parsed", "info", "votes", KEYPATH_WILDCARD, "confirmationCount"],
+  ["data", "parsed", "info", "votes", KEYPATH_WILDCARD, "latency"]
+];
+var innerInstructionsConfigs = [
+  ["index"],
+  ["instructions", KEYPATH_WILDCARD, "accounts", KEYPATH_WILDCARD],
+  ["instructions", KEYPATH_WILDCARD, "programIdIndex"],
+  ["instructions", KEYPATH_WILDCARD, "stackHeight"]
+];
+var tokenBalancesConfigs = [
+  ["accountIndex"],
+  ["uiTokenAmount", "decimals"],
+  ["uiTokenAmount", "uiAmount"]
+];
+var messageConfig = [
+  ["addressTableLookups", KEYPATH_WILDCARD, "writableIndexes", KEYPATH_WILDCARD],
+  ["addressTableLookups", KEYPATH_WILDCARD, "readonlyIndexes", KEYPATH_WILDCARD],
+  ["header", "numReadonlySignedAccounts"],
+  ["header", "numReadonlyUnsignedAccounts"],
+  ["header", "numRequiredSignatures"],
+  ["instructions", KEYPATH_WILDCARD, "accounts", KEYPATH_WILDCARD],
+  ["instructions", KEYPATH_WILDCARD, "programIdIndex"],
+  ["instructions", KEYPATH_WILDCARD, "stackHeight"],
+  ["transactionConfig", "computeUnitLimit"],
+  ["transactionConfig", "heapSize"],
+  ["transactionConfig", "loadedAccountsDataSizeLimit"]
+];
+function getSimulateTransactionAllowedNumericKeypaths() {
+  return [
+    ["loadedAccountsDataSize"],
+    ...jsonParsedAccountsConfigs.map((c) => ["accounts", KEYPATH_WILDCARD, ...c]),
+    ...innerInstructionsConfigs.map((c) => ["innerInstructions", KEYPATH_WILDCARD, ...c])
+  ];
+}
+function getThrowSolanaErrorResponseTransformer() {
+  return (json2, request) => {
+    const jsonRpcResponse = json2;
+    if ("error" in jsonRpcResponse) {
+      const { error: error62 } = jsonRpcResponse;
+      const isSendTransactionPreflightFailure = error62 && typeof error62 === "object" && "code" in error62 && (error62.code === -32002 || error62.code === -32002n);
+      if (isSendTransactionPreflightFailure && "data" in error62 && error62.data) {
+        const treeWalker = getTreeWalkerResponseTransformer(
+          [getBigIntUpcastVisitor(getSimulateTransactionAllowedNumericKeypaths())],
+          { keyPath: [] }
+        );
+        const transformedData = treeWalker(error62.data, request);
+        const transformedError = { ...error62, data: transformedData };
+        throw getSolanaErrorFromJsonRpcError(transformedError);
+      }
+      throw getSolanaErrorFromJsonRpcError(jsonRpcResponse.error);
+    }
+    return jsonRpcResponse;
+  };
+}
+function getDefaultResponseTransformerForSolanaRpc(config2) {
+  return (response, request) => {
+    const methodName = request.methodName;
+    const keyPaths = config2?.allowedNumericKeyPaths && methodName ? config2.allowedNumericKeyPaths[methodName] : void 0;
+    return pipe2(
+      response,
+      (r) => getThrowSolanaErrorResponseTransformer()(r, request),
+      (r) => getResultResponseTransformer()(r, request),
+      (r) => getBigIntUpcastResponseTransformer(keyPaths ?? [])(r, request)
+    );
+  };
+}
+
+// node_modules/@solana/rpc-api/dist/index.node.mjs
+function createSolanaRpcApi(config2) {
+  return createJsonRpcApi({
+    requestTransformer: getDefaultRequestTransformerForSolanaRpc(config2),
+    responseTransformer: getDefaultResponseTransformerForSolanaRpc({
+      allowedNumericKeyPaths: getAllowedNumericKeypaths()
+    })
+  });
+}
+var memoizedKeypaths;
+function getAllowedNumericKeypaths() {
+  if (!memoizedKeypaths) {
+    memoizedKeypaths = {
+      getAccountInfo: jsonParsedAccountsConfigs.map((c) => ["value", ...c]),
+      getAgGenesisCert: [
+        ["block", "blockId", KEYPATH_WILDCARD],
+        ["signature", "bitmap", KEYPATH_WILDCARD],
+        ["signature", "signature", KEYPATH_WILDCARD]
+      ],
+      getBlock: [
+        ...tokenBalancesConfigs.flatMap((c) => [
+          ["transactions", KEYPATH_WILDCARD, "meta", "preTokenBalances", KEYPATH_WILDCARD, ...c],
+          ["transactions", KEYPATH_WILDCARD, "meta", "postTokenBalances", KEYPATH_WILDCARD, ...c]
+        ]),
+        ["transactions", KEYPATH_WILDCARD, "meta", "rewards", KEYPATH_WILDCARD, "commission"],
+        ...innerInstructionsConfigs.map((c) => [
+          "transactions",
+          KEYPATH_WILDCARD,
+          "meta",
+          "innerInstructions",
+          KEYPATH_WILDCARD,
+          ...c
+        ]),
+        ...messageConfig.map((c) => ["transactions", KEYPATH_WILDCARD, "transaction", "message", ...c]),
+        ["transactions", KEYPATH_WILDCARD, "version"],
+        ["rewards", KEYPATH_WILDCARD, "commission"]
+      ],
+      getClusterNodes: [
+        [KEYPATH_WILDCARD, "featureSet"],
+        [KEYPATH_WILDCARD, "shredVersion"]
+      ],
+      getInflationGovernor: [["initial"], ["foundation"], ["foundationTerm"], ["taper"], ["terminal"]],
+      getInflationRate: [["foundation"], ["total"], ["validator"]],
+      getInflationReward: [[KEYPATH_WILDCARD, "commission"]],
+      getMultipleAccounts: jsonParsedAccountsConfigs.map((c) => ["value", KEYPATH_WILDCARD, ...c]),
+      getProgramAccounts: jsonParsedAccountsConfigs.flatMap((c) => [
+        ["value", KEYPATH_WILDCARD, "account", ...c],
+        [KEYPATH_WILDCARD, "account", ...c]
+      ]),
+      getRecentPerformanceSamples: [[KEYPATH_WILDCARD, "samplePeriodSecs"]],
+      getSignaturesForAddress: [[KEYPATH_WILDCARD, "transactionIndex"]],
+      getTokenAccountBalance: [
+        ["value", "decimals"],
+        ["value", "uiAmount"]
+      ],
+      getTokenAccountsByDelegate: jsonParsedTokenAccountsConfigs.map((c) => [
+        "value",
+        KEYPATH_WILDCARD,
+        "account",
+        ...c
+      ]),
+      getTokenAccountsByOwner: jsonParsedTokenAccountsConfigs.map((c) => [
+        "value",
+        KEYPATH_WILDCARD,
+        "account",
+        ...c
+      ]),
+      getTokenLargestAccounts: [
+        ["value", KEYPATH_WILDCARD, "decimals"],
+        ["value", KEYPATH_WILDCARD, "uiAmount"]
+      ],
+      getTokenSupply: [
+        ["value", "decimals"],
+        ["value", "uiAmount"]
+      ],
+      getTransaction: [
+        ...tokenBalancesConfigs.flatMap((c) => [
+          ["meta", "preTokenBalances", KEYPATH_WILDCARD, ...c],
+          ["meta", "postTokenBalances", KEYPATH_WILDCARD, ...c]
+        ]),
+        ["meta", "rewards", KEYPATH_WILDCARD, "commission"],
+        ...innerInstructionsConfigs.map((c) => ["meta", "innerInstructions", KEYPATH_WILDCARD, ...c]),
+        ...messageConfig.map((c) => ["transaction", "message", ...c]),
+        ["version"]
+      ],
+      getTransactionsForAddress: [
+        ["data", KEYPATH_WILDCARD, "transactionIndex"],
+        ...tokenBalancesConfigs.flatMap((c) => [
+          ["data", KEYPATH_WILDCARD, "meta", "preTokenBalances", KEYPATH_WILDCARD, ...c],
+          ["data", KEYPATH_WILDCARD, "meta", "postTokenBalances", KEYPATH_WILDCARD, ...c]
+        ]),
+        ["data", KEYPATH_WILDCARD, "meta", "rewards", KEYPATH_WILDCARD, "commission"],
+        ...innerInstructionsConfigs.map((c) => [
+          "data",
+          KEYPATH_WILDCARD,
+          "meta",
+          "innerInstructions",
+          KEYPATH_WILDCARD,
+          ...c
+        ]),
+        ...messageConfig.map((c) => ["data", KEYPATH_WILDCARD, "transaction", "message", ...c]),
+        ["data", KEYPATH_WILDCARD, "version"]
+      ],
+      getVersion: [["feature-set"]],
+      getVoteAccounts: [
+        ["current", KEYPATH_WILDCARD, "commission"],
+        ["current", KEYPATH_WILDCARD, "inflationRewardsCommissionBps"],
+        ["delinquent", KEYPATH_WILDCARD, "commission"],
+        ["delinquent", KEYPATH_WILDCARD, "inflationRewardsCommissionBps"]
+      ],
+      simulateTransaction: [
+        ["value", "loadedAccountsDataSize"],
+        ...jsonParsedAccountsConfigs.map((c) => ["value", "accounts", KEYPATH_WILDCARD, ...c]),
+        ...innerInstructionsConfigs.map((c) => ["value", "innerInstructions", KEYPATH_WILDCARD, ...c]),
+        ...tokenBalancesConfigs.flatMap((c) => [
+          ["value", "preTokenBalances", KEYPATH_WILDCARD, ...c],
+          ["value", "postTokenBalances", KEYPATH_WILDCARD, ...c]
+        ])
+      ]
+    };
+  }
+  return memoizedKeypaths;
+}
+
+// node_modules/@solana/rpc-transport-http/dist/index.node.mjs
+var DISALLOWED_HEADERS = {
+  accept: true,
+  "content-length": true,
+  "content-type": true
+};
+var FORBIDDEN_HEADERS = /* @__PURE__ */ Object.assign(
+  {
+    "accept-charset": true,
+    "access-control-request-headers": true,
+    "access-control-request-method": true,
+    connection: true,
+    "content-length": true,
+    cookie: true,
+    date: true,
+    dnt: true,
+    expect: true,
+    host: true,
+    "keep-alive": true,
+    "permissions-policy": true,
+    // Prefix matching is implemented in code, below.
+    // 'proxy-': true,
+    // 'sec-': true,
+    referer: true,
+    te: true,
+    trailer: true,
+    "transfer-encoding": true,
+    upgrade: true,
+    via: true
+  },
+  void 0,
+  void 0
+);
+function assertIsAllowedHttpRequestHeaders(headers) {
+  const badHeaders = Object.keys(headers).filter((headerName) => {
+    const lowercaseHeaderName = headerName.toLowerCase();
+    return DISALLOWED_HEADERS[headerName.toLowerCase()] === true || FORBIDDEN_HEADERS[headerName.toLowerCase()] === true || lowercaseHeaderName.startsWith("proxy-") || lowercaseHeaderName.startsWith("sec-");
+  });
+  if (badHeaders.length > 0) {
+    throw new SolanaError(SOLANA_ERROR__RPC__TRANSPORT_HTTP_HEADER_FORBIDDEN, {
+      headers: badHeaders
+    });
+  }
+}
+function normalizeHeaders(headers) {
+  const out = {};
+  for (const headerName in headers) {
+    out[headerName.toLowerCase()] = headers[headerName];
+  }
+  return out;
+}
+function createHttpTransport(config2) {
+  if (process.env.NODE_ENV !== "production" && false) ;
+  const { fromJson, headers, toJson, url: url2 } = config2;
+  if (process.env.NODE_ENV !== "production" && headers) {
+    assertIsAllowedHttpRequestHeaders(headers);
+  }
+  let dispatcherConfig;
+  if ("dispatcher_NODE_ONLY" in config2) {
+    dispatcherConfig = { dispatcher: config2.dispatcher_NODE_ONLY };
+  }
+  const customHeaders = headers && normalizeHeaders(headers);
+  return async function makeHttpRequest({
+    payload,
+    signal
+  }) {
+    const body = toJson ? toJson(payload) : JSON.stringify(payload);
+    const requestInfo = {
+      ...dispatcherConfig,
+      body,
+      headers: {
+        ...customHeaders,
+        // Keep these headers lowercase so they will override any user-supplied headers above.
+        accept: "application/json",
+        "content-type": "application/json; charset=utf-8"
+      },
+      method: "POST",
+      signal
+    };
+    const response = await fetch(url2, requestInfo);
+    if (!response.ok) {
+      throw new SolanaError(SOLANA_ERROR__RPC__TRANSPORT_HTTP_ERROR, {
+        headers: response.headers,
+        message: response.statusText,
+        statusCode: response.status
+      });
+    }
+    if (fromJson) {
+      return fromJson(await response.text(), payload);
+    }
+    return await response.json();
+  };
+}
+var SOLANA_RPC_METHODS = [
+  "getAccountInfo",
+  "getAgGenesisCert",
+  "getBalance",
+  "getBlock",
+  "getBlockCommitment",
+  "getBlockHeight",
+  "getBlockProduction",
+  "getBlocks",
+  "getBlocksWithLimit",
+  "getBlockTime",
+  "getClusterNodes",
+  "getEpochInfo",
+  "getEpochSchedule",
+  "getFeeForMessage",
+  "getFirstAvailableBlock",
+  "getGenesisHash",
+  "getHealth",
+  "getHighestSnapshotSlot",
+  "getIdentity",
+  "getInflationGovernor",
+  "getInflationRate",
+  "getInflationReward",
+  "getLargestAccounts",
+  "getLatestBlockhash",
+  "getLeaderSchedule",
+  "getMaxRetransmitSlot",
+  "getMaxShredInsertSlot",
+  "getMinimumBalanceForRentExemption",
+  "getMultipleAccounts",
+  "getProgramAccounts",
+  "getRecentPerformanceSamples",
+  "getRecentPrioritizationFees",
+  "getSignaturesForAddress",
+  "getSignatureStatuses",
+  "getSlot",
+  "getSlotLeader",
+  "getSlotLeaders",
+  "getStakeMinimumDelegation",
+  "getSupply",
+  "getTokenAccountBalance",
+  "getTokenAccountsByDelegate",
+  "getTokenAccountsByOwner",
+  "getTokenLargestAccounts",
+  "getTokenSupply",
+  "getTransaction",
+  "getTransactionCount",
+  "getTransactionsForAddress",
+  "getVersion",
+  "getVoteAccounts",
+  "index",
+  "isBlockhashValid",
+  "minimumLedgerSlot",
+  "requestAirdrop",
+  "sendTransaction",
+  "simulateTransaction"
+];
+function isSolanaRequest(payload) {
+  return isJsonRpcPayload(payload) && SOLANA_RPC_METHODS.includes(payload.method);
+}
+function createHttpTransportForSolanaRpc(config2) {
+  return createHttpTransport({
+    ...config2,
+    fromJson: (rawResponse, payload) => isSolanaRequest(payload) ? parseJsonWithBigInts(rawResponse) : JSON.parse(rawResponse),
+    toJson: (payload) => isSolanaRequest(payload) ? stringifyJsonWithBigInts(payload) : JSON.stringify(payload)
+  });
+}
+
+// node_modules/@solana/rpc/dist/index.node.mjs
+import { setMaxListeners as setMaxListeners2 } from "events";
+
+// node_modules/@solana/fast-stable-stringify/dist/index.node.mjs
+var objToString = Object.prototype.toString;
+var objKeys = Object.keys || function(obj) {
+  const keys = [];
+  for (const name in obj) {
+    keys.push(name);
+  }
+  return keys;
+};
+function stringify3(val, isArrayProp) {
+  let i, max, str, keys, key, propVal, toStr;
+  if (val === true) {
+    return "true";
+  }
+  if (val === false) {
+    return "false";
+  }
+  switch (typeof val) {
+    case "object":
+      if (val === null) {
+        return null;
+      } else if ("toJSON" in val && typeof val.toJSON === "function") {
+        return stringify3(val.toJSON(), isArrayProp);
+      } else {
+        toStr = objToString.call(val);
+        if (toStr === "[object Array]") {
+          str = "[";
+          max = val.length - 1;
+          for (i = 0; i < max; i++) {
+            str += stringify3(val[i], true) + ",";
+          }
+          if (max > -1) {
+            str += stringify3(val[i], true);
+          }
+          return str + "]";
+        } else if (toStr === "[object Object]") {
+          keys = objKeys(val).sort();
+          max = keys.length;
+          str = "";
+          i = 0;
+          while (i < max) {
+            key = keys[i];
+            propVal = stringify3(val[key], false);
+            if (propVal !== void 0) {
+              if (str) {
+                str += ",";
+              }
+              str += JSON.stringify(key) + ":" + propVal;
+            }
+            i++;
+          }
+          return "{" + str + "}";
+        } else {
+          return JSON.stringify(val);
+        }
+      }
+    case "function":
+    case "undefined":
+      return isArrayProp ? null : void 0;
+    case "bigint":
+      return `${val.toString()}n`;
+    case "string":
+      return JSON.stringify(val);
+    default:
+      return isFinite(val) ? val : null;
+  }
+}
+function index_default(val) {
+  const returnVal = stringify3(val, false);
+  if (returnVal !== void 0) {
+    return "" + returnVal;
+  }
+}
+
+// node_modules/@solana/rpc/dist/index.node.mjs
+function createSolanaJsonRpcIntegerOverflowError(methodName, keyPath, value) {
+  let argumentLabel = "";
+  if (typeof keyPath[0] === "number") {
+    const argPosition = keyPath[0] + 1;
+    const lastDigit = argPosition % 10;
+    const lastTwoDigits = argPosition % 100;
+    if (lastDigit == 1 && lastTwoDigits != 11) {
+      argumentLabel = argPosition + "st";
+    } else if (lastDigit == 2 && lastTwoDigits != 12) {
+      argumentLabel = argPosition + "nd";
+    } else if (lastDigit == 3 && lastTwoDigits != 13) {
+      argumentLabel = argPosition + "rd";
+    } else {
+      argumentLabel = argPosition + "th";
+    }
+  } else {
+    argumentLabel = `\`${keyPath[0].toString()}\``;
+  }
+  const path = keyPath.length > 1 ? keyPath.slice(1).map((pathPart) => typeof pathPart === "number" ? `[${pathPart}]` : pathPart).join(".") : void 0;
+  const error62 = new SolanaError(SOLANA_ERROR__RPC__INTEGER_OVERFLOW, {
+    argumentLabel,
+    keyPath,
+    methodName,
+    optionalPathLabel: path ? ` at path \`${path}\`` : "",
+    value,
+    ...path !== void 0 ? { path } : void 0
+  });
+  safeCaptureStackTrace(error62, createSolanaJsonRpcIntegerOverflowError);
+  return error62;
+}
+var DEFAULT_RPC_CONFIG = {
+  defaultCommitment: "confirmed",
+  onIntegerOverflow(request, keyPath, value) {
+    throw createSolanaJsonRpcIntegerOverflowError(request.methodName, keyPath, value);
+  }
+};
+var e3 = class extends globalThis.AbortController {
+  constructor(...t) {
+    super(...t), setMaxListeners2(Number.MAX_SAFE_INTEGER, this.signal);
+  }
+};
+var EXPLICIT_ABORT_TOKEN;
+function createExplicitAbortToken() {
+  return process.env.NODE_ENV !== "production" ? {
+    EXPLICIT_ABORT_TOKEN: "This object is thrown from the request that underlies a series of coalesced requests when the last request in that series aborts"
+  } : {};
+}
+function getRpcTransportWithRequestCoalescing(transport, getDeduplicationKey) {
+  let coalescedRequestsByDeduplicationKey;
+  return async function makeCoalescedHttpRequest(request) {
+    const { payload, signal } = request;
+    const deduplicationKey = getDeduplicationKey(payload);
+    if (deduplicationKey === void 0) {
+      return await transport(request);
+    }
+    if (!coalescedRequestsByDeduplicationKey) {
+      queueMicrotask(() => {
+        coalescedRequestsByDeduplicationKey = void 0;
+      });
+      coalescedRequestsByDeduplicationKey = {};
+    }
+    if (coalescedRequestsByDeduplicationKey[deduplicationKey] == null) {
+      const abortController = new e3();
+      const responsePromise = (async () => {
+        try {
+          return await transport({
+            ...request,
+            signal: abortController.signal
+          });
+        } catch (e22) {
+          if (e22 === (EXPLICIT_ABORT_TOKEN ||= createExplicitAbortToken())) {
+            return;
+          }
+          throw e22;
+        }
+      })();
+      coalescedRequestsByDeduplicationKey[deduplicationKey] = {
+        abortController,
+        numConsumers: 0,
+        responsePromise
+      };
+    }
+    const coalescedRequest = coalescedRequestsByDeduplicationKey[deduplicationKey];
+    coalescedRequest.numConsumers++;
+    if (signal) {
+      const responsePromise = coalescedRequest.responsePromise;
+      return await new Promise((resolve2, reject) => {
+        const handleAbort = () => {
+          signal.removeEventListener("abort", handleAbort);
+          coalescedRequest.numConsumers -= 1;
+          queueMicrotask(() => {
+            if (coalescedRequest.numConsumers === 0) {
+              const abortController = coalescedRequest.abortController;
+              abortController.abort(EXPLICIT_ABORT_TOKEN ||= createExplicitAbortToken());
+            }
+          });
+          reject(signal.reason);
+        };
+        signal.addEventListener("abort", handleAbort);
+        responsePromise.then(resolve2).catch(reject).finally(() => {
+          signal.removeEventListener("abort", handleAbort);
+        });
+      });
+    } else {
+      return await coalescedRequest.responsePromise;
+    }
+  };
+}
+function getSolanaRpcPayloadDeduplicationKey(payload) {
+  return isJsonRpcPayload(payload) ? index_default([payload.method, payload.params]) : void 0;
+}
+function normalizeHeaders2(headers) {
+  const out = {};
+  for (const headerName in headers) {
+    out[headerName.toLowerCase()] = headers[headerName];
+  }
+  return out;
+}
+function createDefaultRpcTransport(config2) {
+  return pipe2(
+    createHttpTransportForSolanaRpc({
+      ...config2,
+      headers: {
+        ...{
+          // Keep these headers lowercase so they will be overridden by any user-supplied headers below.
+          "accept-encoding": (
+            // Natively supported by Node LTS v20.18.0 and above.
+            "br,gzip,deflate"
+          )
+          // Brotli, gzip, and Deflate, in that order.
+        },
+        ...config2.headers ? normalizeHeaders2(config2.headers) : void 0,
+        ...{
+          // Keep these headers lowercase so they will override any user-supplied headers above.
+          "solana-client": `js/${"8.4.0"}`
+        }
+      }
+    }),
+    (transport) => getRpcTransportWithRequestCoalescing(transport, getSolanaRpcPayloadDeduplicationKey)
+  );
+}
+function createSolanaRpcFromTransport(transport) {
+  return createRpc({
+    api: createSolanaRpcApi(DEFAULT_RPC_CONFIG),
+    transport
+  });
+}
+
+// src/units.ts
+function parseAmount(human, decimals, label) {
+  const s2 = human.trim();
+  if (!/^\d+(\.\d+)?$/.test(s2)) throw new Error(`${label}: "${human}" is not a plain decimal amount`);
+  const frac = s2.split(".")[1] ?? "";
+  if (frac.length > decimals) {
+    throw new Error(`${label}: "${human}" has ${frac.length} fractional digits but the token has ${decimals} decimals`);
+  }
+  const v = parseUnits(s2, decimals);
+  if (v <= 0n) throw new Error(`${label}: amount must be positive`);
+  return v;
+}
+function formatAmount(raw, decimals) {
+  return formatUnits(raw, decimals);
+}
+
+// package.json
+var package_default = { version: "0.1.3" };
+
+// src/version.ts
+var PACKAGE_VERSION = package_default.version;
 
 // src/registry-schema.ts
-var address = external_exports.string().refine((s) => isAddress(s, { strict: true }), { message: "not a checksummed EVM address" }).transform((s) => getAddress(s));
+var address2 = external_exports.string().refine((s2) => isAddress(s2, { strict: true }), { message: "not a checksummed EVM address" }).transform((s2) => getAddress(s2));
 var chassisSchema = external_exports.enum(["morpho-v2", "fusion", "enzyme"]);
 var erc4626Chassis = /* @__PURE__ */ new Set(["morpho-v2", "fusion"]);
 var backendSchema = external_exports.enum(["morpho", "tempora"]);
@@ -38529,8 +43723,8 @@ var vaultEntrySchema = external_exports.object({
    * 🔴 Adding a chain here also needs its row in `CHAIN_INFO` (a compile error until it has one) and
    * in `links.ts`'s explorer map (which throws on a chain it does not know).
    */
-  chainId: external_exports.union([external_exports.literal(8453), external_exports.literal(42161), external_exports.literal(4663)]),
-  address,
+  chainId: external_exports.union([external_exports.literal(8453), external_exports.literal(42161), external_exports.literal(4663), external_exports.literal(1), external_exports.literal(143)]),
+  address: address2,
   chassis: chassisSchema,
   backend: backendSchema,
   /**
@@ -38538,7 +43732,7 @@ var vaultEntrySchema = external_exports.object({
    * and no vault. Which chain is used when the caller names neither is `EARN.defaultChain`.
    */
   isDefault: external_exports.boolean().default(false),
-  asset: external_exports.object({ address, symbol: external_exports.string().min(1), decimals: external_exports.number().int().min(0).max(36) }),
+  asset: external_exports.object({ address: address2, symbol: external_exports.string().min(1), decimals: external_exports.number().int().min(0).max(36) }),
   /** Measured on-chain via `decimals()`. 18 on Morpho V2 and Enzyme, 8 on Fusion — never assume. */
   shareDecimals: external_exports.number().int().min(0).max(36),
   depositOpen: depositOpenSchema,
@@ -38564,6 +43758,47 @@ var vaultEntrySchema = external_exports.object({
     });
   }
 });
+var solanaAddress = external_exports.string().refine((s2) => isAddress2(s2), { message: "not a Solana address" });
+var solanaVaultEntrySchema = external_exports.object({
+  family: external_exports.literal("solana"),
+  /**
+   * The ticker every tool takes as `vault`. A Kamino vault's share mint carries no token metadata, so
+   * there is no on-chain ticker to read: this one is ASSIGNED here, in the same form as the EVM rows'.
+   * `name` IS read on chain (the vault state stores it), and `scripts/registry-check.ts` reconciles it.
+   */
+  symbol: external_exports.string().min(1).regex(/^[A-Za-z0-9][A-Za-z0-9._-]*$/),
+  name: external_exports.string().min(1),
+  warning: external_exports.string().min(1),
+  chain: external_exports.literal("solana"),
+  /** The vault's state account: the address every instruction names, and the one an explorer opens. */
+  address: solanaAddress,
+  chassis: external_exports.literal("kamino-vault"),
+  backend: backendSchema,
+  isDefault: external_exports.boolean().default(false),
+  /** The SPL mint the vault takes and pays (`tokenMint` in the vault state). */
+  asset: external_exports.object({ address: solanaAddress, symbol: external_exports.string().min(1), decimals: external_exports.number().int().min(0).max(36) }),
+  /** The vault's share mint, a PDA of the vault (`sharesMint` in the vault state). */
+  sharesMint: solanaAddress,
+  shareDecimals: external_exports.number().int().min(0).max(36),
+  depositOpen: external_exports.object({
+    open: external_exports.boolean(),
+    method: external_exports.literal("simulated-deposit-from-stranger"),
+    measuredAtSlot: external_exports.number().int().positive(),
+    measuredAtIso: external_exports.string().datetime(),
+    reason: external_exports.enum(["PERMISSIONED", "REVERTED_OTHER"]).optional(),
+    detail: external_exports.string().optional()
+  }).strict(),
+  /** The slot of the transaction that created the vault state. */
+  deployedAtSlot: external_exports.number().int().positive(),
+  notes: external_exports.array(external_exports.string()).default([])
+}).strict().superRefine((v, ctx) => {
+  if (!v.depositOpen.open && !v.depositOpen.reason) {
+    ctx.addIssue({ code: "custom", path: ["depositOpen", "reason"], message: "a closed vault must say why" });
+  }
+  if (v.depositOpen.open && v.depositOpen.reason) {
+    ctx.addIssue({ code: "custom", path: ["depositOpen", "reason"], message: "an open vault carries no reason" });
+  }
+});
 var registrySchema = external_exports.object({
   schemaVersion: external_exports.literal(1),
   /**
@@ -38571,7 +43806,9 @@ var registrySchema = external_exports.object({
    * the only source a row is checked against; there is no upstream repository the client knows of.
    */
   reconciledAtIso: external_exports.string().datetime(),
-  vaults: external_exports.array(vaultEntrySchema).min(1)
+  vaults: external_exports.array(vaultEntrySchema).min(1),
+  /** Vaults on Solana; see `solanaVaultEntrySchema`. One default among them, like any chain. */
+  solanaVaults: external_exports.array(solanaVaultEntrySchema).default([])
 }).strict().superRefine((r, ctx) => {
   const symbols = /* @__PURE__ */ new Set();
   const addrs = /* @__PURE__ */ new Set();
@@ -38586,6 +43823,21 @@ var registrySchema = external_exports.object({
       }
     }
   }
+  if (r.solanaVaults.length > 0) {
+    const defaults = r.solanaVaults.filter((v) => v.isDefault);
+    if (defaults.length !== 1) {
+      ctx.addIssue({ code: "custom", path: ["solanaVaults"], message: `exactly one vault per chain must be isDefault; chain solana has ${defaults.length}` });
+    }
+    for (const d of defaults) {
+      if (!d.depositOpen.open) ctx.addIssue({ code: "custom", path: ["solanaVaults"], message: `the default vault (${d.symbol}) on solana must be measured open` });
+    }
+  }
+  r.solanaVaults.forEach((v, i) => {
+    if (symbols.has(v.symbol)) ctx.addIssue({ code: "custom", path: ["solanaVaults", i, "symbol"], message: `duplicate symbol ${v.symbol}` });
+    if (addrs.has(v.address)) ctx.addIssue({ code: "custom", path: ["solanaVaults", i, "address"], message: `duplicate address ${v.address}` });
+    symbols.add(v.symbol);
+    addrs.add(v.address);
+  });
   r.vaults.forEach((v, i) => {
     if (symbols.has(v.symbol)) ctx.addIssue({ code: "custom", path: ["vaults", i, "symbol"], message: `duplicate symbol ${v.symbol}` });
     if (addrs.has(v.address)) ctx.addIssue({ code: "custom", path: ["vaults", i, "address"], message: `duplicate address ${v.address}` });
@@ -38593,6 +43845,290 @@ var registrySchema = external_exports.object({
     addrs.add(v.address);
   });
 });
+
+// registry/vaults.json
+var vaults_default = {
+  schemaVersion: 1,
+  reconciledAtIso: "2026-10-04T21:22:04Z",
+  vaults: [
+    {
+      symbol: "tlCashPlusUSDC2",
+      name: "Tempora Labs Cash Plus USDC (Test 2)",
+      warning: "TEST VAULT \u2014 unproven. It exists to exercise this product, not to hold savings. Deposit only an amount you are fully prepared to lose entirely, and do not move significant funds into it. Show this warning before preparing any deposit.",
+      chainId: 8453,
+      address: "0x040fCA12673778FEED5DA7b2ccFbbAb0cc0134Cf",
+      chassis: "morpho-v2",
+      backend: "tempora",
+      isDefault: false,
+      asset: {
+        address: "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913",
+        symbol: "USDC",
+        decimals: 6
+      },
+      shareDecimals: 18,
+      depositOpen: {
+        open: true,
+        method: "simulated-deposit-from-stranger",
+        measuredAtBlock: 51372415,
+        measuredAtIso: "2026-09-16T04:49:00Z",
+        detail: "deposit(1 USDC, 0x\u2026dEaD) from 0x\u2026dEaD reverted 0xe65b7a77 TransferFromReverted at block 51372415 \u2014 it reached the token pull, so access is open; maxDeposit() reads 0 to every caller on this chassis by design and is not consulted."
+      },
+      deployedAtBlock: 51371133,
+      notes: [
+        "18-decimal shares against a 6-decimal asset \u2014 a share amount is never an asset amount here.",
+        "Morpho Vault V2. maxDeposit() and maxWithdraw() return 0 to every caller by protocol design; the pre-flight simulates the real call and earn_balance simulates the exit. Neither reads those views.",
+        "Withdrawals are served from idle USDC, then through the vault's liquidity adapter; a withdrawal larger than that reverts until positions are unwound. earn_balance reports exitableNow by simulating the withdrawal.",
+        "No fee is set: performanceFee() = 0 and managementFee() = 0 at block 51372415. The curator can introduce one, and the vault's fee timelocks are 0 (timelock(setPerformanceFee) = timelock(setManagementFee) = 0 at block 51404161), so a change needs no notice. Read both fees before depositing.",
+        "The DEMO vault. Open to any account and in depositable, but not the default: name it with `--vault tlCashPlusUSDC2`. Its structure is the one Test 2B restores as a sibling."
+      ]
+    },
+    {
+      symbol: "tlCashPlusUSDC2A",
+      name: "Tempora Labs Cash Plus USDC (Test 2A)",
+      warning: "TEST VAULT \u2014 unproven. It exists to exercise this product, not to hold savings. Deposit only an amount you are fully prepared to lose entirely, and do not move significant funds into it. Show this warning before preparing any deposit.",
+      chainId: 8453,
+      address: "0x1516D2c082b9cc9af852B1Ebc828f168F27299ef",
+      chassis: "fusion",
+      backend: "tempora",
+      isDefault: false,
+      asset: {
+        address: "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913",
+        symbol: "USDC",
+        decimals: 6
+      },
+      shareDecimals: 8,
+      depositOpen: {
+        open: false,
+        method: "simulated-deposit-from-stranger",
+        measuredAtBlock: 51361109,
+        measuredAtIso: "2026-09-15T22:32:47Z",
+        reason: "WHITELIST_GATED",
+        detail: "deposit(1 USDC, 0x\u2026dEaD) from 0x\u2026dEaD reverted 0x068ca9d8 AccessManagedUnauthorized at block 51361109. The AccessManager at 0xD76eadf8451eB94df0eADd8BfB01C66EF3182ECC returns getTargetFunctionRole(vault, deposit) = 800; withdraw and redeem are PUBLIC_ROLE (2^64-1), so an account that holds shares can always leave."
+      },
+      deployedAtBlock: 51359816,
+      notes: [
+        "8-decimal shares against a 6-decimal asset \u2014 a share amount is never an asset amount here.",
+        "getInstantWithdrawalFuses() returns three fuses (measured at block 51361109), so a withdrawal is served from the vault's liquid balance and then, in fuse order, by unwinding its positions in the same transaction. A withdrawal larger than what those positions can release in-block still reverts; earn_balance reports exitableNow, which simulates the withdrawal rather than reading maxWithdraw.",
+        "Deposits need role 800 on the AccessManager. An account without it gets WHITELIST_GATED from earn_status and earn_quote. Neither earn prepare_deposit nor connect deposit checks the role: a deposit built for such an account reverts on-chain (AccessManagedUnauthorized), so run earn_status for the account first. Withdrawals are public.",
+        "Whitelist-gated (role 800 on its AccessManager): not in depositable. Listed so that an admitted account's position can be read and exited; a non-member gets WHITELIST_GATED from earn_status before anything is built."
+      ]
+    },
+    {
+      symbol: "tlCashPlusUSDC2B",
+      name: "Tempora Labs Cash Plus USDC (Test 2B)",
+      warning: "TEST VAULT \u2014 unproven. It exists to exercise this product, not to hold savings. Deposit only an amount you are fully prepared to lose entirely, and do not move significant funds into it. Show this warning before preparing any deposit.",
+      chainId: 8453,
+      address: "0x91BcEbA5feCB9E92d80F1845B55cC56621E9352F",
+      chassis: "morpho-v2",
+      backend: "tempora",
+      isDefault: true,
+      asset: {
+        address: "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913",
+        symbol: "USDC",
+        decimals: 6
+      },
+      shareDecimals: 18,
+      depositOpen: {
+        open: true,
+        method: "simulated-deposit-from-stranger",
+        measuredAtBlock: 52097648,
+        measuredAtIso: "2026-10-02T23:44:03Z",
+        detail: "deposit(1 USDC, 0x\u2026dEaD) from 0x\u2026dEaD reverted 0xe65b7a77 TransferFromReverted at block 52097648 \u2014 it reached the token pull, so access is open; maxDeposit() reads 0 to every caller on this chassis by design and is not consulted."
+      },
+      deployedAtBlock: 51436870,
+      notes: [
+        "18-decimal shares against a 6-decimal asset \u2014 a share amount is never an asset amount here.",
+        "Morpho Vault V2. maxDeposit() and maxWithdraw() return 0 to every caller by protocol design; the pre-flight simulates the real call and earn_balance simulates the exit. Neither reads those views.",
+        "Withdrawals are served from idle USDC, then through the vault's liquidity adapter; a withdrawal larger than that reverts until positions are unwound. earn_balance reports exitableNow by simulating the withdrawal.",
+        "No fee is set: performanceFee() = 0 and managementFee() = 0 at block 52097648. The curator can introduce one, and the vault's fee timelocks are 0 (timelock(setPerformanceFee) = timelock(setManagementFee) = 0 at block 52097648), so a change needs no notice. Read both fees before depositing.",
+        "Three configured adapters (measured at block 52097648); Treasury does not model the fund's allocation across them \u2014 read the vault's positions on-chain before a first deposit.",
+        "Morpho's own app has no page for this vault (app.morpho.org answered 404 for it on 2026-10-02, and Morpho's API does not list it), unlike Test 2. Positions cannot be cross-checked there; verify on-chain or on BaseScan instead.",
+        "The DEFAULT vault on Base, and open to any account: it is in depositable."
+      ]
+    },
+    {
+      symbol: "tlCashPlusUSDC2C",
+      name: "Tempora Labs Cash Plus USDC (Test 2C)",
+      warning: "TEST VAULT \u2014 unproven. It exists to exercise this product, not to hold savings. Deposit only an amount you are fully prepared to lose entirely, and do not move significant funds into it. Show this warning before preparing any deposit.",
+      chainId: 42161,
+      address: "0x4057a63953142Ac2b3E5dB1954Fc14d578662587",
+      chassis: "morpho-v2",
+      backend: "tempora",
+      isDefault: true,
+      asset: {
+        address: "0xaf88d065e77c8cC2239327C5EDb3A432268e5831",
+        symbol: "USDC",
+        decimals: 6
+      },
+      shareDecimals: 18,
+      depositOpen: {
+        open: true,
+        method: "simulated-deposit-from-stranger",
+        measuredAtBlock: 511070816,
+        measuredAtIso: "2026-10-02T18:43:33Z",
+        detail: "deposit(1 USDC, 0x\u2026dEaD) from 0x\u2026dEaD reverted 0xe65b7a77 TransferFromReverted at block 511070816 \u2014 it reached the token pull, so access is open; maxDeposit() reads 0 to every caller on this chassis by design and is not consulted."
+      },
+      deployedAtBlock: 510270114,
+      notes: [
+        "On Arbitrum One (chain 42161). Calls for this vault are sent on Arbitrum, and its RPC is TREASURY_RPC_ARBITRUM.",
+        "The asset is native USDC on Arbitrum One, not bridged USDC.e, which is a different token this vault does not take.",
+        "18-decimal shares against a 6-decimal asset \u2014 a share amount is never an asset amount here.",
+        "Morpho Vault V2. maxDeposit() and maxWithdraw() return 0 to every caller by protocol design; the pre-flight simulates the real call and earn_balance simulates the exit. Neither reads those views.",
+        "Withdrawals are served from idle USDC, then through the vault's liquidity adapter; a withdrawal larger than that reverts until positions are unwound. earn_balance reports exitableNow by simulating the withdrawal.",
+        "No fee is set: performanceFee() = 0 and managementFee() = 0 at block 511070816. The curator can introduce one, and the vault's fee timelocks are 0 (timelock(setPerformanceFee) = timelock(setManagementFee) = 0 at block 511070816), so a change needs no notice. Read both fees before depositing.",
+        "The default vault on Arbitrum One, and open to any account: it is in depositable."
+      ]
+    },
+    {
+      symbol: "tlCashPlusUSDG2D",
+      name: "Tempora Labs Cash Plus USDG (Test 2D)",
+      warning: "TEST VAULT \u2014 unproven. It exists to exercise this product, not to hold savings. Deposit only an amount you are fully prepared to lose entirely, and do not move significant funds into it. Show this warning before preparing any deposit.",
+      chainId: 4663,
+      address: "0x758f00731943aA88e8C7fB709e0B727903B4F833",
+      chassis: "morpho-v2",
+      backend: "tempora",
+      isDefault: true,
+      asset: {
+        address: "0x5fc5360D0400a0Fd4f2af552ADD042D716F1d168",
+        symbol: "USDG",
+        decimals: 6
+      },
+      shareDecimals: 18,
+      depositOpen: {
+        open: true,
+        method: "simulated-deposit-from-stranger",
+        measuredAtBlock: 79974900,
+        measuredAtIso: "2026-10-04T13:35:53Z",
+        detail: "deposit(1 USDG, 0x\u2026dEaD) from 0x\u2026dEaD reverted 0xe65b7a77 TransferFromReverted at block 79974900 \u2014 it reached the token pull, so access is open; maxDeposit() reads 0 to every caller on this chassis by design and is not consulted."
+      },
+      deployedAtBlock: 79381803,
+      notes: [
+        "On Robinhood Chain (chain 4663). Calls for this vault are sent on Robinhood Chain, and its RPC is TREASURY_RPC_ROBINHOOD.",
+        "The asset is USDG (Global Dollar), not USDC: the first vault in this registry whose asset is not USDC. Amounts in and out of this vault are USDG, in USDG's own 6 decimals; a tool argument or result field named for USDC (amount_usdc, usdcValue) carries USDG here.",
+        "18-decimal shares against a 6-decimal asset \u2014 a share amount is never an asset amount here.",
+        "Morpho Vault V2. maxDeposit() and maxWithdraw() return 0 to every caller by protocol design; the pre-flight simulates the real call and earn_balance simulates the exit. Neither reads those views.",
+        "Withdrawals are served from idle USDG, then through the vault's liquidity adapter; a withdrawal larger than that reverts until positions are unwound. earn_balance reports exitableNow by simulating the withdrawal.",
+        "No fee is set: performanceFee() = 0 and managementFee() = 0 at block 79974900. The curator can introduce one, and the vault's fee timelocks are 0 (timelock(setPerformanceFee) = timelock(setManagementFee) = 0 at block 79974900), so a change needs no notice. Read both fees before depositing.",
+        "Three configured adapters (measured at block 79974900); Treasury does not model the fund's allocation across them \u2014 read the vault's positions on-chain before a first deposit.",
+        "The public Robinhood Chain endpoint answered a single eth_getLogs over 674,901 blocks (79,300,000 to 79,974,900, on 2026-10-04), which covers this vault's whole history; it does not serve state at past blocks, which nothing in this client reads.",
+        "The default vault on Robinhood Chain, and open to any account: it is in depositable."
+      ]
+    },
+    {
+      symbol: "tlCashPlusUSDC2E",
+      name: "Tempora Labs Cash Plus USDC (Test 2E)",
+      warning: "TEST VAULT \u2014 unproven. It exists to exercise this product, not to hold savings. Deposit only an amount you are fully prepared to lose entirely, and do not move significant funds into it. Show this warning before preparing any deposit.",
+      chainId: 1,
+      address: "0x2AA9B1F12bbFE1E01dcb4DD52E6836d68416e3B6",
+      chassis: "morpho-v2",
+      backend: "tempora",
+      isDefault: true,
+      asset: {
+        address: "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48",
+        symbol: "USDC",
+        decimals: 6
+      },
+      shareDecimals: 18,
+      depositOpen: {
+        open: true,
+        method: "simulated-deposit-from-stranger",
+        measuredAtBlock: 26166799,
+        measuredAtIso: "2026-10-11T04:24:35Z",
+        detail: "deposit(1 USDC, 0x\u2026dEaD) from 0x\u2026dEaD reverted 0xe65b7a77 TransferFromReverted at block 26166799 \u2014 it reached the token pull, so access is open; maxDeposit() reads 0 to every caller on this chassis by design and is not consulted."
+      },
+      deployedAtBlock: 26164268,
+      notes: [
+        "On Ethereum (chain 1). Calls for this vault are sent on Ethereum, and its RPC is TREASURY_RPC_ETHEREUM.",
+        "Gas on Ethereum costs far more than on Base, Arbitrum One, Robinhood Chain or Monad: the approve, deposit and withdrawal each pay Ethereum gas in ETH, which can be a large share of a small deposit. Say so before preparing a small deposit here.",
+        "The asset is Circle's USDC on Ethereum (0xA0b8\u2026eB48).",
+        "18-decimal shares against a 6-decimal asset \u2014 a share amount is never an asset amount here.",
+        "Morpho Vault V2. maxDeposit() and maxWithdraw() return 0 to every caller by protocol design; the pre-flight simulates the real call and earn_balance simulates the exit. Neither reads those views.",
+        "Withdrawals are served from idle USDC, then through the vault's liquidity adapter; a withdrawal larger than that reverts until positions are unwound. earn_balance reports exitableNow by simulating the withdrawal.",
+        "No fee is set: performanceFee() = 0 and managementFee() = 0 at block 26166799. The curator can introduce one, and the vault's fee timelocks are 0 (timelock(setPerformanceFee) = timelock(setManagementFee) = 0 at block 26166799), so a change needs no notice. Read both fees before depositing.",
+        "Three configured adapters (measured at block 26166799); Treasury does not model the fund's allocation across them \u2014 read the vault's positions on-chain before a first deposit.",
+        "The public Ethereum endpoint (ethereum.reth.rs) serves eth_getLogs over up to 100,000 blocks per request (measured 2026-10-11), so earn_balance reads this vault's whole history from it in a few requests.",
+        "The default vault on Ethereum, and open to any account: it is in depositable."
+      ]
+    },
+    {
+      symbol: "tlCashPlusUSDC2F",
+      name: "Tempora Labs Cash Plus USDC (Test 2F)",
+      warning: "TEST VAULT \u2014 unproven. It exists to exercise this product, not to hold savings. Deposit only an amount you are fully prepared to lose entirely, and do not move significant funds into it. Show this warning before preparing any deposit.",
+      chainId: 143,
+      address: "0x163295A4d4381745A205DC5E9A436a3f51791593",
+      chassis: "morpho-v2",
+      backend: "tempora",
+      isDefault: true,
+      asset: {
+        address: "0x754704Bc059F8C67012fEd69BC8A327a5aafb603",
+        symbol: "USDC",
+        decimals: 6
+      },
+      shareDecimals: 18,
+      depositOpen: {
+        open: true,
+        method: "simulated-deposit-from-stranger",
+        measuredAtBlock: 112372495,
+        measuredAtIso: "2026-10-11T04:24:45Z",
+        detail: "deposit(1 USDC, 0x\u2026dEaD) from 0x\u2026dEaD reverted 0xe65b7a77 TransferFromReverted at block 112372495 \u2014 it reached the token pull, so access is open; maxDeposit() reads 0 to every caller on this chassis by design and is not consulted."
+      },
+      deployedAtBlock: 112273210,
+      notes: [
+        "On Monad (chain 143). Calls for this vault are sent on Monad, and its RPC is TREASURY_RPC_MONAD.",
+        "The asset is the USDC token at 0x7547\u2026b603 on Monad (name and symbol USDC, 6 decimals, read on chain 2026-10-11).",
+        "18-decimal shares against a 6-decimal asset \u2014 a share amount is never an asset amount here.",
+        "Morpho Vault V2. maxDeposit() and maxWithdraw() return 0 to every caller by protocol design; the pre-flight simulates the real call and earn_balance simulates the exit. Neither reads those views.",
+        "Withdrawals are served from idle USDC, then through the vault's liquidity adapter; a withdrawal larger than that reverts until positions are unwound. earn_balance reports exitableNow by simulating the withdrawal.",
+        "No fee is set: performanceFee() = 0 and managementFee() = 0 at block 112372495. The curator can introduce one, and the vault's fee timelocks are 0 (timelock(setPerformanceFee) = timelock(setManagementFee) = 0 at block 112372495), so a change needs no notice. Read both fees before depositing.",
+        "Three configured adapters (measured at block 112372495); Treasury does not model the fund's allocation across them \u2014 read the vault's positions on-chain before a first deposit.",
+        "The public Monad endpoint (rpc.monad.xyz) serves eth_getLogs over at most 100 blocks per request (measured 2026-10-11), and Monad makes a block about every 0.3 seconds, so from it earn_balance's history scan covers under an hour and reports itself cut short. For entry basis and yield, set TREASURY_LOGS_RPC_MONAD to a provider with a wider eth_getLogs range.",
+        "The default vault on Monad, and open to any account: it is in depositable."
+      ]
+    }
+  ],
+  solanaVaults: [
+    {
+      family: "solana",
+      symbol: "tlCashPlusUSDC2G",
+      name: "Tempora Labs Cash Plus USDC (Test 2G)",
+      warning: "TEST VAULT \u2014 unproven. It exists to exercise this product, not to hold savings. Deposit only an amount you are fully prepared to lose entirely, and do not move significant funds into it. Show this warning before preparing any deposit.",
+      chain: "solana",
+      address: "8qV54zrW2piQgBbVaUUtGajf4KuVDKLUDquHv9VZBfS7",
+      chassis: "kamino-vault",
+      backend: "tempora",
+      isDefault: true,
+      asset: {
+        address: "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v",
+        symbol: "USDC",
+        decimals: 6
+      },
+      sharesMint: "pxUHrn6sFsnZiLToD9hQa5p6vXRFx7h8dCjZr7LXp7Z",
+      shareDecimals: 6,
+      depositOpen: {
+        open: true,
+        method: "simulated-deposit-from-stranger",
+        measuredAtSlot: 455531367,
+        measuredAtIso: "2026-10-11T05:12:46Z",
+        detail: "a simulated 1 USDC deposit from an unrelated account holding USDC and SOL succeeded at slot 455531367 (0.999999 shares minted); the vault's permissioning authority is unset, so no account needs admission."
+      },
+      deployedAtSlot: 455493127,
+      notes: [
+        "On Solana mainnet-beta. Every call for this vault is a Solana transaction, signed by a Solana wallet; its RPC is TREASURY_RPC_SOLANA.",
+        "A Kamino vault (program KvauGMspG5k6rtzrqqn7WNn3oZdyKqLKwK2XWQ8FLjd) over Kamino lending reserves. It is not an ERC-4626 vault: shares are an SPL token (6 decimals), and there is no approve step.",
+        "The ticker tlCashPlusUSDC2G is assigned by this registry: the share mint carries no token metadata, so there is no on-chain ticker to read. The name is read from the vault's own state.",
+        "Shares always land in the depositing account, and a withdrawal always pays the account that holds the shares: there is no separate receiver.",
+        "Each withdraw instruction keeps up to 0.001 USDC in the vault: Kamino's GLOBAL withdrawal penalty for every vault on its program (the program's global config holds withdrawalPenaltyLamports = 1000, read 2026-10-11), not this vault's own setting (0), and Kamino can change it at any time without notice. A withdrawal that needs more than one reserve is more than one instruction: measured by simulation 2026-10-11, 2,000,000 shares kept 1,000 as one instruction and 1,929 as two; a withdrawal worth 0.001 USDC or less is refused (program error 7049). Quotes and positions report the exact amount, net of it.",
+        "A first deposit creates the account's share token account, whose rent (about 0.002 SOL) the account pays and gets back if it ever closes that account. Every transaction also needs SOL for its fee.",
+        "A prepared transaction names a recent blockhash and lands only within about a minute of being prepared: prepare it when the operator is ready to sign.",
+        "No fee is set: performance and management fees read 0 at slot 455529733. The vault admin can set them, and this vault's own withdrawal penalty, with no timelock: a change takes effect in the transaction that makes it. The vault admin or Kamino's global admin can also set a per-reserve crank fee taken from each deposit and minimum deposit and withdrawal amounts (all 0, read 2026-10-11).",
+        "Kamino's program can require a co-signer (a permissioning authority) on every deposit AND every withdrawal of this vault; set by Kamino's global admin with no delay, that is a power to stop exits. It is unset (read 2026-10-11), and this client refuses to build while one is set.",
+        "Each withdrawal leg is limited by its reserve's available liquidity: while a reserve is highly utilised, a large withdrawal can be refused or need more than one transaction. earn_balance's exit simulates it.",
+        "Deposit cap: 1,000 USDC in total (read 2026-10-11). Two reserves are configured: Kamino's main-market USDC reserve and its OnRe-market USDC reserve; idle USDC is the rest.",
+        "The default vault on Solana, and open to any account: it is in depositable."
+      ]
+    }
+  ]
+};
 
 // src/config/earn.ts
 var EARN = {
@@ -38613,12 +44149,20 @@ var EARN = {
    * `robinhood`: Tempora Labs Cash Plus USDG (Test 2D) — a Morpho Vault V2 on Robinhood Chain over
    * USDG, the first vault whose asset is not USDC. Open to any account by the same measurement.
    *
+   * `ethereum`: Tempora Labs Cash Plus USDC (Test 2E) — a Morpho Vault V2 on Ethereum, open to any
+   * account by the same measurement. Gas there costs far more than on the other chains.
+   *
+   * `monad`: Tempora Labs Cash Plus USDC (Test 2F) — a Morpho Vault V2 on Monad, open to any account
+   * by the same measurement.
+   *
    * `Record<ChainKey, …>`: a chain added to `CHAIN_INFO` without a default here does not compile.
    */
   defaultVaultByChain: {
     base: "tlCashPlusUSDC2B",
     arbitrum: "tlCashPlusUSDC2C",
-    robinhood: "tlCashPlusUSDG2D"
+    robinhood: "tlCashPlusUSDG2D",
+    ethereum: "tlCashPlusUSDC2E",
+    monad: "tlCashPlusUSDC2F"
   },
   /** The round-trip target. The same vault as the default; open, so the fork tier deposits from the whale directly. */
   roundTripVault: "tlCashPlusUSDC2B",
@@ -38632,6 +44176,12 @@ var EARN = {
     usdcWhale: "0xBBBBBbbBBb9cC5e90e3b3Af64bdAF62C37EEFFCb",
     /** Aave V3's aArbUSDCn token on Arbitrum One — held ~1.7e13 native-USDC base units when probed 2026-10-02. Impersonated on the fork, never keyed. */
     usdcWhaleArbitrum: "0x724dc807b04555b71ed48a6896b6F41593b8C637",
+    /** Morpho Blue on Ethereum — held ~1.2e14 USDC base units when probed 2026-10-11. Impersonated on the fork, never keyed. */
+    usdcWhaleEthereum: "0xBBBBBbbBBb9cC5e90e3b3Af64bdAF62C37EEFFCb",
+    /** The largest USDC holder among recent transfers on Monad — ~1.3e13 base units when probed 2026-10-11. Impersonated on the fork, never keyed. */
+    usdcWhaleMonad: "0x188d586Ddcf52439676Ca21A244753fA19F9Ea8e",
+    /** The largest USDG holder among recent transfers on Robinhood Chain — ~1.0e14 base units when probed 2026-10-11. Impersonated on the fork, never keyed. */
+    usdgWhaleRobinhood: "0x94bAB9693Ba2f6358507eFfcbd372b0660AFfF9d",
     /** USDC the fork round trip deposits, and what it seeds a discovered depositor with beforehand. */
     forkDepositUsdc: "100",
     forkSeedUsdc: "1000"
@@ -38639,11 +44189,10 @@ var EARN = {
 };
 
 // src/registry.ts
-var REGISTRY_URL = new URL("../registry/vaults.json", pathToFileURL(realpathSync(fileURLToPath(import.meta.url))));
 var cached2;
 function loadRegistry() {
   if (cached2) return cached2;
-  const raw = JSON.parse(readFileSync(fileURLToPath(REGISTRY_URL), "utf8"));
+  const raw = vaults_default;
   const parsed = registrySchema.parse(raw);
   const chainId = defaultChainId();
   if (!parsed.vaults.some((v) => v.chainId === chainId)) {
@@ -38658,10 +44207,44 @@ function listVaults() {
 function getVault(symbol2) {
   const v = loadRegistry().vaults.find((x) => x.symbol === symbol2);
   if (!v) {
-    const known = loadRegistry().vaults.map((x) => x.symbol).join(", ");
+    if (loadRegistry().solanaVaults.some((x) => x.symbol === symbol2)) {
+      throw new Error(`vault "${symbol2}" is on solana, which this command does not handle`);
+    }
+    const known = [...loadRegistry().vaults, ...loadRegistry().solanaVaults].map((x) => x.symbol).join(", ");
     throw new Error(`unknown vault "${symbol2}"; known: ${known}`);
   }
   return v;
+}
+function listSolanaVaults() {
+  return loadRegistry().solanaVaults;
+}
+function offeredChainKeys() {
+  return [...offeredChains().map((c) => c.key), ...listSolanaVaults().length > 0 ? [SOLANA_INFO.key] : []];
+}
+function resolveAnyVault(symbol2, chain) {
+  const sol = symbol2 ? listSolanaVaults().find((x) => x.symbol === symbol2) : void 0;
+  if (chain === SOLANA_INFO.key) {
+    const vaults = listSolanaVaults();
+    if (vaults.length === 0) throw new Error(`unknown chain "${chain}"; chains with a vault: ${offeredChainKeys().join(", ")}`);
+    if (!symbol2) return { family: "solana", vault: vaults.find((x) => x.isDefault) };
+    if (sol) return { family: "solana", vault: sol };
+    const evm2 = getVault(symbol2);
+    throw new Error(
+      `vault "${symbol2}" is on ${CHAIN_INFO[evm2.chainId].key}, not solana. Name one or the other: drop \`chain\` to use ${symbol2} on ${CHAIN_INFO[evm2.chainId].key}, or pick a vault on solana (${vaults.map((x) => x.symbol).join(", ")}).`
+    );
+  }
+  if (sol) {
+    if (chain) {
+      throw new Error(
+        `vault "${symbol2}" is on solana, not ${chain}. Name one or the other: drop \`chain\` to use ${symbol2} on solana, or pick a vault on ${chain}.`
+      );
+    }
+    return { family: "solana", vault: sol };
+  }
+  return { family: "evm", vault: resolveVault(symbol2, chain) };
+}
+function depositableSolanaVaults() {
+  return listSolanaVaults().filter((v) => v.depositOpen.open);
 }
 function defaultChainId() {
   const id = chainIdForKey(EARN.defaultChain);
@@ -38688,10 +44271,11 @@ function defaultVault(chainId = defaultChainId()) {
 function resolveVault(symbol2, chain) {
   let chainId;
   if (chain) {
+    if (chain === SOLANA_INFO.key) throw new Error(`chain "${chain}" has no ERC-4626 vault; this resolves the EVM vaults only, and the Solana vault is reached through the CLI (\`treasury earn \u2026 --chain solana\`)`);
     chainId = chainIdForKey(chain);
     const offered = offeredChains();
     if (chainId === void 0 || !offered.some((c) => c.chainId === chainId)) {
-      throw new Error(`unknown chain "${chain}"; chains with a vault: ${offered.map((c) => c.key).join(", ")}`);
+      throw new Error(`unknown chain "${chain}"; chains with a vault: ${offeredChainKeys().join(", ")}`);
     }
   }
   if (!symbol2) return defaultVault(chainId);
@@ -38710,16 +44294,852 @@ function depositableVaults() {
   );
 }
 
+// src/solana/constants.ts
+var KVAULT_PROGRAM_ID = "KvauGMspG5k6rtzrqqn7WNn3oZdyKqLKwK2XWQ8FLjd";
+var KLEND_PROGRAM_ID = "KLend2g3cP87fffoy8q1mQqGKjrxjC8boSyAYavgmjD";
+var SPL_TOKEN_PROGRAM_ID = "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA";
+var ASSOCIATED_TOKEN_PROGRAM_ID = "ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL";
+var SYSTEM_PROGRAM_ID = "11111111111111111111111111111111";
+var SYSVAR_INSTRUCTIONS_ID = "Sysvar1nstructions1111111111111111111111111";
+var COMPUTE_BUDGET_PROGRAM_ID = "ComputeBudget111111111111111111111111111111";
+var DEFAULT_PUBKEY = SYSTEM_PROGRAM_ID;
+var MAINNET_GENESIS_HASH = "5eykt4UsFv8P8NJdTREpY1vzqKqZKvdpKuc147dw2N9d";
+var SEEDS = {
+  tokenVault: "token_vault",
+  ctokenVault: "ctoken_vault",
+  baseVaultAuthority: "authority",
+  shares: "shares",
+  globalConfig: "global_config",
+  eventAuthority: "__event_authority",
+  /** The lending program's market authority. */
+  lendingMarketAuthority: "lma"
+};
+var VAULT_STATE_SIZE = 62552;
+var RESERVE_SIZE = 8624;
+var MAX_RESERVES = 25;
+var MAX_TRANSACTION_BYTES = 1232;
+var MAX_COMPUTE_UNITS = 14e5;
+
+// src/solana/kvault.ts
+var DISCRIMINATORS = {
+  deposit: [242, 35, 198, 137, 82, 225, 242, 182],
+  withdraw: [183, 18, 70, 156, 148, 109, 161, 34]
+};
+var encoder5 = getAddressEncoder();
+var utf8 = (s2) => new TextEncoder().encode(s2);
+var ro = (a) => ({ address: address(a), role: AccountRole.READONLY });
+var rw = (a) => ({ address: address(a), role: AccountRole.WRITABLE });
+var signer = (a, writable) => ({
+  address: address(a),
+  role: writable ? AccountRole.WRITABLE_SIGNER : AccountRole.READONLY_SIGNER
+});
+function u64le(v) {
+  if (v < 0n || v > 0xffffffffffffffffn) throw new Error(`${v} does not fit a u64`);
+  const b = new Uint8Array(8);
+  new DataView(b.buffer).setBigUint64(0, v, true);
+  return b;
+}
+function concat3(...parts) {
+  const out = new Uint8Array(parts.reduce((n, p) => n + p.length, 0));
+  let i = 0;
+  for (const p of parts) {
+    out.set(p, i);
+    i += p.length;
+  }
+  return out;
+}
+async function pda(program, seeds) {
+  const [found] = await getProgramDerivedAddress({
+    programAddress: address(program),
+    seeds: seeds.map((s2) => typeof s2 === "string" ? encoder5.encode(address(s2)) : utf8(s2.text))
+  });
+  return found;
+}
+async function vaultPdas(vaultState) {
+  const [tokenVault, baseVaultAuthority, sharesMint] = await Promise.all([
+    pda(KVAULT_PROGRAM_ID, [{ text: SEEDS.tokenVault }, vaultState]),
+    pda(KVAULT_PROGRAM_ID, [{ text: SEEDS.baseVaultAuthority }, vaultState]),
+    pda(KVAULT_PROGRAM_ID, [{ text: SEEDS.shares }, vaultState])
+  ]);
+  return { tokenVault, baseVaultAuthority, sharesMint };
+}
+var ctokenVaultPda = (vaultState, reserve) => pda(KVAULT_PROGRAM_ID, [{ text: SEEDS.ctokenVault }, vaultState, reserve]);
+var kvaultGlobalConfigPda = () => pda(KVAULT_PROGRAM_ID, [{ text: SEEDS.globalConfig }]);
+var kvaultEventAuthorityPda = () => pda(KVAULT_PROGRAM_ID, [{ text: SEEDS.eventAuthority }]);
+var lendingMarketAuthorityPda = (lendingMarket) => pda(KLEND_PROGRAM_ID, [{ text: SEEDS.lendingMarketAuthority }, lendingMarket]);
+async function associatedTokenAccount(owner, mint) {
+  const [found] = await getProgramDerivedAddress({
+    programAddress: address(ASSOCIATED_TOKEN_PROGRAM_ID),
+    seeds: [encoder5.encode(address(owner)), encoder5.encode(address(SPL_TOKEN_PROGRAM_ID)), encoder5.encode(address(mint))]
+  });
+  return found;
+}
+async function depositIx(p) {
+  return {
+    programAddress: address(KVAULT_PROGRAM_ID),
+    accounts: [
+      signer(p.user, true),
+      rw(p.vaultState),
+      rw(p.tokenVault),
+      ro(p.tokenMint),
+      ro(p.baseVaultAuthority),
+      rw(p.sharesMint),
+      rw(p.userTokenAta),
+      rw(p.userSharesAta),
+      ro(KLEND_PROGRAM_ID),
+      ro(SPL_TOKEN_PROGRAM_ID),
+      ro(SPL_TOKEN_PROGRAM_ID),
+      ro(await kvaultEventAuthorityPda()),
+      ro(KVAULT_PROGRAM_ID),
+      ...p.vaultReserves.map((r) => rw(r.reserve)),
+      ...p.vaultReserves.map((r) => ro(r.lendingMarket))
+    ],
+    data: concat3(DISCRIMINATORS.deposit, u64le(p.maxAmount))
+  };
+}
+async function withdrawIx(p) {
+  const [ctokenVault, lma, eventAuthority, globalConfig2] = await Promise.all([
+    ctokenVaultPda(p.vaultState, p.reserve.reserve),
+    lendingMarketAuthorityPda(p.reserve.lendingMarket),
+    kvaultEventAuthorityPda(),
+    kvaultGlobalConfigPda()
+  ]);
+  return {
+    programAddress: address(KVAULT_PROGRAM_ID),
+    accounts: [
+      // withdrawFromAvailable
+      signer(p.user, false),
+      rw(p.vaultState),
+      ro(globalConfig2),
+      rw(p.tokenVault),
+      ro(p.baseVaultAuthority),
+      rw(p.userTokenAta),
+      rw(p.tokenMint),
+      rw(p.userSharesAta),
+      rw(p.sharesMint),
+      ro(SPL_TOKEN_PROGRAM_ID),
+      ro(SPL_TOKEN_PROGRAM_ID),
+      ro(KLEND_PROGRAM_ID),
+      ro(eventAuthority),
+      ro(KVAULT_PROGRAM_ID),
+      // withdrawFromReserveAccounts
+      rw(p.vaultState),
+      rw(p.reserve.reserve),
+      rw(ctokenVault),
+      ro(p.reserve.lendingMarket),
+      ro(lma),
+      rw(p.reserve.liquiditySupplyVault),
+      rw(p.reserve.collateralMint),
+      ro(SPL_TOKEN_PROGRAM_ID),
+      ro(SYSVAR_INSTRUCTIONS_ID),
+      ro(eventAuthority),
+      ro(KVAULT_PROGRAM_ID),
+      ...p.vaultReserves.map((r) => rw(r.reserve)),
+      ...p.vaultReserves.map((r) => ro(r.lendingMarket))
+    ],
+    data: concat3(DISCRIMINATORS.withdraw, u64le(p.sharesAmount))
+  };
+}
+async function createAtaIdempotentIx(owner, mint) {
+  return {
+    programAddress: address(ASSOCIATED_TOKEN_PROGRAM_ID),
+    accounts: [
+      signer(owner, true),
+      rw(await associatedTokenAccount(owner, mint)),
+      ro(owner),
+      ro(mint),
+      ro(SYSTEM_PROGRAM_ID),
+      ro(SPL_TOKEN_PROGRAM_ID)
+    ],
+    data: Uint8Array.from([1])
+  };
+}
+function setComputeUnitLimitIx(units) {
+  if (!Number.isInteger(units) || units <= 0 || units > MAX_COMPUTE_UNITS) {
+    throw new Error(`compute unit limit must be an integer in (0, ${MAX_COMPUTE_UNITS}], got ${units}`);
+  }
+  const data = new Uint8Array(5);
+  data[0] = 2;
+  new DataView(data.buffer).setUint32(1, units, true);
+  return { programAddress: address(COMPUTE_BUDGET_PROGRAM_ID), data };
+}
+function compileUnsigned(instructions, feePayer, lifetime) {
+  const message = pipe2(
+    createTransactionMessage({ version: "legacy" }),
+    (m) => setTransactionMessageFeePayer(address(feePayer), m),
+    (m) => setTransactionMessageLifetimeUsingBlockhash({ blockhash: lifetime.blockhash, lastValidBlockHeight: lifetime.lastValidBlockHeight }, m),
+    (m) => appendTransactionMessageInstructions(instructions, m)
+  );
+  const base643 = getBase64EncodedWireTransaction(compileTransaction(message));
+  return { base64: base643, bytes: Buffer.from(base643, "base64").length };
+}
+
+// src/solana/rpc.ts
+var RATE_LIMIT_WAIT_MS2 = 15e3;
+var retrySleep = (ms) => new Promise((r) => setTimeout(r, ms));
+function withRateLimitRetry(base2, sleep = retrySleep) {
+  return (async (req) => {
+    let waited = 0;
+    for (let attempt = 0; ; attempt++) {
+      try {
+        return await base2(req);
+      } catch (e4) {
+        const is429 = isSolanaError(e4, SOLANA_ERROR__RPC__TRANSPORT_HTTP_ERROR) && e4.context.statusCode === 429;
+        if (!is429 || attempt >= 5 || waited >= RATE_LIMIT_WAIT_MS2) throw e4;
+        const ms = Math.min(500 * 2 ** attempt, RATE_LIMIT_WAIT_MS2 - waited);
+        waited += ms;
+        await sleep(ms);
+      }
+    }
+  });
+}
+function makeSolanaRpc(url2) {
+  return createSolanaRpcFromTransport(withRateLimitRetry(createDefaultRpcTransport({ url: url2 })));
+}
+async function solanaCluster(rpc, ms = 3e3) {
+  let timer;
+  try {
+    const hash4 = await Promise.race([
+      rpc.getGenesisHash().send(),
+      new Promise((resolve2) => {
+        timer = setTimeout(() => resolve2(void 0), ms);
+      })
+    ]);
+    if (hash4 === void 0) return void 0;
+    return hash4 === MAINNET_GENESIS_HASH ? "mainnet" : "other";
+  } catch {
+    return void 0;
+  } finally {
+    if (timer) clearTimeout(timer);
+  }
+}
+
+// src/solana/layout.ts
+var SF_ONE = 1n << 60n;
+var VAULT_STATE_DISCRIMINATOR = Uint8Array.from([228, 196, 82, 165, 98, 210, 235, 152]);
+var RESERVE_DISCRIMINATOR = Uint8Array.from([43, 242, 204, 202, 26, 247, 59, 127]);
+var VAULT_STATE_OFFSETS = {
+  vaultAdminAuthority: 8,
+  baseVaultAuthority: 40,
+  tokenMint: 80,
+  tokenMintDecimals: 112,
+  tokenVault: 120,
+  tokenProgram: 152,
+  sharesMint: 184,
+  sharesMintDecimals: 216,
+  tokenAvailable: 224,
+  sharesIssued: 232,
+  unallocatedWeight: 248,
+  performanceFeeBps: 256,
+  managementFeeBps: 264,
+  pendingFeesSf: 296,
+  allocations: 312,
+  minInvestAmount: 58424,
+  minInvestDelaySlots: 58432,
+  pendingAdmin: 58448,
+  name: 58528,
+  unallocatedTokensCap: 58640,
+  allocationAdmin: 58648,
+  allowAllocationsInWhitelistedReservesOnly: 58728,
+  allowInvestInWhitelistedReservesOnly: 58729,
+  depositCap: 58736,
+  permissioningAuthority: 58840
+};
+var ALLOCATION_SLOT = {
+  size: 2160,
+  reserve: 0,
+  ctokenVault: 32,
+  targetAllocationWeight: 64,
+  tokenAllocationCap: 72,
+  ctokenAllocationCap: 88,
+  ctokenAllocation: 1104,
+  lastInvestSlot: 1112
+};
+var RESERVE_OFFSETS = {
+  lastUpdateSlot: 16,
+  lendingMarket: 32,
+  liquidityMint: 128,
+  liquiditySupplyVault: 160,
+  totalAvailableAmount: 224,
+  borrowedAmountSf: 232,
+  liquidityMintDecimals: 272,
+  accumulatedProtocolFeesSf: 344,
+  accumulatedReferrerFeesSf: 360,
+  pendingReferrerFeesSf: 376,
+  collateralMint: 2560,
+  collateralMintTotalSupply: 2592,
+  depositLimit: 5016
+};
+var addressDecoder = getAddressDecoder();
+function view(data) {
+  return new DataView(data.buffer, data.byteOffset, data.byteLength);
+}
+var u64 = (d, o2) => view(d).getBigUint64(o2, true);
+var u128 = (d, o2) => u64(d, o2) | u64(d, o2 + 8) << 64n;
+var pubkey = (d, o2) => addressDecoder.decode(d.subarray(o2, o2 + 32));
+function assertAccount(data, size5, disc, what) {
+  if (data.length !== size5) {
+    throw new Error(`kamino: ${what} is ${data.length} bytes, expected ${size5} (a different program version or account type)`);
+  }
+  for (let i = 0; i < 8; i++) {
+    if (data[i] !== disc[i]) throw new Error(`kamino: ${what} discriminator mismatch \u2014 not a ${what} account`);
+  }
+}
+function decodeVaultState(data) {
+  assertAccount(data, VAULT_STATE_SIZE, VAULT_STATE_DISCRIMINATOR, "VaultState");
+  const o2 = VAULT_STATE_OFFSETS;
+  const allocations = [];
+  for (let i = 0; i < MAX_RESERVES; i++) {
+    const base2 = o2.allocations + i * ALLOCATION_SLOT.size;
+    const reserve = pubkey(data, base2 + ALLOCATION_SLOT.reserve);
+    if (reserve === DEFAULT_PUBKEY) continue;
+    allocations.push({
+      reserve,
+      ctokenVault: pubkey(data, base2 + ALLOCATION_SLOT.ctokenVault),
+      targetAllocationWeight: u64(data, base2 + ALLOCATION_SLOT.targetAllocationWeight),
+      tokenAllocationCap: u64(data, base2 + ALLOCATION_SLOT.tokenAllocationCap),
+      ctokenAllocationCap: u64(data, base2 + ALLOCATION_SLOT.ctokenAllocationCap),
+      ctokenAllocation: u64(data, base2 + ALLOCATION_SLOT.ctokenAllocation),
+      lastInvestSlot: u64(data, base2 + ALLOCATION_SLOT.lastInvestSlot)
+    });
+  }
+  const nameBytes = data.subarray(o2.name, o2.name + 40);
+  const nul = nameBytes.indexOf(0);
+  return {
+    vaultAdminAuthority: pubkey(data, o2.vaultAdminAuthority),
+    baseVaultAuthority: pubkey(data, o2.baseVaultAuthority),
+    tokenMint: pubkey(data, o2.tokenMint),
+    tokenMintDecimals: u64(data, o2.tokenMintDecimals),
+    tokenVault: pubkey(data, o2.tokenVault),
+    tokenProgram: pubkey(data, o2.tokenProgram),
+    sharesMint: pubkey(data, o2.sharesMint),
+    sharesMintDecimals: u64(data, o2.sharesMintDecimals),
+    tokenAvailable: u64(data, o2.tokenAvailable),
+    sharesIssued: u64(data, o2.sharesIssued),
+    unallocatedWeight: u64(data, o2.unallocatedWeight),
+    performanceFeeBps: u64(data, o2.performanceFeeBps),
+    managementFeeBps: u64(data, o2.managementFeeBps),
+    pendingFeesSf: u128(data, o2.pendingFeesSf),
+    allocations,
+    minInvestAmount: u64(data, o2.minInvestAmount),
+    minInvestDelaySlots: u64(data, o2.minInvestDelaySlots),
+    pendingAdmin: pubkey(data, o2.pendingAdmin),
+    name: new TextDecoder().decode(nul === -1 ? nameBytes : nameBytes.subarray(0, nul)),
+    unallocatedTokensCap: u64(data, o2.unallocatedTokensCap),
+    allocationAdmin: pubkey(data, o2.allocationAdmin),
+    allowAllocationsInWhitelistedReservesOnly: data[o2.allowAllocationsInWhitelistedReservesOnly],
+    allowInvestInWhitelistedReservesOnly: data[o2.allowInvestInWhitelistedReservesOnly],
+    depositCap: u64(data, o2.depositCap),
+    permissioningAuthority: pubkey(data, o2.permissioningAuthority)
+  };
+}
+function decodeReserve(data) {
+  assertAccount(data, RESERVE_SIZE, RESERVE_DISCRIMINATOR, "Reserve");
+  const o2 = RESERVE_OFFSETS;
+  return {
+    lastUpdateSlot: u64(data, o2.lastUpdateSlot),
+    lendingMarket: pubkey(data, o2.lendingMarket),
+    liquidityMint: pubkey(data, o2.liquidityMint),
+    liquiditySupplyVault: pubkey(data, o2.liquiditySupplyVault),
+    totalAvailableAmount: u64(data, o2.totalAvailableAmount),
+    borrowedAmountSf: u128(data, o2.borrowedAmountSf),
+    liquidityMintDecimals: u64(data, o2.liquidityMintDecimals),
+    accumulatedProtocolFeesSf: u128(data, o2.accumulatedProtocolFeesSf),
+    accumulatedReferrerFeesSf: u128(data, o2.accumulatedReferrerFeesSf),
+    pendingReferrerFeesSf: u128(data, o2.pendingReferrerFeesSf),
+    collateralMint: pubkey(data, o2.collateralMint),
+    collateralMintTotalSupply: u64(data, o2.collateralMintTotalSupply),
+    depositLimit: u64(data, o2.depositLimit)
+  };
+}
+function totalSupplySf(r) {
+  return r.totalAvailableAmount * SF_ONE + r.borrowedAmountSf - r.accumulatedProtocolFeesSf - r.accumulatedReferrerFeesSf - r.pendingReferrerFeesSf;
+}
+function ctokensToLiquidity(ctokens, r) {
+  if (r.collateralMintTotalSupply === 0n) return 0n;
+  return ctokens * totalSupplySf(r) / (r.collateralMintTotalSupply * SF_ONE);
+}
+function vaultHoldings(vault, reserves) {
+  const byReserve = /* @__PURE__ */ new Map();
+  let invested = 0n;
+  for (const a of vault.allocations) {
+    const r = reserves.get(a.reserve);
+    if (r === void 0) {
+      throw new Error(`kamino: the vault allocates to reserve ${a.reserve}, which was not read`);
+    }
+    const v = ctokensToLiquidity(a.ctokenAllocation, r);
+    byReserve.set(a.reserve, v);
+    invested += v;
+  }
+  const aumIncludingFees = vault.tokenAvailable + invested;
+  const pendingFees = vault.pendingFeesSf / SF_ONE;
+  return { idle: vault.tokenAvailable, byReserve, aumIncludingFees, pendingFees, netAum: aumIncludingFees - pendingFees };
+}
+
+// src/solana/vault.ts
+var b64 = (data) => new Uint8Array(Buffer.from(data[0], "base64"));
+async function readVault(rpc, entry) {
+  const first = await rpc.getAccountInfo(address(entry.address), { encoding: "base64" }).send();
+  if (!first.value) throw new Error(`no account at ${entry.address} on this cluster \u2014 the endpoint is not Solana mainnet, or the registry row is wrong`);
+  const state = decodeVaultState(b64(first.value.data));
+  const disagree = [];
+  if (state.tokenMint !== entry.asset.address) disagree.push(`asset ${entry.asset.address} != the vault's token mint ${state.tokenMint}`);
+  if (state.sharesMint !== entry.sharesMint) disagree.push(`sharesMint ${entry.sharesMint} != the vault's ${state.sharesMint}`);
+  if (Number(state.tokenMintDecimals) !== entry.asset.decimals) disagree.push(`asset decimals ${entry.asset.decimals} != ${state.tokenMintDecimals}`);
+  if (Number(state.sharesMintDecimals) !== entry.shareDecimals) disagree.push(`shareDecimals ${entry.shareDecimals} != ${state.sharesMintDecimals}`);
+  if (disagree.length > 0) throw new Error(`the registry row for ${entry.symbol} disagrees with the chain: ${disagree.join("; ")}`);
+  const keys = state.allocations.map((a) => address(a.reserve));
+  const res = keys.length === 0 ? { value: [], context: first.context } : await rpc.getMultipleAccounts(keys, { encoding: "base64" }).send();
+  const reserves = /* @__PURE__ */ new Map();
+  res.value.forEach((acc, i) => {
+    if (!acc) throw new Error(`the vault allocates to reserve ${keys[i]}, which does not exist on this cluster`);
+    reserves.set(keys[i], decodeReserve(b64(acc.data)));
+  });
+  return {
+    entry,
+    state,
+    reserves,
+    holdings: vaultHoldings(state, reserves),
+    accounts: {
+      vaultState: entry.address,
+      tokenVault: state.tokenVault,
+      tokenMint: state.tokenMint,
+      baseVaultAuthority: state.baseVaultAuthority,
+      sharesMint: state.sharesMint,
+      vaultReserves: state.allocations.map((a) => ({ reserve: a.reserve, lendingMarket: reserves.get(a.reserve).lendingMarket }))
+    },
+    slot: BigInt(res.context.slot)
+  };
+}
+function sharePrice(v) {
+  if (v.state.sharesIssued === 0n) return formatAmount(10n ** BigInt(v.entry.asset.decimals), v.entry.asset.decimals);
+  return formatAmount(v.holdings.netAum * 10n ** BigInt(v.entry.shareDecimals) / v.state.sharesIssued, v.entry.asset.decimals);
+}
+async function tokenBalance(rpc, account) {
+  const r = await rpc.getAccountInfo(address(account), { encoding: "base64" }).send();
+  if (!r.value) return { exists: false, amount: 0n };
+  return { exists: true, amount: splAmount(b64(r.value.data)) };
+}
+function splAmount(data) {
+  if (data.length < 72) throw new Error(`a token account is at least 72 bytes, got ${data.length}`);
+  return new DataView(data.buffer, data.byteOffset, data.byteLength).getBigUint64(64, true);
+}
+var DEPOSIT_COMPUTE_UNITS = 4e5;
+var WITHDRAW_COMPUTE_UNITS_PER_RESERVE = 4e5;
+function assertNoCoSigner(v) {
+  const refusal = coSignerRefusal(v);
+  if (refusal) throw new Error(`refused: ${refusal} Nothing was prepared.`);
+}
+function coSignerRefusal(v) {
+  if (v.state.permissioningAuthority === DEFAULT_PUBKEY) return void 0;
+  return `${v.entry.symbol} now requires a co-signer (permissioning authority ${v.state.permissioningAuthority}) for every deposit and withdrawal, and this client builds single-signer transactions only.`;
+}
+async function depositInstructions(v, user, amount) {
+  assertNoCoSigner(v);
+  return [
+    setComputeUnitLimitIx(DEPOSIT_COMPUTE_UNITS),
+    await createAtaIdempotentIx(user, v.state.sharesMint),
+    await depositIx({
+      ...v.accounts,
+      user,
+      userTokenAta: await associatedTokenAccount(user, v.state.tokenMint),
+      userSharesAta: await associatedTokenAccount(user, v.state.sharesMint),
+      maxAmount: amount
+    })
+  ];
+}
+function reserveAccounts(v, reserve) {
+  const r = v.reserves.get(reserve);
+  return { reserve, lendingMarket: r.lendingMarket, liquiditySupplyVault: r.liquiditySupplyVault, collateralMint: r.collateralMint };
+}
+async function withdrawInstructions(v, user, shares) {
+  assertNoCoSigner(v);
+  if (v.state.allocations.length === 0) throw new Error(`${v.entry.symbol} has no reserve, and a withdrawal names one`);
+  if (shares <= 0n) throw new Error("a withdrawal of 0 shares");
+  const userTokenAta = await associatedTokenAccount(user, v.state.tokenMint);
+  const userSharesAta = await associatedTokenAccount(user, v.state.sharesMint);
+  const perShareNum = v.holdings.netAum;
+  const perShareDen = v.state.sharesIssued === 0n ? 1n : v.state.sharesIssued;
+  const capacity = (reserve) => {
+    const held = v.holdings.byReserve.get(reserve) ?? 0n;
+    const avail = v.reserves.get(reserve).totalAvailableAmount;
+    return held < avail ? held : avail;
+  };
+  const order = [...v.state.allocations.map((a) => a.reserve)].sort((a, b) => capacity(b) > capacity(a) ? 1 : capacity(b) < capacity(a) ? -1 : 0);
+  const legs = [];
+  let left = shares;
+  let idle = v.holdings.idle;
+  for (const [i, reserve] of order.entries()) {
+    if (left === 0n) break;
+    const tokens = idle + capacity(reserve);
+    const fits = perShareNum === 0n ? left : tokens * perShareDen / perShareNum;
+    const take = i === order.length - 1 || fits >= left ? left : fits;
+    if (take > 0n) legs.push({ reserve, shares: take });
+    left -= take;
+    idle = 0n;
+  }
+  if (left > 0n) legs.push({ reserve: order[0], shares: left });
+  const ixs = [
+    setComputeUnitLimitIx(Math.min(MAX_COMPUTE_UNITS, WITHDRAW_COMPUTE_UNITS_PER_RESERVE * legs.length)),
+    await createAtaIdempotentIx(user, v.state.tokenMint)
+  ];
+  for (const leg of legs) {
+    ixs.push(await withdrawIx({ ...v.accounts, user, userTokenAta, userSharesAta, sharesAmount: leg.shares, reserve: reserveAccounts(v, leg.reserve) }));
+  }
+  return ixs;
+}
+async function simulate(rpc, ixs, feePayer, watch) {
+  const tx = compileUnsigned(ixs, feePayer, { blockhash: "11111111111111111111111111111111", lastValidBlockHeight: 0n });
+  if (tx.bytes > MAX_TRANSACTION_BYTES) throw new Error(`the transaction is ${tx.bytes} bytes, over Solana's ${MAX_TRANSACTION_BYTES}-byte limit`);
+  const res = await rpc.simulateTransaction(tx.base64, {
+    encoding: "base64",
+    sigVerify: false,
+    replaceRecentBlockhash: true,
+    commitment: "confirmed",
+    accounts: { addresses: watch.map((a) => address(a)), encoding: "base64" }
+  }).send();
+  const after = /* @__PURE__ */ new Map();
+  (res.value.accounts ?? []).forEach((acc, i) => after.set(watch[i], acc ? splAmount(b64(acc.data)) : null));
+  return { ok: res.value.err === null, err: res.value.err, logs: res.value.logs ?? [], unitsConsumed: res.value.unitsConsumed ?? null, slot: BigInt(res.context.slot), after };
+}
+async function simulateWithdrawal(rpc, v, user, ixs) {
+  const tokenAta = await associatedTokenAccount(user, v.state.tokenMint);
+  const sharesAta = await associatedTokenAccount(user, v.state.sharesMint);
+  const [token, held] = await Promise.all([tokenBalance(rpc, tokenAta), tokenBalance(rpc, sharesAta)]);
+  const sim = await simulate(rpc, ixs, user, [tokenAta, sharesAta]);
+  const legs = ixs.filter((ix) => isWithdrawInstruction(ix.programAddress, ix.data)).length;
+  const tokenAfter = sim.after.get(tokenAta);
+  if (!sim.ok || tokenAfter === null || tokenAfter === void 0) return { sim, legs };
+  return { sim, received: tokenAfter - token.amount, burned: held.amount - (sim.after.get(sharesAta) ?? 0n), legs };
+}
+function isWithdrawInstruction(programAddress, data) {
+  return programAddress === KVAULT_PROGRAM_ID && data !== void 0 && DISCRIMINATORS.withdraw.every((x, i) => data[i] === x);
+}
+function partialWithdrawal(asked, burned, legs, shareDecimals, slot) {
+  if (burned + BigInt(legs) >= asked) return void 0;
+  return `the simulated withdrawal at slot ${slot} burns ${formatAmount(burned, shareDecimals)} of the ${formatAmount(asked, shareDecimals)} shares asked for: a reserve cannot pay its full part now, so it would land as a partial withdrawal. Ask the operator whether to withdraw a smaller amount, or try again later`;
+}
+function describeSimulation(s2) {
+  const err = JSON.stringify(s2.err, (_k, x) => typeof x === "bigint" ? x.toString() : x);
+  const why = s2.logs.filter((l) => /error|failed|insufficient|exceed|cap|Error Message/i.test(l)).slice(-3);
+  return why.length > 0 ? `${err} \u2014 ${why.join(" | ")}` : err;
+}
+var NO_FEE_ACCOUNT = /AccountNotFound|InvalidAccountForFee|InsufficientFundsForFee|insufficient lamports/i;
+var NO_TOKENS = /insufficient funds|InsufficientFunds|custom program error: 0x1\b|AccountNotInitialized|invalid account data for instruction/i;
+async function preflightDepositSolana(rpc, entry, account, amountHuman) {
+  const amount = parseAmount(amountHuman ?? "1", entry.asset.decimals, `deposit amount (${entry.asset.symbol})`);
+  const findings = [];
+  let v;
+  try {
+    v = await readVault(rpc, entry);
+  } catch (e4) {
+    return { vault: entry.symbol, depositor: account, status: "UNRESOLVED", canDeposit: false, findings: [`vault read failed: ${describeError(e4)}`] };
+  }
+  findings.push(`identity OK at slot ${v.slot}: token mint ${v.state.tokenMint}, share mint ${v.state.sharesMint}, ${v.state.allocations.length} reserve(s)`);
+  const coSigner = coSignerRefusal(v);
+  if (coSigner) return { vault: entry.symbol, depositor: account, status: "REVERTED_OTHER", canDeposit: false, findings: [...findings, coSigner] };
+  const tokenAta = await associatedTokenAccount(account, v.state.tokenMint);
+  const sharesAta = await associatedTokenAccount(account, v.state.sharesMint);
+  let held;
+  let shares;
+  try {
+    [held, shares] = await Promise.all([tokenBalance(rpc, tokenAta), tokenBalance(rpc, sharesAta)]);
+  } catch (e4) {
+    return { vault: entry.symbol, depositor: account, status: "UNRESOLVED", canDeposit: false, findings: [...findings, `balance reads failed: ${describeError(e4)}`] };
+  }
+  const cap = v.state.depositCap;
+  const overCap = cap !== 0n && v.holdings.aumIncludingFees + amount > cap;
+  if (overCap) {
+    findings.push(`the vault's deposit cap is ${formatAmount(cap, entry.asset.decimals)} ${entry.asset.symbol} and it holds ${formatAmount(v.holdings.aumIncludingFees, entry.asset.decimals)}: this deposit would exceed it`);
+  }
+  if (!held.exists) findings.push(`the account has no ${entry.asset.symbol} token account yet, so it holds no ${entry.asset.symbol} on Solana`);
+  else if (held.amount < amount) findings.push(`the account holds ${formatAmount(held.amount, entry.asset.decimals)} ${entry.asset.symbol}, less than the ${formatAmount(amount, entry.asset.decimals)} asked`);
+  let sim;
+  try {
+    sim = await simulate(rpc, await depositInstructions(v, account, amount), account, [sharesAta]);
+  } catch (e4) {
+    return { vault: entry.symbol, depositor: account, status: "UNRESOLVED", canDeposit: false, findings: [...findings, `simulation failed to run: ${describeError(e4)}`] };
+  }
+  const balances = { asset: formatAmount(held.amount, entry.asset.decimals), shares: formatAmount(shares.amount, entry.shareDecimals) };
+  const base2 = { vault: entry.symbol, depositor: account, balances, quotes: { sharePriceInAssets: `${sharePrice(v)} ${entry.asset.symbol} per share` }, measuredAtSlot: Number(sim.slot) };
+  if (sim.ok) {
+    const minted = (sim.after.get(sharesAta) ?? 0n) - shares.amount;
+    findings.push(`simulated deposit succeeds at slot ${sim.slot}: ${formatAmount(minted, entry.shareDecimals)} shares (${sim.unitsConsumed ?? "?"} compute units)`);
+    return { ...base2, status: "OPEN_READY", canDeposit: true, expectedSharesRaw: minted, findings };
+  }
+  const why = describeSimulation(sim);
+  const text2 = `${why} ${sim.logs.join(" ")}`;
+  if (NO_FEE_ACCOUNT.test(text2)) {
+    findings.push(
+      `the account cannot pay a transaction fee: it holds no SOL (${why}). It needs SOL for the fee and for its share account's rent, about 0.003 SOL in all. The simulation stopped there, before the vault, so whether the vault takes this deposit was not checked`
+    );
+    return { ...base2, status: "NEEDS_FUNDS", canDeposit: false, findings };
+  }
+  if (NO_TOKENS.test(text2)) {
+    findings.push(
+      overCap ? `the deposit stopped at the account's own ${entry.asset.symbol} (${why}), and it is over the vault's deposit cap, so the vault would refuse it once funded` : `the deposit stopped at the account's own ${entry.asset.symbol} (${why}): the vault did not refuse the account; it needs ${entry.asset.symbol} on Solana`
+    );
+    return { ...base2, status: "NEEDS_FUNDS", canDeposit: !overCap, findings };
+  }
+  findings.push(`simulated deposit reverted: ${why}`);
+  return { ...base2, status: "REVERTED_OTHER", canDeposit: false, findings };
+}
+async function freshLifetime(rpc) {
+  const [{ value }, height] = await Promise.all([rpc.getLatestBlockhash({ commitment: "confirmed" }).send(), rpc.getBlockHeight({ commitment: "confirmed" }).send()]);
+  return { blockhash: value.blockhash, lastValidBlockHeight: BigInt(value.lastValidBlockHeight), currentBlockHeight: BigInt(height) };
+}
+
+// src/earn/solana.ts
+var onSolana = { chain: SOLANA_INFO.key, chainId: null, cluster: "mainnet-beta", genesisHash: MAINNET_GENESIS_HASH };
+var solscan = (kind, id) => `https://solscan.io/${kind}/${id}`;
+function solanaAccount(v, what) {
+  if (!isAddress2(v)) throw new Error(`${what} must be a Solana address for a vault on Solana; got ${v}`);
+  return v;
+}
+function rpcAndCheck() {
+  return { rpc: makeSolanaRpc(solanaRpcUrlFromEnv()), source: solanaRpcSourceForEnv().source };
+}
+async function onMainnet(rpc, source, work) {
+  const [cluster, settled] = await Promise.all([
+    solanaRpcSourceForEnv().configured ? solanaCluster(rpc) : Promise.resolve("mainnet"),
+    work().then(
+      (value) => ({ ok: true, value }),
+      (error62) => ({ ok: false, error: error62 })
+    )
+  ]);
+  if (cluster === "other") throw new Error(`the endpoint in ${source} is not Solana mainnet-beta (its genesis hash differs). Point ${SOLANA_INFO.rpcEnv[0]} at a mainnet endpoint; until then no Solana read can be trusted.`);
+  if (!settled.ok) throw settled.error;
+  return settled.value;
+}
+function solanaVaultRow(v) {
+  return {
+    symbol: v.symbol,
+    name: v.name,
+    warning: v.warning,
+    links: { explorer: solscan("account", v.address) },
+    backend: v.backend,
+    isDefault: v.isDefault,
+    chain: SOLANA_INFO.key,
+    chainId: null,
+    address: v.address,
+    chassis: v.chassis,
+    asset: v.asset,
+    sharesMint: v.sharesMint,
+    shareDecimals: v.shareDecimals,
+    depositOpen: v.depositOpen,
+    notes: v.notes
+  };
+}
+async function solanaHealth(vault, partial2) {
+  const src = solanaRpcSourceForEnv();
+  const base2 = {
+    mode: "health",
+    ...partial2,
+    server: "treasury",
+    version: PACKAGE_VERSION,
+    registry: { schemaVersion: loadRegistry().schemaVersion, vaults: loadRegistry().vaults.length + loadRegistry().solanaVaults.length, reconciledAtIso: loadRegistry().reconciledAtIso },
+    ...onSolana,
+    vault: vault.symbol,
+    rpcSource: src.source,
+    rpcConfigured: src.configured
+  };
+  try {
+    const rpc = makeSolanaRpc(solanaRpcUrlFromEnv());
+    const [cluster, slot] = await Promise.all([solanaCluster(rpc), rpc.getSlot({ commitment: "confirmed" }).send()]);
+    if (cluster === "other") {
+      return { ...base2, rpc: "wrong_chain", latestSlot: null, reason: `the endpoint in ${src.source} is not Solana mainnet-beta (its genesis hash differs). Point ${SOLANA_INFO.rpcEnv[0]} at a mainnet endpoint.` };
+    }
+    return { ...base2, rpc: "ok", chainVerified: cluster === "mainnet", latestSlot: slot.toString() };
+  } catch (e4) {
+    return { ...base2, rpc: "unreachable", latestSlot: null, reason: redactEndpoints(e4 instanceof Error ? e4.message : String(e4)) };
+  }
+}
+async function solanaPreflight(vault, account, amountHuman) {
+  const { rpc, source } = rpcAndCheck();
+  const r = await onMainnet(rpc, source, () => preflightDepositSolana(rpc, vault, solanaAccount(account, "account"), amountHuman));
+  const { expectedSharesRaw: _raw, ...rest } = r;
+  return rest;
+}
+async function solanaQuoteDeposit(vault, account, amountHuman) {
+  const { rpc, source } = rpcAndCheck();
+  const pf = await onMainnet(rpc, source, () => preflightDepositSolana(rpc, vault, solanaAccount(account, "account"), amountHuman));
+  const raw = pf.expectedSharesRaw;
+  const { expectedSharesRaw: _raw, ...preflight } = pf;
+  return {
+    vault: vault.symbol,
+    depositor: account,
+    amountUsdc: `${amountHuman} ${vault.asset.symbol}`,
+    expectedShares: raw === void 0 ? "unknown \u2014 the simulated deposit did not succeed; see preflight" : `${formatAmount(raw, vault.shareDecimals)} ${vault.symbol}`,
+    sharePriceInAssets: preflight.quotes?.sharePriceInAssets,
+    preflight,
+    note: "Read from a simulated deposit at the slot shown: the shares the account would receive. This client quotes no rate."
+  };
+}
+function sharesFor(v, amountHuman) {
+  const amount = parseAmount(amountHuman, v.entry.asset.decimals, `withdrawal amount (${v.entry.asset.symbol})`);
+  if (amount === 0n) throw new Error("a withdrawal of 0");
+  if (v.holdings.netAum === 0n) throw new Error(`${v.entry.symbol} holds nothing to withdraw`);
+  return (amount * v.state.sharesIssued + v.holdings.netAum - 1n) / v.holdings.netAum;
+}
+async function simulateWithdraw(rpc, v, account, shares) {
+  return simulateWithdrawal(rpc, v, account, await withdrawInstructions(v, account, shares));
+}
+async function solanaQuoteWithdraw(vault, account, amountHuman) {
+  const { rpc, source } = rpcAndCheck();
+  return onMainnet(rpc, source, async () => {
+    const owner = solanaAccount(account, "account");
+    const v = await readVault(rpc, vault);
+    const held = await tokenBalance(rpc, await associatedTokenAccount(owner, v.state.sharesMint));
+    const shares = sharesFor(v, amountHuman);
+    const base2 = {
+      vault: vault.symbol,
+      owner,
+      amountUsdc: `${amountHuman} ${vault.asset.symbol}`,
+      sharesToBurn: `${formatAmount(shares, vault.shareDecimals)} ${vault.symbol}`,
+      sharesHeld: `${formatAmount(held.amount, vault.shareDecimals)} ${vault.symbol}`,
+      instantLiquidity: `${formatAmount(v.holdings.idle, vault.asset.decimals)} ${vault.asset.symbol}`,
+      sharePriceInAssets: `${sharePrice(v)} ${vault.asset.symbol} per share`
+    };
+    if (shares > held.amount) {
+      return { ...base2, canWithdraw: false, note: `the account holds ${formatAmount(held.amount, vault.shareDecimals)} shares, fewer than the ${formatAmount(shares, vault.shareDecimals)} this amount needs` };
+    }
+    const { sim, received, burned, legs } = await simulateWithdraw(rpc, v, owner, shares);
+    if (received === void 0 || burned === void 0) return { ...base2, canWithdraw: false, measuredAtSlot: Number(sim.slot), note: `the simulated withdrawal failed: ${describeSimulation(sim)}` };
+    const partial2 = partialWithdrawal(shares, burned, legs, vault.shareDecimals, sim.slot);
+    if (partial2) return { ...base2, canWithdraw: false, measuredAtSlot: Number(sim.slot), note: partial2 };
+    return {
+      ...base2,
+      canWithdraw: true,
+      receives: `${formatAmount(received, vault.asset.decimals)} ${vault.asset.symbol}`,
+      measuredAtSlot: Number(sim.slot),
+      note: "simulated withdrawal succeeds at this slot. `receives` is what the account's USDC balance would rise by \u2014 net of the up to 0.001 USDC Kamino keeps per withdraw instruction."
+    };
+  });
+}
+async function solanaBalance(vault, account) {
+  const { rpc, source } = rpcAndCheck();
+  return onMainnet(rpc, source, async () => {
+    const owner = solanaAccount(account, "account");
+    const v = await readVault(rpc, vault);
+    const held = await tokenBalance(rpc, await associatedTokenAccount(owner, v.state.sharesMint));
+    const value = v.state.sharesIssued === 0n ? 0n : held.amount * v.holdings.netAum / v.state.sharesIssued;
+    let exit;
+    if (held.amount === 0n) {
+      exit = { exitableNow: `0 ${vault.asset.symbol}`, measuredAs: "no position" };
+    } else {
+      try {
+        const { sim, received } = await simulateWithdraw(rpc, v, owner, held.amount);
+        exit = received === void 0 ? { exitableNow: "unknown", measuredAs: "refused", note: `a full withdrawal was refused at this slot: ${describeSimulation(sim)}` } : { exitableNow: `${formatAmount(received, vault.asset.decimals)} ${vault.asset.symbol}`, measuredAs: "a simulated full withdrawal", note: "net of the up to 0.001 USDC Kamino keeps per withdraw instruction" };
+      } catch (e4) {
+        exit = { exitableNow: "unknown", measuredAs: "not measured", note: describeError(e4) };
+      }
+    }
+    return {
+      vault: vault.symbol,
+      account: owner,
+      sharesExact: formatAmount(held.amount, vault.shareDecimals),
+      shares: `${formatAmount(held.amount, vault.shareDecimals)} ${vault.symbol}`,
+      usdcValue: `${formatAmount(value, vault.asset.decimals)} ${vault.asset.symbol}`,
+      sharePriceInAssets: `${sharePrice(v)} ${vault.asset.symbol} per share`,
+      exit: { ...exit, instantLiquidity: `${formatAmount(v.holdings.idle, vault.asset.decimals)} ${vault.asset.symbol}` },
+      entryBasisUsdc: "unknown \u2014 not read on Solana; see scan.note",
+      accruedYieldUsdc: "unknown \u2014 not read on Solana; see scan.note",
+      scan: {
+        complete: false,
+        wholeHistory: false,
+        note: "On Solana this client reads the position, not its history: entry basis and yield are not derived. The account's own deposit and withdrawal transactions are the record (solscan.io lists them)."
+      },
+      measuredAtSlot: Number(v.slot)
+    };
+  });
+}
+var SOLANA_SIGNER_RULES = [
+  "Sign and send on Solana mainnet-beta only: check the wallet's network before signing.",
+  "Send before block height `transaction.expiresAfterBlockHeight` (about a minute after it was prepared). If that height has passed, do not sign: prepare the transaction again.",
+  "Before signing, check the fee payer and signer is the account the operator named, and the vault the transaction calls (`vaultAddress`) is the vault named. Do not sign a transaction whose account you did not confirm.",
+  "Confirm by the signature's status. If a send fails with no status, read the account's share balance before preparing again: a transaction that did land would be repeated by a new one."
+];
+async function envelope(rpc, v, account, kind, simulated, ixs, expected) {
+  const life = await freshLifetime(rpc);
+  const tx = compileUnsigned(ixs, account, life);
+  return {
+    requires_signature: true,
+    status: "unsigned",
+    ...onSolana,
+    next_step: `This is ONE Solana transaction, for Solana mainnet-beta: tell the operator which chain. Hand it to the operator's own Solana wallet now \u2014 it lands only until block height ${life.lastValidBlockHeight}, about a minute from now \u2014 following \`signer_rules\`. Nothing has been submitted; no funds have moved.`,
+    signer_rules: SOLANA_SIGNER_RULES,
+    vault: v.entry.symbol,
+    vaultAddress: v.entry.address,
+    account,
+    kind,
+    expected,
+    simulated,
+    transaction: {
+      encoding: "base64",
+      wire: tx.base64,
+      bytes: tx.bytes,
+      feePayer: account,
+      blockhash: life.blockhash,
+      preparedAtBlockHeight: life.currentBlockHeight.toString(),
+      expiresAfterBlockHeight: life.lastValidBlockHeight.toString()
+    }
+  };
+}
+function sameAsAccount(receiver, account) {
+  if (receiver !== account) {
+    throw new Error(
+      `on Solana the receiver must be the account itself: a Kamino vault mints shares to the signer's own account and pays a withdrawal to the account whose shares burn. --receiver ${receiver} is not --account ${account}.`
+    );
+  }
+}
+async function solanaPrepareDeposit(vault, account, amountHuman, receiver) {
+  const user = solanaAccount(account, "account");
+  sameAsAccount(solanaAccount(receiver, "receiver"), user);
+  const { rpc, source } = rpcAndCheck();
+  return onMainnet(rpc, source, async () => {
+    const v = await readVault(rpc, vault);
+    const amount = parseAmount(amountHuman, vault.asset.decimals, `deposit amount (${vault.asset.symbol})`);
+    if (amount === 0n) throw new Error("a deposit of 0");
+    const ixs = await depositInstructions(v, user, amount);
+    const sharesAta = await associatedTokenAccount(user, v.state.sharesMint);
+    const before = await tokenBalance(rpc, sharesAta);
+    const sim = await simulate(rpc, ixs, user, [sharesAta]);
+    if (!sim.ok) throw new Error(`not prepared: the simulated deposit fails at slot ${sim.slot}: ${describeSimulation(sim)}. Run \`earn status --chain solana --account ${user}\` for the reason in words.`);
+    const minted = (sim.after.get(sharesAta) ?? 0n) - before.amount;
+    return envelope(rpc, v, user, "deposit", `deposit ${formatAmount(amount, vault.asset.decimals)} ${vault.asset.symbol}; the simulation at slot ${sim.slot} minted ${formatAmount(minted, vault.shareDecimals)} ${vault.symbol}`, ixs, `${formatAmount(minted, vault.shareDecimals)} ${vault.symbol}`);
+  });
+}
+async function solanaPrepareWithdraw(vault, account, receiver, args) {
+  const user = solanaAccount(account, "account");
+  sameAsAccount(solanaAccount(receiver, "receiver"), user);
+  const { rpc, source } = rpcAndCheck();
+  return onMainnet(rpc, source, async () => {
+    const v = await readVault(rpc, vault);
+    const shares = args.sharesExact !== void 0 ? parseAmount(args.sharesExact, vault.shareDecimals, "shares_exact") : sharesFor(v, args.amountHuman);
+    const held = await tokenBalance(rpc, await associatedTokenAccount(user, v.state.sharesMint));
+    if (shares > held.amount) throw new Error(`the account holds ${formatAmount(held.amount, vault.shareDecimals)} shares, fewer than the ${formatAmount(shares, vault.shareDecimals)} this withdrawal burns`);
+    const ixs = await withdrawInstructions(v, user, shares);
+    const { sim, received, burned, legs } = await simulateWithdraw(rpc, v, user, shares);
+    if (received === void 0 || burned === void 0) throw new Error(`not prepared: the simulated withdrawal fails at slot ${sim.slot}: ${describeSimulation(sim)}`);
+    const partial2 = partialWithdrawal(shares, burned, legs, vault.shareDecimals, sim.slot);
+    if (partial2) throw new Error(`not prepared: ${partial2}`);
+    const got = `${formatAmount(received, vault.asset.decimals)} ${vault.asset.symbol}`;
+    return envelope(rpc, v, user, "withdraw", `burn ${formatAmount(shares, vault.shareDecimals)} ${vault.symbol}; the simulation at slot ${sim.slot} paid ${got} (net of the up to 0.001 USDC Kamino keeps per withdraw instruction)`, ixs, got);
+  });
+}
+
 // src/links.ts
 var EXPLORER = {
   8453: "https://basescan.org/address/",
   42161: "https://arbiscan.io/address/",
-  4663: "https://robinhoodchain.blockscout.com/address/"
+  4663: "https://robinhoodchain.blockscout.com/address/",
+  1: "https://etherscan.io/address/",
+  143: "https://monadscan.com/address/"
 };
 var MORPHO_APP_CHAIN = { 8453: "base" };
 var MORPHO_LISTED = /* @__PURE__ */ new Set(["0x040fCA12673778FEED5DA7b2ccFbbAb0cc0134Cf"]);
 var APP = {
-  "morpho-v2": (chainId, address2) => MORPHO_APP_CHAIN[chainId] && MORPHO_LISTED.has(address2) ? `https://app.morpho.org/${MORPHO_APP_CHAIN[chainId]}/vault/${address2}` : void 0
+  "morpho-v2": (chainId, address3) => MORPHO_APP_CHAIN[chainId] && MORPHO_LISTED.has(address3) ? `https://app.morpho.org/${MORPHO_APP_CHAIN[chainId]}/vault/${address3}` : void 0
 };
 function linksFor(vault) {
   const explorer = EXPLORER[vault.chainId];
@@ -38734,12 +45154,6 @@ function explorerTxUrl(chainId, hash4) {
   if (explorer === void 0) throw new Error(`no block explorer is recorded for chain ${chainId}; add it to EXPLORER in src/links.ts`);
   return `${explorer.replace(/address\/$/, "tx/")}${hash4}`;
 }
-
-// src/version.ts
-import { readFileSync as readFileSync2, realpathSync as realpathSync2 } from "fs";
-import { fileURLToPath as fileURLToPath2, pathToFileURL as pathToFileURL2 } from "url";
-var PACKAGE_JSON_URL = new URL("../package.json", pathToFileURL2(realpathSync2(fileURLToPath2(import.meta.url))));
-var PACKAGE_VERSION = JSON.parse(readFileSync2(fileURLToPath2(PACKAGE_JSON_URL), "utf8")).version;
 
 // src/abi/erc4626.ts
 var erc4626Abi = [
@@ -38878,22 +45292,6 @@ var knownRevertSelectors = {
   TransferFromReverted: "0xe65b7a77"
 };
 
-// src/units.ts
-function parseAmount(human, decimals, label) {
-  const s = human.trim();
-  if (!/^\d+(\.\d+)?$/.test(s)) throw new Error(`${label}: "${human}" is not a plain decimal amount`);
-  const frac = s.split(".")[1] ?? "";
-  if (frac.length > decimals) {
-    throw new Error(`${label}: "${human}" has ${frac.length} fractional digits but the token has ${decimals} decimals`);
-  }
-  const v = parseUnits(s, decimals);
-  if (v <= 0n) throw new Error(`${label}: amount must be positive`);
-  return v;
-}
-function formatAmount(raw, decimals) {
-  return formatUnits(raw, decimals);
-}
-
 // src/preflight.ts
 function classifyRevert(obs) {
   const sel = obs.selector?.toLowerCase();
@@ -38920,12 +45318,12 @@ function classifyRevert(obs) {
     note: `deposit() reverted${sel ? ` with selector ${sel}` : ""}${obs.reason ? ` ("${obs.reason}")` : ""}; this client does not name the cause. Check, in no particular order: vault paused; per-block or supply cap; insufficient asset balance at the depositor; a chassis-specific gate this client has not seen. Raw: ${obs.raw ?? "n/a"}.`
   };
 }
-function isRevert(e) {
-  return e instanceof BaseError2 && e.walk((x) => x instanceof ContractFunctionRevertedError || x instanceof ExecutionRevertedError) !== null;
+function isRevert(e4) {
+  return e4 instanceof BaseError2 && e4.walk((x) => x instanceof ContractFunctionRevertedError || x instanceof ExecutionRevertedError) !== null;
 }
 function extractRevert(err) {
   if (!(err instanceof BaseError2)) return void 0;
-  const r = err.walk((e) => e instanceof ContractFunctionRevertedError);
+  const r = err.walk((e4) => e4 instanceof ContractFunctionRevertedError);
   if (!r) return void 0;
   const raw = r.raw;
   const signature = r.signature;
@@ -38963,8 +45361,8 @@ async function preflightDeposit(args) {
       client.readContract({ address: vault.address, abi: erc4626Abi, functionName: "asset" }),
       client.readContract({ address: vault.address, abi: erc4626Abi, functionName: "decimals" })
     ]);
-  } catch (e) {
-    return { vault: vault.symbol, depositor, status: "UNRESOLVED", canDeposit: false, findings: [...findings, `identity reads failed: ${describeError(e)}`] };
+  } catch (e4) {
+    return { vault: vault.symbol, depositor, status: "UNRESOLVED", canDeposit: false, findings: [...findings, `identity reads failed: ${describeError(e4)}`] };
   }
   if (onchainAsset.toLowerCase() !== vault.asset.address.toLowerCase()) {
     return refuse(`registry asset ${vault.asset.address} != on-chain asset() ${onchainAsset} \u2014 registry row is wrong or the address is a different contract`);
@@ -38984,8 +45382,8 @@ async function preflightDeposit(args) {
       client.readContract({ address: vault.address, abi: erc4626Abi, functionName: "totalAssets" }),
       client.readContract({ address: vault.address, abi: erc4626Abi, functionName: "maxDeposit", args: [depositor] })
     ]);
-  } catch (e) {
-    return { vault: vault.symbol, depositor, status: "UNRESOLVED", canDeposit: false, findings: [...findings, `state reads failed: ${describeError(e)}`] };
+  } catch (e4) {
+    return { vault: vault.symbol, depositor, status: "UNRESOLVED", canDeposit: false, findings: [...findings, `state reads failed: ${describeError(e4)}`] };
   }
   const balances = {
     asset: `${formatAmount(assetBal, vault.asset.decimals)} ${vault.asset.symbol}`,
@@ -39004,8 +45402,8 @@ async function preflightDeposit(args) {
   try {
     const previewShares = await client.readContract({ address: vault.address, abi: erc4626Abi, functionName: "previewDeposit", args: [assets2] });
     quotes.previewShares = `${formatAmount(previewShares, vault.shareDecimals)} ${vault.symbol}`;
-  } catch (e) {
-    findings.push(isRevert(e) ? "previewDeposit() reverted; no shares quote" : `previewDeposit() could not be read, so no shares quote (the RPC failed, not the vault): ${describeError(e)}`);
+  } catch (e4) {
+    findings.push(isRevert(e4) ? "previewDeposit() reverted; no shares quote" : `previewDeposit() could not be read, so no shares quote (the RPC failed, not the vault): ${describeError(e4)}`);
   }
   try {
     await client.simulateContract({
@@ -39017,10 +45415,10 @@ async function preflightDeposit(args) {
     });
     findings.push("simulated deposit() SUCCEEDED from this address with the current allowance");
     return { vault: vault.symbol, depositor, status: "OPEN_READY", canDeposit: true, findings, balances, quotes, advisory, measuredAtBlock: Number(block) };
-  } catch (e) {
-    const obs = extractRevert(e);
+  } catch (e4) {
+    const obs = extractRevert(e4);
     if (!obs) {
-      return { vault: vault.symbol, depositor, status: "UNRESOLVED", canDeposit: false, findings: [...findings, `simulation did not return a definite revert: ${describeError(e)}`], balances, quotes, advisory, measuredAtBlock: Number(block) };
+      return { vault: vault.symbol, depositor, status: "UNRESOLVED", canDeposit: false, findings: [...findings, `simulation did not return a definite revert: ${describeError(e4)}`], balances, quotes, advisory, measuredAtBlock: Number(block) };
     }
     const c = classifyRevert(obs);
     findings.push(c.note);
@@ -39045,19 +45443,19 @@ var withdrawEvent = parseAbiItem(
 );
 var UNKNOWN_AFTER_SCAN_FAILURE = "unknown \u2014 event scan failed; see scan.note";
 var UNKNOWN_INCOMPLETE_SCAN = "unknown \u2014 the scan did not cover this position's history; see scan.note";
-function rangeLimitFromError(e) {
-  const text2 = String(e).replace(/,/g, "");
-  const m = text2.match(/(?:limited to a|up to a)\s+(\d+)\s*(?:block)?\s*range/i) ?? text2.match(/range\s+\d+\s+exceeds limit of\s+(\d+)/i);
+function rangeLimitFromError(e4) {
+  const text2 = String(e4).replace(/,/g, "");
+  const m = text2.match(/(?:limited to a|up to a)\s+(\d+)\s*(?:block)?\s*range/i) ?? text2.match(/range\s+\d+\s+exceeds limit of\s+(\d+)/i) ?? text2.match(/exceeds max block range\s+(\d+)/i);
   return m ? BigInt(m[1]) : void 0;
 }
-async function scanLogs(client, address2, event, owner, from16, to, maxRequests, refuseIfCapped, deadline, now) {
+async function scanLogs(client, address3, event, owner, from16, to, maxRequests, refuseIfCapped, deadline, now) {
   const argsFilter = { owner };
   try {
-    const logs = await client.getLogs({ address: address2, event, args: argsFilter, fromBlock: from16, toBlock: to });
+    const logs = await client.getLogs({ address: address3, event, args: argsFilter, fromBlock: from16, toBlock: to });
     return { logs, coveredFrom: from16, requests: 1, capped: false };
-  } catch (e) {
-    const window = rangeLimitFromError(e);
-    if (!window) throw e;
+  } catch (e4) {
+    const window = rangeLimitFromError(e4);
+    if (!window) throw e4;
     const needed = (to - from16 + window) / window;
     if (refuseIfCapped && needed > BigInt(maxRequests)) throw new WindowTooNarrow(window, needed);
     const out = [];
@@ -39065,7 +45463,7 @@ async function scanLogs(client, address2, event, owner, from16, to, maxRequests,
     let requests = 0;
     while (hi >= from16 && requests < maxRequests && now() < deadline) {
       const lo = hi - window + 1n > from16 ? hi - window + 1n : from16;
-      const chunk = await client.getLogs({ address: address2, event, args: argsFilter, fromBlock: lo, toBlock: hi });
+      const chunk = await client.getLogs({ address: address3, event, args: argsFilter, fromBlock: lo, toBlock: hi });
       out.push(...chunk);
       requests += 1;
       hi = lo - 1n;
@@ -39105,8 +45503,8 @@ async function measureExit(a) {
   const read = async (fn) => {
     try {
       return { value: await fn(), failed: void 0 };
-    } catch (e) {
-      return { failed: isRevert(e) ? "revert" : "rpc" };
+    } catch (e4) {
+      return { failed: isRevert(e4) ? "revert" : "rpc" };
     }
   };
   const [liquidRead, maxRead] = await Promise.all([
@@ -39132,8 +45530,8 @@ async function measureExit(a) {
     try {
       await client.simulateContract({ address: vault.address, abi: erc4626Abi, functionName: "withdraw", args: [assets2, principal, principal], account: principal });
       return "paid";
-    } catch (e) {
-      return isRevert(e) ? "refused" : "unresolved";
+    } catch (e4) {
+      return isRevert(e4) ? "refused" : "unresolved";
     }
   };
   const unresolved = (what) => ({
@@ -39292,8 +45690,8 @@ async function quoteDeposit(args) {
   const pre = await preflightDeposit({ vault, depositor, assetsHuman: args.assetsHuman, client });
   let previewError;
   const [previewShares, oneShareInAssets] = await Promise.all([
-    client.readContract({ address: vault.address, abi: erc4626Abi, functionName: "previewDeposit", args: [assets2] }).catch((e) => {
-      previewError = e;
+    client.readContract({ address: vault.address, abi: erc4626Abi, functionName: "previewDeposit", args: [assets2] }).catch((e4) => {
+      previewError = e4;
       return void 0;
     }),
     client.readContract({ address: vault.address, abi: erc4626Abi, functionName: "convertToAssets", args: [10n ** BigInt(vault.shareDecimals)] })
@@ -39327,8 +45725,8 @@ async function quoteWithdraw(args) {
     await client.simulateContract({ address: vault.address, abi: erc4626Abi, functionName: "withdraw", args: [assets2, owner, owner], account: owner });
     simulated = "OK";
     note = "simulated withdraw() from the owner succeeds at this block";
-  } catch (e) {
-    const obs = extractRevert(e);
+  } catch (e4) {
+    const obs = extractRevert(e4);
     if (obs) {
       simulated = "REVERTED";
       const reason = obs.reason ?? "";
@@ -39336,15 +45734,15 @@ async function quoteWithdraw(args) {
       if (toBurn !== void 0 && held < toBurn) {
         note = `withdraw() reverted: the owner holds ${formatAmount(held, vault.shareDecimals)} ${vault.symbol} against ${formatAmount(toBurn, vault.shareDecimals)} needed \u2014 insufficient shares. (${said})`;
       } else if (vault.chassis === "fusion" && (/transfer amount exceeds balance|ERC20InsufficientBalance/i.test(reason) || liquid < assets2)) {
-        note = `withdraw() reverted ("${said}"): the vault holds ${formatAmount(liquid, vault.asset.decimals)} ${vault.asset.symbol} liquid against ${formatAmount(assets2, vault.asset.decimals)} requested \u2014 this chassis pays withdrawals from its own balance in the same block; the rest is deployed and needs the fund to unwind first. Withdraw at most the liquid amount now, or wait. maxWithdraw() (${maxW === void 0 ? "reverted" : formatAmount(maxW, vault.asset.decimals)}) does not know this.`;
+        note = `withdraw() reverted ("${said}"): the vault holds ${formatAmount(liquid, vault.asset.decimals)} ${vault.asset.symbol} liquid against ${formatAmount(assets2, vault.asset.decimals)} requested \u2014 this chassis pays withdrawals from its own balance in the same block; the rest is deployed and needs the fund to unwind first. Up to the liquid amount can come out now: ask the operator whether to withdraw that, another amount, or wait. maxWithdraw() (${maxW === void 0 ? "reverted" : formatAmount(maxW, vault.asset.decimals)}) does not know this.`;
       } else if (vault.chassis === "morpho-v2") {
         const shares = toBurn === void 0 ? "previewWithdraw reverted, so the shares needed are unknown" : `the owner holds enough shares (${formatAmount(held, vault.shareDecimals)} against ${formatAmount(toBurn, vault.shareDecimals)} needed)`;
-        note = `withdraw() reverted "${said}" for ${formatAmount(assets2, vault.asset.decimals)} ${vault.asset.symbol}; ${shares}. A Morpho Vault V2 pays a withdrawal from its idle ${vault.asset.symbol} and then through its liquidity adapter, so the revert can come from the vault or from a market it withdraws from; the reason above is the chain's own. A smaller amount may still pass: quote it before preparing anything.`;
+        note = `withdraw() reverted "${said}" for ${formatAmount(assets2, vault.asset.decimals)} ${vault.asset.symbol}; ${shares}. A Morpho Vault V2 pays a withdrawal from its idle ${vault.asset.symbol} and then through its liquidity adapter, so the revert can come from the vault or from a market it withdraws from; the reason above is the chain's own. A smaller amount may still pass: say so, and quote only an amount the operator names.`;
       } else {
         note = `withdraw() reverted "${said}" \u2014 not a balance or liquidity shortfall; treat as a vault-side refusal.`;
       }
     } else {
-      note = `simulation did not return a definite revert: ${describeError(e, 160)}`;
+      note = `simulation did not return a definite revert: ${describeError(e4, 160)}`;
     }
   }
   return {
@@ -39457,7 +45855,7 @@ function buildWithdraw(vault, args) {
 
 // src/disclosures.ts
 var DISCLOSURES = {
-  source: "Agent Treasury \u2014 pre-deposit disclosures, 2026-09-15 (wording revised 2026-10-04: Tempora Labs named in full)",
+  source: "Agent Treasury \u2014 pre-deposit disclosures, 2026-09-15 (wording revised 2026-10-04: Tempora Labs named in full; 2026-10-12: withdrawals subject to liquidity, and the Solana co-signer)",
   presentBefore: "the depositor's first deposit, on every distribution surface",
   items: [
     "EVERY VAULT THIS CLIENT OFFERS TODAY IS A TEST VAULT \u2014 unproven, and named as such on-chain. They exist to exercise the product, not to hold savings. Deposit only an amount you are fully prepared to lose entirely, and do not move significant funds into one.",
@@ -39466,7 +45864,7 @@ var DISCLOSURES = {
     "The vault holds positions in third-party protocols, each of which carries smart-contract, custody, and mechanism risk that Tempora Labs does not control.",
     "Any yield figure is a measurement over a past window, not a promise. Historical performance is not indicative of future results.",
     "A withdrawal is served from the vault's liquid balance and then by unwinding its positions. In stressed conditions part of a position may not be withdrawable immediately; earn_balance reports what is exitable now, simulated at the current block.",
-    "Deposits into a whitelist-gated vault are accepted only from accounts the fund has admitted. Withdrawals are public: an account that holds shares can always leave.",
+    "Deposits into a whitelist-gated vault are accepted only from accounts the fund has admitted. Withdrawals are not gated: an account that holds shares can leave, subject to the vault's liquidity. On Solana, Kamino's program can require a co-signer on every withdrawal, which would stop exits until it co-signs; none is required today.",
     "The vault's current holdings, weights and fees are on-chain and publicly readable at the vault's address.",
     "Each default vault, and the demo vault, is a destination curated by Tempora Labs. Tempora Labs can set fees on it as curator (a management fee and a performance fee, both readable on-chain; check them before depositing). This client offers it because it is a Tempora Labs vault, not because it is the best-yielding vault available."
   ],
@@ -39502,14 +45900,18 @@ var DISCLOSURES = {
 };
 
 // src/earn/commands.ts
-var addressArg = external_exports.string().refine((s) => isAddress(s), "must be an EVM address").transform((s) => getAddress(s));
+var addressArg = external_exports.string().refine((s2) => isAddress(s2) || isAddress2(s2), "must be an EVM address (0x\u2026), or a Solana address for a vault on Solana");
+function evm(v, what) {
+  if (!isAddress(v)) throw new Error(`${what} must be an EVM address (0x\u2026) for a vault on an EVM chain; got ${v}`);
+  return getAddress(v);
+}
 var amountArg = external_exports.string().regex(/^\d+(\.\d+)?$/, `plain decimal amount of the vault's asset (USDC; USDG on Robinhood Chain), e.g. "25" or "12.5"`);
-var vaultArg = external_exports.string().optional().describe("the vault's ERC-20 ticker, e.g. tlCashPlusUSDC2 (`earn vaults` lists them); omit for the default vault of `chain`, or of the default chain when `chain` is omitted too");
+var vaultArg = external_exports.string().optional().describe("the vault's ticker, e.g. tlCashPlusUSDC2 (`earn vaults` lists them); omit for the default vault of `chain`, or of the default chain when `chain` is omitted too");
 var accountArg = addressArg.describe("the account whose shares these are \u2014 the depositor, the owner, the holder");
 var chainArg = () => {
   let offered;
   try {
-    offered = offeredChains().map((c) => c.key);
+    offered = offeredChainKeys();
   } catch {
     offered = supportedChainIds.map((id) => CHAIN_INFO[id].key);
   }
@@ -39550,16 +45952,18 @@ var onChain = (vault) => ({ chain: CHAIN_INFO[vault.chainId].key, chainId: vault
 function hintChain(args) {
   try {
     const a = args ?? {};
-    return resolveVault(typeof a.vault === "string" ? a.vault : void 0, typeof a.chain === "string" ? a.chain : void 0).chainId;
+    const t = resolveAnyVault(typeof a.vault === "string" ? a.vault : void 0, typeof a.chain === "string" ? a.chain : void 0);
+    return t.family === "solana" ? "solana" : t.vault.chainId;
   } catch {
     return defaultChainId();
   }
 }
-var RPC_FAILURE = /RPC Request failed|HTTP request failed|reads failed|over rate limit|rate.?limit|"unreachable"|fetch failed|ETIMEDOUT|ECONNREFUSED/i;
+var hintFor = (chain) => chain === "solana" ? solanaPublicRpcHint() : publicRpcHint(chain);
+var RPC_FAILURE = /RPC Request failed|HTTP request failed|HTTP error \((?:429|5\d\d)\)|reads failed|over rate limit|rate.?limit|"unreachable"|fetch failed|ETIMEDOUT|ECONNREFUSED/i;
 var text = (v, chainId = defaultChainId()) => {
   let body = typeof v === "string" ? v : JSON.stringify(v, null, 2);
   if (RPC_FAILURE.test(body)) {
-    const hint = publicRpcHint(chainId);
+    const hint = hintFor(chainId);
     if (hint) {
       body = typeof v === "string" ? `${body}
 
@@ -39594,10 +45998,10 @@ var SIGNER_RULES = [
 var guarded = (fn) => async (...a) => {
   try {
     return await fn(...a);
-  } catch (e) {
-    const msg = e instanceof Error ? e.message : String(e);
+  } catch (e4) {
+    const msg = e4 instanceof Error ? e4.message : String(e4);
     const redacted = redactEndpoints(msg);
-    const hint = RPC_FAILURE.test(redacted) ? publicRpcHint(hintChain(a[0])) : void 0;
+    const hint = RPC_FAILURE.test(redacted) ? hintFor(hintChain(a[0])) : void 0;
     throw new Error(hint ? `${redacted}
 
 ${hint}` : redacted);
@@ -39614,7 +46018,7 @@ function buildCommands() {
     "earn_vaults",
     {
       title: "List vaults",
-      description: "Every vault in the registry, on every chain. `symbol` is the vault's own on-chain ERC-20 ticker \u2014 the value every other tool takes as `vault` \u2014 and `name` its `name()`; `chain` is the chain it is on, the value every other tool takes as `chain`; `links` are openable without any RPC endpoint, so an operator can verify the contract independently. SHOW `warning` TO THE DEPOSITOR \u2014 every vault offered today is a test vault. Each row also carries its backend, chassis, decimals and MEASURED deposit-open status. `chains` lists the chains a deposit can go to, the default chain first, each with its own default vault: if the operator has not said which chain, show them these and ASK before preparing a deposit. `default` is used when a tool is called with neither `vault` nor `chain`, and is on `defaultChain`; `depositable` is the subset any account can put money into today, across all chains: ERC-4626 chassis + measured open. `defaultAccess` says whether a default takes deposits from any account (`open`) or only whitelisted ones (`whitelist`); for `whitelist`, run `earn status` for the account before preparing a deposit.",
+      description: "Every vault in the registry, on every chain. `symbol` is the vault's ticker \u2014 its own on-chain ERC-20 ticker on the EVM chains, one the registry assigns on Solana \u2014 the value every other tool takes as `vault`, and `name` its name; `chain` is the chain it is on, the value every other tool takes as `chain`; `links` are openable without any RPC endpoint, so an operator can verify the contract independently. SHOW `warning` TO THE DEPOSITOR \u2014 every vault offered today is a test vault. Each row also carries its backend, chassis, decimals and MEASURED deposit-open status. `chains` lists the chains a deposit can go to, the default chain first, each with its own default vault: if the operator has not said which chain, show them these and ASK before preparing a deposit. `default` is used when a tool is called with neither `vault` nor `chain`, and is on `defaultChain`; `depositable` is the subset any account can put money into today, across all chains: an ERC-4626 chassis (or the Kamino vault on Solana) + measured open. `defaultAccess` says whether a default takes deposits from any account (`open`) or only whitelisted ones (`whitelist`); for `whitelist`, run `earn status` for the account before preparing a deposit.",
       inputSchema: {}
     },
     guarded(async () => {
@@ -39624,34 +46028,50 @@ function buildCommands() {
         defaultChain: CHAIN_INFO[defaultChainId()].key,
         default: defaultVault().symbol,
         defaultAccess: defaultVault().depositOpen.open ? "open" : "whitelist",
-        depositable: depositableVaults().map((v) => v.symbol),
-        chains: offeredChains().map((c) => {
-          const d = defaultVault(c.chainId);
-          return {
-            chain: c.key,
-            chainId: c.chainId,
-            name: c.name,
-            default: d.symbol,
-            defaultAccess: d.depositOpen.open ? "open" : "whitelist",
-            depositable: depositableVaults().filter((v) => v.chainId === c.chainId).map((v) => v.symbol)
-          };
-        }),
-        vaults: listVaults().map((v) => ({
-          symbol: v.symbol,
-          name: v.name,
-          warning: v.warning,
-          links: linksFor(v),
-          backend: v.backend,
-          isDefault: v.isDefault,
-          chain: CHAIN_INFO[v.chainId].key,
-          chainId: v.chainId,
-          address: v.address,
-          chassis: v.chassis,
-          asset: v.asset,
-          shareDecimals: v.shareDecimals,
-          depositOpen: v.depositOpen,
-          notes: v.notes
-        }))
+        depositable: [...depositableVaults().map((v) => v.symbol), ...depositableSolanaVaults().map((v) => v.symbol)],
+        chains: [
+          ...offeredChains().map((c) => {
+            const d = defaultVault(c.chainId);
+            return {
+              chain: c.key,
+              chainId: c.chainId,
+              name: c.name,
+              default: d.symbol,
+              defaultAccess: d.depositOpen.open ? "open" : "whitelist",
+              depositable: depositableVaults().filter((v) => v.chainId === c.chainId).map((v) => v.symbol)
+            };
+          }),
+          // Solana, when the registry has a vault there: no chain id; the cluster is in each Solana row.
+          ...listSolanaVaults().length === 0 ? [] : [
+            {
+              chain: onSolana.chain,
+              chainId: null,
+              name: "Solana",
+              default: listSolanaVaults().find((v) => v.isDefault).symbol,
+              defaultAccess: "open",
+              depositable: depositableSolanaVaults().map((v) => v.symbol)
+            }
+          ]
+        ],
+        vaults: [
+          ...listVaults().map((v) => ({
+            symbol: v.symbol,
+            name: v.name,
+            warning: v.warning,
+            links: linksFor(v),
+            backend: v.backend,
+            isDefault: v.isDefault,
+            chain: CHAIN_INFO[v.chainId].key,
+            chainId: v.chainId,
+            address: v.address,
+            chassis: v.chassis,
+            asset: v.asset,
+            shareDecimals: v.shareDecimals,
+            depositOpen: v.depositOpen,
+            notes: v.notes
+          })),
+          ...listSolanaVaults().map(solanaVaultRow)
+        ]
       });
     })
   );
@@ -39668,15 +46088,24 @@ function buildCommands() {
     "earn_status",
     {
       title: "Health check, or a deposit pre-flight verdict",
-      description: "With NO `account`: is the CLI working and the chain's RPC reachable \u2014 chain, chain id, latest block, registry version, and which env var supplied the RPC (never the URL). Each chain has its own RPC, so pass `chain` to check the one you are about to use; `rpc` is `ok`, `unreachable`, or `wrong_chain` when the configured endpoint answers for a different chain. `chainVerified: false` beside `ok` means the endpoint answered but did not say which chain it is. When a separate logs RPC is set, `logsRpc` reports it the same way. With `account`: simulates deposit() from that address and reports OPEN_READY, NEEDS_APPROVAL, WHITELIST_GATED, REVERTED_OTHER, REFUSED_BY_CLIENT or UNRESOLVED, never trusting maxDeposit(). The `mode` field says which answer you got.",
+      description: "With NO `account`: is the CLI working and the chain's RPC reachable \u2014 chain, chain id, latest block, registry version, and which env var supplied the RPC (never the URL). Each chain has its own RPC, so pass `chain` to check the one you are about to use; `rpc` is `ok`, `unreachable`, or `wrong_chain` when the configured endpoint answers for a different chain. `chainVerified: false` beside `ok` means the endpoint answered but did not say which chain it is. When a separate logs RPC is set, `logsRpc` reports it the same way. With `account`: simulates deposit() from that address and reports OPEN_READY, NEEDS_APPROVAL, WHITELIST_GATED, REVERTED_OTHER, REFUSED_BY_CLIENT or UNRESOLVED, never trusting maxDeposit(); on Solana it simulates the deposit transaction and reports OPEN_READY, NEEDS_FUNDS (the account lacks the USDC, or SOL for fees and rent), REVERTED_OTHER or UNRESOLVED. The `mode` field says which answer you got.",
       inputSchema: { vault: vaultArg, chain, account: accountArg.optional(), amount_usdc: amountArg.optional() }
     },
     guarded(async ({ vault: symbol2, chain: chain2, account, amount_usdc }) => {
+      const target = resolveAnyVault(symbol2, chain2);
+      if (target.family === "solana") {
+        const v = target.vault;
+        if (account !== void 0) {
+          return text({ ...await solanaPreflight(v, account, amount_usdc), mode: "preflight", account, ...onSolana, ...commitsMoney(v) }, "solana");
+        }
+        return text(await solanaHealth(v, symbol2 !== void 0 ? { requested: "preflight", missing: ["account"] } : {}), "solana");
+      }
       if (account !== void 0) {
         const { vault: vault2, client, endpoints } = clientFor(symbol2, chain2);
-        const args = amount_usdc === void 0 ? { vault: vault2, depositor: account, client } : { vault: vault2, depositor: account, client, assetsHuman: amount_usdc };
+        const depositor = evm(account, "account");
+        const args = amount_usdc === void 0 ? { vault: vault2, depositor, client } : { vault: vault2, depositor, client, assetsHuman: amount_usdc };
         const verdict = await onItsChain(vault2, endpoints, () => preflightDeposit(args));
-        return text({ ...verdict, mode: "preflight", account, ...onChain(vault2), ...commitsMoney(vault2) }, vault2.chainId);
+        return text({ ...verdict, mode: "preflight", account: depositor, ...onChain(vault2), ...commitsMoney(vault2) }, vault2.chainId);
       }
       const partial2 = symbol2 !== void 0 ? { requested: "preflight", missing: ["account"] } : {};
       const vault = supportedVault(symbol2, chain2);
@@ -39723,8 +46152,8 @@ function buildCommands() {
         }
         const verified = src.configured ? { chainVerified: said === vault.chainId } : {};
         return text({ ...base2, rpc: "ok", ...verified, latestBlock: latest.toString(), ...logs }, vault.chainId);
-      } catch (e) {
-        const reason = redactEndpoints(e instanceof Error ? e.message : String(e));
+      } catch (e4) {
+        const reason = redactEndpoints(e4 instanceof Error ? e4.message : String(e4));
         return text({ ...base2, rpc: "unreachable", latestBlock: null, reason }, vault.chainId);
       }
     })
@@ -39742,7 +46171,14 @@ function buildCommands() {
         direction: external_exports.enum(["deposit", "withdraw"]).describe("which side to quote \u2014 required, there is no default")
       }
     },
-    guarded(async ({ vault: symbol2, chain: chain2, account, amount_usdc, direction }) => {
+    guarded(async ({ vault: symbol2, chain: chain2, account: rawAccount, amount_usdc, direction }) => {
+      const target = resolveAnyVault(symbol2, chain2);
+      if (target.family === "solana") {
+        const v = target.vault;
+        if (direction === "deposit") return text({ direction: "deposit", ...onSolana, ...commitsMoney(v), ...await solanaQuoteDeposit(v, rawAccount, amount_usdc) }, "solana");
+        return text({ direction: "withdraw", ...onSolana, ...await solanaQuoteWithdraw(v, rawAccount, amount_usdc) }, "solana");
+      }
+      const account = evm(rawAccount, "account");
       const { vault, client, endpoints } = clientFor(symbol2, chain2);
       if (direction === "deposit") {
         return text(
@@ -39762,7 +46198,7 @@ function buildCommands() {
     "earn_prepare_deposit",
     {
       title: "Prepare an unsigned deposit",
-      description: "Returns the UNSIGNED calls for a deposit \u2014 [approve(asset \u2192 vault), deposit(assets, receiver)] \u2014 inside an envelope with requires_signature: true. Amount is in the vault's asset \u2014 USDC, or USDG on Robinhood Chain; `amount_usdc` keeps its name for every asset. The envelope names the `chain` and `chainId` the calls are for: say which chain to the operator, and if they have not chosen one, ask before calling this. NOTHING IS SUBMITTED: hand the calls to a signer in order. This tool cannot sign or send, and the deposit has not happened until the signer's transactions confirm. Each call also carries `function` and `args` \u2014 the same call `data` encodes, decoded, e.g. `approve(address spender, uint256 value)` with `{ spender, value }` \u2014 so an operator without a CLI signer can fill a block explorer's Write Contract form directly. `args` values are RAW contract units, which is what the form takes; `description` is the human sentence.",
+      description: "Returns the UNSIGNED calls for a deposit \u2014 [approve(asset \u2192 vault), deposit(assets, receiver)] on the EVM chains, ONE unsigned transaction (`transaction.wire`) on Solana \u2014 inside an envelope with requires_signature: true. Amount is in the vault's asset \u2014 USDC, or USDG on Robinhood Chain; `amount_usdc` keeps its name for every asset. The envelope names the `chain` and `chainId` the calls are for: say which chain to the operator, and if they have not chosen one, ask before calling this. NOTHING IS SUBMITTED: hand the calls to a signer in order. This tool cannot sign or send, and the deposit has not happened until the signer's transactions confirm. On the EVM chains each call also carries `function` and `args` \u2014 the same call `data` encodes, decoded, e.g. `approve(address spender, uint256 value)` with `{ spender, value }` \u2014 so an operator without a CLI signer can fill a block explorer's Write Contract form directly. `args` values are RAW contract units, which is what the form takes; `description` is the human sentence.",
       inputSchema: {
         vault: vaultArg,
         chain,
@@ -39772,15 +46208,20 @@ function buildCommands() {
       }
     },
     guarded(async ({ vault: symbol2, chain: chain2, account, amount_usdc, receiver }) => {
+      const target = resolveAnyVault(symbol2, chain2);
+      if (target.family === "solana") {
+        const { requires_signature, status, ...rest } = await solanaPrepareDeposit(target.vault, account, amount_usdc, receiver);
+        return text({ requires_signature, status, ...onSolana, ...commitsMoney(target.vault), ...rest }, "solana");
+      }
       const vault = supportedVault(symbol2, chain2);
-      return unsigned(buildDeposit(vault, { assetsHuman: amount_usdc, receiver, account }), vault, "deposit");
+      return unsigned(buildDeposit(vault, { assetsHuman: amount_usdc, receiver: evm(receiver, "receiver"), account: evm(account, "account") }), vault, "deposit");
     })
   );
   register(
     "earn_prepare_withdraw",
     {
       title: "Prepare an unsigned withdrawal",
-      description: "Returns the UNSIGNED call for a withdrawal in asset terms \u2014 withdraw(assets, receiver, owner) \u2014 inside an envelope with requires_signature: true, which names the `chain` the call is for: a position is withdrawn on the chain it is on, so name the vault (or its chain) and never ask the operator to choose one. To empty the account pass --all (a switch: it takes no value) with shares_exact copied verbatim from sharesExact from `earn balance` (redeem of the exact balance; never a rounded number). NOTHING IS SUBMITTED and no funds have moved until a signer confirms. Each call also carries `function` and `args` \u2014 the same call `data` encodes, decoded, e.g. `withdraw(uint256 assets, address receiver, address owner)` with `{ assets, receiver, owner }` \u2014 so an operator without a CLI signer can fill a block explorer's Write Contract form directly. `args` values are RAW contract units, which is what the form takes; `description` is the human sentence.",
+      description: "Returns the UNSIGNED call for a withdrawal in asset terms \u2014 withdraw(assets, receiver, owner) on the EVM chains, ONE unsigned transaction (`transaction.wire`) on Solana \u2014 inside an envelope with requires_signature: true, which names the `chain` the call is for: a position is withdrawn on the chain it is on, so name the vault (or its chain) and never ask the operator to choose one. To empty the account pass --all (a switch: it takes no value) with shares_exact copied verbatim from sharesExact from `earn balance` (redeem of the exact balance; never a rounded number). NOTHING IS SUBMITTED and no funds have moved until a signer confirms. On the EVM chains each call also carries `function` and `args` \u2014 the same call `data` encodes, decoded, e.g. `withdraw(uint256 assets, address receiver, address owner)` with `{ assets, receiver, owner }` \u2014 so an operator without a CLI signer can fill a block explorer's Write Contract form directly. `args` values are RAW contract units, which is what the form takes; `description` is the human sentence.",
       inputSchema: {
         vault: vaultArg,
         chain,
@@ -39791,10 +46232,18 @@ function buildCommands() {
         shares_exact: external_exports.string().regex(/^\d+(\.\d+)?$/).optional()
       }
     },
-    guarded(async ({ vault: symbol2, chain: chain2, receiver, account, amount_usdc, all, shares_exact }) => {
-      const vault = supportedVault(symbol2, chain2);
+    guarded(async ({ vault: symbol2, chain: chain2, receiver: rawReceiver, account: rawAccount, amount_usdc, all, shares_exact }) => {
+      const target = resolveAnyVault(symbol2, chain2);
       if (all && amount_usdc) throw new Error("give --amount_usdc or --all with --shares_exact, not both");
       if (!all && shares_exact) throw new Error("--shares_exact goes with --all; for an amount in the asset, use --amount_usdc alone");
+      if (all && !shares_exact) throw new Error("--all requires --shares_exact (copy sharesExact from `earn balance` verbatim)");
+      if (!all && !amount_usdc) throw new Error("provide --amount_usdc, or --all with --shares_exact");
+      if (target.family === "solana") {
+        return text(await solanaPrepareWithdraw(target.vault, rawAccount, rawReceiver, all ? { sharesExact: shares_exact } : { amountHuman: amount_usdc }), "solana");
+      }
+      const vault = supportedVault(symbol2, chain2);
+      const receiver = evm(rawReceiver, "receiver");
+      const account = evm(rawAccount, "account");
       if (all) {
         if (!shares_exact) throw new Error("--all requires --shares_exact (copy sharesExact from `earn balance` verbatim)");
         return unsigned(buildWithdraw(vault, { receiver, owner: account, all: true, sharesExact: shares_exact }), vault, "withdraw");
@@ -39813,10 +46262,13 @@ function buildCommands() {
         chain,
         account: accountArg,
         lookback_blocks: external_exports.number().int().positive().optional().describe("how far back to scan for Deposit/Withdraw events; default: from the vault's deployment block, i.e. the whole history. The EFFECTIVE window is max_log_requests \xD7 the provider's eth_getLogs cap (Alchemy free 10 blocks, Base public 2,000, Infura on Arbitrum 10,000); if the configured RPC cannot cover it, the chain's public endpoint serves the scan and scan.source says so"),
-        max_log_requests: external_exports.number().int().positive().max(400).optional().describe("cap on eth_getLogs calls per event per scan; default 100 (= 1,000 blocks on Alchemy free, 200,000 on Base public). scan.wholeHistory says whether the scan actually covered every block since the vault was deployed \u2014 scan.complete alone is only a reconciliation and can be vacuously true. For an older vault, a provider with a wide eth_getLogs range (TREASURY_LOGS_RPC_BASE; TREASURY_LOGS_RPC_ARBITRUM on Arbitrum One; TREASURY_LOGS_RPC_ROBINHOOD on Robinhood Chain) is what makes it whole")
+        max_log_requests: external_exports.number().int().positive().max(400).optional().describe("cap on eth_getLogs calls per event per scan; default 100 (= 1,000 blocks on Alchemy free, 200,000 on Base public). scan.wholeHistory says whether the scan actually covered every block since the vault was deployed \u2014 scan.complete alone is only a reconciliation and can be vacuously true. For an older vault, a provider with a wide eth_getLogs range (TREASURY_LOGS_RPC_BASE; TREASURY_LOGS_RPC_ARBITRUM on Arbitrum One; TREASURY_LOGS_RPC_ROBINHOOD on Robinhood Chain; TREASURY_LOGS_RPC_ETHEREUM on Ethereum; TREASURY_LOGS_RPC_MONAD on Monad, whose public endpoint serves only 100 blocks per request) is what makes it whole")
       }
     },
-    guarded(async ({ vault: symbol2, chain: chain2, account, lookback_blocks, max_log_requests }) => {
+    guarded(async ({ vault: symbol2, chain: chain2, account: rawAccount, lookback_blocks, max_log_requests }) => {
+      const target = resolveAnyVault(symbol2, chain2);
+      if (target.family === "solana") return text({ ...onSolana, ...await solanaBalance(target.vault, rawAccount) }, "solana");
+      const account = evm(rawAccount, "account");
       const vault = supportedVault(symbol2, chain2);
       const logsUrl = logsRpcUrlFromEnv(vault.chainId);
       const client = makePublicClient(vault.chainId, logsUrl);
@@ -39855,88 +46307,115 @@ function buildCommands() {
   return commands;
 }
 
-// src/connect/ack.ts
-var ACK_TTL_MS = 15 * 6e4;
-function callsDigest(calls, account) {
-  return keccak256(stringToHex(JSON.stringify([account, calls.map((c) => [c.chainId, c.to, c.data, c.value])])));
-}
-function issueAck(calls, account, now) {
-  const digest = callsDigest(calls, account);
-  const issuedAtIso = now.toISOString();
-  return {
-    code: keccak256(stringToHex(`${digest}|${issuedAtIso}`)).slice(2, 10),
-    digest,
-    issuedAtIso,
-    expiresAtIso: new Date(now.getTime() + ACK_TTL_MS).toISOString()
+// src/connect/gate-solana.ts
+var same = (a, b) => a.length <= b.length && a.every((x, i) => b[i] === x);
+var u642 = (d, o2) => new DataView(d.buffer, d.byteOffset, d.byteLength).getBigUint64(o2, true);
+var isSigner = (role) => role === AccountRole.READONLY_SIGNER || role === AccountRole.WRITABLE_SIGNER;
+async function admitSolana(wireBase64, account) {
+  const refuse = (why) => {
+    throw new Error(`refused: ${why}`);
   };
-}
-function checkAck(code, pending, calls, account, now) {
-  const again = "run the same command without --ack, post its `acknowledgement` to the operator, and wait for their yes";
-  if (!pending) throw new Error(`refused: no acknowledgement is pending; ${again}`);
-  if (code.trim().toLowerCase() !== pending.code) throw new Error(`refused: --ack ${code} is not the pending acknowledgement's code; ${again}`);
-  const expires = Date.parse(pending.expiresAtIso);
-  if (!Number.isFinite(expires) || now.getTime() > expires) throw new Error(`refused: the acknowledgement expired at ${pending.expiresAtIso}; ${again}`);
-  if (callsDigest(calls, account) !== pending.digest) {
-    throw new Error(`refused: these calls are not the ones the operator acknowledged (the amount, vault, chain, receiver or connected account changed); ${again}`);
+  let ixs;
+  let feePayer;
+  let signers;
+  try {
+    const tx = getTransactionDecoder().decode(getBase64Encoder().encode(wireBase64));
+    const compiled = getCompiledTransactionMessageDecoder().decode(tx.messageBytes);
+    signers = compiled.header.numSignerAccounts;
+    if ("addressTableLookups" in compiled && (compiled.addressTableLookups?.length ?? 0) > 0) refuse("the transaction loads accounts from a lookup table, which this gate cannot read");
+    const message = decompileTransactionMessage4(compiled);
+    feePayer = message.feePayer.address;
+    ixs = message.instructions;
+  } catch (e4) {
+    if (e4 instanceof Error && e4.message.startsWith("refused:")) throw e4;
+    return refuse(`the transaction does not decode (${e4 instanceof Error ? e4.message : String(e4)})`);
   }
+  if (feePayer !== account) refuse(`the fee payer is ${feePayer}, not the connected account ${account}`);
+  if (signers !== 1) refuse(`the transaction needs ${signers} signers; only the connected account may sign`);
+  let kind;
+  let vault;
+  let amount = 0n;
+  const ataMints = /* @__PURE__ */ new Set();
+  for (const [i, ix] of ixs.entries()) {
+    const at = `instruction ${i + 1}`;
+    const data = Uint8Array.from(ix.data ?? []);
+    const accts = ix.accounts ?? [];
+    for (const a of accts) if (isSigner(a.role) && a.address !== account) refuse(`${at} asks ${a.address} to sign, not the connected account`);
+    switch (ix.programAddress) {
+      case COMPUTE_BUDGET_PROGRAM_ID:
+        if (data.length !== 5 || data[0] !== 2) refuse(`${at}: only a compute-unit limit is allowed from the Compute Budget program`);
+        break;
+      case ASSOCIATED_TOKEN_PROGRAM_ID: {
+        if (data.length !== 1 || data[0] !== 1) refuse(`${at}: only an idempotent token-account creation is allowed`);
+        const [payer, ata, owner, mint, system, token] = accts.map((a) => a.address);
+        if (payer !== account || owner !== account) refuse(`${at} creates a token account for ${owner}, paid by ${payer}; only the connected account's own`);
+        if (system !== SYSTEM_PROGRAM_ID || token !== SPL_TOKEN_PROGRAM_ID) refuse(`${at} names an unexpected program`);
+        if (ata !== await associatedTokenAccount(account, mint)) refuse(`${at} names a token account that is not the connected account's for ${mint}`);
+        ataMints.add(mint);
+        break;
+      }
+      case KVAULT_PROGRAM_ID: {
+        const isDeposit2 = same(DISCRIMINATORS.deposit, data);
+        const isWithdraw = same(DISCRIMINATORS.withdraw, data);
+        if (!isDeposit2 && !isWithdraw) refuse(`${at} is a Kamino vault instruction other than deposit or withdraw`);
+        if (data.length !== 16) refuse(`${at} carries ${data.length} bytes of data, not 16`);
+        const k = isDeposit2 ? "deposit" : "withdraw";
+        if (kind !== void 0 && kind !== k) refuse("a deposit and a withdrawal in one transaction");
+        if (k === "deposit" && kind === "deposit") refuse("two deposits in one transaction");
+        kind = k;
+        const user = accts[0]?.address;
+        const state = accts[1]?.address;
+        if (user !== account) refuse(`${at} acts for ${user}, not the connected account ${account}`);
+        const v = listSolanaVaults().find((x) => x.address === state);
+        if (!v) refuse(`${at} names ${state}, which is not a vault in the registry`);
+        if (vault && vault.address !== v.address) refuse("two different vaults in one transaction");
+        vault = v;
+        const [tokenAta, sharesAta, pdas] = await Promise.all([associatedTokenAccount(account, v.asset.address), associatedTokenAccount(account, v.sharesMint), vaultPdas(v.address)]);
+        const tokenVault = accts[isDeposit2 ? 2 : 3]?.address;
+        const authority = accts[4]?.address;
+        if (tokenVault !== pdas.tokenVault || authority !== pdas.baseVaultAuthority) refuse(`${at} names a token vault or vault authority that is not ${v.symbol}'s`);
+        if (isWithdraw && accts[14]?.address !== state) refuse(`${at} names a second vault state ${accts[14]?.address}, not ${state}`);
+        const userToken = accts[isDeposit2 ? 6 : 5]?.address;
+        const userShares = accts[7]?.address;
+        const mint = accts[isDeposit2 ? 3 : 6]?.address;
+        const sharesMint = accts[isDeposit2 ? 5 : 8]?.address;
+        if (mint !== v.asset.address || sharesMint !== v.sharesMint) refuse(`${at} names a token or share mint that is not the vault's`);
+        if (userToken !== tokenAta) refuse(`${at} ${isDeposit2 ? "takes from" : "pays into"} ${userToken}, not the connected account's own ${v.asset.symbol} account`);
+        if (userShares !== sharesAta) refuse(`${at} names ${userShares} as the share account, not the connected account's own`);
+        const n = u642(data, 8);
+        if (n === 0n) refuse(`${at} moves 0`);
+        amount += n;
+        break;
+      }
+      default:
+        refuse(`${at} calls ${ix.programAddress}, which is not one this page may send`);
+    }
+  }
+  if (!kind || !vault) return refuse("the transaction contains no deposit or withdrawal");
+  for (const m of ataMints) if (m !== vault.sharesMint && m !== vault.asset.address) refuse(`a token account is created for ${m}, which is not this vault's`);
+  return { kind, vault, amount };
 }
-function operatorWarning(w, action = "deposit") {
-  const s = w.replace(/\s*Show this warning before preparing any deposit\.\s*$/, "").trim();
-  return action === "withdraw" ? s.replace(/\s*Deposit only .*?\.(?=\s|$)/g, "").trim() : s;
-}
-function summarize(action, calls, admitted, receiver) {
-  const main = admitted.find((a) => a.kind !== "approve");
-  const v = main.vault;
-  const chainId = calls[0].chainId;
-  const amount = main.kind === "redeem" ? `${formatUnits(main.amount, v.shareDecimals)} ${v.symbol} shares (the amount given; it is the whole position only if it equals the account's share balance, which is not checked here)` : `${formatUnits(main.amount, v.asset.decimals)} ${v.asset.symbol}`;
-  return {
-    action,
-    amount,
-    asset: v.asset.symbol,
-    chain: CHAIN_INFO[chainId].name,
-    chainId,
-    vault: { symbol: v.symbol, name: v.name, address: v.address, explorer: linksFor(v).explorer },
-    receiver,
-    warning: operatorWarning(v.warning, action),
-    // The disclosures in plain words (`DISCLOSURES.plain`): the operator reads this before every page,
-    // so it is the short form. Before a withdrawal, only what holds for every action.
-    disclosures: action === "deposit" ? [...DISCLOSURES.plain.deposit, ...v.depositOpen.open ? [] : [DISCLOSURES.plain.gatedDeposit], ...DISCLOSURES.plain.always] : [...DISCLOSURES.plain.always]
-  };
-}
-function acknowledgementText(s) {
-  const lands = s.action === "deposit" ? "Shares go to" : `${s.asset} goes to`;
-  const prompts = s.action === "deposit" ? `Your wallet will ask you twice: first to approve ${s.amount} to the vault, then to make the deposit.` : `Your wallet will ask you once, to make the withdrawal.`;
-  return [
-    `Confirm before the signing page opens. Nothing has been sent.`,
-    ``,
-    `  ${s.action === "deposit" ? "Deposit" : "Withdraw"}: ${s.amount}`,
-    `  Chain: ${s.chain} (chainId ${s.chainId})`,
-    `  Vault: ${s.vault.name} (${s.vault.symbol})`,
-    `         ${s.vault.explorer}`,
-    `  ${lands}: ${s.receiver} (the connected wallet)`,
-    `  ${prompts}`,
-    ``,
-    `WARNING: ${s.warning}`,
-    ``,
-    `Before you agree:`,
-    ...s.disclosures.map((d) => `  - ${d}`),
-    `  ${DISCLOSURES.plain.fullTerms}`,
-    ``,
-    `Do you acknowledge and want the signing page opened for exactly this ${s.action}? Reply yes or no.`
-  ].join("\n");
-}
+
+// src/connect/http.ts
+import http2 from "http";
+import { randomBytes as randomBytes2, timingSafeEqual } from "crypto";
+
+// src/connect/session.ts
+import { chmodSync, closeSync, mkdirSync, openSync, readFileSync, rmSync, statSync, writeFileSync, writeSync } from "fs";
+import { homedir } from "os";
+import { join } from "path";
 
 // src/connect/config.ts
 var DEFAULT_PRIVY_APP_ID = "cmubfegl2028d0ci3n0f2u6z5";
-var DEFAULT_CONNECT_PORT = 53682;
+var DEFAULT_CONNECT_PORTS = [53682, 53683, 53684, 53685, 53686];
 var privyAppId = () => {
   const v = (process.env["PRIVY_APP_ID"] ?? "").trim();
   return v.length > 0 && !v.includes("${") ? v : DEFAULT_PRIVY_APP_ID;
 };
-var connectPort = () => {
+var connectPorts = () => {
   const raw = (process.env["TREASURY_CONNECT_PORT"] ?? "").trim();
   const n = Number(raw);
-  return raw.length > 0 && Number.isInteger(n) && n > 0 && n < 65536 ? n : DEFAULT_CONNECT_PORT;
+  return raw.length > 0 && Number.isInteger(n) && n > 0 && n < 65536 ? [n] : DEFAULT_CONNECT_PORTS;
 };
 var connectHome = () => {
   const v = (process.env["TREASURY_CONNECT_HOME"] ?? "").trim();
@@ -39944,75 +46423,153 @@ var connectHome = () => {
 };
 var noOpen = () => (process.env["TREASURY_CONNECT_NO_OPEN"] ?? "").trim().length > 0;
 
-// src/connect/gate.ts
-var UNLIMITED = 2n ** 128n;
-var same = (a, b) => getAddress(a) === getAddress(b);
-var SHAPES = /* @__PURE__ */ new Set(["approve,deposit", "withdraw", "redeem"]);
-function admit(calls, account) {
-  if (calls.length === 0) throw new Error("refused: there is nothing to confirm");
-  if (calls.some((c) => c.chainId !== calls[0].chainId)) throw new Error("refused: the calls are on more than one chain");
-  const vaults = listVaults();
-  const out = [];
-  calls.forEach((c, i) => {
-    const at = `call ${i + 1} of ${calls.length}`;
-    if (!isSupportedChainId(c.chainId)) throw new Error(`refused (${at}): chain ${c.chainId} is not supported`);
-    if (BigInt(c.value) !== 0n) throw new Error(`refused (${at}): it attaches native value, which no vault call needs`);
-    let decoded;
+// src/connect/session.ts
+var dir = () => connectHome() ?? join(homedir(), ".config", "treasury");
+var sessionPath = () => join(dir(), "connect-session.json");
+function readSession() {
+  let raw;
+  try {
+    raw = readFileSync(sessionPath(), "utf8");
+  } catch {
+    return void 0;
+  }
+  try {
+    const v = JSON.parse(raw);
+    if (typeof v.account !== "string" || !isAddress(v.account)) return void 0;
+    if (v.walletType !== "external" && v.walletType !== "embedded") return void 0;
+    return { account: getAddress(v.account), walletType: v.walletType, connectedAtIso: String(v.connectedAtIso ?? "") };
+  } catch {
+    return void 0;
+  }
+}
+function writeOwnerOnly(path, value) {
+  mkdirSync(dir(), { recursive: true, mode: 448 });
+  writeFileSync(path, `${JSON.stringify(value, null, 2)}
+`, { mode: 384 });
+  chmodSync(path, 384);
+}
+function writeSession(s2) {
+  writeOwnerOnly(sessionPath(), s2);
+  clearPendingAck();
+}
+function clearSession() {
+  const had = readSession() !== void 0;
+  rmSync(sessionPath(), { force: true });
+  clearPendingAck();
+  return had;
+}
+var solanaSessionPath = () => join(dir(), "connect-session-solana.json");
+function readSolanaSession() {
+  try {
+    const v = JSON.parse(readFileSync(solanaSessionPath(), "utf8"));
+    if (typeof v.account !== "string" || !isAddress2(v.account)) return void 0;
+    if (v.walletType !== "external" && v.walletType !== "embedded") return void 0;
+    return { account: v.account, walletType: v.walletType, connectedAtIso: String(v.connectedAtIso ?? "") };
+  } catch {
+    return void 0;
+  }
+}
+function writeSolanaSession(s2) {
+  writeOwnerOnly(solanaSessionPath(), s2);
+  clearPendingAck();
+}
+function clearSolanaSession() {
+  const had = readSolanaSession() !== void 0;
+  rmSync(solanaSessionPath(), { force: true });
+  clearPendingAck();
+  return had;
+}
+var pendingAckPath = () => join(dir(), "connect-ack.json");
+function writePendingAck(a) {
+  writeOwnerOnly(pendingAckPath(), a);
+}
+function readPendingAck() {
+  try {
+    const v = JSON.parse(readFileSync(pendingAckPath(), "utf8"));
+    if (typeof v.code !== "string" || typeof v.digest !== "string" || typeof v.issuedAtIso !== "string" || typeof v.expiresAtIso !== "string") return void 0;
+    return { code: v.code, digest: v.digest, issuedAtIso: v.issuedAtIso, expiresAtIso: v.expiresAtIso };
+  } catch {
+    return void 0;
+  }
+}
+function clearPendingAck() {
+  rmSync(pendingAckPath(), { force: true });
+}
+var pageLockPath = () => join(dir(), "connect-page.lock");
+var LOCK_WRITE_GRACE_MS = 2e3;
+var alive = (pid) => {
+  try {
+    process.kill(pid, 0);
+    return true;
+  } catch (e4) {
+    return e4.code === "EPERM";
+  }
+};
+function heldBy(path) {
+  let raw;
+  try {
+    raw = readFileSync(path, "utf8");
+  } catch {
+    return void 0;
+  }
+  try {
+    const v = JSON.parse(raw);
+    if (typeof v.pid !== "number" || typeof v.expiresAt !== "number") return void 0;
+    if (v.expiresAt < Date.now() || !alive(v.pid)) return void 0;
+    return { pid: v.pid, ...typeof v.port === "number" ? { port: v.port } : {} };
+  } catch {
     try {
-      decoded = decodeFunctionData({ abi: erc4626Abi, data: c.data });
+      return Date.now() - statSync(path).mtimeMs < LOCK_WRITE_GRACE_MS ? { pid: 0 } : void 0;
     } catch {
-      throw new Error(`refused (${at}): its calldata is not an approve, deposit, withdraw or redeem`);
+      return void 0;
     }
-    const name = decoded.functionName;
-    const args = decoded.args ?? [];
-    const canonical = encodeFunctionData({ abi: erc4626Abi, functionName: name, args });
-    if (canonical !== c.data) throw new Error(`refused (${at}): its calldata is not the canonical encoding of ${name} (trailing bytes, stray bits in an address, or hex not in lowercase)`);
-    if (name === "approve") {
-      const vault2 = vaults.find((v) => v.chainId === c.chainId && same(v.asset.address, c.to));
-      if (!vault2) throw new Error(`refused (${at}): approve on ${c.to}, which is not the asset of a listed vault on chain ${c.chainId}`);
-      const [spender, value] = args;
-      const target = vaults.find((v) => v.chainId === c.chainId && same(v.address, spender) && same(v.asset.address, c.to));
-      if (!target) throw new Error(`refused (${at}): the approval goes to ${spender}, not to a listed vault for this asset`);
-      if (value === 0n) throw new Error(`refused (${at}): an approval of 0`);
-      if (value >= UNLIMITED) throw new Error(`refused (${at}): an unlimited approval`);
-      out.push({ kind: "approve", vault: target, amount: value });
-      return;
+  }
+}
+function claimPageLock(ttlMs) {
+  mkdirSync(dir(), { recursive: true, mode: 448 });
+  const path = pageLockPath();
+  const token = `${process.pid}.${Date.now()}.${Math.random().toString(36).slice(2)}`;
+  const expiresAt = Date.now() + ttlMs;
+  const write = (port) => writeFileSync(path, JSON.stringify({ pid: process.pid, expiresAt, token, ...port ? { port } : {} }), { mode: 384 });
+  for (let attempt = 0; ; attempt++) {
+    try {
+      const fd = openSync(path, "wx", 384);
+      try {
+        writeSync(fd, JSON.stringify({ pid: process.pid, expiresAt, token }));
+      } finally {
+        closeSync(fd);
+      }
+      break;
+    } catch (e4) {
+      if (e4.code !== "EEXIST") throw e4;
+      const holder = heldBy(path);
+      if (holder || attempt > 0) {
+        const where = holder?.port ? ` on port ${holder.port}` : "";
+        throw new Error(`another sign-in or confirmation page is still open${where}; finish or close it, then retry`);
+      }
+      rmSync(path, { force: true });
     }
-    const vault = vaults.find((v) => v.chainId === c.chainId && same(v.address, c.to));
-    if (!vault) throw new Error(`refused (${at}): ${c.to} is not a listed vault on chain ${c.chainId}`);
-    if (name === "deposit") {
-      const [assets2, receiver] = args;
-      if (assets2 === 0n) throw new Error(`refused (${at}): a deposit of 0`);
-      if (!same(receiver, account)) throw new Error(`refused (${at}): the shares would go to ${receiver}, not the connected account ${account}`);
-      out.push({ kind: "deposit", vault, amount: assets2 });
-      return;
+  }
+  const ours = () => {
+    try {
+      return JSON.parse(readFileSync(path, "utf8")).token === token;
+    } catch {
+      return false;
     }
-    if (name === "withdraw" || name === "redeem") {
-      const [amount, receiver, owner] = args;
-      if (amount === 0n) throw new Error(`refused (${at}): a ${name} of 0`);
-      if (!same(receiver, account)) throw new Error(`refused (${at}): the funds would go to ${receiver}, not the connected account ${account}`);
-      if (!same(owner, account)) throw new Error(`refused (${at}): it burns the shares of ${owner}, not the connected account ${account}`);
-      out.push({ kind: name, vault, amount });
-      return;
+  };
+  return {
+    setPort: (port) => {
+      if (ours()) write(port);
+    },
+    release: () => {
+      if (ours()) rmSync(path, { force: true });
     }
-    throw new Error(`refused (${at}): ${name} is not something this page hands to a wallet`);
-  });
-  out.forEach((a, i) => {
-    if (a.kind !== "approve") return;
-    const next = out[i + 1];
-    if (!next || next.kind !== "deposit" || next.vault.address !== a.vault.address || next.amount !== a.amount) {
-      throw new Error(`refused (call ${i + 1}): an approval must be followed by a deposit of exactly that amount into the same vault`);
-    }
-  });
-  const shape = out.map((a) => a.kind).join(",");
-  if (!SHAPES.has(shape)) throw new Error(`refused: ${shape} is not a batch this page confirms (only approve+deposit, withdraw, or redeem)`);
-  return out;
+  };
 }
 
 // src/connect/http.ts
-import http2 from "http";
-import { randomBytes as randomBytes2, timingSafeEqual } from "crypto";
 var MAX_BODY_BYTES = 16 * 1024;
+var LOCK_MARGIN_MS = 6e4;
 var CANCEL_GRACE_MS = 3e4;
 var same2 = (a, b) => {
   const x = Buffer.from(a);
@@ -40021,7 +46578,7 @@ var same2 = (a, b) => {
 };
 async function serveOnce(flow) {
   const secret = randomBytes2(24).toString("hex");
-  const origin = `http://localhost:${flow.port}`;
+  let origin = "";
   let settled = false;
   let busy = false;
   let deferred;
@@ -40033,7 +46590,7 @@ async function serveOnce(flow) {
     res.writeHead(code, { "content-type": "application/json", "cache-control": "no-store", "x-content-type-options": "nosniff" });
     res.end(JSON.stringify(body));
   };
-  const readBody = (req) => new Promise((resolve, reject) => {
+  const readBody = (req) => new Promise((resolve2, reject) => {
     let size5 = 0;
     const chunks = [];
     req.on("data", (c) => {
@@ -40049,7 +46606,7 @@ async function serveOnce(flow) {
       try {
         const v = JSON.parse(Buffer.concat(chunks).toString("utf8"));
         if (v === null || typeof v !== "object" || Array.isArray(v)) throw new Error("not an object");
-        resolve(v);
+        resolve2(v);
       } catch {
         reject(new Error("body is not a JSON object"));
       }
@@ -40093,10 +46650,10 @@ async function serveOnce(flow) {
           if (url2.pathname === "/challenge") {
             if (!flow.challenge) return json2(res, 404, { ok: false, reason: "not found" });
             const a = body["address"];
-            if (typeof a !== "string" || !isAddress(a)) return json2(res, 400, { ok: false, reason: "not an address" });
-            const address2 = getAddress(a);
-            const message = flow.challenge(address2, origin, secret);
-            issued = { address: address2, message };
+            const address3 = flow.challengeAddress ? flow.challengeAddress(a) : typeof a === "string" && isAddress(a) ? getAddress(a) : void 0;
+            if (address3 === void 0) return json2(res, 400, { ok: false, reason: "not an address" });
+            const message = flow.challenge(address3, origin, secret);
+            issued = { address: address3, message };
             return json2(res, 200, { ok: true, message });
           }
           if (body["rejected"] === true) {
@@ -40121,21 +46678,22 @@ async function serveOnce(flow) {
           }
         }
         return json2(res, 405, { ok: false, reason: "method not allowed" });
-      } catch (e) {
-        return json2(res, 400, { ok: false, reason: e instanceof Error ? e.message : "bad request" });
+      } catch (e4) {
+        return json2(res, 400, { ok: false, reason: e4 instanceof Error ? e4.message : "bad request" });
       }
     })();
   };
-  const servers = [http2.createServer(onRequest), http2.createServer(onRequest)];
+  let servers = [];
   const closeAll = () => {
-    for (const s of servers) {
-      s.close();
-      s.closeAllConnections();
+    for (const s2 of servers) {
+      s2.close();
+      s2.closeAllConnections();
     }
   };
   const finish = (r) => {
     if (settled) return;
     settled = true;
+    lock.release();
     resolveDone(r);
     setTimeout(closeAll, 1500).unref();
   };
@@ -40145,22 +46703,42 @@ async function serveOnce(flow) {
     deferred = r;
     setTimeout(() => finish(r), flow.cancelGraceMs ?? CANCEL_GRACE_MS).unref();
   };
-  const listen = (server, host, optional2) => new Promise((resolve, reject) => {
-    server.once("error", (e) => {
-      if (e.code === "EADDRINUSE") {
-        return reject(new Error(`port ${flow.port} is in use on ${host} \u2014 another sign-in or confirmation page is probably still open; finish or close it, then retry`));
+  const listen = (server, port, host, optional2) => new Promise((resolve2, reject) => {
+    server.once("error", (e4) => {
+      if (e4.code === "EADDRINUSE") {
+        return reject(Object.assign(new Error(`port ${port} is in use on ${host} by another program; close it, then retry`), { inUse: true }));
       }
-      if (optional2 && (e.code === "EADDRNOTAVAIL" || e.code === "EAFNOSUPPORT")) return resolve();
-      reject(e);
+      if (optional2 && (e4.code === "EADDRNOTAVAIL" || e4.code === "EAFNOSUPPORT")) return resolve2();
+      reject(e4);
     });
-    server.listen({ port: flow.port, host, ipv6Only: host === "::1" }, () => resolve());
+    server.listen({ port, host, ipv6Only: host === "::1" }, () => resolve2());
   });
+  const lock = claimPageLock(flow.ttlMs + LOCK_MARGIN_MS);
   try {
-    await listen(servers[0], "127.0.0.1", false);
-    await listen(servers[1], "::1", true);
-  } catch (e) {
-    closeAll();
-    throw e;
+    let busy2;
+    let bound = false;
+    for (const port of flow.ports) {
+      origin = `http://localhost:${port}`;
+      servers = [http2.createServer(onRequest), http2.createServer(onRequest)];
+      try {
+        await listen(servers[0], port, "127.0.0.1", false);
+        await listen(servers[1], port, "::1", true);
+        lock.setPort(port);
+        bound = true;
+        break;
+      } catch (e4) {
+        closeAll();
+        if (!e4.inUse) throw e4;
+        busy2 = e4;
+      }
+    }
+    if (!bound) {
+      if (flow.ports.length === 1 && busy2) throw busy2;
+      throw new Error(`ports ${flow.ports.join(", ")} are all in use by other programs; close one of them, then retry`);
+    }
+  } catch (e4) {
+    lock.release();
+    throw e4;
   }
   const timer = setTimeout(
     // A cancel still waiting on a check is the operator's reason; it wins over the clock.
@@ -40170,6 +46748,366 @@ async function serveOnce(flow) {
   timer.unref();
   void done.then(() => clearTimeout(timer));
   return { url: `${origin}/${flow.mode}?s=${secret}`, done, close: () => finish({ ok: false, reason: "cancelled" }) };
+}
+
+// src/connect/solana.ts
+function solanaSignInMessage(a) {
+  return [
+    `${new URL(a.origin).host} wants you to sign in with your Solana account:`,
+    a.address,
+    "",
+    "Connect this wallet to Open Agent Treasury. This signature costs no fee and authorizes no transaction.",
+    "",
+    `URI: ${a.origin}`,
+    "Version: 1",
+    "Chain ID: mainnet",
+    `Nonce: ${a.nonce}`,
+    `Issued At: ${a.issuedAt}`
+  ].join("\n");
+}
+async function verifySolanaSignIn(address3, message, signatureBase64) {
+  try {
+    const sig = getBase64Encoder().encode(signatureBase64);
+    if (sig.length !== 64) return false;
+    const key = await getPublicKeyFromAddress(address3);
+    return await verifySignature(key, sig, new TextEncoder().encode(message));
+  } catch {
+    return false;
+  }
+}
+async function runConnectSolana(deps) {
+  const handle = await serveOnce({
+    mode: "connect",
+    ttlMs: deps.ttlMs,
+    html: (s2) => deps.html(s2, "Connect to Open Agent Treasury"),
+    csp: deps.csp,
+    assets: deps.assets,
+    ports: deps.ports,
+    info: () => ({ mode: "connect", chain: "solana", appId: deps.appId }),
+    challengeAddress: (a) => typeof a === "string" && isAddress2(a) ? a : void 0,
+    challenge: (address3, origin, nonce) => solanaSignInMessage({ address: address3, origin, nonce, issuedAt: (/* @__PURE__ */ new Date()).toISOString() }),
+    accept: async (body, ctx) => {
+      const address3 = body["address"];
+      if (typeof address3 !== "string" || !isAddress2(address3)) return { ok: false, reason: "not a Solana address" };
+      if (!ctx.message || ctx.challengedAddress !== address3) return { ok: false, reason: "no sign-in message was issued for this address" };
+      const sig = body["signature"];
+      if (typeof sig !== "string" || !/^[A-Za-z0-9+/]+={0,2}$/.test(sig)) return { ok: false, reason: "malformed signature" };
+      const walletType = body["walletType"] === "embedded" ? "embedded" : "external";
+      if (!await verifySolanaSignIn(address3, ctx.message, sig)) return { ok: false, reason: "the signature does not match the address" };
+      return { ok: true, final: true, value: { account: address3, walletType, connectedAtIso: (/* @__PURE__ */ new Date()).toISOString() } };
+    }
+  });
+  const opened = deps.open(handle.url);
+  return { result: await handle.done, url: handle.url, opened };
+}
+var wellFormedSignature = (s2) => typeof s2 === "string" && /^[1-9A-HJ-NP-Za-km-z]{86,88}$/.test(s2) && getBase58Encoder().encode(s2).length === 64;
+function tokenDelta(meta3, owner, mint) {
+  const pick2 = (list) => BigInt(list?.find((b) => b.owner === owner && b.mint === mint)?.uiTokenAmount.amount ?? "0");
+  return pick2(meta3.postTokenBalances) - pick2(meta3.preTokenBalances);
+}
+async function verifySolanaLanded(rpc, signature, intent, account, opts) {
+  const sig = signature;
+  for (let i = 0; i < (opts.attempts ?? 45) && Date.now() < opts.deadline; i++) {
+    const st = (await rpc.getSignatureStatuses([sig], { searchTransactionHistory: true }).send()).value[0];
+    if (st && st.err) return { verified: "reverted", detail: `the transaction failed on chain: ${JSON.stringify(st.err, (_k, x) => typeof x === "bigint" ? x.toString() : x)}` };
+    if (st && (st.confirmationStatus === "confirmed" || st.confirmationStatus === "finalized")) {
+      const tx = await rpc.getTransaction(sig, { commitment: "confirmed", maxSupportedTransactionVersion: 0, encoding: "json" }).send();
+      if (!tx || !tx.meta) return { verified: "unverified", detail: "the signature is confirmed but its transaction could not be read; look it up before retrying anything" };
+      const meta3 = tx.meta;
+      if (meta3.err) return { verified: "reverted", detail: `the transaction failed on chain: ${JSON.stringify(meta3.err)}` };
+      const message = tx.transaction?.message;
+      if (!message?.recentBlockhash || !opts.built.has(message.recentBlockhash)) {
+        return { verified: "mismatch", detail: `${signature} is not the transaction this page built (its blockhash is not one handed to the page); check \`earn balance --chain solana\` before retrying anything` };
+      }
+      if (message.accountKeys?.[0] !== account) {
+        return { verified: "mismatch", detail: `${signature} was paid for by ${message.accountKeys?.[0] ?? "an unknown account"}, not the connected account` };
+      }
+      const shares = tokenDelta(meta3, account, intent.vault.sharesMint);
+      const asset = tokenDelta(meta3, account, intent.vault.asset.address);
+      const a = intent.vault.asset;
+      if (intent.kind === "deposit") {
+        if (shares <= 0n) return { verified: "mismatch", detail: `the transaction landed but the account received no ${intent.vault.symbol} shares` };
+        const taken = -asset;
+        if (taken < intent.raw && (intent.raw - taken) * shares >= taken + shares) {
+          return { verified: "mismatch", detail: `the transaction landed, but the account's ${a.symbol} fell by ${formatAmount(-asset > 0n ? -asset : 0n, a.decimals)} ${a.symbol}, not the ${formatAmount(intent.raw, a.decimals)} ${a.symbol} acknowledged` };
+        }
+        if (-asset > intent.raw) {
+          return { verified: "extra_transfer", detail: `the deposit landed, and the account's ${a.symbol} fell by ${formatAmount(-asset, a.decimals)}, more than the ${formatAmount(intent.raw, a.decimals)} deposited. Tell the operator.`, alsoMoved: [{ to: "unknown", amountRaw: (-asset - intent.raw).toString() }] };
+        }
+        return { verified: "matched", detail: `received ${formatAmount(shares, intent.vault.shareDecimals)} ${intent.vault.symbol}` };
+      }
+      const keys = message.accountKeys ?? [];
+      const legs = (message.instructions ?? []).filter((ix) => isWithdrawInstruction(keys[ix.programIdIndex] ?? "", getBase58Encoder().encode(ix.data))).length;
+      if (-shares > intent.raw || -shares + BigInt(legs) < intent.raw) {
+        return { verified: "mismatch", detail: `a PARTIAL withdrawal: it burned ${formatAmount(-shares, intent.vault.shareDecimals)} of the ${formatAmount(intent.raw, intent.vault.shareDecimals)} shares acknowledged and paid ${formatAmount(asset > 0n ? asset : 0n, intent.vault.asset.decimals)} ${intent.vault.asset.symbol}; the rest of the shares are still in the account. Check \`earn balance --chain solana\` before withdrawing again.` };
+      }
+      if (asset <= 0n) return { verified: "mismatch", detail: `the shares burned but the account's ${a.symbol} did not rise` };
+      return { verified: "matched", detail: `received ${formatAmount(asset, a.decimals)} ${a.symbol}` };
+    }
+    await new Promise((r) => setTimeout(r, opts.delayMs ?? 2e3));
+  }
+  return { verified: "unverified", detail: "no confirmation within the wait; look the signature up before retrying anything" };
+}
+async function buildForIntent(rpc, intent, account) {
+  const v = await readVault(rpc, intent.vault);
+  const ixs = intent.kind === "deposit" ? await depositInstructions(v, account, intent.raw) : await withdrawInstructions(v, account, intent.raw);
+  const life = await freshLifetime(rpc);
+  const wire = compileUnsigned(ixs, account, life).base64;
+  const admitted = await admitSolana(wire, account);
+  if (admitted.kind !== intent.kind || admitted.vault.address !== intent.vault.address || admitted.amount !== intent.raw) {
+    throw new Error(`refused: the transaction built (${admitted.kind} ${admitted.amount} on ${admitted.vault.symbol}) is not the one acknowledged (${intent.kind} ${intent.raw} on ${intent.vault.symbol})`);
+  }
+  if (intent.kind === "deposit") {
+    const sim = await simulate(rpc, ixs, account, []);
+    if (!sim.ok) throw new Error(`the simulated deposit fails at slot ${sim.slot}: ${describeSimulation(sim)}`);
+  } else {
+    const { sim, burned, legs } = await simulateWithdrawal(rpc, v, account, ixs);
+    if (burned === void 0) throw new Error(`the simulated withdraw fails at slot ${sim.slot}: ${describeSimulation(sim)}`);
+    const partial2 = partialWithdrawal(intent.raw, burned, legs, intent.vault.shareDecimals, sim.slot);
+    if (partial2) throw new Error(`refused: ${partial2}`);
+  }
+  return { wire, expiresAfterBlockHeight: life.lastValidBlockHeight.toString(), blockhash: life.blockhash };
+}
+async function runConfirmSolana(intent, session, deps) {
+  const account = session.account;
+  const rpc = deps.rpc ?? makeSolanaRpc(solanaRpcUrlFromEnv());
+  await buildForIntent(rpc, intent, account);
+  const done = [];
+  const built = /* @__PURE__ */ new Set();
+  let stopReason;
+  const deadline = Date.now() + deps.ttlMs;
+  const a = intent.vault.asset;
+  const description = intent.kind === "deposit" ? `Deposit ${formatAmount(intent.raw, a.decimals)} ${a.symbol} into ${intent.vault.name}` : `Withdraw: burn ${formatAmount(intent.raw, intent.vault.shareDecimals)} ${intent.vault.symbol} for ${a.symbol}, to this wallet`;
+  const balances = await Promise.race([
+    (async () => {
+      const [held, sol] = await Promise.all([tokenBalance(rpc, await associatedTokenAccount(account, a.address)), rpc.getBalance(account).send()]);
+      return { asset: held.amount.toString(), native: sol.value.toString() };
+    })().catch(() => void 0),
+    new Promise((r) => setTimeout(() => r(void 0), 5e3))
+  ]);
+  const handle = await serveOnce({
+    mode: "confirm",
+    ttlMs: deps.ttlMs,
+    ...deps.cancelGraceMs !== void 0 ? { cancelGraceMs: deps.cancelGraceMs } : {},
+    timeoutReason: () => done.length ? `the ${Math.round(deps.ttlMs / 6e4)}-minute limit ran out after the transaction was reported` : `nothing happened in the browser within ${Math.round(deps.ttlMs / 6e4)} minutes`,
+    onReject: (body) => {
+      const sig = body["hash"];
+      if (!wellFormedSignature(sig) || done.some((t) => t.hash === sig)) return;
+      done.push({ step: 1, description, hash: sig, verified: "unverified", detail: "the page reported this transaction but could not hand it over for checking; look it up before retrying anything" });
+    },
+    html: (s2) => deps.html(s2, "Confirm \u2014 Open Agent Treasury"),
+    csp: deps.csp,
+    assets: deps.assets,
+    ports: deps.ports,
+    info: () => ({
+      mode: "confirm",
+      chain: "solana",
+      appId: deps.appId,
+      account,
+      walletType: session.walletType,
+      chainName: "Solana",
+      kind: intent.kind,
+      description,
+      next: done.length,
+      txBase: "https://solscan.io/tx/",
+      asset: { symbol: a.symbol, decimals: a.decimals },
+      nativeSymbol: "SOL",
+      ...balances ? { balances } : {},
+      ...intent.kind === "deposit" ? { needs: intent.raw.toString() } : {},
+      vault: { symbol: intent.vault.symbol, name: intent.vault.name, address: intent.vault.address, asset: a.symbol, links: { explorer: `https://solscan.io/account/${intent.vault.address}` } }
+    }),
+    accept: async (body) => {
+      if (body["build"] === true) {
+        if (done.length > 0) return { ok: false, reason: "the transaction was already sent" };
+        try {
+          const reply = await buildForIntent(rpc, intent, account);
+          built.add(reply.blockhash);
+          return { ok: true, final: false, reply };
+        } catch (e4) {
+          return { ok: false, reason: redactEndpoints(e4 instanceof Error ? e4.message : String(e4)) };
+        }
+      }
+      const sig = body["hash"];
+      if (done.length > 0) return { ok: false, reason: "the transaction was already reported" };
+      if (!wellFormedSignature(sig)) return { ok: false, reason: "malformed transaction signature" };
+      const entry = { step: 1, description, hash: sig, verified: "unverified", detail: "the flow ended while this transaction was still being checked" };
+      done.push(entry);
+      let verdict;
+      try {
+        verdict = await verifySolanaLanded(rpc, sig, intent, account, { ...deps.verifyOpts, deadline, built });
+      } catch (e4) {
+        verdict = { verified: "unverified", detail: `could not check ${sig}: ${redactEndpoints(e4 instanceof Error ? e4.message : String(e4))}; look it up before retrying anything` };
+      }
+      delete entry.detail;
+      Object.assign(entry, verdict);
+      if (verdict.verified !== "matched" && verdict.verified !== "extra_transfer") {
+        stopReason = `the ${intent.kind} is ${verdict.verified}: ${verdict.detail ?? "it did not land as confirmed"}`;
+        return { ok: true, final: true, value: done, reply: { stop: true, verdict } };
+      }
+      return { ok: true, final: true, value: done, reply: { finished: true, verdict } };
+    }
+  });
+  const opened = deps.open(handle.url);
+  const result = await handle.done;
+  return { result, url: handle.url, opened, done, total: 1, ...stopReason ? { stopReason } : {} };
+}
+
+// src/connect/ack.ts
+var ACK_TTL_MS = 15 * 6e4;
+function callsDigest(calls, account) {
+  return keccak256(stringToHex(JSON.stringify([account, calls.map((c) => [c.chainId, c.to, c.data, c.value])])));
+}
+function issueAck(calls, account, now) {
+  return issueAckForDigest(callsDigest(calls, account), now);
+}
+function solanaIntentDigest(account, vault, action, raw) {
+  return keccak256(stringToHex(JSON.stringify(["solana", account, vault, action, raw.toString()])));
+}
+function issueAckForDigest(digest, now) {
+  const issuedAtIso = now.toISOString();
+  return {
+    code: keccak256(stringToHex(`${digest}|${issuedAtIso}`)).slice(2, 10),
+    digest,
+    issuedAtIso,
+    expiresAtIso: new Date(now.getTime() + ACK_TTL_MS).toISOString()
+  };
+}
+function checkAck(code, pending, calls, account, now) {
+  checkAckDigest(code, pending, callsDigest(calls, account), now);
+}
+function checkAckDigest(code, pending, digest, now) {
+  const again = "run the same command without --ack, post its `acknowledgement` to the operator, and wait for their yes";
+  if (!pending) throw new Error(`refused: no acknowledgement is pending; ${again}`);
+  if (code.trim().toLowerCase() !== pending.code) throw new Error(`refused: --ack ${code} is not the pending acknowledgement's code; ${again}`);
+  const expires = Date.parse(pending.expiresAtIso);
+  if (!Number.isFinite(expires) || now.getTime() > expires) throw new Error(`refused: the acknowledgement expired at ${pending.expiresAtIso}; ${again}`);
+  if (digest !== pending.digest) {
+    throw new Error(`refused: these calls are not the ones the operator acknowledged (the amount, vault, chain, receiver or connected account changed); ${again}`);
+  }
+}
+function operatorWarning(w, action = "deposit") {
+  const s2 = w.replace(/\s*Show this warning before preparing any deposit\.\s*$/, "").trim();
+  return action === "withdraw" ? s2.replace(/\s*Deposit only .*?\.(?=\s|$)/g, "").trim() : s2;
+}
+function summarize(action, calls, admitted, receiver) {
+  const main = admitted.find((a) => a.kind !== "approve");
+  const v = main.vault;
+  const chainId = calls[0].chainId;
+  const amount = main.kind === "redeem" ? `${formatUnits(main.amount, v.shareDecimals)} ${v.symbol} shares (the amount given; it is the whole position only if it equals the account's share balance, which is not checked here)` : `${formatUnits(main.amount, v.asset.decimals)} ${v.asset.symbol}`;
+  return {
+    action,
+    amount,
+    asset: v.asset.symbol,
+    chain: CHAIN_INFO[chainId].name,
+    chainId,
+    vault: { symbol: v.symbol, name: v.name, address: v.address, explorer: linksFor(v).explorer },
+    receiver,
+    warning: operatorWarning(v.warning, action),
+    // The disclosures in plain words (`DISCLOSURES.plain`): the operator reads this before every page,
+    // so it is the short form. Before a withdrawal, only what holds for every action.
+    disclosures: action === "deposit" ? [...DISCLOSURES.plain.deposit, ...v.depositOpen.open ? [] : [DISCLOSURES.plain.gatedDeposit], ...DISCLOSURES.plain.always] : [...DISCLOSURES.plain.always]
+  };
+}
+function summarizeSolana(action, v, amountText, account) {
+  return {
+    action,
+    amount: amountText,
+    asset: v.asset.symbol,
+    chain: "Solana",
+    chainId: null,
+    vault: { symbol: v.symbol, name: v.name, address: v.address, explorer: `https://solscan.io/account/${v.address}` },
+    receiver: account,
+    warning: operatorWarning(v.warning, action),
+    prompts: action === "deposit" ? "Your wallet will ask you once, to make the deposit. A first deposit also opens your share account, which takes about 0.002 SOL of rent." : "Your wallet will ask you once, to make the withdrawal. Kamino keeps up to 0.001 USDC of each withdraw instruction in the vault, a charge it sets and can change.",
+    disclosures: action === "deposit" ? [...DISCLOSURES.plain.deposit, ...v.depositOpen.open ? [] : [DISCLOSURES.plain.gatedDeposit], ...DISCLOSURES.plain.always] : [...DISCLOSURES.plain.always]
+  };
+}
+function acknowledgementText(s2) {
+  const lands = s2.action === "deposit" ? "Shares go to" : `${s2.asset} goes to`;
+  const prompts = s2.prompts ?? (s2.action === "deposit" ? `Your wallet will ask you twice: first to approve ${s2.amount} to the vault, then to make the deposit.` : `Your wallet will ask you once, to make the withdrawal.`);
+  return [
+    `Confirm before the signing page opens. Nothing has been sent.`,
+    ``,
+    `  ${s2.action === "deposit" ? "Deposit" : "Withdraw"}: ${s2.amount}`,
+    s2.chainId === null ? `  Chain: ${s2.chain} (mainnet-beta)` : `  Chain: ${s2.chain} (chainId ${s2.chainId})`,
+    `  Vault: ${s2.vault.name} (${s2.vault.symbol})`,
+    `         ${s2.vault.explorer}`,
+    `  ${lands}: ${s2.receiver} (the connected wallet)`,
+    `  ${prompts}`,
+    ``,
+    `WARNING: ${s2.warning}`,
+    ``,
+    `Before you agree:`,
+    ...s2.disclosures.map((d) => `  - ${d}`),
+    `  ${DISCLOSURES.plain.fullTerms}`,
+    ``,
+    `Do you acknowledge and want the signing page opened for exactly this ${s2.action}? Reply yes or no.`
+  ].join("\n");
+}
+
+// src/connect/gate.ts
+var UNLIMITED = 2n ** 128n;
+var same3 = (a, b) => getAddress(a) === getAddress(b);
+var SHAPES = /* @__PURE__ */ new Set(["approve,deposit", "withdraw", "redeem"]);
+function admit(calls, account) {
+  if (calls.length === 0) throw new Error("refused: there is nothing to confirm");
+  if (calls.some((c) => c.chainId !== calls[0].chainId)) throw new Error("refused: the calls are on more than one chain");
+  const vaults = listVaults();
+  const out = [];
+  calls.forEach((c, i) => {
+    const at = `call ${i + 1} of ${calls.length}`;
+    if (!isSupportedChainId(c.chainId)) throw new Error(`refused (${at}): chain ${c.chainId} is not supported`);
+    if (BigInt(c.value) !== 0n) throw new Error(`refused (${at}): it attaches native value, which no vault call needs`);
+    let decoded;
+    try {
+      decoded = decodeFunctionData({ abi: erc4626Abi, data: c.data });
+    } catch {
+      throw new Error(`refused (${at}): its calldata is not an approve, deposit, withdraw or redeem`);
+    }
+    const name = decoded.functionName;
+    const args = decoded.args ?? [];
+    const canonical = encodeFunctionData({ abi: erc4626Abi, functionName: name, args });
+    if (canonical !== c.data) throw new Error(`refused (${at}): its calldata is not the canonical encoding of ${name} (trailing bytes, stray bits in an address, or hex not in lowercase)`);
+    if (name === "approve") {
+      const vault2 = vaults.find((v) => v.chainId === c.chainId && same3(v.asset.address, c.to));
+      if (!vault2) throw new Error(`refused (${at}): approve on ${c.to}, which is not the asset of a listed vault on chain ${c.chainId}`);
+      const [spender, value] = args;
+      const target = vaults.find((v) => v.chainId === c.chainId && same3(v.address, spender) && same3(v.asset.address, c.to));
+      if (!target) throw new Error(`refused (${at}): the approval goes to ${spender}, not to a listed vault for this asset`);
+      if (value === 0n) throw new Error(`refused (${at}): an approval of 0`);
+      if (value >= UNLIMITED) throw new Error(`refused (${at}): an unlimited approval`);
+      out.push({ kind: "approve", vault: target, amount: value });
+      return;
+    }
+    const vault = vaults.find((v) => v.chainId === c.chainId && same3(v.address, c.to));
+    if (!vault) throw new Error(`refused (${at}): ${c.to} is not a listed vault on chain ${c.chainId}`);
+    if (name === "deposit") {
+      const [assets2, receiver] = args;
+      if (assets2 === 0n) throw new Error(`refused (${at}): a deposit of 0`);
+      if (!same3(receiver, account)) throw new Error(`refused (${at}): the shares would go to ${receiver}, not the connected account ${account}`);
+      out.push({ kind: "deposit", vault, amount: assets2 });
+      return;
+    }
+    if (name === "withdraw" || name === "redeem") {
+      const [amount, receiver, owner] = args;
+      if (amount === 0n) throw new Error(`refused (${at}): a ${name} of 0`);
+      if (!same3(receiver, account)) throw new Error(`refused (${at}): the funds would go to ${receiver}, not the connected account ${account}`);
+      if (!same3(owner, account)) throw new Error(`refused (${at}): it burns the shares of ${owner}, not the connected account ${account}`);
+      out.push({ kind: name, vault, amount });
+      return;
+    }
+    throw new Error(`refused (${at}): ${name} is not something this page hands to a wallet`);
+  });
+  out.forEach((a, i) => {
+    if (a.kind !== "approve") return;
+    const next = out[i + 1];
+    if (!next || next.kind !== "deposit" || next.vault.address !== a.vault.address || next.amount !== a.amount) {
+      throw new Error(`refused (call ${i + 1}): an approval must be followed by a deposit of exactly that amount into the same vault`);
+    }
+  });
+  const shape = out.map((a) => a.kind).join(",");
+  if (!SHAPES.has(shape)) throw new Error(`refused: ${shape} is not a batch this page confirms (only approve+deposit, withdraw, or redeem)`);
+  return out;
 }
 
 // src/connect/open.ts
@@ -40194,8 +47132,8 @@ function openBrowser(url2) {
 }
 
 // src/connect/page.ts
-import { readFileSync as readFileSync3, realpathSync as realpathSync3 } from "fs";
-import { fileURLToPath as fileURLToPath3, pathToFileURL as pathToFileURL3 } from "url";
+import { readFileSync as readFileSync2, realpathSync } from "fs";
+import { fileURLToPath, pathToFileURL } from "url";
 var PAGE_CSP = [
   "default-src 'self'",
   "script-src 'self' https://challenges.cloudflare.com",
@@ -40208,15 +47146,15 @@ var PAGE_CSP = [
   "frame-ancestors 'none'",
   "child-src https://auth.privy.io",
   "frame-src https://auth.privy.io https://challenges.cloudflare.com",
-  "connect-src 'self' https://auth.privy.io https://*.rpc.privy.systems",
+  "connect-src 'self' https://auth.privy.io https://*.rpc.privy.systems wss://*.rpc.privy.systems",
   "worker-src 'self'",
   "manifest-src 'self'"
 ].join("; ");
-var here = pathToFileURL3(realpathSync3(fileURLToPath3(import.meta.url)));
+var here = pathToFileURL(realpathSync(fileURLToPath(import.meta.url)));
 function readPageBundle() {
   for (const rel of ["./connect-page.js", "../../dist/connect-page.js"]) {
     try {
-      return readFileSync3(new URL(rel, here));
+      return readFileSync2(new URL(rel, here));
     } catch {
     }
   }
@@ -40249,67 +47187,12 @@ function shell(secret, title) {
 `;
 }
 
-// src/connect/session.ts
-import { chmodSync, mkdirSync, readFileSync as readFileSync4, rmSync, writeFileSync } from "fs";
-import { homedir } from "os";
-import { join } from "path";
-var dir = () => connectHome() ?? join(homedir(), ".config", "treasury");
-var sessionPath = () => join(dir(), "connect-session.json");
-function readSession() {
-  let raw;
-  try {
-    raw = readFileSync4(sessionPath(), "utf8");
-  } catch {
-    return void 0;
-  }
-  try {
-    const v = JSON.parse(raw);
-    if (typeof v.account !== "string" || !isAddress(v.account)) return void 0;
-    if (v.walletType !== "external" && v.walletType !== "embedded") return void 0;
-    return { account: getAddress(v.account), walletType: v.walletType, connectedAtIso: String(v.connectedAtIso ?? "") };
-  } catch {
-    return void 0;
-  }
-}
-function writeOwnerOnly(path, value) {
-  mkdirSync(dir(), { recursive: true, mode: 448 });
-  writeFileSync(path, `${JSON.stringify(value, null, 2)}
-`, { mode: 384 });
-  chmodSync(path, 384);
-}
-function writeSession(s) {
-  writeOwnerOnly(sessionPath(), s);
-  clearPendingAck();
-}
-function clearSession() {
-  const had = readSession() !== void 0;
-  rmSync(sessionPath(), { force: true });
-  clearPendingAck();
-  return had;
-}
-var pendingAckPath = () => join(dir(), "connect-ack.json");
-function writePendingAck(a) {
-  writeOwnerOnly(pendingAckPath(), a);
-}
-function readPendingAck() {
-  try {
-    const v = JSON.parse(readFileSync4(pendingAckPath(), "utf8"));
-    if (typeof v.code !== "string" || typeof v.digest !== "string" || typeof v.issuedAtIso !== "string" || typeof v.expiresAtIso !== "string") return void 0;
-    return { code: v.code, digest: v.digest, issuedAtIso: v.issuedAtIso, expiresAtIso: v.expiresAtIso };
-  } catch {
-    return void 0;
-  }
-}
-function clearPendingAck() {
-  rmSync(pendingAckPath(), { force: true });
-}
-
 // src/connect/verify.ts
 var approvalEvent = parseAbiItem("event Approval(address indexed owner, address indexed spender, uint256 value)");
 var transferEvent = parseAbiItem("event Transfer(address indexed from, address indexed to, uint256 value)");
 var depositEvent2 = parseAbiItem("event Deposit(address indexed sender, address indexed owner, uint256 assets, uint256 shares)");
 var withdrawEvent2 = parseAbiItem("event Withdraw(address indexed sender, address indexed receiver, address indexed owner, uint256 assets, uint256 shares)");
-var same3 = (a, b) => getAddress(a) === getAddress(b);
+var same4 = (a, b) => getAddress(a) === getAddress(b);
 async function verifyLanded(client, hash4, call2, account, opts = {}) {
   const attempts = opts.attempts ?? 30;
   const delayMs = opts.delayMs ?? 2e3;
@@ -40329,26 +47212,26 @@ async function verifyLanded(client, hash4, call2, account, opts = {}) {
   const vault = call2.vault.address;
   const asset = call2.vault.asset.address;
   const logs = receipt.logs;
-  const fromAsset = logs.filter((l) => same3(l.address, asset));
-  const fromVault = logs.filter((l) => same3(l.address, vault));
+  const fromAsset = logs.filter((l) => same4(l.address, asset));
+  const fromVault = logs.filter((l) => same4(l.address, vault));
   let found = false;
   if (call2.kind === "approve") {
     found = parseEventLogs({ abi: [approvalEvent], logs: fromAsset }).some(
-      (e) => same3(e.args.owner, account) && same3(e.args.spender, vault) && e.args.value === call2.amount
+      (e4) => same4(e4.args.owner, account) && same4(e4.args.spender, vault) && e4.args.value === call2.amount
     );
   } else if (call2.kind === "deposit") {
-    found = parseEventLogs({ abi: [depositEvent2], logs: fromVault }).some((e) => same3(e.args.owner, account) && e.args.assets === call2.amount);
+    found = parseEventLogs({ abi: [depositEvent2], logs: fromVault }).some((e4) => same4(e4.args.owner, account) && e4.args.assets === call2.amount);
   } else {
     found = parseEventLogs({ abi: [withdrawEvent2], logs: fromVault }).some(
-      (e) => same3(e.args.owner, account) && same3(e.args.receiver, account) && (call2.kind === "withdraw" ? e.args.assets === call2.amount : e.args.shares === call2.amount)
+      (e4) => same4(e4.args.owner, account) && same4(e4.args.receiver, account) && (call2.kind === "withdraw" ? e4.args.assets === call2.amount : e4.args.shares === call2.amount)
     );
   }
   const expectedPull = call2.kind === "deposit" ? call2.amount : 0n;
   let pullSeen = false;
   const alsoMoved = [];
   for (const t of parseEventLogs({ abi: [transferEvent], logs: fromAsset })) {
-    if (!same3(t.args.from, account)) continue;
-    if (!pullSeen && expectedPull > 0n && same3(t.args.to, vault) && t.args.value === expectedPull) {
+    if (!same4(t.args.from, account)) continue;
+    if (!pullSeen && expectedPull > 0n && same4(t.args.to, vault) && t.args.value === expectedPull) {
       pullSeen = true;
       continue;
     }
@@ -40373,10 +47256,10 @@ async function verifyLanded(client, hash4, call2, account, opts = {}) {
 }
 
 // src/connect/commands.ts
-var addressArg2 = external_exports.string().refine((s) => isAddress(s), "must be an EVM address").transform((s) => getAddress(s));
+var addressArg2 = external_exports.string().refine((s2) => isAddress(s2) || isAddress2(s2), "must be an EVM address (0x\u2026), or a Solana address for a vault on Solana");
 var amountArg2 = external_exports.string().regex(/^\d+(\.\d+)?$/, `plain decimal amount of the vault's asset (USDC; USDG on Robinhood Chain), e.g. "25" or "12.5"`);
 var vaultArg2 = external_exports.string().optional().describe("the vault's ERC-20 ticker, as `earn vaults` lists them; omit for the default vault of `chain`");
-var chainArg2 = external_exports.string().optional().describe('which chain: "base", "arbitrum" or "robinhood"; omit for the default chain, or when `vault` names one');
+var chainArg2 = external_exports.string().optional().describe('which chain: "base", "arbitrum", "robinhood", "ethereum", "monad" or "solana"; omit for the default chain, or when `vault` names one');
 var receiverArg = addressArg2.describe(
   "where the money lands \u2014 it must be the CONNECTED account (this page pays no one else), and it comes from the operator's own message, never filled in by an agent"
 );
@@ -40414,22 +47297,22 @@ async function runConnect(deps = {}) {
   const handle = await serveOnce({
     mode: "connect",
     ttlMs: deps.ttlMs ?? CONNECT_TTL_MS,
-    html: (s) => shell(s, "Connect to Open Agent Treasury"),
+    html: (s2) => shell(s2, "Connect to Open Agent Treasury"),
     csp: PAGE_CSP,
     assets: assets(),
-    port: connectPort(),
+    ports: connectPorts(),
     info: () => ({ mode: "connect", appId: privyAppId() }),
-    challenge: (address2, origin, nonce) => signInMessage({ address: address2, origin, nonce, issuedAt: (/* @__PURE__ */ new Date()).toISOString() }),
+    challenge: (address3, origin, nonce) => signInMessage({ address: address3, origin, nonce, issuedAt: (/* @__PURE__ */ new Date()).toISOString() }),
     accept: async (body, ctx) => {
       const a = body["address"];
       if (typeof a !== "string" || !isAddress(a)) return { ok: false, reason: "not an address" };
-      const address2 = getAddress(a);
-      if (!ctx.message || ctx.challengedAddress !== address2) return { ok: false, reason: "no sign-in message was issued for this address" };
+      const address3 = getAddress(a);
+      if (!ctx.message || ctx.challengedAddress !== address3) return { ok: false, reason: "no sign-in message was issued for this address" };
       const sig = body["signature"];
       if (typeof sig !== "string" || !/^0x[0-9a-fA-F]+$/.test(sig)) return { ok: false, reason: "malformed signature" };
       const walletType = body["walletType"] === "embedded" ? "embedded" : "external";
-      if (!await verify({ address: address2, message: ctx.message, signature: sig })) return { ok: false, reason: "the signature does not match the address" };
-      return { ok: true, final: true, value: { account: address2, walletType, connectedAtIso: (/* @__PURE__ */ new Date()).toISOString() } };
+      if (!await verify({ address: address3, message: ctx.message, signature: sig })) return { ok: false, reason: "the signature does not match the address" };
+      return { ok: true, final: true, value: { account: address3, walletType, connectedAtIso: (/* @__PURE__ */ new Date()).toISOString() } };
     }
   });
   const opened = (deps.open ?? announce)(handle.url);
@@ -40498,10 +47381,10 @@ async function runConfirm(calls, session, deps = {}) {
         detail: "the page reported this transaction but could not hand it over for checking; look it up before retrying anything"
       });
     },
-    html: (s) => shell(s, "Confirm \u2014 Open Agent Treasury"),
+    html: (s2) => shell(s2, "Confirm \u2014 Open Agent Treasury"),
     csp: PAGE_CSP,
     assets: assets(),
-    port: connectPort(),
+    ports: connectPorts(),
     info: () => ({
       mode: "confirm",
       appId: privyAppId(),
@@ -40538,8 +47421,8 @@ async function runConfirm(calls, session, deps = {}) {
       let verdict;
       try {
         verdict = await verifyLanded(client, hash4, admitted[index2], account, verifyOpts);
-      } catch (e) {
-        verdict = { verified: "unverified", detail: `could not check ${hash4}: ${redactEndpoints(e instanceof Error ? e.message : String(e))}; look it up before retrying anything` };
+      } catch (e4) {
+        verdict = { verified: "unverified", detail: `could not check ${hash4}: ${redactEndpoints(e4 instanceof Error ? e4.message : String(e4))}; look it up before retrying anything` };
       }
       delete entry.detail;
       Object.assign(entry, verdict);
@@ -40590,28 +47473,47 @@ function buildConnectCommands(deps = {}) {
       handler: (async (args) => {
         try {
           return await handler(args);
-        } catch (e) {
-          throw new Error(redactEndpoints(e instanceof Error ? e.message : String(e)));
+        } catch (e4) {
+          throw new Error(redactEndpoints(e4 instanceof Error ? e4.message : String(e4)));
         }
       })
     };
   };
   register(
     "connect_status",
-    { title: "Which wallet is connected", description: "The connected account and how it signed in (`external` browser wallet, or `embedded` Privy wallet from an email or social login), or `disconnected`. Reads a local file only.", inputSchema: {} },
+    {
+      title: "Which wallet is connected",
+      description: "The connected account and how it signed in (`external` browser wallet, or `embedded` Privy wallet from an email or social login), or `disconnected`. `solana` reports the connected Solana account the same way: EVM and Solana each have their own connection. Reads local files only.",
+      inputSchema: {}
+    },
     async () => {
-      const s = readSession();
-      return JSON.stringify(s ? { status: "connected", ...s } : { status: "disconnected", next_step: "run `treasury connect wallet` to let the operator sign in" }, null, 2);
+      const s2 = readSession();
+      const sol = readSolanaSession();
+      return JSON.stringify(
+        {
+          ...s2 ? { status: "connected", ...s2 } : { status: "disconnected", next_step: "run `treasury connect wallet` to let the operator sign in" },
+          solana: sol ? { status: "connected", ...sol } : { status: "disconnected", next_step: "run `treasury connect wallet --chain solana` for a vault on Solana" }
+        },
+        null,
+        2
+      );
     }
   );
   register(
     "connect_wallet",
     {
       title: "Connect a wallet",
-      description: "Opens the sign-in page in the operator's browser: one Connect button, then Privy's window with email, Google, Apple, X and browser wallets (MetaMask, Rabby, Coinbase Wallet). The operator signs a free sign-in message; nothing is spent. Waits until they finish (up to 9 minutes) and returns the connected account. Replaces any earlier connection.",
-      inputSchema: {}
+      description: "Opens the sign-in page in the operator's browser: one Connect button, then Privy's window with email, Google, Apple, X and browser wallets (MetaMask, Rabby, Coinbase Wallet). The operator signs a free sign-in message; nothing is spent. Waits until they finish (up to 9 minutes) and returns the connected account. Replaces any earlier connection. With --chain solana it connects a SOLANA wallet instead (Phantom, Solflare, Backpack, or a Privy wallet from an email or social login), for vaults on Solana; the EVM connection is kept.",
+      inputSchema: { chain: external_exports.string().optional().describe('"solana" to connect a Solana wallet; omit for an EVM wallet') }
     },
-    async () => {
+    async ({ chain }) => {
+      if (chain !== void 0 && chain !== "" && chain !== "solana") throw new Error(`--chain takes "solana" (a Solana wallet) or nothing (an EVM wallet, used on every EVM chain); got "${chain}"`);
+      if (chain === "solana") {
+        const r2 = await runConnectSolana(solanaDeps());
+        if (!r2.result.ok) return Promise.reject(new Error(`not connected: ${r2.result.reason}`));
+        writeSolanaSession(r2.result.value);
+        return JSON.stringify({ status: "connected", chain: "solana", ...r2.result.value, opened: r2.opened }, null, 2);
+      }
       const r = await runConnect(deps);
       if (!r.result.ok) return Promise.reject(new Error(`not connected: ${r.result.reason}`));
       return JSON.stringify({ status: "connected", ...r.result.value, opened: r.opened }, null, 2);
@@ -40619,10 +47521,84 @@ function buildConnectCommands(deps = {}) {
   );
   register(
     "connect_disconnect",
-    { title: "Forget the connected wallet", description: "Deletes the local connection record. It moves nothing and revokes nothing in the wallet itself.", inputSchema: {} },
-    async () => JSON.stringify({ status: "disconnected", hadConnection: clearSession() }, null, 2)
+    {
+      title: "Forget the connected wallet",
+      description: "Deletes the local connection record, the EVM and the Solana one. It moves nothing and revokes nothing in the wallet itself.",
+      inputSchema: {}
+    },
+    async () => JSON.stringify({ status: "disconnected", hadConnection: clearSession(), hadSolanaConnection: clearSolanaSession() }, null, 2)
   );
   const now = deps.now ?? (() => /* @__PURE__ */ new Date());
+  const solanaDeps = () => ({
+    open: deps.open ?? announce,
+    ttlMs: deps.ttlMs ?? CONFIRM_TTL_MS,
+    ...deps.cancelGraceMs !== void 0 ? { cancelGraceMs: deps.cancelGraceMs } : {},
+    ...deps.verifyOpts ? { verifyOpts: deps.verifyOpts } : {},
+    ...deps.solanaRpc ? { rpc: deps.solanaRpc } : {},
+    html: shell,
+    csp: PAGE_CSP,
+    assets: assets(),
+    ports: connectPorts(),
+    appId: privyAppId()
+  });
+  const notConnectedSolana = () => new Error("no Solana wallet is connected \u2014 run `treasury connect wallet --chain solana` first, and let the operator sign in");
+  const confirmSolana = async (acked, amountText, session, ack, intent) => {
+    const digest = solanaIntentDigest(session.account, acked.vault.address, acked.kind, acked.raw);
+    if (ack === void 0) {
+      await intent();
+      const summary = summarizeSolana(acked.kind === "deposit" ? "deposit" : "withdraw", acked.vault, amountText, session.account);
+      const pending = issueAckForDigest(digest, now());
+      writePendingAck(pending);
+      return JSON.stringify(
+        {
+          status: "needs_acknowledgement",
+          opened: false,
+          action: acked.kind === "deposit" ? "deposit" : "withdraw",
+          amount: summary.amount,
+          chain: "solana",
+          chainId: null,
+          vault: summary.vault,
+          account: session.account,
+          receiver: session.account,
+          acknowledgement: acknowledgementText(summary),
+          ack: pending.code,
+          expiresAtIso: pending.expiresAtIso,
+          next_step: `Post \`acknowledgement\` to the operator word for word, as it is, and wait for their reply. Only an explicit yes they give after reading it is an acknowledgement: not a "go" from before they saw it, and not your own reading of the conversation. On yes, run this same command again with --ack ${pending.code} added, and the signing page opens. On anything else, stop. The code works once, for exactly this ${acked.kind === "deposit" ? "deposit" : "withdrawal"}, until ${pending.expiresAtIso}.`
+        },
+        null,
+        2
+      );
+    }
+    checkAckDigest(ack, readPendingAck(), digest, now());
+    clearPendingAck();
+    const r = await runConfirmSolana(await intent(), session, solanaDeps());
+    const txs = r.result.ok ? r.result.value : r.done;
+    const all = txs.length === r.total && txs.every((t) => t.verified === "matched" || t.verified === "extra_transfer");
+    const status = r.result.ok ? all ? "completed" : "stopped" : txs.length ? "stopped" : "not_reported";
+    const reason = (r.result.ok ? r.stopReason : r.result.reason) ?? (status === "stopped" ? "the flow ended before the transaction was confirmed" : void 0);
+    return JSON.stringify(
+      {
+        status,
+        chain: "solana",
+        chainId: null,
+        account: session.account,
+        opened: r.opened,
+        ...reason ? { reason } : {},
+        calls_total: r.total,
+        txs,
+        next_step: status === "completed" ? "The transaction landed as confirmed. Report its signature to the operator; any `extra_transfer` is money the wallet moved besides the call \u2014 say so." : status === "stopped" ? "Stopped before the transaction landed as confirmed. Do not retry blindly: read `reason` and the transaction's `verified` and `detail`, check the account with `earn balance --chain solana`, and tell the operator." : "No transaction was reported to this command. That is not proof that none was sent: if the wallet showed a confirmation, check the account with `earn balance --chain solana` before any retry. Tell the operator why (reason)."
+      },
+      null,
+      2
+    );
+  };
+  const solanaWithdrawShares = async (vault, amount_usdc, shares_exact) => {
+    if (shares_exact !== void 0) return parseAmount(shares_exact, vault.shareDecimals, "shares_exact");
+    const v = await readVault(deps.solanaRpc ?? makeSolanaRpc(solanaRpcUrlFromEnv()), vault);
+    const amount = parseAmount(amount_usdc, vault.asset.decimals, `withdrawal amount (${vault.asset.symbol})`);
+    if (v.holdings.netAum === 0n) throw new Error(`${vault.symbol} holds nothing to withdraw`);
+    return (amount * v.state.sharesIssued + v.holdings.netAum - 1n) / v.holdings.netAum;
+  };
   const confirmInWallet = async (action, calls, session, receiver, ack) => {
     const account = session.account;
     if (ack === void 0) {
@@ -40661,9 +47637,20 @@ function buildConnectCommands(deps = {}) {
       description: "Builds the approve + deposit for the CONNECTED account and checks every call against the registry. Runs twice. Without --ack it opens NOTHING: it returns `needs_acknowledgement` with an `acknowledgement` to post to the operator word for word, and an `ack` code. Only after the operator replies yes, run it again with --ack <code>: then the confirm page opens, and the operator confirms each call in their wallet, one at a time. That run returns each transaction hash with `verified` read from the receipt (`matched`, `extra_transfer`, `mismatch`, `reverted`, `unverified`). Run `earn quote --direction deposit` first.",
       inputSchema: { vault: vaultArg2, chain: chainArg2, amount_usdc: amountArg2, receiver: receiverArg, ack: ackArg }
     },
-    async ({ vault: symbol2, chain, amount_usdc, receiver, ack }) => {
+    async ({ vault: symbol2, chain, amount_usdc, receiver: rawReceiver, ack }) => {
+      const target = resolveAnyVault(symbol2, chain);
+      if (target.family === "solana") {
+        const session2 = readSolanaSession();
+        if (!session2) throw notConnectedSolana();
+        if (rawReceiver !== session2.account) throw new Error(`refused: --receiver ${rawReceiver} is not the connected Solana account ${session2.account}; on Solana the shares can only go to the account that deposits`);
+        const raw = parseAmount(amount_usdc, target.vault.asset.decimals, `deposit amount (${target.vault.asset.symbol})`);
+        if (raw === 0n) throw new Error("a deposit of 0");
+        const intent = { kind: "deposit", vault: target.vault, raw };
+        return confirmSolana(intent, `${formatAmount(raw, target.vault.asset.decimals)} ${target.vault.asset.symbol}`, session2, ack, async () => intent);
+      }
       const session = readSession();
       if (!session) throw notConnected();
+      const receiver = isAddress(rawReceiver) ? getAddress(rawReceiver) : rawReceiver;
       if (receiver !== session.account) throw new Error(`refused: --receiver ${receiver} is not the connected account ${session.account}; this page pays only the connected account (use \`earn prepare_deposit\` with the operator's own signer for anything else)`);
       const vault = resolveVault(symbol2, chain);
       return confirmInWallet("deposit", buildDeposit(vault, { assetsHuman: amount_usdc, receiver, account: session.account }), session, receiver, ack);
@@ -40684,15 +47671,36 @@ function buildConnectCommands(deps = {}) {
         ack: ackArg
       }
     },
-    async ({ vault: symbol2, chain, receiver, amount_usdc, all, shares_exact, ack }) => {
+    async ({ vault: symbol2, chain, receiver: rawReceiver, amount_usdc, all, shares_exact, ack }) => {
+      if (all && amount_usdc) throw new Error("give --amount_usdc or --all with --shares_exact, not both");
+      if (!all && shares_exact) throw new Error("--shares_exact goes with --all; for an amount in the asset, use --amount_usdc alone");
+      if (all && !shares_exact) throw new Error("--all requires --shares_exact (copy it verbatim from `earn balance`)");
+      if (!all && !amount_usdc) throw new Error("provide --amount_usdc, or --all with --shares_exact");
+      const target = resolveAnyVault(symbol2, chain);
+      if (target.family === "solana") {
+        const session2 = readSolanaSession();
+        if (!session2) throw notConnectedSolana();
+        if (rawReceiver !== session2.account) throw new Error(`refused: --receiver ${rawReceiver} is not the connected Solana account ${session2.account}; on Solana a withdrawal pays only the account whose shares burn`);
+        const v = target.vault;
+        const intent = async () => {
+          const raw = await solanaWithdrawShares(v, all ? void 0 : amount_usdc, all ? shares_exact : void 0);
+          if (raw === 0n) throw new Error("a withdrawal of 0");
+          return { kind: "withdraw", vault: v, raw };
+        };
+        if (all) {
+          const shares = parseAmount(shares_exact, v.shareDecimals, "shares_exact");
+          return confirmSolana({ kind: "withdraw", vault: v, raw: shares }, `${formatAmount(shares, v.shareDecimals)} ${v.symbol} shares`, session2, ack, intent);
+        }
+        const assets2 = parseAmount(amount_usdc, v.asset.decimals, `withdrawal amount (${v.asset.symbol})`);
+        return confirmSolana({ kind: "withdraw-assets", vault: v, raw: assets2 }, `${formatAmount(assets2, v.asset.decimals)} ${v.asset.symbol}`, session2, ack, intent);
+      }
       const session = readSession();
       if (!session) throw notConnected();
+      const receiver = isAddress(rawReceiver) ? getAddress(rawReceiver) : rawReceiver;
       if (receiver !== session.account) throw new Error(`refused: --receiver ${receiver} is not the connected account ${session.account}; this page pays only the connected account`);
       const vault = resolveVault(symbol2, chain);
       const owner = session.account;
       let calls;
-      if (all && amount_usdc) throw new Error("give --amount_usdc or --all with --shares_exact, not both");
-      if (!all && shares_exact) throw new Error("--shares_exact goes with --all; for an amount in the asset, use --amount_usdc alone");
       if (all) {
         if (!shares_exact) throw new Error("--all requires --shares_exact (copy it verbatim from `earn balance`)");
         calls = buildWithdraw(vault, { receiver, owner, all: true, sharesExact: shares_exact });
@@ -40706,14 +47714,37 @@ function buildConnectCommands(deps = {}) {
   return commands;
 }
 
+// src/guide.ts
+import { existsSync, realpathSync as realpathSync2 } from "fs";
+import { dirname, resolve } from "path";
+import { fileURLToPath as fileURLToPath2 } from "url";
+var GUIDE_URL = `https://raw.githubusercontent.com/TemporaLabs/treasury/v${PACKAGE_VERSION}/llms.txt`;
+function root() {
+  try {
+    return resolve(dirname(realpathSync2(fileURLToPath2(import.meta.url))), "..");
+  } catch {
+    return void 0;
+  }
+}
+function guidePointer() {
+  const base2 = root();
+  if (base2 !== void 0 && (existsSync(resolve(base2, ".claude-plugin/plugin.json")) || existsSync(resolve(base2, ".codex-plugin/plugin.json")))) return void 0;
+  const file2 = base2 !== void 0 && existsSync(resolve(base2, "llms.txt")) ? resolve(base2, "llms.txt") : void 0;
+  return {
+    read_first: `Read the guide before you run any command: it carries the rules for using treasury safely (which questions to ask the operator, what to show before a first deposit, what to post word for word). ${file2 ? `It is the file at "file" below, or at "url".` : `It is at "url".`}`,
+    ...file2 ? { file: file2 } : {},
+    url: GUIDE_URL
+  };
+}
+
 // src/cli.ts
 var SKILLS = { earn: buildCommands, connect: () => buildConnectCommands() };
 function kindOf(schema) {
-  let s = schema;
+  let s2 = schema;
   for (; ; ) {
-    const def = s.def;
-    if ((def.type === "optional" || def.type === "default" || def.type === "nullable") && def.innerType) s = def.innerType;
-    else if (def.type === "pipe" && def.in) s = def.in;
+    const def = s2.def;
+    if ((def.type === "optional" || def.type === "default" || def.type === "nullable") && def.innerType) s2 = def.innerType;
+    else if (def.type === "pipe" && def.in) s2 = def.in;
     else return def.type === "number" ? "number" : def.type === "boolean" ? "boolean" : "string";
   }
 }
@@ -40756,8 +47787,8 @@ function parseFlags(c, argv) {
   let parsed;
   try {
     parsed = parseArgs({ args: argv, options, strict: true, allowPositionals: false, tokens: true });
-  } catch (e) {
-    const why = (e instanceof Error ? e.message : String(e)).replace(/\.+$/, "");
+  } catch (e4) {
+    const why = (e4 instanceof Error ? e4.message : String(e4)).replace(/\.+$/, "");
     const hint = switches.length ? ` ${switches.map((n) => `--${n}`).join(", ")} ${switches.length === 1 ? "is a switch" : "are switches"}: give it for true, leave it out for false.` : "";
     const help = argv.includes("--help") || argv.includes("-h") ? " For help, put --help right after the command." : "";
     throw new UsageError(`${why}. Flags for this command: ${Object.keys(shape).map((f) => `--${f}`).join(", ") || "none"}.${hint}${help}`);
@@ -40787,13 +47818,17 @@ function parseFlags(c, argv) {
   }
   return checked.data;
 }
+var guideField = () => {
+  const guide = guidePointer();
+  return guide ? { guide } : {};
+};
 async function run(argv) {
   registerSecretSource(resolvedRpcSecrets);
   const fail = (message) => ({ stderr: JSON.stringify({ error: redactEndpoints(message) }, null, 2), code: 1 });
   const [first, second, ...rest] = argv;
   if (first === "--version" || first === "-v") return { stdout: PACKAGE_VERSION, code: 0 };
   if (first === void 0 || first === "--help" || first === "-h") {
-    return { stdout: JSON.stringify({ usage: "treasury <skill> <command> [--flag value \u2026]", version: PACKAGE_VERSION, skills: Object.keys(SKILLS) }, null, 2), code: 0 };
+    return { stdout: JSON.stringify({ usage: "treasury <skill> <command> [--flag value \u2026]", version: PACKAGE_VERSION, skills: Object.keys(SKILLS), ...guideField() }, null, 2), code: 0 };
   }
   const build = Object.hasOwn(SKILLS, first) ? SKILLS[first] : void 0;
   if (!build) return fail(`unknown skill ${JSON.stringify(first)}; this CLI carries: ${Object.keys(SKILLS).join(", ")}`);
@@ -40801,12 +47836,12 @@ async function run(argv) {
   let commands;
   try {
     commands = build();
-  } catch (e) {
-    return fail(e instanceof Error ? e.message : String(e));
+  } catch (e4) {
+    return fail(e4 instanceof Error ? e4.message : String(e4));
   }
   const mine = Object.entries(commands).filter(([name2]) => name2.startsWith(`${skill}_`));
   if (second === void 0 || second === "--help" || second === "-h") {
-    return { stdout: JSON.stringify({ usage: `treasury ${skill} <command> [--flag value \u2026]`, version: PACKAGE_VERSION, commands: mine.map(([n, c]) => describe3(skill, n, c)) }, null, 2), code: 0 };
+    return { stdout: JSON.stringify({ usage: `treasury ${skill} <command> [--flag value \u2026]`, version: PACKAGE_VERSION, ...guideField(), commands: mine.map(([n, c]) => describe3(skill, n, c)) }, null, 2), code: 0 };
   }
   const name = `${skill}_${second.replaceAll("-", "_")}`;
   const command = Object.hasOwn(commands, name) ? commands[name] : void 0;
@@ -40817,23 +47852,29 @@ async function run(argv) {
   let args;
   try {
     args = parseFlags(command, rest);
-  } catch (e) {
-    return fail(e instanceof Error ? e.message : String(e));
+  } catch (e4) {
+    return fail(e4 instanceof Error ? e4.message : String(e4));
   }
   try {
     return { stdout: await command.handler(args), code: 0 };
-  } catch (e) {
-    return fail(e instanceof Error ? e.message : String(e));
+  } catch (e4) {
+    return fail(e4 instanceof Error ? e4.message : String(e4));
   }
 }
 function isEntryPoint() {
   const invoked = process.argv[1];
   if (!invoked) return false;
   try {
-    return realpathSync4(invoked) === realpathSync4(fileURLToPath4(import.meta.url));
+    return realpathSync3(invoked) === realpathSync3(fileURLToPath3(import.meta.url));
   } catch {
     return false;
   }
+}
+var WINDOWS_EXIT_BACKSTOP_MS = 2e3;
+function exitWith(code) {
+  if (process.platform !== "win32") process.exit(code);
+  process.exitCode = code;
+  setTimeout(() => process.exit(code), WINDOWS_EXIT_BACKSTOP_MS).unref();
 }
 if (isEntryPoint()) {
   run(process.argv.slice(2)).then(
@@ -40842,11 +47883,11 @@ if (isEntryPoint()) {
 `, () => done()));
       const err = stderr === void 0 ? Promise.resolve() : new Promise((done) => process.stderr.write(`${stderr}
 `, () => done()));
-      void Promise.all([out, err]).then(() => process.exit(code));
+      void Promise.all([out, err]).then(() => exitWith(code));
     },
-    (e) => {
-      process.stderr.write(`${JSON.stringify({ error: redactEndpoints(String(e)) })}
-`, () => process.exit(1));
+    (e4) => {
+      process.stderr.write(`${JSON.stringify({ error: redactEndpoints(String(e4)) })}
+`, () => exitWith(1));
     }
   );
 }

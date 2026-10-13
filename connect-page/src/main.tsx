@@ -14,7 +14,15 @@
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import { createRoot } from "react-dom/client";
 import { PrivyProvider, useLogin, usePrivy, useWallets, type ConnectedWallet } from "@privy-io/react-auth";
-import { arbitrum, base, robinhood } from "viem/chains";
+import {
+  defaultSolanaRpcsPlugin,
+  toSolanaWalletConnectors,
+  useSignAndSendTransaction,
+  useSignMessage as useSolanaSignMessage,
+  useWallets as useSolanaWallets,
+  type ConnectedStandardSolanaWallet,
+} from "@privy-io/react-auth/solana";
+import { arbitrum, base, mainnet, monad, robinhood } from "viem/chains";
 import { CSS } from "./styles";
 
 const secret = new URLSearchParams(location.search).get("s") ?? "";
@@ -30,8 +38,26 @@ type Call = {
   value: string;
   vault: { symbol: string; name: string; address: string; asset: string; links: { explorer: string; app?: string } };
 };
+type SolanaConfirm = {
+  mode: "confirm";
+  chain: "solana";
+  appId: string;
+  account: string;
+  walletType: WalletType;
+  chainName: string;
+  kind: "deposit" | "withdraw";
+  description: string;
+  next: number;
+  txBase: string;
+  asset: { symbol: string; decimals: number };
+  nativeSymbol: string;
+  balances?: { asset: string; native?: string };
+  needs?: string;
+  vault: { symbol: string; name: string; address: string; asset: string; links: { explorer: string } };
+};
 type Info =
-  | { mode: "connect"; appId: string }
+  | { mode: "connect"; appId: string; chain?: "solana" }
+  | SolanaConfirm
   | {
       mode: "confirm";
       appId: string;
@@ -49,6 +75,7 @@ type Info =
       balances?: { asset: string; native?: string };
       /** Raw units of the asset the deposit pulls; absent for a withdrawal. */
       needs?: string;
+      chain?: undefined;
     };
 
 async function post(path: string, body: Record<string, unknown>): Promise<Record<string, unknown> & { ok: boolean; reason?: string }> {
@@ -301,7 +328,7 @@ function Connect() {
   );
 }
 
-function Confirm({ info }: { info: Extract<Info, { mode: "confirm" }> }) {
+function Confirm({ info }: { info: Extract<Info, { mode: "confirm"; chain?: undefined }> }) {
   const { ready, authenticated, logout } = usePrivy();
   const { wallets } = useWallets();
   const { login } = useLogin();
@@ -491,8 +518,316 @@ function Confirm({ info }: { info: Extract<Info, { mode: "confirm" }> }) {
   );
 }
 
+
+/** Base58, as Solana writes signatures: the page needs only the encoder, so it carries one rather than a dependency. */
+const B58 = "123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz";
+function base58(bytes: Uint8Array): string {
+  let n = 0n;
+  for (const b of bytes) n = (n << 8n) | BigInt(b);
+  let out = "";
+  while (n > 0n) {
+    out = B58[Number(n % 58n)] + out;
+    n /= 58n;
+  }
+  for (const b of bytes) {
+    if (b !== 0) break;
+    out = "1" + out;
+  }
+  return out;
+}
+const base64 = (bytes: Uint8Array) => btoa(String.fromCharCode(...bytes));
+const fromBase64 = (s: string) => Uint8Array.from(atob(s), (c) => c.charCodeAt(0));
+const solanaKind = (w: ConnectedStandardSolanaWallet): WalletType => ((w.standardWallet as { isPrivyWallet?: boolean }).isPrivyWallet ? "embedded" : "external");
+
+/**
+ * Privy's Solana connectors, less WalletConnect. `toSolanaWalletConnectors()` always appends a WalletConnect
+ * connector, and this page carries no WalletConnect code (`connect-page/build.mjs` stubs it out for its
+ * licence), so that connector fails as soon as Privy initialises it — measured in a headless browser on
+ * 2026-10-11. The Solana wallets installed in the browser (Phantom, Solflare, Backpack) and Privy's own
+ * wallet are what this page offers, as on the EVM side.
+ */
+type SolanaConnectors = ReturnType<typeof toSolanaWalletConnectors>;
+function solanaConnectorsWithoutWalletConnect(): SolanaConnectors {
+  const base = toSolanaWalletConnectors({ shouldAutoConnect: false });
+  const isWalletConnect = (c: unknown) => {
+    const w = (c as { wallet?: { isWalletConnectSolana?: boolean } }).wallet;
+    return Boolean(w && "isWalletConnectSolana" in w && w.isWalletConnectSolana);
+  };
+  const keep = <T,>(list: T[]) => list.filter((c) => !isWalletConnect(c));
+  const b = base as unknown as { get: () => unknown[]; _setOnConnectorsUpdated: (cb: (l: unknown[]) => void) => void };
+  return { ...base, get: () => keep(b.get()), _setOnConnectorsUpdated: (cb: (l: unknown[]) => void) => b._setOnConnectorsUpdated((l) => cb(keep(l))) } as unknown as SolanaConnectors;
+}
+
+/** The Solana sign-in: the same page, a Solana wallet, an ed25519 signature over the same kind of message. */
+function ConnectSolana() {
+  const { ready, authenticated, logout } = usePrivy();
+  const { wallets, ready: walletsReady } = useSolanaWallets();
+  const { signMessage } = useSolanaSignMessage();
+  const [phase, setPhase] = useState<Phase>({ text: "" });
+  const [connected, setConnected] = useState<{ address: string; walletType: WalletType; name?: string } | null>(null);
+  const [signedIn, setSignedIn] = useState(false);
+  const cleared = useRef(false);
+  const started = useRef(false);
+
+  useEffect(() => {
+    if (!ready || cleared.current) return;
+    cleared.current = true;
+    if (authenticated) void logout();
+  }, [ready, authenticated, logout]);
+
+  const { login } = useLogin({
+    onComplete: ({ wasAlreadyAuthenticated }) => {
+      if (!wasAlreadyAuthenticated) setSignedIn(true);
+    },
+    onError: (code) => {
+      if (String(code) !== "exited_auth_flow") setPhase({ text: `Sign-in failed: ${String(code)}`, tone: "bad" });
+    },
+  });
+
+  const prove = useCallback(
+    async (wallet: ConnectedStandardSolanaWallet) => {
+      const walletType = solanaKind(wallet);
+      try {
+        setPhase({ text: walletType === "external" ? "Check your wallet and sign the sign-in message. It is free." : "Approve the sign-in message. It is free.", busy: true });
+        const ch = await post("/challenge", { address: wallet.address });
+        if (!ch.ok || typeof ch["message"] !== "string") throw new Error(ch.reason ?? "no sign-in message was issued");
+        const { signature } = await signMessage({ message: new TextEncoder().encode(ch["message"]), wallet });
+        const r = await post("/result", { address: wallet.address, signature: base64(signature), walletType });
+        if (!r.ok) throw new Error(r.reason ?? "the sign-in was refused");
+        setConnected({ address: wallet.address, walletType, ...(walletType === "external" ? { name: wallet.standardWallet.name } : {}) });
+        setPhase({ text: "", done: true });
+      } catch (e) {
+        setPhase({ text: `Not connected: ${rejected(e) ? "the sign-in message was declined in the wallet" : errText(e)}.`, tone: "bad", retry: true });
+      }
+    },
+    [signMessage],
+  );
+
+  useEffect(() => {
+    if (!ready || !walletsReady || !authenticated || !signedIn || started.current) return;
+    const wallet = wallets[0];
+    if (!wallet) return;
+    started.current = true;
+    void prove(wallet);
+  }, [ready, walletsReady, authenticated, signedIn, wallets, prove]);
+
+  const giveUp = async () => {
+    setPhase({ text: "Cancelled. No wallet was connected.", tone: "bad", done: true });
+    await reject("cancelled by the operator on the sign-in page");
+  };
+
+  if (connected) {
+    return (
+      <Page mark={<CheckMark />} title="Solana wallet connected" lede="You can close this tab and go back to your agent.">
+        <WalletBox address={connected.address} walletType={connected.walletType} name={connected.name} network="Solana" />
+        <p className="oat-fine">Each deposit or withdrawal will open a page like this one for you to confirm.</p>
+      </Page>
+    );
+  }
+  return (
+    <Page mark={<WalletMark />} title="Connect Solana wallet" lede="Open Agent Treasury would like to connect to your Solana wallet.">
+      <section className="oat-panel" aria-labelledby="used-to">
+        <h2 className="oat-label" id="used-to">
+          Your wallet will be used to
+        </h2>
+        <ul className="oat-points">
+          <li>
+            <Tick />
+            Show your agent your address and balance
+          </li>
+          <li>
+            <Tick />
+            Deposit into Tempora Labs vaults on Solana, once you confirm
+          </li>
+          <li>
+            <Tick />
+            Withdraw back to this wallet, once you confirm
+          </li>
+        </ul>
+      </section>
+      {phase.retry ? (
+        <>
+          <button
+            className="oat-btn"
+            onClick={() => {
+              started.current = false;
+              setPhase({ text: "" });
+              const w = wallets[0];
+              if (w) void prove(w);
+              else void logout().then(() => login());
+            }}
+          >
+            <ButtonIcon />
+            Sign in again
+          </button>
+          <button className="oat-text" onClick={() => void giveUp()}>
+            Cancel
+          </button>
+        </>
+      ) : (
+        !phase.done && (
+          <button className="oat-btn" disabled={!ready || phase.busy} onClick={() => login()}>
+            <ButtonIcon />
+            Connect
+          </button>
+        )
+      )}
+      <Status phase={phase} />
+      <p className="oat-fine">Connecting is free. Sign in through Privy with a Solana wallet (Phantom, Solflare, Backpack), email, Google, Apple or X.</p>
+    </Page>
+  );
+}
+
+/**
+ * The Solana confirm view: one transaction. It is fetched from the local process when the operator presses
+ * Confirm — a Solana transaction lands only within about a minute of being built — and the wallet signs and
+ * sends it. The process then reads the signature's status and the account's balances.
+ */
+function ConfirmSolana({ info }: { info: SolanaConfirm }) {
+  const { ready, authenticated, logout } = usePrivy();
+  const { wallets } = useSolanaWallets();
+  const { signAndSendTransaction } = useSignAndSendTransaction();
+  const { login } = useLogin();
+  const [phase, setPhase] = useState<Phase>({ text: "" });
+  const [sent, setSent] = useState<string | null>(null);
+  const wallet = wallets.find((w) => w.address === info.account);
+  const amount = (raw: string | bigint) => `${fmt(raw, info.asset.decimals)} ${info.asset.symbol}`;
+  const held = info.balances ? BigInt(info.balances.asset) : undefined;
+  const shortfall =
+    held === undefined
+      ? undefined
+      : info.needs !== undefined && held < BigInt(info.needs)
+        ? `The deposit needs ${amount(info.needs)}; this wallet holds ${amount(held)} on Solana. Add ${info.asset.symbol} to it first.`
+        : info.balances?.native === "0"
+          ? "This wallet has no SOL for the network fee. Add a little first."
+          : undefined;
+
+  const send = useCallback(async () => {
+    if (!wallet) return;
+    let signature: string | undefined;
+    let stage: "prepare" | "send" = "prepare";
+    try {
+      setPhase({ text: "Preparing the transaction.", busy: true });
+      const live = (await fetch(`/info?s=${secret}`).then((r) => (r.ok ? r.json() : undefined), () => undefined)) as { msLeft?: number; next?: number } | undefined;
+      if (!live) throw new Error("this page has expired; run the command again");
+      if (live.next !== 0) return setPhase({ text: "This transaction was already handled, perhaps in another tab. Close this tab.", tone: "bad", done: true });
+      if ((live.msLeft ?? 0) < 60_000) throw new Error("less than a minute is left on this page; run the command again");
+      const built = await post("/result", { build: true });
+      if (!built.ok || typeof built["wire"] !== "string") throw new Error(built.reason ?? "the transaction could not be prepared");
+      setPhase({ text: "Check your wallet and confirm.", busy: true });
+      stage = "send";
+      const out = await signAndSendTransaction({ transaction: fromBase64(built["wire"]), wallet, chain: "solana:mainnet" });
+      signature = base58(out.signature);
+      setSent(signature);
+      setPhase({ text: "Sent. Waiting for it to land.", busy: true });
+      const r = await post("/result", { hash: signature });
+      if (!r.ok) throw new Error(r.reason ?? "refused");
+      const verdict = (r["verdict"] ?? {}) as { verified?: string; detail?: string };
+      if (r["stop"]) return setPhase({ text: `Stopped: ${verdict.detail ?? "the transaction did not land as confirmed"}`, tone: "bad", done: true });
+      setPhase({ text: verdict.verified === "extra_transfer" ? `Done, with a note: ${verdict.detail}` : "Done. You can close this tab and go back to your agent.", tone: "ok", done: true });
+    } catch (e) {
+      const text = errText(e);
+      if (signature) {
+        setPhase({ text: `Sent, but not confirmed here. Look it up before trying again. (${text})`, tone: "bad", done: true });
+        return void (await reject(text, { hash: signature, index: 0 }));
+      }
+      if (rejected(e)) return setPhase({ text: "You declined it in your wallet. Nothing was sent. Confirm again, or cancel.", tone: "bad" });
+      if (stage === "send") {
+        setPhase({ text: `Your wallet returned an error without a signature, so this page cannot tell whether it was sent: ${text}. Check your wallet's activity before running the command again.`, tone: "bad", done: true });
+        return void (await reject(`the wallet returned an error without a signature; it may or may not have been sent: ${text}`));
+      }
+      // Nothing reached the wallet: the operator can fix what is wrong (funds, most often) and confirm again.
+      setPhase({ text: `Not sent: ${text}.${shortfall ? ` ${shortfall}` : ""} Fix that and confirm again, or cancel.`, tone: "bad" });
+    }
+  }, [wallet, signAndSendTransaction, shortfall]);
+
+  const cancel = async () => {
+    setPhase({ text: "Cancelled. Nothing more will be sent.", tone: "bad", done: true });
+    await reject("cancelled by the operator on the confirm page");
+  };
+
+  return (
+    <Page mark={phase.tone === "ok" ? <CheckMark /> : <WalletMark />} title={info.kind === "deposit" ? `Deposit ${info.asset.symbol}` : `Withdraw ${info.asset.symbol}`} lede={info.kind === "deposit" ? `Move your ${info.asset.symbol} into the vault. Your wallet receives vault shares in return.` : `Take ${info.asset.symbol} out of the vault, back to your wallet.`}>
+      <WalletBox address={info.account} walletType={info.walletType} network="Solana" />
+      {held !== undefined && !phase.done && (
+        <p className="oat-fine">
+          When this page opened, this wallet held {amount(held)}
+          {info.balances?.native !== undefined ? ` and ${fmt(info.balances.native, 9)} SOL` : ""} on Solana.
+        </p>
+      )}
+      {shortfall && !phase.done && (
+        <p className="oat-status" data-tone="bad">
+          {shortfall}
+        </p>
+      )}
+      <section className="oat-panel">
+        <p className="oat-what">{info.description}</p>
+        <dl className="oat-dl">
+          <dt>Vault</dt>
+          <dd>
+            {info.vault.name} ({info.vault.symbol})
+          </dd>
+          <dt>Vault address</dt>
+          <dd>
+            <a className="oat-mono" href={info.vault.links.explorer} target="_blank" rel="noreferrer">
+              {info.vault.address}
+            </a>
+          </dd>
+          <dt>Network</dt>
+          <dd>Solana (mainnet-beta)</dd>
+        </dl>
+      </section>
+      {!phase.done &&
+        (!ready ? (
+          <>
+            <p className="oat-status">Loading.</p>
+            <button className="oat-text" onClick={() => void cancel()}>
+              Cancel
+            </button>
+          </>
+        ) : !authenticated || !wallet ? (
+          <>
+            <button className="oat-btn" onClick={() => void (authenticated ? logout().then(() => login(), (e: unknown) => setPhase({ text: `Could not sign out: ${errText(e)}`, tone: "bad" })) : login())}>
+              <ButtonIcon />
+              {authenticated ? "Sign out and sign in again" : "Sign in with Privy"}
+            </button>
+            <p className="oat-fine">
+              {authenticated
+                ? `The connected wallet ${info.account} is not available here. Unlock it or select it in your wallet, or sign out and sign in with it.`
+                : `Sign in again with the connected wallet (${info.walletType === "embedded" ? "the same email or social login" : "the same Solana wallet"}) to continue.`}
+            </p>
+            <button className="oat-text" onClick={() => void cancel()}>
+              Cancel
+            </button>
+          </>
+        ) : (
+          <>
+            <button className="oat-btn" disabled={phase.busy} onClick={() => void send()}>
+              Confirm in wallet
+            </button>
+            <button className="oat-text" disabled={phase.busy} onClick={() => void cancel()}>
+              Cancel
+            </button>
+          </>
+        ))}
+      <Status phase={phase} />
+      {sent && (
+        <ul className="oat-fine oat-sent" aria-label="Transactions sent">
+          <li>
+            Transaction:{" "}
+            <a className="oat-mono" href={`${info.txBase}${sent}`} target="_blank" rel="noreferrer">
+              {sent}
+            </a>
+          </li>
+        </ul>
+      )}
+    </Page>
+  );
+}
+
 function App({ info }: { info: Info }) {
-  return info.mode === "connect" ? <Connect /> : <Confirm info={info} />;
+  if (info.chain === "solana") return info.mode === "connect" ? <ConnectSolana /> : <ConfirmSolana info={info as SolanaConfirm} />;
+  return info.mode === "connect" ? <Connect /> : <Confirm info={info as Extract<Info, { mode: "confirm"; chain?: undefined }>} />;
 }
 
 async function main() {
@@ -509,6 +844,24 @@ async function main() {
     );
   }
   const info = (await res.json()) as Info;
+  // A Solana flow gets Privy's Solana side: Solana wallets on the first screen, a Privy Solana wallet for an
+  // email or social login, and Privy's own Solana RPC for that wallet to send through. An EVM flow is unchanged.
+  if (info.chain === "solana") {
+    return root.render(
+      <PrivyProvider
+        appId={info.appId}
+        config={{
+          appearance: { theme: "light", accentColor: "#1E3553", landingHeader: "Connect Solana wallet", walletChainType: "solana-only", walletList: ["detected_solana_wallets", "phantom", "solflare", "backpack"] },
+          loginMethodsAndOrder: { primary: ["detected_solana_wallets", "email", "google"], overflow: ["apple", "twitter", "phantom", "solflare", "backpack"] },
+          externalWallets: { walletConnect: { enabled: false }, solana: { connectors: solanaConnectorsWithoutWalletConnect() } },
+          embeddedWallets: { solana: { createOnLogin: "users-without-wallets" }, showWalletUIs: true },
+          plugins: [defaultSolanaRpcsPlugin()],
+        }}
+      >
+        <App info={info} />
+      </PrivyProvider>,
+    );
+  }
   root.render(
     <PrivyProvider
       appId={info.appId}
@@ -523,7 +876,7 @@ async function main() {
         loginMethodsAndOrder: { primary: ["detected_ethereum_wallets", "email", "google"], overflow: ["apple", "twitter", "coinbase_wallet"] },
         externalWallets: { walletConnect: { enabled: false } },
         embeddedWallets: { ethereum: { createOnLogin: "users-without-wallets" }, showWalletUIs: true },
-        supportedChains: [base, arbitrum, robinhood],
+        supportedChains: [base, arbitrum, robinhood, mainnet, monad],
         defaultChain: base,
       }}
     >

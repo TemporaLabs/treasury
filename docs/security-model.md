@@ -13,6 +13,7 @@ a command that did would be a design change the project refuses.
 
 ```
    agent ──▶ Treasury ──▶ { requires_signature: true, status: "unsigned", calls: [...] }
+                          (on Solana, one transaction: {...} in place of calls)
                                               │
                           your signer — a wallet, a policy engine, a token-bound account
                                               │
@@ -30,8 +31,8 @@ library directly, you are the boundary.)
 **`tests/boundary.unit.test.ts`** parses every TypeScript file under the package with the TypeScript
 compiler and fails the build if any file:
 
-- imports, requires or dynamically loads anything outside the package and its two declared
-  dependencies (`viem`, `zod`);
+- imports, requires or dynamically loads anything outside the package and its three declared
+  dependencies (`viem`, `zod`, `@solana/kit`);
 - reads an environment variable that is not on the allowlist
   ([`configuration.md`](configuration.md)), or reads one with a computed key;
 - starts a process, except the named files — the test tiers that spawn the reconciliation script, a
@@ -55,7 +56,8 @@ WalletConnect code, but not attested.
 ## Keys
 
 Nothing in the package reads, derives, logs or transmits a private key. There is no code path for it.
-The fork tier signs by impersonating accounts on a local Anvil fork; the live tier only reads. Who
+The fork tier signs by impersonating accounts on a local Anvil fork, and on Solana with a key generated for
+the run and funded only on a local Surfpool fork; the live tier only reads. Who
 may deposit into a gated vault is discovered from the chain when a test needs it, and never written
 into the repository.
 
@@ -97,7 +99,7 @@ open for nothing but the calls that text described.
 - **The account is proven, not claimed.** Both sign-in paths — a browser wallet, or a Privy embedded
   wallet from an email or social login — sign a free sign-in message whose nonce is the flow's
   secret. An ordinary wallet's signature is checked offline; a smart-contract wallet's is checked by
-  asking its contract through your Base RPC. The session file records only the address, how the page
+  asking its contract through your Base RPC. A Solana wallet's signature (ed25519) is checked offline. The session file records only the address, how the page
   said it signed in, and when; it is created owner-readable only and holds no credential.
 - **A gate before any page opens** (`src/connect/gate.ts`). Calls are built by the same builders as the
   prepare commands, then re-checked from the calldata alone: an `approve` only on a listed vault's
@@ -108,11 +110,20 @@ open for nothing but the calls that text described.
   decodes to (no trailing bytes, no stray bits in an address). The allowance the deposit waits for is
   read from those checked calls, not from the call's own `precondition` field. Anything else is
   refused before the operator is asked anything.
+- **On Solana, a gate on the transaction's bytes** (`src/connect/gate-solana.ts`). The page builds the
+  transaction when the operator confirms, and the gate decodes it and admits it only if every
+  instruction is a compute-unit limit, the connected account's own token-account creation for the
+  vault's asset or shares, or this vault's deposit or withdrawal for the connected account, with that
+  account as fee payer and only signer, no lookup table, and the vault's own token and share accounts.
+  The admitted transaction is then simulated; a withdrawal is refused unless the simulation burns every
+  share acknowledged, less at most one share unit of rounding per withdraw instruction, because Kamino's program pays what a reserve can and keeps the rest of the shares,
+  rather than failing, when one part of a withdrawal asks for more than its reserve can pay.
 - **The operator acknowledges before any page opens.** `connect deposit` and `connect withdraw` first
   return a fixed text, written by the CLI, naming the amount, chain, vault and explorer link, receiver,
   the vault's warning and the disclosures, and open nothing. The page opens only on a second run that
   carries that acknowledgement's code: single-use, valid for 15 minutes, and bound to a digest of the
-  exact calls and connected account. The code binds the page to the text the CLI issued: one page, for
+  exact calls and connected account (on Solana, of the intent: account, vault, action and amount, since
+  the transaction is built when the operator confirms and the Solana gate holds it to that intent). The code binds the page to the text the CLI issued: one page, for
   exactly those calls. It does not prove the operator read the text or said yes, because the agent
   that receives the code can pass it back; asking is the agent's conduct, which the skill requires,
   and the wallet's own prompt remains the confirmation no agent can give.
@@ -122,15 +133,23 @@ open for nothing but the calls that text described.
 - **What landed is read from the receipt.** A smart-account wallet relays a call inside a batch, so the
   transaction's own `from`/`to` name a relayer. The check is the vault's or token's own event for the
   connected account and the exact amount; any other movement of the asset out of the account in the
-  same transaction is reported as `extra_transfer`, never folded into a match. The next call is
-  offered only after the previous one is confirmed this way.
+  same transaction is reported as `extra_transfer`, never folded into a match. On Solana the landed
+  transaction must name a blockhash the page was handed (each transaction is built when the operator
+  confirms, and its blockhash recorded) and be paid for by the connected account; anything else is
+  `mismatch`, whatever its balances show. Its token-balance changes must then match: a deposit takes
+  the acknowledged amount of the asset, or less by under one share's worth (the program mints whole shares
+  and takes only what backs them), and mints shares (more taken is `extra_transfer`), and a withdrawal burns
+  the acknowledged shares, less at most one share unit of rounding per withdraw instruction, and pays the asset. A wallet that rebuilt the
+  transaction with a newer blockhash would be reported as `mismatch` rather than matched. The next call
+  is offered only after the previous one is confirmed this way.
 - **No WalletConnect code ships.** The page bundle stubs out every `@walletconnect` / `@reown` module
   (some are under a licence that is not open source) and its build fails if one returns; the page's CSP also blocks
   WalletConnect's servers. The Privy app ID in the page is a public identifier; no Privy secret
   exists anywhere in this package.
 - **Tests pin the page's source and policy** (`tests/connect-page-source.unit.test.ts`). They read
   every file under `connect-page/src` as text: the page may ask a wallet only for `personal_sign`
-  (sign-in), `eth_estimateGas`, `eth_sendTransaction` and a chain switch; it may not sign typed data,
+  (sign-in), `eth_estimateGas`, `eth_sendTransaction` and a chain switch, and a Solana wallet only to sign
+  the sign-in message and to sign and send the transaction the Solana gate admitted; it may not sign typed data,
   send raw transactions, touch key material, write HTML from strings, store anything in the browser,
   or reach the network except by a direct `fetch` of its own local server. The
   Content-Security-Policy is pinned host by host, and `tests/connect.unit.test.ts` checks that the
