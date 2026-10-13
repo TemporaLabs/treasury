@@ -45488,8 +45488,6 @@ var WindowTooNarrow = class extends Error {
     this.window = window;
     this.needed = needed;
   }
-  window;
-  needed;
 };
 var MAX_SCAN_TXS = 100;
 function txsOf(logs, decimals, symbol2) {

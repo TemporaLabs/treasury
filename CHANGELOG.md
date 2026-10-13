@@ -22,6 +22,10 @@ Pre-1.0, minor versions may change tool names, schemas and behaviour.
 ### Dependencies
 - Development: source-map-js 1.2.2, used only by the build tooling, fixing GHSA-68fv-2mgg-jv7q. The
   CLI bundle is unchanged.
+- Development: esbuild 0.27.2 for tsup and vitest, through an override, which predates
+  GHSA-g7r4-m6w7-qqqr (affected: 0.27.3 up to 0.28.1; tsup accepts only 0.27). tsx keeps its own
+  esbuild 0.28.2. The CLI bundle no longer declares `window` and `needed` as class fields on one
+  internal error class; the constructor still assigns both, so its instances are unchanged.
 
 ## [v0.1.3] - 2026-10-13
 
