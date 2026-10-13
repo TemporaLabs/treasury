@@ -307,9 +307,11 @@ than reporting a limit the chain never stated.
 - **A withdrawal can be refused for liquidity, not balance.** Some vaults (Fusion) pay a withdrawal
   only from what they hold un-deployed in that block; the rest of the account's value is in markets
   and comes back when the fund unwinds. The withdraw quote reports `instantLiquidity` and, on a
-  Fusion refusal, says so in those terms. Withdraw at most that amount now, or wait. A Morpho V2
+  Fusion refusal, says so in those terms. Tell the operator that at most that amount comes out now, and
+  ask whether to withdraw that, another amount, or wait; do not shrink the withdrawal yourself. A Morpho V2
   vault holds almost no idle USDC and pays out of its markets, so there the quote shows the chain's
-  own revert reason instead, and a smaller amount may still pass: quote it. Either way, do **not** read a
+  own revert reason instead, and a smaller amount may still pass: say so, and quote only an amount the
+  operator names. Either way, do **not** read a
   refusal as "approve first" (that is a deposit failure) and do not trust `maxWithdraw`, which
   reports the full position on exactly these vaults.
 - One call, one signature, same rules as depositing: show the description and `gasAdvice`, run
