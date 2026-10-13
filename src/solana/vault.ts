@@ -270,7 +270,7 @@ export function isWithdrawInstruction(programAddress: string, data: ArrayLike<nu
  */
 export function partialWithdrawal(asked: bigint, burned: bigint, legs: number, shareDecimals: number, slot: bigint): string | undefined {
   if (burned + BigInt(legs) >= asked) return undefined;
-  return `the simulated withdrawal at slot ${slot} burns ${formatAmount(burned, shareDecimals)} of the ${formatAmount(asked, shareDecimals)} shares asked for: a reserve cannot pay its full part now, so it would land as a partial withdrawal. Try a smaller amount, or again later`;
+  return `the simulated withdrawal at slot ${slot} burns ${formatAmount(burned, shareDecimals)} of the ${formatAmount(asked, shareDecimals)} shares asked for: a reserve cannot pay its full part now, so it would land as a partial withdrawal. Ask the operator whether to withdraw a smaller amount, or try again later`;
 }
 
 /** One line for a failed simulation: the program's error and the last log lines that say why. */
