@@ -190,11 +190,15 @@ export async function solanaBalance(vault: SolanaVaultEntry, account: string) {
       exit = { exitableNow: `0 ${vault.asset.symbol}`, measuredAs: "no position" };
     } else {
       try {
-        const { sim, received } = await simulateWithdraw(rpc, v, owner, held.amount);
+        const { sim, received, burned, legs } = await simulateWithdraw(rpc, v, owner, held.amount);
+        // A capped leg succeeds and pays less, so a successful simulation is a full exit only when every share burns.
+        const partial = received === undefined || burned === undefined ? undefined : partialWithdrawal(held.amount, burned, legs, vault.shareDecimals, sim.slot);
         exit =
-          received === undefined
+          received === undefined || burned === undefined
             ? { exitableNow: "unknown", measuredAs: "refused", note: `a full withdrawal was refused at this slot: ${describeSimulation(sim)}` }
-            : { exitableNow: `${formatAmount(received, vault.asset.decimals)} ${vault.asset.symbol}`, measuredAs: "a simulated full withdrawal", note: "net of the up to 0.001 USDC Kamino keeps per withdraw instruction" };
+            : partial
+              ? { exitableNow: `${formatAmount(received, vault.asset.decimals)} ${vault.asset.symbol}`, measuredAs: "a capped withdrawal", note: `a full withdrawal cannot be prepared now: ${partial}. \`exitableNow\` is what it would pay, net of the up to 0.001 USDC Kamino keeps per withdraw instruction` }
+              : { exitableNow: `${formatAmount(received, vault.asset.decimals)} ${vault.asset.symbol}`, measuredAs: "a simulated full withdrawal", note: "net of the up to 0.001 USDC Kamino keeps per withdraw instruction" };
       } catch (e) {
         exit = { exitableNow: "unknown", measuredAs: "not measured", note: describeError(e) };
       }

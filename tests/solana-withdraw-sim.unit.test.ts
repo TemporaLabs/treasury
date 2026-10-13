@@ -61,7 +61,7 @@ const rpc = {
 };
 
 vi.mock("../src/solana/rpc.js", async (load) => ({ ...(await load<typeof import("../src/solana/rpc.js")>()), makeSolanaRpc: () => rpc }));
-const { solanaPrepareWithdraw, solanaQuoteWithdraw } = await import("../src/earn/solana.js");
+const { solanaBalance, solanaPrepareWithdraw, solanaQuoteWithdraw } = await import("../src/earn/solana.js");
 const { buildForIntent } = await import("../src/connect/solana.js");
 
 /** The shares `amountHuman` USDC needs at the snapshot, as the commands compute it. */
@@ -120,6 +120,20 @@ describe("a Solana withdrawal whose simulation burns fewer shares than asked for
     expect(capped.note).toMatch(/partial withdrawal/);
     // The operator decides whether to try a smaller amount; the note does not pick one.
     expect(capped.note).toMatch(/Ask the operator whether to withdraw a smaller amount/);
+  });
+
+  it("earn balance: a full exit is reported only when every share burns, and a capped one says so", async () => {
+    const legs = await legsFor(HELD);
+    simulated = { burns: HELD - legs, pays: 51_000_000n };
+    const full = (await solanaBalance(vault, ACCOUNT)) as { exit: { exitableNow: string; measuredAs: string } };
+    expect(full.exit.measuredAs).toBe("a simulated full withdrawal");
+    expect(full.exit.exitableNow).toBe("51 USDC");
+
+    simulated = { burns: HELD / 2n, pays: 25_500_000n };
+    const capped = (await solanaBalance(vault, ACCOUNT)) as { exit: { exitableNow: string; measuredAs: string; note: string } };
+    expect(capped.exit.measuredAs).toBe("a capped withdrawal");
+    expect(capped.exit.exitableNow).toBe("25.5 USDC");
+    expect(capped.exit.note).toMatch(/a full withdrawal cannot be prepared now: .*burns 25 of the 50 shares asked for/);
   });
 
   it("connect withdraw: the transaction for the acknowledged shares is refused before any page opens when a leg is capped", async () => {

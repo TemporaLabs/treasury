@@ -43681,7 +43681,7 @@ function formatAmount(raw, decimals) {
 }
 
 // package.json
-var package_default = { version: "0.1.3" };
+var package_default = { version: "0.1.4" };
 
 // src/version.ts
 var PACKAGE_VERSION = package_default.version;
@@ -45028,8 +45028,9 @@ async function solanaBalance(vault, account) {
       exit = { exitableNow: `0 ${vault.asset.symbol}`, measuredAs: "no position" };
     } else {
       try {
-        const { sim, received } = await simulateWithdraw(rpc, v, owner, held.amount);
-        exit = received === void 0 ? { exitableNow: "unknown", measuredAs: "refused", note: `a full withdrawal was refused at this slot: ${describeSimulation(sim)}` } : { exitableNow: `${formatAmount(received, vault.asset.decimals)} ${vault.asset.symbol}`, measuredAs: "a simulated full withdrawal", note: "net of the up to 0.001 USDC Kamino keeps per withdraw instruction" };
+        const { sim, received, burned, legs } = await simulateWithdraw(rpc, v, owner, held.amount);
+        const partial2 = received === void 0 || burned === void 0 ? void 0 : partialWithdrawal(held.amount, burned, legs, vault.shareDecimals, sim.slot);
+        exit = received === void 0 || burned === void 0 ? { exitableNow: "unknown", measuredAs: "refused", note: `a full withdrawal was refused at this slot: ${describeSimulation(sim)}` } : partial2 ? { exitableNow: `${formatAmount(received, vault.asset.decimals)} ${vault.asset.symbol}`, measuredAs: "a capped withdrawal", note: `a full withdrawal cannot be prepared now: ${partial2}. \`exitableNow\` is what it would pay, net of the up to 0.001 USDC Kamino keeps per withdraw instruction` } : { exitableNow: `${formatAmount(received, vault.asset.decimals)} ${vault.asset.symbol}`, measuredAs: "a simulated full withdrawal", note: "net of the up to 0.001 USDC Kamino keeps per withdraw instruction" };
       } catch (e4) {
         exit = { exitableNow: "unknown", measuredAs: "not measured", note: describeError(e4) };
       }
