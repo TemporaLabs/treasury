@@ -128,6 +128,9 @@ Pre-1.0, minor versions may change tool names, schemas and behaviour.
 - **The earn skill no longer loads to analyse what a vault holds or why its share price moved**
   (#113). Its description now names that as out of scope, along with bridging, staking and vaults
   from other providers.
+- The CLI's withdrawal refusals (a Fusion vault short of liquid funds, a Morpho V2 revert, a Solana partial
+  withdrawal) now tell the agent to ask the operator about a smaller amount, as the skill does, instead
+  of suggesting one.
 
 ### Dependencies
 - viem 2.57.3, inlined in the CLI bundle. Treasury does not call `waitForTransactionReceipt`, the function

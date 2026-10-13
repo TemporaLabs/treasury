@@ -7,7 +7,7 @@
  * turns argv into their arguments, validates them against each command's own schema, and prints.
  *
  *   treasury earn --help                 every command, its flags and its description, as JSON
- *   treasury earn quote --direction deposit --account 0x… --amount_usdc 25 --chain base
+ *   treasury earn quote --direction deposit --account 0x… --amount_usdc <amount> --chain base
  *   treasury --version
  *
  * Flags are the command's argument names. `--amount-usdc` is accepted for `--amount_usdc`, and
