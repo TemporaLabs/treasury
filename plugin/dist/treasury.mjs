@@ -44778,7 +44778,6 @@ async function withdrawInstructions(v, user, shares) {
     left -= take;
     idle = 0n;
   }
-  if (left > 0n) legs.push({ reserve: order[0], shares: left });
   const ixs = [
     setComputeUnitLimitIx(Math.min(MAX_COMPUTE_UNITS, WITHDRAW_COMPUTE_UNITS_PER_RESERVE * legs.length)),
     await createAtaIdempotentIx(user, v.state.tokenMint)
