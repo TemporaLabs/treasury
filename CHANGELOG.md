@@ -114,7 +114,8 @@ Pre-1.0, minor versions may change tool names, schemas and behaviour.
   through OAT.
 - The earn skill now says the amount is the operator's to decide, in the same words as the chain: ask,
   do not pick. Its example amounts are placeholders (`<amount>`), in the skill, `llms.txt` and the tools
-  reference.
+  reference. When a vault cannot pay a whole withdrawal now, the skill says what can come out and asks the
+  operator what to do, instead of withdrawing or quoting a smaller amount on its own.
 
 ### Fixed
 - **Windows with Node 24: the health check no longer exits `3221226505` (`0xC0000409`) after a
