@@ -3,8 +3,8 @@
 > Agent Treasury by Tempora Labs — a depositor client for ERC-4626 vaults and a Kamino vault on Solana: registry, pre-flight, and unsigned deposit/withdraw builders. Never signs, never holds a key.
 
 This file is generated from the earn skill and from the command descriptions `treasury --help` prints; it is not edited by hand.
-This version's copy is at https://raw.githubusercontent.com/TemporaLabs/treasury/v0.1.3/llms.txt.
-Run commands as `treasury <skill> <command> [--flag value …]` (`npx @temporalabs/treasury@0.1.3 …` runs the same version without installing it). Each prints one JSON document.
+This version's copy is at https://raw.githubusercontent.com/TemporaLabs/treasury/v0.1.4/llms.txt.
+Run commands as `treasury <skill> <command> [--flag value …]` (`npx @temporalabs/treasury@0.1.4 …` runs the same version without installing it). Each prints one JSON document.
 
 # The earn skill
 
