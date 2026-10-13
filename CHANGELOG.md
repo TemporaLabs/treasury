@@ -125,6 +125,9 @@ Pre-1.0, minor versions may change tool names, schemas and behaviour.
   own, with a two-second backstop for a request that is still pending; macOS and Linux exit exactly as
   before. Measured on Windows, a command now takes about 0.1 s longer to end.
 - `earn status --account` on an EVM chain echoes the account checksummed.
+- **The earn skill no longer loads to analyse what a vault holds or why its share price moved**
+  (#113). Its description now names that as out of scope, along with bridging, staking and vaults
+  from other providers.
 
 ### Dependencies
 - viem 2.57.3, inlined in the CLI bundle. Treasury does not call `waitForTransactionReceipt`, the function
