@@ -137,8 +137,9 @@ open for nothing but the calls that text described.
   transaction must name a blockhash the page was handed (each transaction is built when the operator
   confirms, and its blockhash recorded) and be paid for by the connected account; anything else is
   `mismatch`, whatever its balances show. Its token-balance changes must then match: a deposit takes
-  exactly the acknowledged amount of the asset and mints shares (more taken is `extra_transfer`), and a
-  withdrawal burns exactly the acknowledged shares and pays the asset. A wallet that rebuilt the
+  the acknowledged amount of the asset, or less by under one share's worth (the program mints whole shares
+  and takes only what backs them), and mints shares (more taken is `extra_transfer`), and a withdrawal burns
+  the acknowledged shares, less at most one share unit of rounding per withdraw instruction, and pays the asset. A wallet that rebuilt the
   transaction with a newer blockhash would be reported as `mismatch` rather than matched. The next call
   is offered only after the previous one is confirmed this way.
 - **No WalletConnect code ships.** The page bundle stubs out every `@walletconnect` / `@reown` module

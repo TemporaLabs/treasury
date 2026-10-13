@@ -44807,10 +44807,13 @@ async function simulateWithdrawal(rpc, v, user, ixs) {
   const sharesAta = await associatedTokenAccount(user, v.state.sharesMint);
   const [token, held] = await Promise.all([tokenBalance(rpc, tokenAta), tokenBalance(rpc, sharesAta)]);
   const sim = await simulate(rpc, ixs, user, [tokenAta, sharesAta]);
-  const legs = ixs.filter((ix) => ix.programAddress === KVAULT_PROGRAM_ID && ix.data !== void 0 && DISCRIMINATORS.withdraw.every((x, i) => ix.data[i] === x)).length;
+  const legs = ixs.filter((ix) => isWithdrawInstruction(ix.programAddress, ix.data)).length;
   const tokenAfter = sim.after.get(tokenAta);
   if (!sim.ok || tokenAfter === null || tokenAfter === void 0) return { sim, legs };
   return { sim, received: tokenAfter - token.amount, burned: held.amount - (sim.after.get(sharesAta) ?? 0n), legs };
+}
+function isWithdrawInstruction(programAddress, data) {
+  return programAddress === KVAULT_PROGRAM_ID && data !== void 0 && DISCRIMINATORS.withdraw.every((x, i) => data[i] === x);
 }
 function partialWithdrawal(asked, burned, legs, shareDecimals, slot) {
   if (burned + BigInt(legs) >= asked) return void 0;
@@ -46824,7 +46827,8 @@ async function verifySolanaLanded(rpc, signature, intent, account, opts) {
       const a = intent.vault.asset;
       if (intent.kind === "deposit") {
         if (shares <= 0n) return { verified: "mismatch", detail: `the transaction landed but the account received no ${intent.vault.symbol} shares` };
-        if (-asset < intent.raw) {
+        const taken = -asset;
+        if (taken < intent.raw && (intent.raw - taken) * shares >= taken + shares) {
           return { verified: "mismatch", detail: `the transaction landed, but the account's ${a.symbol} fell by ${formatAmount(-asset > 0n ? -asset : 0n, a.decimals)} ${a.symbol}, not the ${formatAmount(intent.raw, a.decimals)} ${a.symbol} acknowledged` };
         }
         if (-asset > intent.raw) {
@@ -46832,7 +46836,9 @@ async function verifySolanaLanded(rpc, signature, intent, account, opts) {
         }
         return { verified: "matched", detail: `received ${formatAmount(shares, intent.vault.shareDecimals)} ${intent.vault.symbol}` };
       }
-      if (-shares !== intent.raw) {
+      const keys = message.accountKeys ?? [];
+      const legs = (message.instructions ?? []).filter((ix) => isWithdrawInstruction(keys[ix.programIdIndex] ?? "", getBase58Encoder().encode(ix.data))).length;
+      if (-shares > intent.raw || -shares + BigInt(legs) < intent.raw) {
         return { verified: "mismatch", detail: `a PARTIAL withdrawal: it burned ${formatAmount(-shares, intent.vault.shareDecimals)} of the ${formatAmount(intent.raw, intent.vault.shareDecimals)} shares acknowledged and paid ${formatAmount(asset > 0n ? asset : 0n, intent.vault.asset.decimals)} ${intent.vault.asset.symbol}; the rest of the shares are still in the account. Check \`earn balance --chain solana\` before withdrawing again.` };
       }
       if (asset <= 0n) return { verified: "mismatch", detail: `the shares burned but the account's ${a.symbol} did not rise` };

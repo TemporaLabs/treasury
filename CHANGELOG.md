@@ -34,6 +34,11 @@ Pre-1.0, minor versions may change tool names, schemas and behaviour.
   confirm page builds it when the operator presses Confirm, and a gate admits it only if every instruction is
   a compute-unit limit, the account's own token-account creation, or this vault's deposit or withdrawal for the
   connected account.
+- A confirmed Solana transaction is checked against what the page built: it must name a blockhash the page
+  was handed and be paid for by the connected account, or it is `mismatch`. Its token balances then decide:
+  a deposit takes the acknowledged amount, or less by under one share's worth (the program mints whole shares
+  and takes only what backs them), and a withdrawal burns the acknowledged shares, less at most one share unit
+  of rounding per withdraw instruction, the same allowance the simulation before sending makes.
 - Quotes and positions are read from simulated transactions. Each withdraw instruction keeps up to 0.001 USDC in
   the vault — Kamino's global withdrawal penalty for every vault on its program, which Kamino can change; a
   withdrawal split across reserves pays it per part — and one worth 0.001 USDC or less is refused; `receives`

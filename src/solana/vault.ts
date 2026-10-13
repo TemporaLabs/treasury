@@ -251,10 +251,15 @@ export async function simulateWithdrawal(rpc: SolanaRpc, v: VaultRead, user: str
   const sharesAta = await associatedTokenAccount(user, v.state.sharesMint);
   const [token, held] = await Promise.all([tokenBalance(rpc, tokenAta), tokenBalance(rpc, sharesAta)]);
   const sim = await simulate(rpc, ixs, user, [tokenAta, sharesAta]);
-  const legs = ixs.filter((ix) => ix.programAddress === KVAULT_PROGRAM_ID && ix.data !== undefined && DISCRIMINATORS.withdraw.every((x, i) => ix.data![i] === x)).length;
+  const legs = ixs.filter((ix) => isWithdrawInstruction(ix.programAddress, ix.data)).length;
   const tokenAfter = sim.after.get(tokenAta);
   if (!sim.ok || tokenAfter === null || tokenAfter === undefined) return { sim, legs };
   return { sim, received: tokenAfter - token.amount, burned: held.amount - (sim.after.get(sharesAta) ?? 0n), legs };
+}
+
+/** A kVault withdraw instruction: the program's address and the instruction's discriminator. */
+export function isWithdrawInstruction(programAddress: string, data: ArrayLike<number> | undefined): boolean {
+  return programAddress === KVAULT_PROGRAM_ID && data !== undefined && DISCRIMINATORS.withdraw.every((x, i) => data[i] === x);
 }
 
 /**
