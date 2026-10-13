@@ -4,6 +4,17 @@ All notable changes to Agent Treasury are recorded here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versions follow [SemVer](https://semver.org/).
 Pre-1.0, minor versions may change tool names, schemas and behaviour.
 
+## [v0.1.4] - Unreleased
+
+### Fixed
+- **On Solana, `earn balance` no longer reports a capped exit as a full one** (#154). Kamino caps a
+  withdrawal leg its reserve cannot pay instead of failing it, so the simulated full withdrawal could
+  succeed while burning only part of the shares. `exit` now applies the same check as quote and
+  prepare, and the note says when a full withdrawal cannot be prepared now. A smaller amount is
+  reported only if a withdrawal of just the shares that did burn simulates without a cap
+  (`measuredAs: "a simulated partial withdrawal"`); otherwise `exitableNow` is `unknown`
+  (`measuredAs: "a capped withdrawal"`).
+
 ## [v0.1.3] - 2026-10-13
 
 ### Added — Ethereum and Monad

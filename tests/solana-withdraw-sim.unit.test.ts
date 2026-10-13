@@ -33,6 +33,8 @@ const tokenAccount = (amount: bigint) => {
 
 /** What the next simulation reports: the shares it burns and the USDC it pays, or the program's error. */
 let simulated: { burns: bigint; pays: bigint; err?: unknown };
+/** Results for the next simulations, in order, before `simulated` applies again. */
+let then: (typeof simulated)[] = [];
 let sharesAta = "";
 let tokenAta = "";
 
@@ -48,20 +50,23 @@ const rpc = {
   getLatestBlockhash: () => ({ send: async () => ({ value: { blockhash: "11111111111111111111111111111111", lastValidBlockHeight: 1150n } }) }),
   getBlockHeight: () => ({ send: async () => 1000n }),
   simulateTransaction: (_tx: string, cfg: { accounts: { addresses: string[] } }) => ({
-    send: async () => ({
-      context: { slot: BigInt(fx.slot) },
-      value: {
-        err: simulated.err ?? null,
-        logs: [],
-        unitsConsumed: 100_000n,
-        accounts: cfg.accounts.addresses.map((a) => ({ data: String(a) === sharesAta ? tokenAccount(HELD - simulated.burns) : tokenAccount(simulated.pays) })),
-      },
-    }),
+    send: async () => {
+      const s = then.shift() ?? simulated;
+      return {
+        context: { slot: BigInt(fx.slot) },
+        value: {
+          err: s.err ?? null,
+          logs: [],
+          unitsConsumed: 100_000n,
+          accounts: cfg.accounts.addresses.map((a) => ({ data: String(a) === sharesAta ? tokenAccount(HELD - s.burns) : tokenAccount(s.pays) })),
+        },
+      };
+    },
   }),
 };
 
 vi.mock("../src/solana/rpc.js", async (load) => ({ ...(await load<typeof import("../src/solana/rpc.js")>()), makeSolanaRpc: () => rpc }));
-const { solanaPrepareWithdraw, solanaQuoteWithdraw } = await import("../src/earn/solana.js");
+const { solanaBalance, solanaPrepareWithdraw, solanaQuoteWithdraw } = await import("../src/earn/solana.js");
 const { buildForIntent } = await import("../src/connect/solana.js");
 
 /** The shares `amountHuman` USDC needs at the snapshot, as the commands compute it. */
@@ -120,6 +125,30 @@ describe("a Solana withdrawal whose simulation burns fewer shares than asked for
     expect(capped.note).toMatch(/partial withdrawal/);
     // The operator decides whether to try a smaller amount; the note does not pick one.
     expect(capped.note).toMatch(/Ask the operator whether to withdraw a smaller amount/);
+  });
+
+  it("earn balance: a full exit is reported only when every share burns; a capped one reports only what a simulated smaller withdrawal pays", async () => {
+    const legs = await legsFor(HELD);
+    simulated = { burns: HELD - legs, pays: 51_000_000n };
+    const full = (await solanaBalance(vault, ACCOUNT)) as { exit: { exitableNow: string; measuredAs: string } };
+    expect(full.exit.measuredAs).toBe("a simulated full withdrawal");
+    expect(full.exit.exitableNow).toBe("51 USDC");
+
+    type Exit = { exit: { exitableNow: string; measuredAs: string; note: string } };
+    // Capped: 25 of the 50 shares burn. A withdrawal of those 25 alone is then simulated; it burns them all.
+    then = [{ burns: HELD / 2n, pays: 25_500_000n }, { burns: HELD / 2n, pays: 25_400_000n }];
+    const part = (await solanaBalance(vault, ACCOUNT)) as Exit;
+    expect(then).toEqual([]);
+    expect(part.exit.measuredAs).toBe("a simulated partial withdrawal");
+    expect(part.exit.exitableNow).toBe("25.4 USDC");
+    expect(part.exit.note).toMatch(/a full withdrawal cannot be prepared now: .*burns 25 of the 50 shares asked for/);
+
+    // Capped, and the withdrawal of the 25 shares caps too: nothing is reported as withdrawable.
+    then = [{ burns: HELD / 2n, pays: 25_500_000n }, { burns: HELD / 4n, pays: 12_750_000n }];
+    const capped = (await solanaBalance(vault, ACCOUNT)) as Exit;
+    expect(capped.exit.measuredAs).toBe("a capped withdrawal");
+    expect(capped.exit.exitableNow).toBe("unknown");
+    expect(capped.exit.note).toMatch(/A smaller withdrawal was not found to fit/);
   });
 
   it("connect withdraw: the transaction for the acknowledged shares is refused before any page opens when a leg is capped", async () => {

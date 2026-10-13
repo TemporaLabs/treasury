@@ -45028,8 +45028,18 @@ async function solanaBalance(vault, account) {
       exit = { exitableNow: `0 ${vault.asset.symbol}`, measuredAs: "no position" };
     } else {
       try {
-        const { sim, received } = await simulateWithdraw(rpc, v, owner, held.amount);
-        exit = received === void 0 ? { exitableNow: "unknown", measuredAs: "refused", note: `a full withdrawal was refused at this slot: ${describeSimulation(sim)}` } : { exitableNow: `${formatAmount(received, vault.asset.decimals)} ${vault.asset.symbol}`, measuredAs: "a simulated full withdrawal", note: "net of the up to 0.001 USDC Kamino keeps per withdraw instruction" };
+        const usdc = (x) => `${formatAmount(x, vault.asset.decimals)} ${vault.asset.symbol}`;
+        const { sim, received, burned, legs } = await simulateWithdraw(rpc, v, owner, held.amount);
+        const partial2 = received === void 0 || burned === void 0 ? void 0 : partialWithdrawal(held.amount, burned, legs, vault.shareDecimals, sim.slot);
+        if (received === void 0 || burned === void 0) {
+          exit = { exitableNow: "unknown", measuredAs: "refused", note: `a full withdrawal was refused at this slot: ${describeSimulation(sim)}` };
+        } else if (!partial2) {
+          exit = { exitableNow: usdc(received), measuredAs: "a simulated full withdrawal", note: "net of the up to 0.001 USDC Kamino keeps per withdraw instruction" };
+        } else {
+          const part = burned > 0n ? await simulateWithdraw(rpc, v, owner, burned) : void 0;
+          const fits = part?.received !== void 0 && part.burned !== void 0 && !partialWithdrawal(burned, part.burned, part.legs, vault.shareDecimals, part.sim.slot);
+          exit = fits ? { exitableNow: usdc(part.received), measuredAs: "a simulated partial withdrawal", note: `a full withdrawal cannot be prepared now: ${partial2}. \`exitableNow\` is what a withdrawal of ${formatAmount(burned, vault.shareDecimals)} shares pays at this slot, net of the up to 0.001 USDC Kamino keeps per withdraw instruction` } : { exitableNow: "unknown", measuredAs: "a capped withdrawal", note: `a full withdrawal cannot be prepared now: ${partial2}. A smaller withdrawal was not found to fit; run \`earn quote --direction withdraw\` for an amount the operator names` };
+        }
       } catch (e4) {
         exit = { exitableNow: "unknown", measuredAs: "not measured", note: describeError(e4) };
       }
