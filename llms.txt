@@ -28,20 +28,18 @@ treasury connect <command> --flag value …
 Run one plain command per shell call. When unsure of
 a command's flags, run `earn <command> --help` first: the CLI shows only what you ask it for.
 
-Below, each command is named by its tool name: `earn_quote` is `earn quote`, and its arguments are its
-flags (`--direction deposit --account 0x… --amount_usdc <amount>`; every amount in this file is a
-placeholder for the operator's own). `earn --help` lists every command and
-flag; a switch such as `--all` takes no value. A command prints one JSON document on stdout. When it
-cannot run as asked (an unknown or repeated flag, a vault on another chain, a quote or balance whose
-RPC cannot be reached) it exits non-zero with `{ "error": … }` on stderr — report it, never read it as a
-result. A verdict is a result and exits 0, with its fields saying what was found: `WHITELIST_GATED`,
-or `earn_status` reporting `rpc: "unreachable"` or a pre-flight `UNRESOLVED`. Every prepared call comes back inside
-`{ requires_signature: true, status: "unsigned", calls }` (on Solana, one `transaction` in place of
-`calls`) — that envelope is the command telling you
-nothing has been submitted and no money has moved. No `earn` command can sign or send, and neither can you through it — the operator's own signer
-(a wallet, a policy-engine signer, a token-bound account) does that. `connect` does not sign either: it
-opens a page where the operator confirms each call in their own wallet. That boundary is the
-whole design: a skill that supplies judgement must never hold the gate that supplies money.
+Below, each command is named by its tool name: `earn_quote` is `earn quote`, and its arguments are its flags
+(`--direction deposit --account 0x… --amount_usdc <amount>`; every amount in this file is a placeholder for the
+operator's own). `earn --help` lists every command and flag; a switch such as `--all` takes no value. A command prints
+one JSON document on stdout. When it cannot run as asked (an unknown or repeated flag, a vault on another chain, a quote
+or balance whose RPC cannot be reached) it exits non-zero with `{ "error": … }` on stderr — report it, never read it as
+a result. A verdict is a result and exits 0, with its fields saying what was found: `WHITELIST_GATED`, or `earn_status`
+reporting `rpc: "unreachable"` or a pre-flight `UNRESOLVED`. Every prepared call comes back inside `{
+requires_signature: true, status: "unsigned", calls }` (on Solana, one `transaction` in place of `calls`) — that
+envelope is the command telling you nothing has been submitted and no money has moved. No `earn` command can sign or
+send, and neither can you through it — the operator's own signer (a wallet, a policy-engine signer, a token-bound
+account) does that. `connect` does not sign either: it opens a page where the operator confirms each call in their own
+wallet. That boundary is the whole design: a skill that supplies judgement must never hold the gate that supplies money.
 
 ## When the operator asks what this can do
 
@@ -73,19 +71,18 @@ reconciles, which an empty window does vacuously; `wholeHistory` says the scan a
 deployment block and was not cut short. Only then are `entryBasisUsdc` and `accruedYieldUsdc` numbers —
 otherwise they read `unknown`, never a partial sum that renders a missed deposit as yield.
 
-Providers cap the block range per request (Alchemy free tier 10 blocks, Base public RPC 2,000, Infura on Arbitrum 10,000, Monad public RPC 100), and
-some public endpoints refuse old ranges outright. When the configured RPC cannot cover the range, the
-scan moves to the fallback endpoint and `scan.source` says `"fallback"`; you do not need to
-retry anything. Set `TREASURY_LOGS_FALLBACK` to another endpoint to choose it, or to `off` — or any value that is not
-a URL — to forbid it, for an operator who may not query a third party they did not name. It fails
-closed: an unrecognised value turns the fallback off rather than quietly keeping the default. A URL
-there names a Base endpoint, so on every other chain a set variable means no fallback at all. On Base the fallback reaches
-`max_log_requests` (default 100) × 2,000 blocks, about 4.6 days; each scan also stops at a 30-second
-budget. For an older vault, a whole-history basis needs that chain's logs variable
-(`TREASURY_LOGS_RPC_BASE`, `TREASURY_LOGS_RPC_ARBITRUM`, `TREASURY_LOGS_RPC_ROBINHOOD`, `TREASURY_LOGS_RPC_ETHEREUM`,
-`TREASURY_LOGS_RPC_MONAD`) set to a provider with a wide `eth_getLogs` range; until then `scan` says exactly how much
-was covered. On Monad that is needed from day one: its public RPC serves 100 blocks per request and Monad makes about
-three blocks a second, so a public-RPC scan there covers under an hour.
+Providers cap the block range per request (Alchemy free tier 10 blocks, Base public RPC 2,000, Infura on Arbitrum
+10,000, Monad public RPC 100), and some public endpoints refuse old ranges outright. When the configured RPC cannot
+cover the range, the scan moves to the fallback endpoint and `scan.source` says `"fallback"`; you do not need to retry
+anything. Set `TREASURY_LOGS_FALLBACK` to another endpoint to choose it, or to `off` — or any value that is not a URL —
+to forbid it, for an operator who may not query a third party they did not name. It fails closed: an unrecognised value
+turns the fallback off rather than quietly keeping the default. A URL there names a Base endpoint, so on every other
+chain a set variable means no fallback at all. On Base the fallback reaches `max_log_requests` (default 100) × 2,000
+blocks, about 4.6 days; each scan also stops at a 30-second budget. For an older vault, a whole-history basis needs that
+chain's logs variable (`TREASURY_LOGS_RPC_BASE`, `TREASURY_LOGS_RPC_ARBITRUM`, `TREASURY_LOGS_RPC_ROBINHOOD`,
+`TREASURY_LOGS_RPC_ETHEREUM`, `TREASURY_LOGS_RPC_MONAD`) set to a provider with a wide `eth_getLogs` range; until then
+`scan` says exactly how much was covered. On Monad that is needed from day one: its public RPC serves 100 blocks per
+request and Monad makes about three blocks a second, so a public-RPC scan there covers under an hour.
 
 ## The tools
 
@@ -125,10 +122,9 @@ bridge. An operator can still put money into several vaults, on one chain or sev
 - **Before preparing a deposit, if the operator has not said which chain, show them `earn_vaults` →
   `chains` and ask.** Each entry is a chain with its default vault; the first is the default chain.
   Put it as a choice they can answer in a word: "Base (default), Arbitrum, Robinhood Chain, Ethereum, Monad or Solana?"
-- **Ethereum gas is far higher than on the other chains.** When the operator picks Ethereum for a
-  small amount, say so before preparing anything: the approve and the deposit, and later the
-  withdrawal, each pay Ethereum gas in ETH, which can be a large share of a small deposit. Offer
-  another chain; the choice stays theirs.
+- **Ethereum gas is far higher than on the other chains.** When the operator picks Ethereum for a small amount, say so
+  before preparing anything: the approve and the deposit, and later the withdrawal, each pay Ethereum gas in ETH, which
+  can be a large share of a small deposit. Offer another chain; the choice stays theirs.
 - **Do not ask again once it is settled.** If they named a chain, named a vault, or said where
   their funds are, that is the answer for the rest of the task.
 - **Never ask for a withdrawal, a balance or a quote on an existing position.** A position is on
@@ -146,29 +142,26 @@ bridge. An operator can still put money into several vaults, on one chain or sev
 
 ### Several vaults in one request
 
-An operator can spread money across vaults in one sitting — "1 USDC on Base and 3 on Solana", "2 USDC on
-every chain", "1 in 2B and 1 in 2E". The vaults may be on different chains or the same one. That is **one
-deposit per vault**, each a complete deposit of its own with its own transaction; nothing moves money into
-several vaults at once.
+An operator can spread money across vaults in one sitting — "1 USDC on Base and 3 on Solana", "2 USDC on every chain",
+"1 in 2B and 1 in 2E". The vaults may be on different chains or the same one. That is **one deposit per vault**, each a
+complete deposit of its own with its own transaction; nothing moves money into several vaults at once.
 
 1. **Settle the list from the operator's own words.** Each vault, its chain and its amount. A chain named
    without a vault means that chain's default vault. "Every chain" means every entry in `earn_vaults` →
    `chains`, each with its default vault; "every vault" means every vault in `earn_vaults` →
    `depositable`. A listed vault that is not in `depositable` cannot take the deposit: name it to the
    operator rather than dropping it silently. Do not add, drop or resize a leg on your own.
-2. **Check every leg before any money moves:** `earn_quote` with `direction: "deposit"`, the real account
-   and amount, for each vault. The asset has to be on that vault's chain already (USDG, not USDC, on
-   Robinhood Chain); this skill does not bridge, so a leg whose funds are elsewhere cannot go ahead until
-   the operator moves them. Two legs on one chain draw on the same balance: check it covers both. On
-   Solana the account also needs SOL, and on Ethereum gas can be a large share of a small amount: say so
-   for that leg.
+2. **Check every leg before any money moves:** `earn_quote` with `direction: "deposit"`, the real account and amount,
+   for each vault. The asset has to be on that vault's chain already (USDG, not USDC, on Robinhood Chain); this skill
+   does not bridge, so a leg whose funds are elsewhere cannot go ahead until the operator moves them. Two legs on one
+   chain draw on the same balance: check it covers both. On Solana the account also needs SOL, and on Ethereum gas can
+   be a large share of a small amount: say so for that leg.
 3. **Show one plan and get a yes to it:** a row per leg (vault, chain, amount, asset) with the total, and
    which legs cannot go ahead and why. Changing the plan is the operator's call, not yours.
-4. **Then run the legs one at a time, each through the whole deposit flow below.** Each leg has its own
-   receiver check, and through `connect` its own acknowledgement and yes. `earn_terms` comes once, before
-   the operator's first deposit, as below. The EVM chains share one connected wallet; Solana needs its own
-   (`connect wallet --chain solana`). Do not start the next leg until the last one has landed or been
-   abandoned.
+4. **Then run the legs one at a time, each through the whole deposit flow below.** Each leg has its own receiver check,
+   and through `connect` its own acknowledgement and yes. `earn_terms` comes once, before the operator's first deposit,
+   as below. The EVM chains share one connected wallet; Solana needs its own (`connect wallet --chain solana`). Do not
+   start the next leg until the last one has landed or been abandoned.
 5. **If a leg fails or the operator stops it, stop and ask before the rest.** Then report every leg:
    vault, chain, amount, transaction, and which did not happen.
 
@@ -246,30 +239,26 @@ with these differences — say them to the operator where they apply:
      one.
    - `REFUSED_BY_CLIENT` / `UNRESOLVED` → stop; the first is a registry/chain mismatch, the
      second a transport failure. Neither is a verdict about the vault.
-5. **Through `connect`, skip this step:** `connect deposit` builds the same calls (on Solana, the one transaction) and checks them, and
-   opens the signing page only after the operator acknowledges them, every time (see **Handing calls to
-   the signer** below). Its acknowledgement restates the disclosures in plain words on every
-   deposit; on a first deposit the full `earn_terms` of step 3 still come first.
-   **Otherwise, `earn_prepare_deposit`, then hand BOTH calls in `calls` to the signer in order, and ask before each.**
-   (On Solana it returns one transaction instead: see **Solana is different** above.) The
-   envelope names `chain` and `chainId`: tell the operator which chain these calls are for before
-   anything else, because a call sent on the wrong chain can be mined there and do nothing. The
-   amount is in the vault's asset (USDC, or USDG on Robinhood Chain; 6 decimals for both); the tool
-   refuses more precision than that. Show the operator
-   each call's `description` — that sentence exists to be read by a human before a signature —
-   **and its `gasAdvice`**: Morpho V2 calls can run out of gas on an unbuffered estimate even
-   when every simulation passes, because accrual work grows with the time between estimate and
-   inclusion. Estimate × 1.5. **And its `precondition`, where present**: the `deposit` call names
-   the read (`allowance(owner, spender) >= minimum`, raw units) that must hold on the RPC the
-   signer sends through before it is estimated or sent. The `approve` receipt can come from a
-   node ahead of the one simulating the `deposit` — measured on both real round trips — so a
-   signer that reads the precondition until it holds is deterministic and one that retries on
-   an error string is not. **Then follow the envelope's `signer_rules`**, which every prepared
-   build carries: send on the chain the call's `chainId` names and no other, confirm each destination against the operator's own addresses, set the nonce
-   from the `pending` count before each send, wait for each receipt, and after any failure that
-   is not an on-chain revert, read the nonce on a different provider before re-sending, so
-   nothing is sent twice. The hand-off itself — the destination check and the operator's own
-   terminal — is the section **Handing calls to the signer** below; do not skip it for a small amount.
+5. **Through `connect`, skip this step:** `connect deposit` builds the same calls (on Solana, the one transaction) and
+   checks them, and opens the signing page only after the operator acknowledges them, every time (see **Handing calls to
+   the signer** below). Its acknowledgement restates the disclosures in plain words on every deposit; on a first deposit
+   the full `earn_terms` of step 3 still come first. **Otherwise, `earn_prepare_deposit`, then hand BOTH calls in
+   `calls` to the signer in order, and ask before each.** (On Solana it returns one transaction instead: see **Solana is
+   different** above.) The envelope names `chain` and `chainId`: tell the operator which chain these calls are for
+   before anything else, because a call sent on the wrong chain can be mined there and do nothing. The amount is in the
+   vault's asset (USDC, or USDG on Robinhood Chain; 6 decimals for both); the tool refuses more precision than that.
+   Show the operator each call's `description` — that sentence exists to be read by a human before a signature — **and
+   its `gasAdvice`**: Morpho V2 calls can run out of gas on an unbuffered estimate even when every simulation passes,
+   because accrual work grows with the time between estimate and inclusion. Estimate × 1.5. **And its `precondition`,
+   where present**: the `deposit` call names the read (`allowance(owner, spender) >= minimum`, raw units) that must hold
+   on the RPC the signer sends through before it is estimated or sent. The `approve` receipt can come from a node ahead
+   of the one simulating the `deposit` — measured on both real round trips — so a signer that reads the precondition
+   until it holds is deterministic and one that retries on an error string is not. **Then follow the envelope's
+   `signer_rules`**, which every prepared build carries: send on the chain the call's `chainId` names and no other,
+   confirm each destination against the operator's own addresses, set the nonce from the `pending` count before each
+   send, wait for each receipt, and after any failure that is not an on-chain revert, read the nonce on a different
+   provider before re-sending, so nothing is sent twice. The hand-off itself — the destination check and the operator's
+   own terminal — is the section **Handing calls to the signer** below; do not skip it for a small amount.
 6. **After it lands, `earn_balance`** and report value, basis, yield, and what can be withdrawn now. Until a signer's
    transaction confirms, the deposit has NOT happened — `requires_signature: true` is the tool
    saying so, and "prepared" is not "deposited". The vault's events
@@ -293,30 +282,26 @@ which has no scan, the keyed RPC is `TREASURY_RPC_SOLANA`.
 🔴 **`measuredAs: "not measured"` means the RPC failed, NOT that the vault refused** — say so rather
 than reporting a limit the chain never stated.
 
-- `earn_balance` answers "what is it worth" at the current block, plus entry basis and accrued
-  yield derived from the vault's own `Deposit`/`Withdraw` events for this owner. Read
-  `scan.wholeHistory`: when `true`, the scan reached the deployment block, was not cut short, and
-  shares in − shares out reconciles, so basis and yield are the account's lifetime figures; when
-  `false`, both read `unknown` — **never a bound over the covered window**, because a window that
-  reconciles can still have missed the deposit that produced the shares. The note says which
-  provider window capped the scan. Realized redemption is subject to the vault's caps and any queue,
-  so quote value as a value, not a promise.
+- `earn_balance` answers "what is it worth" at the current block, plus entry basis and accrued yield derived from the
+  vault's own `Deposit`/`Withdraw` events for this owner. Read `scan.wholeHistory`: when `true`, the scan reached the
+  deployment block, was not cut short, and shares in − shares out reconciles, so basis and yield are the account's
+  lifetime figures; when `false`, both read `unknown` — **never a bound over the covered window**, because a window that
+  reconciles can still have missed the deposit that produced the shares. The note says which provider window capped the
+  scan. Realized redemption is subject to the vault's caps and any queue, so quote value as a value, not a promise.
 - **Withdraw in the vault's asset** (USDC; USDG on Robinhood Chain). `earn_quote` with `direction: "withdraw"`, then `connect withdraw` (same flags,
   receiver = the connected account) or `earn_prepare_withdraw` with `amount_usdc` and the `account` whose shares burn; the vault burns
   whatever shares that costs at inclusion. To empty the account, pass `--all` and
   `--shares_exact` copied **verbatim** from `earn_balance.sharesExact` — never a number you rounded
   or computed: an 18-decimal balance exceeds 2⁵³, floats round it (sometimes up), and redeeming
   more than is owned reverts.
-- **A withdrawal can be refused for liquidity, not balance.** Some vaults (Fusion) pay a withdrawal
-  only from what they hold un-deployed in that block; the rest of the account's value is in markets
-  and comes back when the fund unwinds. The withdraw quote reports `instantLiquidity` and, on a
-  Fusion refusal, says so in those terms. Tell the operator that at most that amount comes out now, and
-  ask whether to withdraw that, another amount, or wait; do not shrink the withdrawal yourself. A Morpho V2
-  vault holds almost no idle USDC and pays out of its markets, so there the quote shows the chain's
-  own revert reason instead, and a smaller amount may still pass: say so, and quote only an amount the
-  operator names. Either way, do **not** read a
-  refusal as "approve first" (that is a deposit failure) and do not trust `maxWithdraw`, which
-  reports the full position on exactly these vaults.
+- **A withdrawal can be refused for liquidity, not balance.** Some vaults (Fusion) pay a withdrawal only from what they
+  hold un-deployed in that block; the rest of the account's value is in markets and comes back when the fund unwinds.
+  The withdraw quote reports `instantLiquidity` and, on a Fusion refusal, says so in those terms. Tell the operator that
+  at most that amount comes out now, and ask whether to withdraw that, another amount, or wait; do not shrink the
+  withdrawal yourself. A Morpho V2 vault holds almost no idle USDC and pays out of its markets, so there the quote shows
+  the chain's own revert reason instead, and a smaller amount may still pass: say so, and quote only an amount the
+  operator names. Either way, do **not** read a refusal as "approve first" (that is a deposit failure) and do not trust
+  `maxWithdraw`, which reports the full position on exactly these vaults.
 - One call, one signature, same rules as depositing: show the description and `gasAdvice`, run
   the destination check below on `receiver`, hand it over.
 
@@ -481,13 +466,11 @@ you do it, and here is why the key stays with you."
 
 ## What this skill will not do
 
-- **Hold a key, sign, or send.** If the operator asks you to "just do it", answer with the
-  hand-off above: `connect` when there is a browser here; otherwise the calls are built, what each one
-  does, and the terminal commands to send them.
-  The two that bite: send the `approve` and the `deposit` as separate transactions in that order,
-  checking the deposit's own `precondition` in between rather than assuming the approve has
-  propagated; and never reuse a nonce across the pair. `docs/runbooks/sign_and_send.md` in the
-  Agent Treasury repository covers the rest.
+- **Hold a key, sign, or send.** If the operator asks you to "just do it", answer with the hand-off above: `connect`
+  when there is a browser here; otherwise the calls are built, what each one does, and the terminal commands to send
+  them. The two that bite: send the `approve` and the `deposit` as separate transactions in that order, checking the
+  deposit's own `precondition` in between rather than assuming the approve has propagated; and never reuse a nonce
+  across the pair. `docs/runbooks/sign_and_send.md` in the Agent Treasury repository covers the rest.
 - **Schedule anything.** Recurring or end-of-month withdrawals are the operator's own scheduler
   calling one-shot `earn_prepare_withdraw`; nothing here runs unattended.
 - **Deposit into a vault outside `depositable`**, override a `WHITELIST_GATED` or
