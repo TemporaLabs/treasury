@@ -118,6 +118,8 @@ describe("a Solana withdrawal whose simulation burns fewer shares than asked for
     expect(capped.canWithdraw).toBe(false);
     expect(capped.receives).toBeUndefined();
     expect(capped.note).toMatch(/partial withdrawal/);
+    // The operator decides whether to try a smaller amount; the note does not pick one.
+    expect(capped.note).toMatch(/Ask the operator whether to withdraw a smaller amount/);
   });
 
   it("connect withdraw: the transaction for the acknowledged shares is refused before any page opens when a leg is capped", async () => {
