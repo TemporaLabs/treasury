@@ -19,6 +19,10 @@ Pre-1.0, minor versions may change tool names, schemas and behaviour.
   failing endpoint (5xx) on the public endpoint reached the operator without the hint naming
   `TREASURY_RPC_SOLANA`. The error is now described from its code and status, in either mode.
 
+### Dependencies
+- Development: source-map-js 1.2.2, used only by the build tooling, fixing GHSA-68fv-2mgg-jv7q. The
+  CLI bundle is unchanged.
+
 ## [v0.1.3] - 2026-10-13
 
 ### Added — Ethereum and Monad
