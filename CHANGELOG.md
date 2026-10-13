@@ -10,9 +10,10 @@ Pre-1.0, minor versions may change tool names, schemas and behaviour.
 - **On Solana, `earn balance` no longer reports a capped exit as a full one** (#154). Kamino caps a
   withdrawal leg its reserve cannot pay instead of failing it, so the simulated full withdrawal could
   succeed while burning only part of the shares. `exit` now applies the same check as quote and
-  prepare: when shares would be left behind, `measuredAs` reads `"a capped withdrawal"`,
-  `exitableNow` is what that withdrawal would pay, and the note says a full withdrawal cannot be
-  prepared now.
+  prepare, and the note says when a full withdrawal cannot be prepared now. A smaller amount is
+  reported only if a withdrawal of just the shares that did burn simulates without a cap
+  (`measuredAs: "a simulated partial withdrawal"`); otherwise `exitableNow` is `unknown`
+  (`measuredAs: "a capped withdrawal"`).
 
 ## [v0.1.3] - 2026-10-13
 

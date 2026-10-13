@@ -190,15 +190,23 @@ export async function solanaBalance(vault: SolanaVaultEntry, account: string) {
       exit = { exitableNow: `0 ${vault.asset.symbol}`, measuredAs: "no position" };
     } else {
       try {
+        const usdc = (x: bigint) => `${formatAmount(x, vault.asset.decimals)} ${vault.asset.symbol}`;
         const { sim, received, burned, legs } = await simulateWithdraw(rpc, v, owner, held.amount);
         // A capped leg succeeds and pays less, so a successful simulation is a full exit only when every share burns.
         const partial = received === undefined || burned === undefined ? undefined : partialWithdrawal(held.amount, burned, legs, vault.shareDecimals, sim.slot);
-        exit =
-          received === undefined || burned === undefined
-            ? { exitableNow: "unknown", measuredAs: "refused", note: `a full withdrawal was refused at this slot: ${describeSimulation(sim)}` }
-            : partial
-              ? { exitableNow: `${formatAmount(received, vault.asset.decimals)} ${vault.asset.symbol}`, measuredAs: "a capped withdrawal", note: `a full withdrawal cannot be prepared now: ${partial}. \`exitableNow\` is what it would pay, net of the up to 0.001 USDC Kamino keeps per withdraw instruction` }
-              : { exitableNow: `${formatAmount(received, vault.asset.decimals)} ${vault.asset.symbol}`, measuredAs: "a simulated full withdrawal", note: "net of the up to 0.001 USDC Kamino keeps per withdraw instruction" };
+        if (received === undefined || burned === undefined) {
+          exit = { exitableNow: "unknown", measuredAs: "refused", note: `a full withdrawal was refused at this slot: ${describeSimulation(sim)}` };
+        } else if (!partial) {
+          exit = { exitableNow: usdc(received), measuredAs: "a simulated full withdrawal", note: "net of the up to 0.001 USDC Kamino keeps per withdraw instruction" };
+        } else {
+          // What the capped exit paid is not by itself withdrawable: report it only when a withdrawal of just the
+          // shares that burned simulates without a cap, as quote and prepare would require.
+          const part = burned > 0n ? await simulateWithdraw(rpc, v, owner, burned) : undefined;
+          const fits = part?.received !== undefined && part.burned !== undefined && !partialWithdrawal(burned, part.burned, part.legs, vault.shareDecimals, part.sim.slot);
+          exit = fits
+            ? { exitableNow: usdc(part!.received!), measuredAs: "a simulated partial withdrawal", note: `a full withdrawal cannot be prepared now: ${partial}. \`exitableNow\` is what a withdrawal of ${formatAmount(burned, vault.shareDecimals)} shares pays at this slot, net of the up to 0.001 USDC Kamino keeps per withdraw instruction` }
+            : { exitableNow: "unknown", measuredAs: "a capped withdrawal", note: `a full withdrawal cannot be prepared now: ${partial}. A smaller withdrawal was not found to fit; run \`earn quote --direction withdraw\` for an amount the operator names` };
+        }
       } catch (e) {
         exit = { exitableNow: "unknown", measuredAs: "not measured", note: describeError(e) };
       }
