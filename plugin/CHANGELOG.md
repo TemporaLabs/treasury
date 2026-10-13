@@ -4,7 +4,7 @@ All notable changes to the Agent Treasury plugin are recorded here. The format f
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versions follow [SemVer](https://semver.org/).
 The product's own changes are in the repository's [`CHANGELOG.md`](../CHANGELOG.md).
 
-## [v0.1.3] - Unreleased
+## [v0.1.3] - 2026-10-13
 
 Carries `@temporalabs/treasury` v0.1.3.
 
