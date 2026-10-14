@@ -30,6 +30,12 @@ Pre-1.0, minor versions may change tool names, schemas and behaviour.
   with a Solana leg runs leg by leg. The acknowledgement says which: one signing page, or a page per leg.
 
 ### Fixed
+- **A page lock left by a crashed run is replaced safely** (#154). Two runs that found the same leftover lock at
+  the same instant could both take it over and both open a page; a run now moves the old file aside and keeps it
+  only if it is the one it judged stale. And a leftover lock whose process ID had been reused (by another program,
+  or by the same process) was read as live until it expired, about ten minutes later; the page's process now
+  touches the file every 5 seconds, and a lock untouched for 30 seconds, and still untouched one beat later, is
+  replaced. A lock written by an earlier version, which does not touch its file, is judged by its process ID as before.
 - **On Solana, a landed withdrawal is checked for what it paid, not only that the asset rose** (#154).
   The check reads every token account of the vault's asset in the transaction. Any other owner whose
   balance rose in the same transaction is reported as `extra_transfer` with `alsoMoved`, as on EVM.

@@ -235,7 +235,7 @@ export async function serveOnce<T>(flow: Flow<T>): Promise<Handle<T>> {
     });
   // Taken before any port is tried: a page this machine already has open is reported as that, and
   // never answered by opening a second one on the next port.
-  const lock = claimPageLock(flow.ttlMs + LOCK_MARGIN_MS);
+  const lock = await claimPageLock(flow.ttlMs + LOCK_MARGIN_MS);
   try {
     let busy: Error | undefined;
     let bound = false;

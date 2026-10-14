@@ -46412,7 +46412,7 @@ import http2 from "http";
 import { randomBytes as randomBytes2, timingSafeEqual } from "crypto";
 
 // src/connect/session.ts
-import { chmodSync, closeSync, mkdirSync, openSync, readFileSync, rmSync, statSync, writeFileSync, writeSync } from "fs";
+import { chmodSync, closeSync, linkSync, mkdirSync, openSync, readFileSync, renameSync, rmSync, statSync, utimesSync, writeFileSync, writeSync } from "fs";
 import { homedir } from "os";
 import { join } from "path";
 
@@ -46529,6 +46529,8 @@ function clearPlan() {
 }
 var pageLockPath = () => join(dir(), "connect-page.lock");
 var LOCK_WRITE_GRACE_MS = 2e3;
+var LOCK_BEAT_MS = 5e3;
+var LOCK_BEAT_STALE_MS = 3e4;
 var alive = (pid) => {
   try {
     process.kill(pid, 0);
@@ -46537,49 +46539,83 @@ var alive = (pid) => {
     return e4.code === "EPERM";
   }
 };
+var mtimeOf = (path) => {
+  try {
+    return statSync(path).mtimeMs;
+  } catch {
+    return void 0;
+  }
+};
 function heldBy(path) {
   let raw;
   try {
     raw = readFileSync(path, "utf8");
   } catch {
-    return void 0;
+    return { held: false, raw: void 0 };
   }
   try {
     const v = JSON.parse(raw);
-    if (typeof v.pid !== "number" || typeof v.expiresAt !== "number") return void 0;
-    if (v.expiresAt < Date.now() || !alive(v.pid)) return void 0;
-    return { pid: v.pid, ...typeof v.port === "number" ? { port: v.port } : {} };
+    if (typeof v.pid !== "number" || typeof v.expiresAt !== "number") return { held: false, raw };
+    if (v.expiresAt < Date.now() || !alive(v.pid)) return { held: false, raw };
+    const port = typeof v.port === "number" ? { port: v.port } : {};
+    const mtimeMs = mtimeOf(path);
+    if (v.beat === true && mtimeMs !== void 0 && Date.now() - mtimeMs > LOCK_BEAT_STALE_MS) return { held: "unless-beating", raw, mtimeMs, pid: v.pid, ...port };
+    return { held: true, pid: v.pid, ...port };
   } catch {
-    try {
-      return Date.now() - statSync(path).mtimeMs < LOCK_WRITE_GRACE_MS ? { pid: 0 } : void 0;
-    } catch {
-      return void 0;
-    }
+    const mtimeMs = mtimeOf(path);
+    return mtimeMs !== void 0 && Date.now() - mtimeMs < LOCK_WRITE_GRACE_MS ? { held: true, pid: 0 } : { held: false, raw };
   }
 }
-function claimPageLock(ttlMs) {
+function replaceStale(path, seen) {
+  const aside = `${path}.${process.pid}.${Math.random().toString(36).slice(2)}`;
+  try {
+    renameSync(path, aside);
+  } catch (e4) {
+    if (e4.code === "ENOENT") return true;
+    throw e4;
+  }
+  let moved;
+  try {
+    moved = readFileSync(aside, "utf8");
+  } catch {
+    moved = void 0;
+  }
+  if (moved !== seen) {
+    try {
+      linkSync(aside, path);
+    } catch {
+    }
+  }
+  rmSync(aside, { force: true });
+  return moved === seen;
+}
+async function claimPageLock(ttlMs, { beatMs = LOCK_BEAT_MS, waitMs = LOCK_BEAT_MS + 1e3 } = {}) {
   mkdirSync(dir(), { recursive: true, mode: 448 });
   const path = pageLockPath();
   const token = `${process.pid}.${Date.now()}.${Math.random().toString(36).slice(2)}`;
   const expiresAt = Date.now() + ttlMs;
-  const write = (port) => writeFileSync(path, JSON.stringify({ pid: process.pid, expiresAt, token, ...port ? { port } : {} }), { mode: 384 });
+  const body = (port) => JSON.stringify({ pid: process.pid, expiresAt, token, beat: true, ...port ? { port } : {} });
+  const write = (port) => writeFileSync(path, body(port), { mode: 384 });
+  const refuse = (port) => new Error(`another sign-in or confirmation page is still open${port ? ` on port ${port}` : ""}; finish or close it, then retry`);
   for (let attempt = 0; ; attempt++) {
     try {
       const fd = openSync(path, "wx", 384);
       try {
-        writeSync(fd, JSON.stringify({ pid: process.pid, expiresAt, token }));
+        writeSync(fd, body());
       } finally {
         closeSync(fd);
       }
       break;
     } catch (e4) {
       if (e4.code !== "EEXIST") throw e4;
-      const holder = heldBy(path);
-      if (holder || attempt > 0) {
-        const where = holder?.port ? ` on port ${holder.port}` : "";
-        throw new Error(`another sign-in or confirmation page is still open${where}; finish or close it, then retry`);
+      let h = heldBy(path);
+      if (h.held === "unless-beating") {
+        const { mtimeMs, port, raw } = h;
+        await new Promise((r) => setTimeout(r, waitMs));
+        h = mtimeOf(path) !== mtimeMs ? { held: true, pid: h.pid, ...port ? { port } : {} } : { held: false, raw };
       }
-      rmSync(path, { force: true });
+      if (h.held === true) throw refuse(h.port);
+      if (attempt > 2 || h.raw !== void 0 && !replaceStale(path, h.raw)) throw refuse();
     }
   }
   const ours = () => {
@@ -46589,11 +46625,21 @@ function claimPageLock(ttlMs) {
       return false;
     }
   };
+  const beat = setInterval(() => {
+    if (!ours()) return;
+    try {
+      const t = /* @__PURE__ */ new Date();
+      utimesSync(path, t, t);
+    } catch {
+    }
+  }, beatMs);
+  beat.unref();
   return {
     setPort: (port) => {
       if (ours()) write(port);
     },
     release: () => {
+      clearInterval(beat);
       if (ours()) rmSync(path, { force: true });
     }
   };
@@ -46746,7 +46792,7 @@ async function serveOnce(flow) {
     });
     server.listen({ port, host, ipv6Only: host === "::1" }, () => resolve2());
   });
-  const lock = claimPageLock(flow.ttlMs + LOCK_MARGIN_MS);
+  const lock = await claimPageLock(flow.ttlMs + LOCK_MARGIN_MS);
   try {
     let busy2;
     let bound = false;

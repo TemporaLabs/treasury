@@ -333,7 +333,9 @@ A `connect wallet` that completes a sign-in, or a `connect disconnect`, clears a
 acknowledgement; a sign-in that does not finish leaves it as it was. The pending one
 sits beside the session file (`connect-ack.json`, owner-readable only) and holds a digest of the calls,
 not the calls. While a page is open, `connect-page.lock` beside them names its process and port, and a second
-sign-in or confirmation is refused until the page closes.
+sign-in or confirmation is refused until the page closes. The page's process touches the file every 5 seconds; a
+lock left by a run that crashed (its process gone, its page expired, or the file untouched for 30 seconds and still
+untouched a few seconds later) is replaced.
 
 ### What the confirm flow returns
 
