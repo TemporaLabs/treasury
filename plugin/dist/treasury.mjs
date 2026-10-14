@@ -47196,6 +47196,7 @@ function planAcknowledgementText(legs, totals) {
   const fees = DISCLOSURES.plain.deposit.find((d) => d.startsWith("Tempora Labs runs this vault"));
   const disclosures = [...new Set(legs.flatMap((s2) => s2.disclosures))].map((d) => several && d === fees ? DISCLOSURES.plain.feesSeveral : d);
   const minutes = Math.round(PLAN_TTL_MS / 6e4);
+  const onePage = !legs.some((s2) => s2.chainId === null);
   const legLines = legs.flatMap((s2, i) => {
     const lands = s2.action === "deposit" ? "Shares go to" : `${s2.asset} goes to`;
     const prompts = s2.prompts ?? (s2.action === "deposit" ? `Your wallet will ask you twice: first to approve ${s2.amount} to the vault, then to make the deposit.` : `Your wallet will ask you once, to make the withdrawal.`);
@@ -47212,8 +47213,8 @@ function planAcknowledgementText(legs, totals) {
   return [
     `Confirm before any signing page opens. Nothing has been sent.`,
     ``,
-    `This plan has ${n} ${n === 1 ? "leg" : "legs"}, run in this order on one signing page, where your wallet asks you to confirm each transaction. If a leg does not complete, the legs after it do not run.`,
-    `The plan lasts ${minutes} minutes: a leg not started by then does not run, and connecting a wallet again cancels it. To stop partway, reject a transaction in your wallet, or stop the plan on the signing page; the legs after it then do not run.`,
+    `This plan has ${n} ${n === 1 ? "leg" : "legs"}, run in this order ${onePage ? "on one signing page" : "each on its own signing page"}, where your wallet asks you to confirm each transaction. If a leg does not complete, the legs after it do not run.`,
+    `The plan lasts ${minutes} minutes: a leg not started by then does not run, and connecting a wallet again cancels it. To stop partway, reject a transaction in your wallet, or stop the plan on ${onePage ? "the" : "that leg's"} signing page; the legs after it then do not run.`,
     ``,
     ...legLines,
     ...totals.length ? [`In total: ${totals.join("; ")}.`, ``] : [],
@@ -47226,7 +47227,7 @@ function planAcknowledgementText(legs, totals) {
     ...disclosures.map((d) => `  - ${d}`),
     `  ${DISCLOSURES.plain.fullTerms}`,
     ``,
-    `Do you acknowledge and want the signing page opened for exactly these ${n} ${n === 1 ? "leg" : "legs"}, run one leg at a time? Reply yes or no.`
+    `Do you acknowledge and want ${onePage ? "the signing page" : "the signing pages"} opened for exactly these ${n} ${n === 1 ? "leg" : "legs"}, run one leg at a time? Reply yes or no.`
   ].join("\n");
 }
 
@@ -47453,7 +47454,7 @@ var ackArg = external_exports.string().regex(/^[0-9a-fA-F]{8}$/, "the 8-characte
 );
 var CONNECT_TTL_MS = 9 * 6e4;
 var CONFIRM_TTL_MS = 9 * 6e4;
-var LEG_MIN_MS = 3 * 6e4;
+var LEG_MIN_MS = 5 * 6e4;
 function signInMessage(a) {
   return [
     `${new URL(a.origin).host} wants you to sign in with your Ethereum account:`,
@@ -47741,6 +47742,7 @@ function buildConnectCommands(deps = {}) {
     appId: privyAppId()
   });
   const notConnectedSolana = () => new Error("no Solana wallet is connected \u2014 run `treasury connect wallet --chain solana` first, and let the operator sign in");
+  const planTx = (t) => ({ hash: t.hash, verified: t.verified, ...t.alsoMoved?.length ? { alsoMoved: t.alsoMoved } : {} });
   const markLeg = (code, index2, update) => {
     const cur = readPlan();
     if (!cur || cur.code !== code) return;
@@ -47749,16 +47751,23 @@ function buildConnectCommands(deps = {}) {
   };
   const runPlanLeg = async (plan, index2, run2) => {
     markLeg(plan.code, index2, { status: "running" });
+    let opened = false;
+    const open2 = (url2) => (opened = true, (deps.open ?? announce)(url2));
     let text2;
     try {
-      text2 = await run2();
+      text2 = await run2(open2);
     } catch (e4) {
-      markLeg(plan.code, index2, { status: "not_reported", reason: redactEndpoints(e4 instanceof Error ? e4.message : String(e4)) });
+      const message = redactEndpoints(e4 instanceof Error ? e4.message : String(e4));
+      if (!opened) {
+        markLeg(plan.code, index2, { status: "pending" });
+        throw new Error(`${message} (no page opened and nothing was sent; leg ${plan.legs[index2].leg} of the plan can run again)`);
+      }
+      markLeg(plan.code, index2, { status: "not_reported", reason: message });
       throw e4;
     }
     const r = JSON.parse(text2);
     const status = r.status === "completed" ? "completed" : r.status === "stopped" ? "stopped" : "not_reported";
-    markLeg(plan.code, index2, { status, txs: (r.txs ?? []).map((t) => ({ hash: t.hash, verified: t.verified })), ...r.reason ? { reason: r.reason } : {} });
+    markLeg(plan.code, index2, { status, txs: (r.txs ?? []).map(planTx), ...r.reason ? { reason: r.reason } : {} });
     const leg = plan.legs[index2];
     const next = plan.legs[index2 + 1];
     const next_step = status !== "completed" ? `The plan ended at leg ${leg.leg} of ${plan.legs.length}: the legs after it will not run. ${r.next_step}` : next ? `Leg ${leg.leg} of ${plan.legs.length} completed. Report its hashes to the operator, then run leg ${next.leg} without asking again (their yes covered every leg): ${next.command}` : `Leg ${leg.leg} of ${plan.legs.length} completed, and with it the whole plan. Report every leg's hashes to the operator (\`connect plan --status\` lists them).`;
@@ -47816,7 +47825,7 @@ function buildConnectCommands(deps = {}) {
     if (mode.kind === "plan") {
       const plan = readPlan();
       const index2 = checkPlanLeg(mode.code, mode.leg, plan, digest, now());
-      return runPlanLeg(plan, index2, async () => solanaOutcome(session, await runConfirmSolana(await intent(), session, solanaDeps())));
+      return runPlanLeg(plan, index2, async (open2) => solanaOutcome(session, await runConfirmSolana(await intent(), session, { ...solanaDeps(), open: open2 })));
     }
     checkAckDigest(mode.ack, readPendingAck(), digest, now());
     clearPendingAck();
@@ -47835,7 +47844,7 @@ function buildConnectCommands(deps = {}) {
     if (mode.kind === "plan") {
       const plan = readPlan();
       const index2 = checkPlanLeg(mode.code, mode.leg, plan, callsDigest(calls, account), now());
-      return runPlanLeg(plan, index2, async () => outcome(calls[0].chainId, session.account, await runConfirm(calls, session, deps)));
+      return runPlanLeg(plan, index2, async (open2) => outcome(calls[0].chainId, session.account, await runConfirm(calls, session, { ...deps, open: open2 })));
     }
     const ack = mode.ack;
     if (ack === void 0) {
@@ -48086,18 +48095,18 @@ function buildConnectCommands(deps = {}) {
     const session = readSession();
     if (!session) throw notConnected();
     const report = (status, p, extra, next_step) => JSON.stringify({ status, code: p.code, expiresAtIso: p.expiresAtIso, ...extra, legs: planSummary(p), next_step }, null, 2);
-    const endedReport = (p) => {
+    const endedReport = (p, opened2 = false) => {
       const ended2 = p.legs.find((l) => l.status !== "pending" && l.status !== "completed");
       if (ended2) {
         return report(
           ended2.status === "running" ? "not_reported" : ended2.status,
           p,
-          { opened: false },
+          { opened: opened2 },
           ended2.status === "running" ? `Leg ${ended2.leg}'s run never finished, so whether it sent anything is not known here. Check the account with \`earn balance\` and tell the operator; the legs after it do not run.` : `The plan ended at leg ${ended2.leg} (${ended2.status}${ended2.reason ? `: ${ended2.reason}` : ""}); the legs after it did not run. Report each leg's transactions to the operator, check the account with \`earn balance\`, and do not retry blindly.`
         );
       }
       if (p.legs.every((l) => l.status === "completed")) {
-        return report("completed", p, { opened: false }, "Every leg landed as confirmed. Report each leg's transactions to the operator; any `extra_transfer` is money the wallet moved besides the call \u2014 say so.");
+        return report("completed", p, { opened: opened2 }, "Every leg landed as confirmed. Report each leg's transactions to the operator; any `extra_transfer` is money the wallet moved besides the call \u2014 say so.");
       }
       return void 0;
     };
@@ -48117,14 +48126,23 @@ function buildConnectCommands(deps = {}) {
     const endsAt = Date.now() + ttlMs;
     let current;
     let paused = false;
+    const mine = structuredClone(plan);
+    const record2 = (index2, update) => {
+      mine.legs[index2] = { ...mine.legs[index2], ...update };
+      markLeg(plan.code, index2, update);
+    };
+    const replaced = () => readPlan()?.code !== plan.code;
+    const startable = (index2) => mine.legs[index2]?.status === "pending" && readPlan()?.legs[index2]?.status === "pending";
+    const endReplaced = () => {
+      const next = mine.legs.findIndex((l) => l.status === "pending");
+      if (next >= 0) mine.legs[next] = { ...mine.legs[next], status: "stopped", reason: "the plan was replaced or cleared by another command while its page was open" };
+    };
     const reused = plan.page;
-    const page = reused ?? { secret: newSecret(), port: 0 };
-    const ports = reused?.port ? [reused.port, ...connectPorts().filter((p) => p !== reused.port)] : connectPorts();
-    const legStatusOf = (status, txs, reason) => ({ status, txs: txs.map((t) => ({ hash: t.hash, verified: t.verified })), ...reason ? { reason } : {} });
-    const pendingLeft = () => (readPlan()?.legs ?? []).some((l) => l.status === "pending");
-    const handle = await serveOnce({
+    const legStatusOf = (status, txs, reason) => ({ status, txs: txs.map(planTx), ...reason ? { reason } : {} });
+    const pendingLeft = () => mine.legs.some((l) => l.status === "pending");
+    const serve = (secret2, ports) => serveOnce({
       mode: "plan",
-      secret: page.secret,
+      secret: secret2,
       ttlMs,
       ...deps.cancelGraceMs !== void 0 ? { cancelGraceMs: deps.cancelGraceMs } : {},
       timeoutReason: () => current ? "the page's time limit ran out during a leg" : "paused for the shell's time limit",
@@ -48133,7 +48151,7 @@ function buildConnectCommands(deps = {}) {
       assets: assets(),
       ports,
       info: () => {
-        const p = readPlan() ?? plan;
+        const p = mine;
         return {
           mode: "plan",
           appId: privyAppId(),
@@ -48149,19 +48167,20 @@ function buildConnectCommands(deps = {}) {
       // The operator stopped the plan on the page: after the wallet declined (nothing sent), or between legs. A hash
       // the page could not hand over is put on record first, and its leg is then "may have been sent".
       onReject: (body) => {
-        const p = readPlan();
-        if (!p) return;
         const reason = typeof body["reason"] === "string" ? body["reason"].slice(0, 300) : "stopped on the page";
         if (current) {
           current.core.onReject(body);
           const out = current.core.done;
           const unverified = out.some((t) => t.verified === "unverified");
-          markLeg(p.code, current.index, unverified ? legStatusOf("not_reported", out, `may have been sent: ${reason}`) : legStatusOf(body["declined"] === true ? "stopped" : "not_reported", out, reason));
+          record2(current.index, unverified ? legStatusOf("not_reported", out, `may have been sent: ${reason}`) : legStatusOf(body["declined"] === true ? "stopped" : "not_reported", out, reason));
           current = void 0;
           return;
         }
-        const next = p.legs.findIndex((l) => l.status === "pending");
-        if (next >= 0) markLeg(p.code, next, { status: "stopped", reason: `the operator stopped the plan before this leg: ${reason}` });
+        const next = mine.legs.findIndex((l) => l.status === "pending");
+        if (next < 0) return;
+        const stop = { status: "stopped", reason: `the operator stopped the plan before this leg: ${reason}` };
+        if (startable(next)) record2(next, stop);
+        else mine.legs[next] = { ...mine.legs[next], ...stop };
       },
       accept: async (body) => {
         if (body["start"] !== void 0) {
@@ -48170,20 +48189,25 @@ function buildConnectCommands(deps = {}) {
             paused = true;
             return { ok: true, final: true, value: "settled", reply: { paused: true } };
           }
-          const p2 = readPlan();
-          const leg = p2?.legs.find((l) => l.leg === body["start"]);
-          if (!p2 || !leg) return { ok: false, reason: `no leg ${String(body["start"])} in this plan` };
+          if (replaced()) {
+            endReplaced();
+            return { ok: false, fatal: true, reason: "this plan was replaced or cleared by another command, so nothing more runs on this page" };
+          }
+          if (planExpired(mine, now())) return { ok: false, fatal: true, reason: `the plan expired at ${mine.expiresAtIso}; legs that had not started do not run` };
+          const leg = mine.legs.find((l) => l.leg === body["start"]);
+          if (!leg) return { ok: false, reason: `no leg ${String(body["start"])} in this plan` };
+          if (!startable(mine.legs.indexOf(leg))) return { ok: false, reason: `leg ${leg.leg} is running, or has run, elsewhere; this page does not start it` };
           let core2;
           let index3;
           try {
             const calls = legCalls(leg, session);
-            index3 = checkPlanLeg(p2.code, leg.leg, p2, callsDigest(calls, account), now());
+            index3 = checkPlanLeg(plan.code, leg.leg, mine, callsDigest(calls, account), now());
             core2 = await prepareConfirm(calls, session, deps, endsAt);
           } catch (e4) {
             return { ok: false, reason: redactEndpoints(e4 instanceof Error ? e4.message : String(e4)) };
           }
-          if (current || readPlan()?.legs[index3]?.status !== "pending") return { ok: false, reason: "the plan was stopped, or this leg started, while it was being prepared" };
-          markLeg(p2.code, index3, { status: "running" });
+          if (current || !startable(index3) || replaced()) return { ok: false, reason: "the plan was stopped, replaced, or this leg started, while it was being prepared" };
+          record2(index3, { status: "running" });
           current = { index: index3, core: core2 };
           return { ok: true, final: false, reply: { started: leg.leg } };
         }
@@ -48191,20 +48215,22 @@ function buildConnectCommands(deps = {}) {
         const cur = current;
         const r = await cur.core.accept(body["index"], body["hash"]);
         if (current !== cur) {
-          const p2 = readPlan();
-          if (p2) markLeg(p2.code, cur.index, { txs: cur.core.done.map((t) => ({ hash: t.hash, verified: t.verified })) });
+          record2(cur.index, { txs: cur.core.done.map(planTx) });
           return { ok: false, reason: "the plan was stopped on the page while this step was being checked" };
         }
         if (!r.ok) return r;
         if (r.kind === "next") return { ok: true, final: false, reply: r.reply };
-        const p = readPlan();
         const { index: index2, core } = cur;
         current = void 0;
         if (r.kind === "stop") {
-          markLeg(p.code, index2, legStatusOf("stopped", core.done, core.stopReason()));
+          record2(index2, legStatusOf("stopped", core.done, core.stopReason()));
           return { ok: true, final: true, value: "settled", reply: r.reply };
         }
-        markLeg(p.code, index2, legStatusOf("completed", core.done));
+        record2(index2, legStatusOf("completed", core.done));
+        if (replaced()) {
+          endReplaced();
+          return { ok: true, final: true, value: "settled", reply: { ...r.reply, legDone: true } };
+        }
         if (!pendingLeft()) return { ok: true, final: true, value: "settled", reply: { ...r.reply, planDone: true } };
         if (endsAt - Date.now() < legMinMs) {
           paused = true;
@@ -48213,19 +48239,35 @@ function buildConnectCommands(deps = {}) {
         return { ok: true, final: false, reply: { ...r.reply, legDone: true } };
       }
     });
+    let handle;
+    let secret = reused?.secret ?? newSecret();
+    let sameTab = false;
+    if (reused?.port) {
+      try {
+        handle = await serve(secret, [reused.port]);
+        sameTab = true;
+      } catch (e4) {
+        const others = connectPorts().filter((p) => p !== reused.port);
+        if (!e4.inUse || others.length === 0) throw e4;
+        secret = newSecret();
+        handle = await serve(secret, others);
+      }
+    } else {
+      handle = await serve(secret, connectPorts());
+    }
     const pNow = readPlan();
-    if (pNow && pNow.code === plan.code) writePlan({ ...pNow, page: { secret: page.secret, port: handle.port } });
-    const sameTab = reused !== void 0 && reused.port === handle.port;
+    if (pNow && pNow.code === plan.code) writePlan({ ...pNow, page: { secret, port: handle.port } });
     const opened = sameTab ? (process.stderr.write(`The plan's page is already open: ${handle.url}
 `), false) : (deps.open ?? announce)(handle.url);
     const result = await handle.done;
     if (current) {
-      const p = readPlan();
-      if (p) markLeg(p.code, current.index, legStatusOf("not_reported", current.core.done, result.ok ? "the page closed during this leg" : result.reason));
+      record2(current.index, legStatusOf("not_reported", current.core.done, result.ok ? "the page closed during this leg" : result.reason));
+      current = void 0;
     }
-    const after = readPlan() ?? plan;
-    const ended = endedReport(after);
-    if (ended) return ended.replace('"opened": false', `"opened": ${opened}`);
+    if (replaced()) endReplaced();
+    const after = mine;
+    const ended = endedReport(after, opened);
+    if (ended) return ended;
     if (planExpired(after, now())) {
       return report("expired", after, { opened }, `The plan expired at ${after.expiresAtIso}; legs that had not started did not run. Tell the operator; for what is left, make a new plan and ask again.`);
     }

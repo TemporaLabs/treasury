@@ -44,7 +44,7 @@ export type PlanInfo = {
 };
 
 /** What the operator sees for a leg. */
-type LegState = "waiting" | "wallet" | "sent" | "confirmed" | "declined" | "unprepared" | "maybe" | "failed" | "mismatch" | "stopped" | "notrun";
+type LegState = "waiting" | "wallet" | "sent" | "confirmed" | "declined" | "unprepared" | "partial" | "maybe" | "failed" | "mismatch" | "stopped" | "notrun";
 /** This tab's own phase of the running leg. "declined" and "unprepared" have nothing outstanding in the wallet. */
 type Phase = "wallet" | "sent" | "declined" | "unprepared";
 const LABEL: Record<LegState, string> = {
@@ -54,6 +54,7 @@ const LABEL: Record<LegState, string> = {
   confirmed: "Confirmed",
   declined: "Declined · nothing sent",
   unprepared: "Couldn't prepare · nothing sent",
+  partial: "Approved · deposit not sent",
   maybe: "May have been sent",
   failed: "Failed on chain",
   mismatch: "Didn't match",
@@ -70,6 +71,11 @@ function legState(l: LegView, local: { leg: number; phase: Phase } | null, planO
     const last = l.txs[l.txs.length - 1]?.verified;
     if (last === "reverted") return "failed";
     if (last === "mismatch") return "mismatch";
+    // A receipt that was never read: that transaction may have gone out.
+    if (last === "unverified") return "maybe";
+    // A deposit stopped after its approval landed (the deposit was declined, or never asked for): the approval was
+    // sent, so never "nothing sent".
+    if (l.action === "deposit" && (last === "matched" || last === "extra_transfer")) return "partial";
     if (/^not prepared/.test(l.reason ?? "")) return "unprepared";
     if (/^declined|the operator stopped/.test(l.reason ?? "")) return "declined";
     return "stopped";
@@ -327,7 +333,14 @@ export function Plan({ info: first }: { info: PlanInfo }) {
     <>
       {failedLeg.status === "not_reported"
         ? `Step ${failedLeg.leg} may have been sent; check your wallet before doing anything else.`
-        : `Step ${failedLeg.leg} ${legState(failedLeg, null, true) === "declined" ? "was declined, and nothing was sent for it" : "did not land as approved"}.`}{" "}
+        : `Step ${failedLeg.leg} ${
+            {
+              declined: "was declined, and nothing was sent for it",
+              unprepared: "could not be prepared, and nothing was sent for it",
+              partial: "stopped after its approval landed: the approval is in place, and the deposit was not sent",
+              maybe: "may have been sent; check your wallet before doing anything else",
+            }[legState(failedLeg, null, true) as string] ?? "did not land as approved"
+          }.`}{" "}
       {landed} of {legs.length} steps landed; the steps after it did not run, and nothing else will be sent.
     </>
   ) : expired ? (
