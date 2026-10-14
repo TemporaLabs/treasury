@@ -324,8 +324,6 @@ export function planAcknowledgementText(legs: AckSummary[], totals: string[]): s
   const fees = DISCLOSURES.plain.deposit.find((d) => d.startsWith("Tempora Labs runs this vault"));
   const disclosures = [...new Set(legs.flatMap((s) => s.disclosures))].map((d) => (several && d === fees ? DISCLOSURES.plain.feesSeveral : d));
   const minutes = Math.round(PLAN_TTL_MS / 60_000);
-  // `connect plan --run` serves every leg on one page, but not a Solana leg yet: such a plan runs one page per leg.
-  const onePage = !legs.some((s) => s.chainId === null);
   const legLines = legs.flatMap((s, i) => {
     const lands = s.action === "deposit" ? "Shares go to" : `${s.asset} goes to`;
     const prompts =
@@ -346,8 +344,8 @@ export function planAcknowledgementText(legs: AckSummary[], totals: string[]): s
   return [
     `Confirm before any signing page opens. Nothing has been sent.`,
     ``,
-    `This plan has ${n} ${n === 1 ? "leg" : "legs"}, run in this order ${onePage ? "on one signing page" : "each on its own signing page"}, where your wallet asks you to confirm each transaction. If a leg does not complete, the legs after it do not run.`,
-    `The plan lasts ${minutes} minutes: a leg not started by then does not run, and connecting a wallet again cancels it. To stop partway, reject a transaction in your wallet, or stop the plan on ${onePage ? "the" : "that leg's"} signing page; the legs after it then do not run.`,
+    `This plan has ${n} ${n === 1 ? "leg" : "legs"}, run in this order on one signing page, where your wallet asks you to confirm each transaction. If a leg does not complete, the legs after it do not run.`,
+    `The plan lasts ${minutes} minutes: a leg not started by then does not run, and connecting a wallet again cancels it. To stop partway, reject a transaction in your wallet, or stop the plan on the signing page; the legs after it then do not run.`,
     ``,
     ...legLines,
     ...(totals.length ? [`In total: ${totals.join("; ")}.`, ``] : []),
@@ -360,6 +358,6 @@ export function planAcknowledgementText(legs: AckSummary[], totals: string[]): s
     ...disclosures.map((d) => `  - ${d}`),
     `  ${DISCLOSURES.plain.fullTerms}`,
     ``,
-    `Do you acknowledge and want ${onePage ? "the signing page" : "the signing pages"} opened for exactly these ${n} ${n === 1 ? "leg" : "legs"}, run one leg at a time? Reply yes or no.`,
+    `Do you acknowledge and want the signing page opened for exactly these ${n} ${n === 1 ? "leg" : "legs"}, run one leg at a time? Reply yes or no.`,
   ].join("\n");
 }

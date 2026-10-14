@@ -265,18 +265,32 @@ export async function buildForIntent(rpc: SolanaRpc, intent: SolanaIntent, accou
   return { wire, expiresAfterBlockHeight: life.lastValidBlockHeight.toString(), blockhash: life.blockhash };
 }
 
-export async function runConfirmSolana(intent: SolanaIntent, session: Session, deps: SolanaFlowDeps): Promise<{ result: Settled<SolanaTxOutcome[]>; url: string; opened: boolean; done: SolanaTxOutcome[]; total: number; stopReason?: string }> {
+/** One Solana intent's confirm core: the build at the operator's press, and the verdict on what landed, without the page around it. */
+export interface SolanaConfirmCore {
+  done: SolanaTxOutcome[];
+  stopReason: () => string | undefined;
+  info: () => Record<string, unknown>;
+  /** Builds the transaction now (a fresh blockhash), held to the intent by the gate and simulated: what the page hands the wallet. */
+  build: () => Promise<{ ok: false; reason: string } | { ok: true; reply: Record<string, unknown> }>;
+  /** Records the signature, reads what landed, and says whether it matched. */
+  accept: (signature: unknown) => Promise<{ ok: false; reason: string } | { ok: true; kind: "finished" | "stop"; reply: Record<string, unknown> }>;
+  /** Puts a signature the page could not hand over on record. */
+  onReject: (body: Record<string, unknown>) => void;
+}
+
+/**
+ * The confirm flow on Solana without its page. The caller runs the gate first (`buildForIntent`), before any page
+ * opens or leg starts; the transaction the wallet gets is built again at the operator's press (`build`), and only a
+ * signature for a transaction built here, for this intent, can verify. `deadline`: when every chain read stops waiting.
+ */
+export async function prepareConfirmSolana(intent: SolanaIntent, session: Session, rpc: SolanaRpc, verifyOpts: SolanaFlowDeps["verifyOpts"], deadline: number): Promise<SolanaConfirmCore> {
   const account = session.account;
-  const rpc = deps.rpc ?? makeSolanaRpc(solanaRpcUrlFromEnv());
-  // The gate runs before any page opens, on a transaction built for exactly this intent.
-  await buildForIntent(rpc, intent, account);
   const done: SolanaTxOutcome[] = [];
   // Every blockhash a transaction handed to the page was built with: the landed one must name one of them.
   const built = new Set<string>();
   // What the simulation of each built withdrawal paid, by its blockhash: the landed one is held to it.
   const simulated = new Map<string, bigint>();
   let stopReason: string | undefined;
-  const deadline = Date.now() + deps.ttlMs;
   const a = intent.vault.asset;
   const description =
     intent.kind === "deposit"
@@ -289,24 +303,16 @@ export async function runConfirmSolana(intent: SolanaIntent, session: Session, d
     })().catch(() => undefined),
     new Promise<undefined>((r) => setTimeout(() => r(undefined), 5_000)),
   ]);
-  const handle = await serveOnce<SolanaTxOutcome[]>({
-    mode: "confirm",
-    ttlMs: deps.ttlMs,
-    ...(deps.cancelGraceMs !== undefined ? { cancelGraceMs: deps.cancelGraceMs } : {}),
-    timeoutReason: () => (done.length ? `the ${Math.round(deps.ttlMs / 60_000)}-minute limit ran out after the transaction was reported` : `nothing happened in the browser within ${Math.round(deps.ttlMs / 60_000)} minutes`),
+  return {
+    done,
+    stopReason: () => stopReason,
     onReject: (body) => {
       const sig = body["hash"];
       if (!wellFormedSignature(sig) || done.some((t) => t.hash === sig)) return;
       done.push({ step: 1, description, hash: sig, verified: "unverified", detail: "the page reported this transaction but could not hand it over for checking; look it up before retrying anything" });
     },
-    html: (s) => deps.html(s, "Confirm — Open Agent Treasury"),
-    csp: deps.csp,
-    assets: deps.assets,
-    ports: deps.ports,
     info: () => ({
-      mode: "confirm",
       chain: "solana",
-      appId: deps.appId,
       account,
       walletType: session.walletType,
       chainName: "Solana",
@@ -320,27 +326,25 @@ export async function runConfirmSolana(intent: SolanaIntent, session: Session, d
       ...(intent.kind === "deposit" ? { needs: intent.raw.toString() } : {}),
       vault: { symbol: intent.vault.symbol, name: intent.vault.name, address: intent.vault.address, asset: a.symbol, links: { explorer: `https://solscan.io/account/${intent.vault.address}` } },
     }),
-    accept: async (body) => {
-      // The page asks for the transaction at the moment the operator confirms.
-      if (body["build"] === true) {
-        if (done.length > 0) return { ok: false, reason: "the transaction was already sent" };
-        try {
-          const { received, ...reply } = await buildForIntent(rpc, intent, account);
-          built.add(reply.blockhash);
-          if (received !== undefined) simulated.set(reply.blockhash, received);
-          return { ok: true, final: false, reply };
-        } catch (e) {
-          return { ok: false, reason: redactEndpoints(e instanceof Error ? e.message : String(e)) };
-        }
+    build: async () => {
+      if (done.length > 0) return { ok: false, reason: "the transaction was already sent" };
+      try {
+        const { received, ...reply } = await buildForIntent(rpc, intent, account);
+        built.add(reply.blockhash);
+        if (received !== undefined) simulated.set(reply.blockhash, received);
+        return { ok: true, reply };
+      } catch (e) {
+        return { ok: false, reason: redactEndpoints(e instanceof Error ? e.message : String(e)) };
       }
-      const sig = body["hash"];
+    },
+    accept: async (sig) => {
       if (done.length > 0) return { ok: false, reason: "the transaction was already reported" };
       if (!wellFormedSignature(sig)) return { ok: false, reason: "malformed transaction signature" };
       const entry: SolanaTxOutcome = { step: 1, description, hash: sig, verified: "unverified", detail: "the flow ended while this transaction was still being checked" };
       done.push(entry);
       let verdict: Verdict;
       try {
-        verdict = await verifySolanaLanded(rpc, sig, intent, account, { ...deps.verifyOpts, deadline, built, simulated });
+        verdict = await verifySolanaLanded(rpc, sig, intent, account, { ...verifyOpts, deadline, built, simulated });
       } catch (e) {
         verdict = { verified: "unverified", detail: `could not check ${sig}: ${redactEndpoints(e instanceof Error ? e.message : String(e))}; look it up before retrying anything` };
       }
@@ -348,12 +352,42 @@ export async function runConfirmSolana(intent: SolanaIntent, session: Session, d
       Object.assign(entry, verdict);
       if (verdict.verified !== "matched" && verdict.verified !== "extra_transfer") {
         stopReason = `the ${intent.kind} is ${verdict.verified}: ${verdict.detail ?? "it did not land as confirmed"}`;
-        return { ok: true, final: true, value: done, reply: { stop: true, verdict } };
+        return { ok: true, kind: "stop", reply: { stop: true, verdict } };
       }
-      return { ok: true, final: true, value: done, reply: { finished: true, verdict } };
+      return { ok: true, kind: "finished", reply: { finished: true, verdict } };
+    },
+  };
+}
+
+export async function runConfirmSolana(intent: SolanaIntent, session: Session, deps: SolanaFlowDeps): Promise<{ result: Settled<SolanaTxOutcome[]>; url: string; opened: boolean; done: SolanaTxOutcome[]; total: number; stopReason?: string }> {
+  const rpc = deps.rpc ?? makeSolanaRpc(solanaRpcUrlFromEnv());
+  // The gate runs before any page opens, on a transaction built for exactly this intent.
+  await buildForIntent(rpc, intent, session.account);
+  const core = await prepareConfirmSolana(intent, session, rpc, deps.verifyOpts, Date.now() + deps.ttlMs);
+  const { done } = core;
+  const handle = await serveOnce<SolanaTxOutcome[]>({
+    mode: "confirm",
+    ttlMs: deps.ttlMs,
+    ...(deps.cancelGraceMs !== undefined ? { cancelGraceMs: deps.cancelGraceMs } : {}),
+    timeoutReason: () => (done.length ? `the ${Math.round(deps.ttlMs / 60_000)}-minute limit ran out after the transaction was reported` : `nothing happened in the browser within ${Math.round(deps.ttlMs / 60_000)} minutes`),
+    onReject: core.onReject,
+    html: (s) => deps.html(s, "Confirm — Open Agent Treasury"),
+    csp: deps.csp,
+    assets: deps.assets,
+    ports: deps.ports,
+    info: () => ({ mode: "confirm", appId: deps.appId, ...core.info() }),
+    accept: async (body) => {
+      // The page asks for the transaction at the moment the operator confirms.
+      if (body["build"] === true) {
+        const b = await core.build();
+        return b.ok ? { ok: true, final: false, reply: b.reply } : b;
+      }
+      const r = await core.accept(body["hash"]);
+      return r.ok ? { ok: true, final: true, value: done, reply: r.reply } : r;
     },
   });
   const opened = deps.open(handle.url);
   const result = await handle.done;
+  const stopReason = core.stopReason();
   return { result, url: handle.url, opened, done, total: 1, ...(stopReason ? { stopReason } : {}) };
 }

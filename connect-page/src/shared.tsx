@@ -26,6 +26,24 @@ export const rejected = (e: unknown) => {
   return code === 4001 || code === "ACTION_REJECTED" || /user (rejected|denied|cancel+ed)|rejected the request|request rejected/i.test(errText(e));
 };
 
+/** Base58, as Solana writes signatures: the page needs only the encoder, so it carries one rather than a dependency. */
+const B58 = "123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz";
+export function base58(bytes: Uint8Array): string {
+  let n = 0n;
+  for (const b of bytes) n = (n << 8n) | BigInt(b);
+  let out = "";
+  while (n > 0n) {
+    out = B58[Number(n % 58n)] + out;
+    n /= 58n;
+  }
+  for (const b of bytes) {
+    if (b !== 0) break;
+    out = "1" + out;
+  }
+  return out;
+}
+export const fromBase64 = (s: string) => Uint8Array.from(atob(s), (c) => c.charCodeAt(0));
+
 /** Raw units as a person reads them: no trailing zeros, at most six decimals. */
 export function fmt(raw: string | bigint, decimals: number): string {
   const v = BigInt(raw);

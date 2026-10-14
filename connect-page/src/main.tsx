@@ -13,7 +13,7 @@
  */
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import { createRoot } from "react-dom/client";
-import { PrivyProvider, useLogin, usePrivy, useWallets, type ConnectedWallet } from "@privy-io/react-auth";
+import { PrivyProvider, useLogin, usePrivy, useWallets, type ConnectedWallet, type PrivyClientConfig } from "@privy-io/react-auth";
 import {
   defaultSolanaRpcsPlugin,
   toSolanaWalletConnectors,
@@ -24,7 +24,7 @@ import {
 } from "@privy-io/react-auth/solana";
 import { arbitrum, base, mainnet, monad, robinhood } from "viem/chains";
 import { CSS } from "./styles";
-import { secret, type WalletType, post, reject, errText, type Phase, rejected, fmt, Page, Status, WalletMark, CheckMark, ButtonIcon } from "./shared";
+import { secret, type WalletType, post, reject, errText, type Phase, rejected, fmt, base58, fromBase64, Page, Status, WalletMark, CheckMark, ButtonIcon } from "./shared";
 import { Plan, type PlanInfo } from "./plan";
 
 
@@ -462,24 +462,7 @@ function Confirm({ info }: { info: Extract<Info, { mode: "confirm"; chain?: unde
 }
 
 
-/** Base58, as Solana writes signatures: the page needs only the encoder, so it carries one rather than a dependency. */
-const B58 = "123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz";
-function base58(bytes: Uint8Array): string {
-  let n = 0n;
-  for (const b of bytes) n = (n << 8n) | BigInt(b);
-  let out = "";
-  while (n > 0n) {
-    out = B58[Number(n % 58n)] + out;
-    n /= 58n;
-  }
-  for (const b of bytes) {
-    if (b !== 0) break;
-    out = "1" + out;
-  }
-  return out;
-}
 const base64 = (bytes: Uint8Array) => btoa(String.fromCharCode(...bytes));
-const fromBase64 = (s: string) => Uint8Array.from(atob(s), (c) => c.charCodeAt(0));
 const solanaKind = (w: ConnectedStandardSolanaWallet): WalletType => ((w.standardWallet as { isPrivyWallet?: boolean }).isPrivyWallet ? "embedded" : "external");
 
 /**
@@ -788,9 +771,13 @@ async function main() {
     );
   }
   const info = (await res.json()) as Info | PlanInfo;
+  // A plan's chain families: one of only Solana legs signs in as a Solana flow does; one that mixes them signs in as an
+  // EVM flow and also loads Privy's Solana connectors, for the page to connect the same wallet's Solana account.
+  const planSolana = info.mode === "plan" && info.legs.some((l) => l.family === "solana");
+  const planEvm = info.mode === "plan" && info.legs.some((l) => l.family !== "solana");
   // A Solana flow gets Privy's Solana side: Solana wallets on the first screen, a Privy Solana wallet for an
   // email or social login, and Privy's own Solana RPC for that wallet to send through. An EVM flow is unchanged.
-  if (info.mode !== "plan" && info.chain === "solana") {
+  if ((info.mode !== "plan" && info.chain === "solana") || (planSolana && !planEvm)) {
     return root.render(
       <PrivyProvider
         appId={info.appId}
@@ -806,23 +793,31 @@ async function main() {
       </PrivyProvider>,
     );
   }
+  const evmConfig = {
+    appearance: { theme: "light", accentColor: "#1E3553", landingHeader: "Connect wallet", walletChainType: "ethereum-only", walletList: ["detected_ethereum_wallets", "metamask", "coinbase_wallet"] },
+    // One window. Its first screen lists the wallets already installed in this browser (MetaMask,
+    // Rabby, any EIP-6963 wallet), then email and Google, up to four entries in all: each installed
+    // wallet takes one, so with three or more Google moves to "More options", and with four or
+    // more email does too. Apple, X and Coinbase Wallet are always there. No WalletConnect.
+    // `loginMethodsAndOrder` is marked deprecated in Privy 3.47 (pinned exactly); `loginMethods`
+    // does not set an order, so check this screen again when upgrading Privy.
+    loginMethodsAndOrder: { primary: ["detected_ethereum_wallets", "email", "google"], overflow: ["apple", "twitter", "coinbase_wallet"] },
+    externalWallets: { walletConnect: { enabled: false } },
+    embeddedWallets: { ethereum: { createOnLogin: "users-without-wallets" }, showWalletUIs: true },
+    supportedChains: [base, arbitrum, robinhood, mainnet, monad],
+    defaultChain: base,
+  } satisfies PrivyClientConfig;
   root.render(
     <PrivyProvider
       appId={info.appId}
-      config={{
-        appearance: { theme: "light", accentColor: "#1E3553", landingHeader: "Connect wallet", walletChainType: "ethereum-only", walletList: ["detected_ethereum_wallets", "metamask", "coinbase_wallet"] },
-        // One window. Its first screen lists the wallets already installed in this browser (MetaMask,
-        // Rabby, any EIP-6963 wallet), then email and Google, up to four entries in all: each installed
-        // wallet takes one, so with three or more Google moves to "More options", and with four or
-        // more email does too. Apple, X and Coinbase Wallet are always there. No WalletConnect.
-        // `loginMethodsAndOrder` is marked deprecated in Privy 3.47 (pinned exactly); `loginMethods`
-        // does not set an order, so check this screen again when upgrading Privy.
-        loginMethodsAndOrder: { primary: ["detected_ethereum_wallets", "email", "google"], overflow: ["apple", "twitter", "coinbase_wallet"] },
-        externalWallets: { walletConnect: { enabled: false } },
-        embeddedWallets: { ethereum: { createOnLogin: "users-without-wallets" }, showWalletUIs: true },
-        supportedChains: [base, arbitrum, robinhood, mainnet, monad],
-        defaultChain: base,
-      }}
+      config={
+        // A plan with EVM and Solana legs: the same EVM sign-in (`walletChainType` stays "ethereum-only", so the window
+        // offers no Solana wallet), plus Privy's Solana connectors (Privy 3.47 adds them whatever `walletChainType` says)
+        // and its Solana RPC. The page connects the Solana account itself, on the wallet the operator signed in with.
+        planSolana
+          ? { ...evmConfig, externalWallets: { ...evmConfig.externalWallets, solana: { connectors: solanaConnectorsWithoutWalletConnect() } }, plugins: [defaultSolanaRpcsPlugin()] }
+          : evmConfig
+      }
     >
       <App info={info} />
     </PrivyProvider>,
