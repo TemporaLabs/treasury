@@ -698,7 +698,7 @@ export function buildConnectCommands(deps: ConnectDeps = {}): Record<string, Com
       const intent = async (): Promise<SolanaIntent> => {
         const raw = await solanaWithdrawShares(v, all ? undefined : amount_usdc, all ? shares_exact : undefined);
         if (raw === 0n) throw new Error("a withdrawal of 0");
-        return { kind: "withdraw", vault: v, raw };
+        return { kind: "withdraw", vault: v, raw, ...(all ? {} : { assets: parseAmount(amount_usdc!, v.asset.decimals, `withdrawal amount (${v.asset.symbol})`) }) };
       };
       if (all) {
         const shares = parseAmount(shares_exact!, v.shareDecimals, "shares_exact");

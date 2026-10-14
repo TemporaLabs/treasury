@@ -46837,6 +46837,35 @@ function tokenDelta(meta3, owner, mint) {
   const pick2 = (list) => BigInt(list?.find((b) => b.owner === owner && b.mint === mint)?.uiTokenAmount.amount ?? "0");
   return pick2(meta3.postTokenBalances) - pick2(meta3.preTokenBalances);
 }
+function assetFlows(meta3, owner, mint) {
+  const pre = (meta3.preTokenBalances ?? []).filter((b) => b.mint === mint);
+  const post = (meta3.postTokenBalances ?? []).filter((b) => b.mint === mint);
+  const byIndex = /* @__PURE__ */ new Map();
+  for (const b of pre) {
+    if (b.accountIndex === void 0) return "the transaction's token-balance records do not name their accounts";
+    byIndex.set(b.accountIndex, { owner: b.owner, before: BigInt(b.uiTokenAmount.amount) });
+  }
+  for (const b of post) {
+    if (b.accountIndex === void 0) return "the transaction's token-balance records do not name their accounts";
+    const row = byIndex.get(b.accountIndex);
+    byIndex.set(b.accountIndex, { owner: b.owner ?? row?.owner, before: row?.before ?? 0n, after: BigInt(b.uiTokenAmount.amount) });
+  }
+  let own2 = 0n;
+  let net = 0n;
+  const rose = [];
+  for (const row of byIndex.values()) {
+    if (row.owner === void 0) return "the transaction's token-balance records do not name the owner of every account they list";
+    if (row.after === void 0) {
+      if (row.before !== 0n) return `the transaction's token-balance records hold no balance after it for an account of ${row.owner} that held ${row.before} base units before`;
+      continue;
+    }
+    const delta = row.after - row.before;
+    net += delta;
+    if (row.owner === owner) own2 += delta;
+    else if (delta > 0n) rose.push({ to: row.owner, amountRaw: delta });
+  }
+  return { own: own2, rose, net };
+}
 async function verifySolanaLanded(rpc, signature, intent, account, opts) {
   const sig = signature;
   for (let i = 0; i < (opts.attempts ?? 45) && Date.now() < opts.deadline; i++) {
@@ -46847,6 +46876,7 @@ async function verifySolanaLanded(rpc, signature, intent, account, opts) {
       if (!tx || !tx.meta) return { verified: "unverified", detail: "the signature is confirmed but its transaction could not be read; look it up before retrying anything" };
       const meta3 = tx.meta;
       if (meta3.err) return { verified: "reverted", detail: `the transaction failed on chain: ${JSON.stringify(meta3.err)}` };
+      if (!meta3.preTokenBalances || !meta3.postTokenBalances) return { verified: "unverified", detail: "the transaction landed, but this RPC returned no token-balance records for it, so what it moved cannot be checked; look it up before retrying anything" };
       const message = tx.transaction?.message;
       if (!message?.recentBlockhash || !opts.built.has(message.recentBlockhash)) {
         return { verified: "mismatch", detail: `${signature} is not the transaction this page built (its blockhash is not one handed to the page); check \`earn balance --chain solana\` before retrying anything` };
@@ -46873,8 +46903,26 @@ async function verifySolanaLanded(rpc, signature, intent, account, opts) {
       if (-shares > intent.raw || -shares + BigInt(legs) < intent.raw) {
         return { verified: "mismatch", detail: `a PARTIAL withdrawal: it burned ${formatAmount(-shares, intent.vault.shareDecimals)} of the ${formatAmount(intent.raw, intent.vault.shareDecimals)} shares acknowledged and paid ${formatAmount(asset > 0n ? asset : 0n, intent.vault.asset.decimals)} ${intent.vault.asset.symbol}; the rest of the shares are still in the account. Check \`earn balance --chain solana\` before withdrawing again.` };
       }
-      if (asset <= 0n) return { verified: "mismatch", detail: `the shares burned but the account's ${a.symbol} did not rise` };
-      return { verified: "matched", detail: `received ${formatAmount(asset, a.decimals)} ${a.symbol}` };
+      const flows = assetFlows(meta3, account, a.address);
+      if (typeof flows === "string") return { verified: "unverified", detail: `${flows}; look the transaction up before retrying anything` };
+      if (flows.net !== 0n) {
+        return { verified: "mismatch", detail: `the ${a.symbol} balances in this transaction do not add up: they ${flows.net > 0n ? "rose" : "fell"} by ${formatAmount(flows.net > 0n ? flows.net : -flows.net, a.decimals)} ${a.symbol} in total, which a withdrawal cannot do` };
+      }
+      const alsoMoved = flows.rose.map((r) => ({ to: r.to, amountRaw: r.amountRaw.toString() }));
+      const paid = flows.own + flows.rose.reduce((sum, r) => sum + r.amountRaw, 0n);
+      if (paid <= 0n) return { verified: "mismatch", detail: `the shares burned but the account's ${a.symbol} did not rise`, ...alsoMoved.length ? { alsoMoved } : {} };
+      const keptPerLeg = 10n ** BigInt(Math.max(a.decimals - 3, 0));
+      if (intent.assets !== void 0 && paid + keptPerLeg * BigInt(legs) < intent.assets) {
+        return { verified: "mismatch", detail: `the withdrawal paid ${formatAmount(paid, a.decimals)} ${a.symbol}, less than the ${formatAmount(intent.assets, a.decimals)} ${a.symbol} acknowledged, by more than the up to ${formatAmount(keptPerLeg, a.decimals)} ${a.symbol} Kamino keeps per withdraw instruction. Tell the operator.`, ...alsoMoved.length ? { alsoMoved } : {} };
+      }
+      const simulated = opts.simulated?.get(message.recentBlockhash);
+      if (simulated !== void 0 && paid + BigInt(legs) < simulated) {
+        return { verified: "mismatch", detail: `the withdrawal paid ${formatAmount(paid, a.decimals)} ${a.symbol}, less than the ${formatAmount(simulated, a.decimals)} ${a.symbol} its simulation before sending paid. Tell the operator.`, ...alsoMoved.length ? { alsoMoved } : {} };
+      }
+      if (alsoMoved.length) {
+        return { verified: "extra_transfer", detail: `the withdrawal landed and paid ${formatAmount(paid, a.decimals)} ${a.symbol}, and in the same transaction ${formatAmount(paid - flows.own, a.decimals)} ${a.symbol} of it went to another owner (alsoMoved). That was not part of the withdrawal. Tell the operator. (SOL the transaction moved is not checked, as on EVM.)`, alsoMoved };
+      }
+      return { verified: "matched", detail: `received ${formatAmount(paid, a.decimals)} ${a.symbol} (SOL the transaction moved is not checked, as on EVM)` };
     }
     await new Promise((r) => setTimeout(r, opts.delayMs ?? 2e3));
   }
@@ -46893,10 +46941,11 @@ async function buildForIntent(rpc, intent, account) {
     const sim = await simulate(rpc, ixs, account, []);
     if (!sim.ok) throw new Error(`the simulated deposit fails at slot ${sim.slot}: ${describeSimulation(sim)}`);
   } else {
-    const { sim, burned, legs } = await simulateWithdrawal(rpc, v, account, ixs);
+    const { sim, burned, legs, received } = await simulateWithdrawal(rpc, v, account, ixs);
     if (burned === void 0) throw new Error(`the simulated withdraw fails at slot ${sim.slot}: ${describeSimulation(sim)}`);
     const partial2 = partialWithdrawal(intent.raw, burned, legs, intent.vault.shareDecimals, sim.slot);
     if (partial2) throw new Error(`refused: ${partial2}`);
+    return { wire, expiresAfterBlockHeight: life.lastValidBlockHeight.toString(), blockhash: life.blockhash, ...received !== void 0 ? { received } : {} };
   }
   return { wire, expiresAfterBlockHeight: life.lastValidBlockHeight.toString(), blockhash: life.blockhash };
 }
@@ -46906,6 +46955,7 @@ async function runConfirmSolana(intent, session, deps) {
   await buildForIntent(rpc, intent, account);
   const done = [];
   const built = /* @__PURE__ */ new Set();
+  const simulated = /* @__PURE__ */ new Map();
   let stopReason;
   const deadline = Date.now() + deps.ttlMs;
   const a = intent.vault.asset;
@@ -46952,8 +47002,9 @@ async function runConfirmSolana(intent, session, deps) {
       if (body["build"] === true) {
         if (done.length > 0) return { ok: false, reason: "the transaction was already sent" };
         try {
-          const reply = await buildForIntent(rpc, intent, account);
+          const { received, ...reply } = await buildForIntent(rpc, intent, account);
           built.add(reply.blockhash);
+          if (received !== void 0) simulated.set(reply.blockhash, received);
           return { ok: true, final: false, reply };
         } catch (e4) {
           return { ok: false, reason: redactEndpoints(e4 instanceof Error ? e4.message : String(e4)) };
@@ -46966,7 +47017,7 @@ async function runConfirmSolana(intent, session, deps) {
       done.push(entry);
       let verdict;
       try {
-        verdict = await verifySolanaLanded(rpc, sig, intent, account, { ...deps.verifyOpts, deadline, built });
+        verdict = await verifySolanaLanded(rpc, sig, intent, account, { ...deps.verifyOpts, deadline, built, simulated });
       } catch (e4) {
         verdict = { verified: "unverified", detail: `could not check ${sig}: ${redactEndpoints(e4 instanceof Error ? e4.message : String(e4))}; look it up before retrying anything` };
       }
@@ -47845,7 +47896,7 @@ function buildConnectCommands(deps = {}) {
       const intent = async () => {
         const raw = await solanaWithdrawShares(v, all ? void 0 : amount_usdc, all ? shares_exact : void 0);
         if (raw === 0n) throw new Error("a withdrawal of 0");
-        return { kind: "withdraw", vault: v, raw };
+        return { kind: "withdraw", vault: v, raw, ...all ? {} : { assets: parseAmount(amount_usdc, v.asset.decimals, `withdrawal amount (${v.asset.symbol})`) } };
       };
       if (all) {
         const shares = parseAmount(shares_exact, v.shareDecimals, "shares_exact");
