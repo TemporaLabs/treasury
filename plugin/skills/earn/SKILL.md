@@ -162,7 +162,8 @@ mix. Each vault is one **leg** with its own transactions; nothing moves money in
    with legs on EVM chains and on Solana needs both wallets connected.
 4. **Then run the plan on one signing page: `connect plan --run`**, each shell call with a timeout of at least 9
    minutes. It returns `in_progress` near that limit: run it again at once, and the operator's open page carries on.
-   A plan with a Solana leg runs leg by leg instead, each exactly as its `command` gives it. **The yes covers every leg:
+   Solana legs run on the same page; on a plan that also has EVM legs, the operator's wallet may ask once, at Start, to
+   connect its Solana account, and a wallet without one (Rabby) ends the plan there with nothing sent. **The yes covers every leg:
    do not ask again between them.** Report each leg as in **Handing calls to the signer**, step 4.
 5. **Stop at the first leg that does not complete**; the CLI refuses the rest. Report every leg (vault, chain, amount,
    transactions, and which did not run; `connect plan --status` lists them). What is left needs a new plan and a new yes.

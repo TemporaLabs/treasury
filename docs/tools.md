@@ -298,7 +298,7 @@ confirm it in the wallet. Nothing here signs. See [`security-model.md`](security
 | `connect wallet` | `--chain` (optional; `solana` connects a Solana wallet: Phantom, Solflare, Backpack, or a Privy wallet) | opens the sign-in page: one Connect button, then Privy's window. The wallet signs a free sign-in message; waits up to 9 minutes and returns `{ status: "connected", account, walletType, connectedAtIso, opened }`. If the sign-in does not finish, it exits 1 with `not connected: <reason>` |
 | `connect deposit` | `--amount_usdc`, `--receiver`, optional `--vault`, `--chain`, then `--ack`, or `--plan` with `--leg` | builds approve + deposit for the connected account and checks them against the registry. Without `--ack`, opens nothing and returns the operator's acknowledgement; with its code, hands each call to the wallet in turn |
 | `connect withdraw` | `--receiver`, then `--amount_usdc` or `--all --shares_exact`, optional `--vault`, `--chain`, then `--ack`, or `--plan` with `--leg` | the same for a withdrawal |
-| `connect plan` | `--legs`, then `--ack`; then `--run`; or `--status` alone | one acknowledgement for several deposits and withdrawals, across vaults and chains. `--legs` and `--ack` open nothing; `--run` opens one signing page for every EVM leg; each leg's command also runs alone with `--plan` and `--leg`. See [below](#a-plan-one-acknowledgement-for-several-legs) |
+| `connect plan` | `--legs`, then `--ack`; then `--run`; or `--status` alone | one acknowledgement for several deposits and withdrawals, across vaults and chains. `--legs` and `--ack` open nothing; `--run` opens one signing page for every leg, EVM and Solana; each leg's command also runs alone with `--plan` and `--leg`. See [below](#a-plan-one-acknowledgement-for-several-legs) |
 | `connect disconnect` | — | forgets the connected accounts, EVM and Solana; moves nothing |
 
 `--receiver` must be the connected account: this page pays no one else. It comes from the operator's
@@ -390,7 +390,7 @@ Without `--ack` it returns
 `{ status: "needs_acknowledgement", opened: false, legs: [{ leg, action, vault, chain, amount, receiver }], acknowledgement, ack, expiresAtIso, next_step }`
 
 `acknowledgement` is one fixed text: every leg in order (action, amount, chain, the vault's name,
-symbol and explorer link, the receiver and the wallet prompts to expect), how long the plan lasts, whether its legs run on one signing page or (with a Solana leg) each on its own,
+symbol and explorer link, the receiver and the wallet prompts to expect), how long the plan lasts, that its legs run in order on one signing page,
 how to stop it partway, the totals, each warning once with the vaults it covers, and the disclosures
 once. A withdrawal of `all` is named as the whole position read when the plan was made. It ends by
 asking for a yes or a no to exactly those legs.
@@ -418,12 +418,23 @@ with `status` `completed`, `stopped`, `not_reported` (a leg may have been sent; 
 `expired`, or `in_progress`. A leg's own `status` is `pending`, `running`, `completed`, `stopped` or
 `not_reported`. No leg starts with less than 5 minutes of the run's 9 left: the run then returns
 `in_progress`, and the agent runs `connect plan --run` again at once. The page keeps its secret and port in the
-plan file, so that run serves the same page and the operator's open tab carries on. `--run` serves EVM legs
-only; a plan with a Solana leg runs leg by leg, as below. It refuses a plan not yet acknowledged, and a leg that
-no longer rebuilds to what was acknowledged (another connected account, amount or share balance). A run records
+plan file, so that run serves the same page and the operator's open tab carries on. It refuses a plan not yet
+acknowledged, a plan with a leg on a chain family whose wallet is not connected, and a leg that no longer rebuilds
+to what was acknowledged (another connected account, amount or share balance). A run records
 only on its own plan: if another command replaces or clears the plan while the page is open (`connect plan
 --legs`, `connect wallet`, `connect disconnect`), or the plan expires, no further leg starts, the run ends at once,
 and it still reports every transaction that landed.
+
+A Solana leg (#184) runs on the same page, in its turn. When it starts it is held to its acknowledged intent, its
+shares are worked out (a withdrawal by amount) and its transaction is built, gate-checked and simulated, as a single
+`connect deposit|withdraw` on Solana does before its page opens. Its transaction is built again when the operator
+presses for it (a blockhash lasts about a minute), and only a signature for a transaction built for that leg verifies.
+The page uses the wallet the operator signed in with, never another. A plan of only Solana legs signs in as a single
+Solana confirmation does. A plan that also has EVM legs signs in with the EVM wallet and, when it starts, connects
+that same wallet's Solana account (the wallet may ask once) and checks it is the connected Solana account. A wallet
+that cannot (none of that name, another account, or no Solana support, as with Rabby) ends the plan there: leg 1 is
+`stopped` with a reason starting `not prepared:`, and nothing was sent. A Solana leg that fails on chain (for one, a
+wallet that replaced the transaction's compute limit) is `stopped` with its signature `reverted`, and ends the plan.
 
 Each leg can also run alone, exactly as its `command` gives it:
 `connect deposit|withdraw --vault <vault> (--amount_usdc <n> | --all --shares_exact <s>) --receiver <r> --plan <code> --leg <n>`.

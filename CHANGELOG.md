@@ -12,8 +12,8 @@ Pre-1.0, minor versions may change tool names, schemas and behaviour.
   acknowledgement and one yes per vault. `connect plan --legs "deposit <vault> <amount>; withdraw
   <vault> <amount|all>"` builds and checks every leg, then returns one acknowledgement text listing
   each leg, its receiver, the warnings and the disclosures. After the operator's yes, run again with
-  `--ack`, it returns each leg's command. A plan of EVM legs then runs on one signing page
-  (`connect plan --run`, below); a plan with a Solana leg runs leg by leg with the new
+  `--ack`, it returns each leg's command. The plan then runs on one signing page
+  (`connect plan --run`, below); each leg can also run alone with the new
   `--plan <code> --leg <n>` flags on `connect deposit` and `connect withdraw`, each through its own
   signing page and without asking again. A plan holds at most 8 legs and expires after 60 minutes; a
   leg that does not complete ends it, and a leg whose page never opened sent nothing and can run again. `connect plan --status` lists the legs and their transactions.
@@ -26,8 +26,15 @@ Pre-1.0, minor versions may change tool names, schemas and behaviour.
   acknowledged, gate-checked and verified from its receipts, and a leg that does not complete ends the plan. Near the
   shell's time limit the run returns `in_progress` between legs (no leg starts with less than 5 minutes left); the
   next run serves the same page. A run records only on its own plan: if another command replaces or clears the plan
-  while the page is open, no further leg starts and the run still reports what landed. EVM legs only for now: a plan
-  with a Solana leg runs leg by leg. The acknowledgement says which: one signing page, or a page per leg.
+  while the page is open, no further leg starts and the run still reports what landed.
+
+- **Solana legs on the same plan page** (#184). `connect plan --run` used to refuse a plan with a Solana leg, which
+  then ran one page per leg. Now every leg runs on the one page, in order. A Solana leg is held to its acknowledged
+  intent and gate-checked when it starts, its transaction is built again when the operator presses for it, and what
+  landed is checked as a single Solana run checks it. The page uses the wallet the operator signed in with: a plan
+  with EVM legs connects that wallet's Solana account at Start (the wallet may ask once) and checks it is the
+  connected Solana account, and a wallet that cannot ends the plan there with nothing sent. A plan of only Solana
+  legs needs only the Solana wallet connected. The acknowledgement now always says one signing page.
 
 ### Fixed
 - **On Solana, a landed withdrawal is checked for what it paid, not only that the asset rose** (#154).

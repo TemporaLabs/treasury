@@ -64,7 +64,7 @@ describe("the connect page's source", () => {
         .map((x) => x.trim().replace(/^type\s+/, "").split(/\s+as\s+/)[0]!)
         .filter(Boolean);
     expect(new Set(imports("@privy-io/react-auth/solana"))).toEqual(
-      new Set(["defaultSolanaRpcsPlugin", "toSolanaWalletConnectors", "useSignAndSendTransaction", "useSignMessage", "useWallets", "ConnectedStandardSolanaWallet"]),
+      new Set(["defaultSolanaRpcsPlugin", "toSolanaWalletConnectors", "useSignAndSendTransaction", "useSignMessage", "useWallets", "useStandardWallets", "ConnectedStandardSolanaWallet", "SolanaStandardWallet"]),
     );
     for (const name of imports("@privy-io/react-auth")) expect(name, "an EVM signing hook from the main entry").not.toMatch(/^use(Sign|Send)/);
     // The named-import list above is the only way a Privy hook reaches the page: no namespace or default
@@ -75,6 +75,20 @@ describe("the connect page's source", () => {
     expect(source).not.toMatch(/\.\s*use(Sign|Send)\w*/);
     // The Solana message the page signs is the sign-in challenge the local process issued, and nothing else.
     expect([...source.matchAll(/signMessage\(\{\s*message:\s*([^,]+),/g)].map((m) => m[1]!.trim())).toEqual(['new TextEncoder().encode(ch["message"])']);
+  });
+
+  /**
+   * A plan with EVM and Solana legs connects the Solana account of the wallet the operator signed in with, and asks it
+   * to sign and send through the Wallet Standard (`useStandardWallets`), as Privy itself does for an external Solana
+   * wallet (#184). The only features the page may call are connecting an account and signing and sending a transaction:
+   * never signing a message or a transaction it keeps, and never a feature named at run time.
+   */
+  it("calls a Solana wallet's own features only to connect it and to sign and send a transaction", () => {
+    const features = [...source.matchAll(/features\s*\[\s*"([^"]+)"\s*\]/g)].map((m) => m[1]);
+    expect(features.length).toBeGreaterThan(0);
+    expect(new Set(features)).toEqual(new Set(["standard:connect", "solana:signAndSendTransaction"]));
+    expect(source).not.toMatch(/features\s*\[\s*[^"\s]/);
+    expect(source).not.toMatch(/features\s*\.\s*\w/);
   });
 
   it("writes no HTML from strings, evaluates no code, and stores nothing in the browser", () => {

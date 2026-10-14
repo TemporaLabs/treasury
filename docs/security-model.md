@@ -130,7 +130,9 @@ open for nothing but the calls that text described.
 - **A plan** (`connect plan`) is one fixed text for up to 8 deposits and withdrawals, with its own code,
   valid for 60 minutes and spent leg by leg, in order. Each leg is bound to the same digest its own
   acknowledgement would be, and is rebuilt, held to that digest and admitted by the gate when it runs; a
-  leg that does not complete ends the plan. `connect plan --run` serves one page for every EVM leg. Its
+  leg that does not complete ends the plan. `connect plan --run` serves one page for every leg, EVM and Solana: a Solana leg is gate-checked when it
+  starts and its transaction built again at the operator's press, and only a signature for a transaction built for
+  that leg, paid for by the connected Solana account, verifies. Its
   secret and port are kept in the owner-readable `connect-plan.json` for the plan's life, so a later run
   serves the same tab; a secret is only ever served on the port it was minted for. A run records only
   on its own plan, and a completed sign-in or a disconnect deletes the plan.
