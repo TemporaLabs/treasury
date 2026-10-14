@@ -213,7 +213,7 @@ jobs:
           want="git+https://github.com/TemporaLabs/treasury.git"
           [ "$got" = "$want" ] || { echo "::error file=package.json::repository.url is '$got' but the public repository is TemporaLabs/treasury — an npm publish with provenance from anywhere else will be refused"; exit 1; }
           echo "repository.url names the public repository"
-      - name: bundled CLI opens exactly its two skills, the eight earn commands and the five connect commands, with no sign/send command
+      - name: bundled CLI opens exactly its two skills, the eight earn commands and the six connect commands, with no sign/send command
         if: steps.pk.outputs.present == 'yes'
         run: |
           python3 - <<'PY'
@@ -232,8 +232,9 @@ jobs:
               "connect_status": set(),
               "connect_wallet": {"chain"},
               "connect_disconnect": set(),
-              "connect_deposit": {"vault", "chain", "amount_usdc", "receiver", "ack"},
-              "connect_withdraw": {"vault", "chain", "receiver", "amount_usdc", "all", "shares_exact", "ack"},
+              "connect_deposit": {"vault", "chain", "amount_usdc", "receiver", "ack", "plan", "leg"},
+              "connect_withdraw": {"vault", "chain", "receiver", "amount_usdc", "all", "shares_exact", "ack", "plan", "leg"},
+              "connect_plan": {"legs", "ack", "status"},
           }, cprops
           assert not any(k in n for n in cprops for k in ("sign","send","transfer")), "a signing command leaked in"
           out = subprocess.run(["node","dist/treasury.mjs","earn","--help"], capture_output=True, text=True, timeout=60)
