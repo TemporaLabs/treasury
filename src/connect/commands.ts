@@ -807,8 +807,14 @@ export function buildConnectCommands(deps: ConnectDeps = {}): Record<string, Com
       if (!session) throw target.family === "solana" ? notConnectedSolana() : notConnected();
       const chain = target.family === "solana" ? "solana" : CHAIN_INFO[target.vault.chainId].key;
       const whole = l.amount === "all";
-      if (whole && out.some((o) => o.symbol === target.vault.symbol && o.action === "deposit")) {
-        throw new Error(`leg ${i + 1} withdraws all of ${target.vault.symbol}, which an earlier leg deposits into; the share balance is read now, before that deposit lands, so withdraw it in a later plan`);
+      // A whole withdrawal is bound to the share balance read now, so it must be the only leg on its vault that
+      // could change that balance before it runs, and nothing on that vault can follow it.
+      const earlier = out.find((o) => o.symbol === target.vault.symbol);
+      if (whole && earlier) {
+        throw new Error(`leg ${i + 1} withdraws all of ${target.vault.symbol}, which an earlier leg ${earlier.action === "deposit" ? "deposits into" : "withdraws from"}; the share balance is read now, before that leg runs, so withdraw it in a later plan`);
+      }
+      if (earlier?.whole) {
+        throw new Error(`leg ${i + 1} is on ${target.vault.symbol}, which an earlier leg withdraws in full; put it in a later plan`);
       }
       // The receiver is the connected account for the leg's chain family: the only account a page pays.
       let args: WithdrawArgs = { vault: target.vault.symbol, receiver: session.account, amount_usdc: l.amount };
@@ -822,6 +828,8 @@ export function buildConnectCommands(deps: ConnectDeps = {}): Record<string, Com
           ? await depositLeg({ vault: target.vault.symbol, receiver: session.account, amount_usdc: l.amount }, { kind: "describe" })
           : await withdrawLeg(args, { kind: "describe" });
       if (typeof d === "string") throw new Error("internal: a leg did not describe itself");
+      // The single acknowledgement's wording says a given share amount is not checked against the balance; here it was read.
+      if (whole) d.summary.amount = `${args.shares_exact} ${target.vault.symbol} shares (your whole position, read when this plan was made; shares that arrive after that are not included)`;
       out.push({ action: l.action, symbol: target.vault.symbol, chain, family: target.family, args, d, whole, asset: target.vault.asset });
     }
     return out;

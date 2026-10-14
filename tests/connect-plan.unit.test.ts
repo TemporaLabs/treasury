@@ -5,7 +5,7 @@ import { join } from "node:path";
 import { createServer } from "node:net";
 import { encodeAbiParameters, encodeEventTopics, getAddress, parseAbiItem, type Address, type Hex } from "viem";
 import { buildConnectCommands, type ConnectDeps } from "../src/connect/commands.js";
-import { pendingAckPath, planPath, readPlan, writeSession } from "../src/connect/session.js";
+import { clearSession, pendingAckPath, planPath, readPlan, writeSession, writeSolanaSession } from "../src/connect/session.js";
 import { PLAN_MAX_LEGS, PLAN_TTL_MS, operatorWarning } from "../src/connect/ack.js";
 import { DISCLOSURES } from "../src/disclosures.js";
 import { defaultVault, listSolanaVaults, listVaults } from "../src/registry.js";
@@ -145,8 +145,20 @@ describe("connect plan without --ack: one acknowledgement for every leg, and not
     expect(text).toContain("withdraw the whole position in 1 vault");
     expect(text).toContain(`WARNING (${vault.symbol}`);
     expect(text).toContain(operatorWarning(other.warning, "withdraw"));
-    for (const d of [...DISCLOSURES.plain.deposit, ...DISCLOSURES.plain.always]) expect(text.split(d).length - 1).toBe(1);
+    // Three vaults: the fee sentence speaks of all of them, once; every other disclosure appears once as written.
+    const fees = DISCLOSURES.plain.deposit.find((d) => d.startsWith("Tempora Labs runs this vault"))!;
+    expect(text).not.toContain(fees);
+    expect(text.split(DISCLOSURES.plain.feesSeveral).length - 1).toBe(1);
+    for (const d of [...DISCLOSURES.plain.deposit, ...DISCLOSURES.plain.always].filter((d) => d !== fees)) expect(text.split(d).length - 1).toBe(1);
     expect(text).toContain("If a leg does not complete, the legs after it do not run.");
+    expect(text).toContain("The plan lasts 60 minutes: a leg not started by then does not run, and connecting a wallet again cancels it.");
+    // The withdraw-all leg says its balance was read, and not the single acknowledgement's "not checked here".
+    expect(text).toContain(`2. Withdraw: 5 ${other.symbol} shares (your whole position, read when this plan was made;`);
+    expect(text).not.toContain("not checked here");
+    // One warning for the family, naming all three vaults, with the deposit advice named for the deposits only.
+    const warningLines = text.split("\n").filter((l) => l.startsWith("WARNING"));
+    expect(warningLines).toEqual([`WARNING (${vault.symbol}, ${other.symbol}, ${sol.symbol}): ${operatorWarning(other.warning, "withdraw")}`]);
+    expect(text).toContain(`  For the deposits (${vault.symbol}, ${sol.symbol}): Deposit only`);
     expect(text.trimEnd().endsWith("for exactly these 3 legs? Reply yes or no.")).toBe(true);
   });
 
@@ -164,6 +176,13 @@ describe("connect plan without --ack: one acknowledgement for every leg, and not
     expect(JSON.parse(readFileSync(pendingAckPath(), "utf8")).code).toBe(single["ack"]);
   });
 
+  it("a plan on one vault keeps the fee sentence as a single acknowledgement words it", async () => {
+    const r = await plan({ legs: `deposit ${vault.symbol} 1; withdraw ${vault.symbol} 0.5` });
+    const text = String(r["acknowledgement"]);
+    expect(text).toContain(DISCLOSURES.plain.deposit.find((d) => d.startsWith("Tempora Labs runs this vault"))!);
+    expect(text).not.toContain(DISCLOSURES.plain.feesSeveral);
+  });
+
   it("withdraw … all binds the share balance read now", async () => {
     await plan({ legs: `withdraw ${other.symbol} all; withdraw ${sol.symbol} all` });
     expect(readPlan()!.legs.map((l) => l.command)).toEqual([expect.stringContaining("--all --shares_exact 5 "), expect.stringContaining("--all --shares_exact 3 ")]);
@@ -177,6 +196,9 @@ describe("connect plan without --ack: one acknowledgement for every leg, and not
     ["a leg with a missing amount", `deposit ${vault.symbol}`, /write each leg as/],
     ["a vault that is not listed", `deposit tlNOPE 1`, /tlNOPE/],
     ["a withdraw-all of a vault an earlier leg deposits into", `deposit ${vault.symbol} 1; withdraw ${vault.symbol} all`, /an earlier leg deposits into/],
+    ["a withdraw-all of a vault an earlier leg withdraws from", `withdraw ${other.symbol} 1; withdraw ${other.symbol} all`, /an earlier leg withdraws from/],
+    ["two withdraw-alls of one vault", `withdraw ${other.symbol} all; withdraw ${other.symbol} all`, /an earlier leg withdraws from/],
+    ["a leg on a vault after a withdraw-all of it", `withdraw ${other.symbol} all; deposit ${other.symbol} 1`, /an earlier leg withdraws in full/],
     ["more legs than a plan holds", Array.from({ length: PLAN_MAX_LEGS + 1 }, () => `deposit ${vault.symbol} 1`).join(";"), /at most/],
   ];
   for (const [what, legs, why] of refused) {
@@ -348,6 +370,65 @@ describe("a plan's legs: in order, each held to what was acknowledged, and a leg
     ]);
     await expect(runLeg(commands[1]!, d)).rejects.toThrow(/already run/);
     expect(opened).toHaveLength(2);
+  });
+
+  it("a Solana leg runs under the plan, held to its acknowledged intent; a changed amount is refused before anything opens", async () => {
+    const { commands } = await acknowledged(`deposit ${sol.symbol} 2.5`);
+    await expect(runLeg(commands[0]!.replace("--amount_usdc 2.5", "--amount_usdc 3"))).rejects.toThrow(/not leg 1 as the operator acknowledged it/);
+    expect(opened).toEqual([]);
+    // Past the plan's check the flow goes on to read the vault, which this stub RPC cannot serve (as in the single
+    // acknowledgement's Solana tests): what matters is that the leg was accepted, marked, and cannot run again.
+    const err = await runLeg(commands[0]!).then(() => "", (e: Error) => e.message);
+    expect(err).not.toMatch(/acknowledged|plan/);
+    // A leg whose run throws is not_reported, with the error as its reason: never left "running".
+    expect(readPlan()!.legs[0]).toMatchObject({ status: "not_reported", reason: err });
+    await expect(runLeg(commands[0]!)).rejects.toThrow(/already run/);
+  });
+
+  it("a leg that lands but does not match (here, reverted) is stopped, and ends the plan: the next leg never runs", async () => {
+    const legs = `withdraw ${vault.symbol} 0.25; deposit ${vault.symbol} 0.6`;
+    const { commands } = await acknowledged(legs);
+    const h = `0x${"07".repeat(32)}` as Hex;
+    receipts = { [h]: { status: "reverted", logs: [] } };
+    const leg1 = runLeg(commands[0]!, deps({ ttlMs: 5_000 }));
+    await play([h]);
+    const r1 = await leg1;
+    expect(r1["status"]).toBe("stopped");
+    expect(String(r1["next_step"])).toMatch(/^The plan ended at leg 1 of 2/);
+    expect(readPlan()!.legs.map((l) => l.status)).toEqual(["stopped", "pending"]);
+    process.env["TREASURY_CONNECT_PORT"] = String(await freePort());
+    await expect(runLeg(commands[1]!)).rejects.toThrow(/the plan ended at leg 1 \(stopped\)/);
+    expect(opened).toHaveLength(1);
+  });
+
+  it("an expiry that cannot be read counts as expired, for the leg and for the acknowledgement", async () => {
+    const { commands } = await acknowledged();
+    writeFileSync(planPath(), JSON.stringify({ ...readPlan()!, expiresAtIso: "not a date" }));
+    await expect(runLeg(commands[0]!)).rejects.toThrow(/expired/);
+    const { ack } = await plan({ legs: LEGS });
+    writeFileSync(planPath(), JSON.stringify({ ...readPlan()!, expiresAtIso: "not a date" }));
+    await expect(plan({ legs: LEGS, ack })).rejects.toThrow(/expired/);
+    expect(opened).toEqual([]);
+  });
+
+  it("a plan file with a leg that does not read back whole is no plan", async () => {
+    const { commands } = await acknowledged();
+    const p = readPlan()!;
+    writeFileSync(planPath(), JSON.stringify({ ...p, legs: [{ ...p.legs[0]!, digest: undefined }, ...p.legs.slice(1)] }));
+    expect(readPlan()).toBeUndefined();
+    await expect(runLeg(commands[0]!)).rejects.toThrow(/no plan is pending/);
+  });
+
+  it("reconnecting the Solana wallet voids the plan too", async () => {
+    await acknowledged();
+    writeSolanaSession({ account: SOL_ACCOUNT, walletType: "external", connectedAtIso: "2026-10-13T12:01:00Z" });
+    expect(existsSync(planPath())).toBe(false);
+  });
+
+  it("disconnecting voids the plan", async () => {
+    await acknowledged();
+    clearSession();
+    expect(existsSync(planPath())).toBe(false);
   });
 
   it("reconnecting a wallet voids the plan", async () => {

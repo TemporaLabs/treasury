@@ -45898,6 +45898,8 @@ var DISCLOSURES = {
       "You can withdraw, but in stressed markets part of your money may not come out right away.",
       "Tempora Labs runs this vault and can charge fees on it. It is offered because it is a Tempora Labs vault, not because it pays the most. Its holdings and fees are public on-chain."
     ],
+    /** The last `deposit` sentence, for an acknowledgement that names more than one vault (`connect plan`). */
+    feesSeveral: "Tempora Labs runs these vaults and can charge fees on them. They are offered because they are Tempora Labs vaults, not because they pay the most. Their holdings and fees are public on-chain.",
     /** Added before a deposit into a vault whose registry row is not open to every account. */
     gatedDeposit: "This vault only accepts deposits from accounts Tempora Labs has admitted. If yours is not one, the deposit will fail.",
     always: [
@@ -47127,13 +47129,21 @@ function checkPlanLeg(code, leg, plan, digest, now) {
 }
 function planAcknowledgementText(legs, totals) {
   const n = legs.length;
+  const advice = (w) => w.match(/Deposit only .*?\.(?=\s|$)/g)?.join(" ") ?? "";
   const warnings = [];
   for (const s2 of legs) {
-    const w = warnings.find((x) => x.text === s2.warning);
-    if (!w) warnings.push({ text: s2.warning, vaults: [s2.vault.symbol] });
-    else if (!w.vaults.includes(s2.vault.symbol)) w.vaults.push(s2.vault.symbol);
+    const base2 = operatorWarning(s2.warning, "withdraw");
+    const w = warnings.find((x) => x.text === base2) ?? warnings[warnings.push({ text: base2, vaults: [], advice: "", depositVaults: [] }) - 1];
+    if (!w.vaults.includes(s2.vault.symbol)) w.vaults.push(s2.vault.symbol);
+    if (s2.action === "deposit" && advice(s2.warning)) {
+      w.advice = advice(s2.warning);
+      if (!w.depositVaults.includes(s2.vault.symbol)) w.depositVaults.push(s2.vault.symbol);
+    }
   }
-  const disclosures = [...new Set(legs.flatMap((s2) => s2.disclosures))];
+  const several = new Set(legs.map((s2) => s2.vault.symbol)).size > 1;
+  const fees = DISCLOSURES.plain.deposit.find((d) => d.startsWith("Tempora Labs runs this vault"));
+  const disclosures = [...new Set(legs.flatMap((s2) => s2.disclosures))].map((d) => several && d === fees ? DISCLOSURES.plain.feesSeveral : d);
+  const minutes = Math.round(PLAN_TTL_MS / 6e4);
   const legLines = legs.flatMap((s2, i) => {
     const lands = s2.action === "deposit" ? "Shares go to" : `${s2.asset} goes to`;
     const prompts = s2.prompts ?? (s2.action === "deposit" ? `Your wallet will ask you twice: first to approve ${s2.amount} to the vault, then to make the deposit.` : `Your wallet will ask you once, to make the withdrawal.`);
@@ -47151,10 +47161,14 @@ function planAcknowledgementText(legs, totals) {
     `Confirm before any signing page opens. Nothing has been sent.`,
     ``,
     `This plan has ${n} ${n === 1 ? "leg" : "legs"}, run in this order. Each opens its own signing page, where your wallet asks you to confirm each transaction. If a leg does not complete, the legs after it do not run.`,
+    `The plan lasts ${minutes} minutes: a leg not started by then does not run, and connecting a wallet again cancels it. To stop partway, cancel on a leg's signing page; the legs after it then do not run.`,
     ``,
     ...legLines,
     ...totals.length ? [`In total: ${totals.join("; ")}.`, ``] : [],
-    ...warnings.map((w) => `WARNING (${w.vaults.join(", ")}): ${w.text}`),
+    ...warnings.flatMap((w) => [
+      `WARNING (${w.vaults.join(", ")}): ${w.text}`,
+      ...w.advice ? [`  For the ${w.depositVaults.length === 1 ? "deposit" : "deposits"} (${w.depositVaults.join(", ")}): ${w.advice}`] : []
+    ]),
     ``,
     `Before you agree:`,
     ...disclosures.map((d) => `  - ${d}`),
@@ -47922,8 +47936,12 @@ function buildConnectCommands(deps = {}) {
       if (!session) throw target.family === "solana" ? notConnectedSolana() : notConnected();
       const chain = target.family === "solana" ? "solana" : CHAIN_INFO[target.vault.chainId].key;
       const whole = l.amount === "all";
-      if (whole && out.some((o2) => o2.symbol === target.vault.symbol && o2.action === "deposit")) {
-        throw new Error(`leg ${i + 1} withdraws all of ${target.vault.symbol}, which an earlier leg deposits into; the share balance is read now, before that deposit lands, so withdraw it in a later plan`);
+      const earlier = out.find((o2) => o2.symbol === target.vault.symbol);
+      if (whole && earlier) {
+        throw new Error(`leg ${i + 1} withdraws all of ${target.vault.symbol}, which an earlier leg ${earlier.action === "deposit" ? "deposits into" : "withdraws from"}; the share balance is read now, before that leg runs, so withdraw it in a later plan`);
+      }
+      if (earlier?.whole) {
+        throw new Error(`leg ${i + 1} is on ${target.vault.symbol}, which an earlier leg withdraws in full; put it in a later plan`);
       }
       let args = { vault: target.vault.symbol, receiver: session.account, amount_usdc: l.amount };
       if (whole) {
@@ -47933,6 +47951,7 @@ function buildConnectCommands(deps = {}) {
       }
       const d = l.action === "deposit" ? await depositLeg({ vault: target.vault.symbol, receiver: session.account, amount_usdc: l.amount }, { kind: "describe" }) : await withdrawLeg(args, { kind: "describe" });
       if (typeof d === "string") throw new Error("internal: a leg did not describe itself");
+      if (whole) d.summary.amount = `${args.shares_exact} ${target.vault.symbol} shares (your whole position, read when this plan was made; shares that arrive after that are not included)`;
       out.push({ action: l.action, symbol: target.vault.symbol, chain, family: target.family, args, d, whole, asset: target.vault.asset });
     }
     return out;

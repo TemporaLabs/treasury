@@ -285,13 +285,23 @@ export function checkPlanLeg(code: string, leg: number, plan: PendingPlan | unde
 /** The text the operator reads for a plan: every leg, then each warning and the disclosures once. */
 export function planAcknowledgementText(legs: AckSummary[], totals: string[]): string {
   const n = legs.length;
-  const warnings: { text: string; vaults: string[] }[] = [];
+  // One warning per text, naming every vault it covers. A withdrawal's warning is the deposit's without its advice on
+  // how much to deposit (`operatorWarning`), so the two are one warning, with that advice named for the deposits only.
+  const advice = (w: string) => w.match(/Deposit only .*?\.(?=\s|$)/g)?.join(" ") ?? "";
+  const warnings: { text: string; vaults: string[]; advice: string; depositVaults: string[] }[] = [];
   for (const s of legs) {
-    const w = warnings.find((x) => x.text === s.warning);
-    if (!w) warnings.push({ text: s.warning, vaults: [s.vault.symbol] });
-    else if (!w.vaults.includes(s.vault.symbol)) w.vaults.push(s.vault.symbol);
+    const base = operatorWarning(s.warning, "withdraw");
+    const w = warnings.find((x) => x.text === base) ?? warnings[warnings.push({ text: base, vaults: [], advice: "", depositVaults: [] }) - 1]!;
+    if (!w.vaults.includes(s.vault.symbol)) w.vaults.push(s.vault.symbol);
+    if (s.action === "deposit" && advice(s.warning)) {
+      w.advice = advice(s.warning);
+      if (!w.depositVaults.includes(s.vault.symbol)) w.depositVaults.push(s.vault.symbol);
+    }
   }
-  const disclosures = [...new Set(legs.flatMap((s) => s.disclosures))];
+  const several = new Set(legs.map((s) => s.vault.symbol)).size > 1;
+  const fees = DISCLOSURES.plain.deposit.find((d) => d.startsWith("Tempora Labs runs this vault"));
+  const disclosures = [...new Set(legs.flatMap((s) => s.disclosures))].map((d) => (several && d === fees ? DISCLOSURES.plain.feesSeveral : d));
+  const minutes = Math.round(PLAN_TTL_MS / 60_000);
   const legLines = legs.flatMap((s, i) => {
     const lands = s.action === "deposit" ? "Shares go to" : `${s.asset} goes to`;
     const prompts =
@@ -313,10 +323,14 @@ export function planAcknowledgementText(legs: AckSummary[], totals: string[]): s
     `Confirm before any signing page opens. Nothing has been sent.`,
     ``,
     `This plan has ${n} ${n === 1 ? "leg" : "legs"}, run in this order. Each opens its own signing page, where your wallet asks you to confirm each transaction. If a leg does not complete, the legs after it do not run.`,
+    `The plan lasts ${minutes} minutes: a leg not started by then does not run, and connecting a wallet again cancels it. To stop partway, cancel on a leg's signing page; the legs after it then do not run.`,
     ``,
     ...legLines,
     ...(totals.length ? [`In total: ${totals.join("; ")}.`, ``] : []),
-    ...warnings.map((w) => `WARNING (${w.vaults.join(", ")}): ${w.text}`),
+    ...warnings.flatMap((w) => [
+      `WARNING (${w.vaults.join(", ")}): ${w.text}`,
+      ...(w.advice ? [`  For the ${w.depositVaults.length === 1 ? "deposit" : "deposits"} (${w.depositVaults.join(", ")}): ${w.advice}`] : []),
+    ]),
     ``,
     `Before you agree:`,
     ...disclosures.map((d) => `  - ${d}`),

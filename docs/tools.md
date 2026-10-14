@@ -377,8 +377,9 @@ one for the whole plan. It never opens a page itself.
 `--legs` lists the legs in order, separated by `;`: each `deposit <vault> <amount>` or
 `withdraw <vault> <amount|all>`, with the vault's ticker as `earn vaults` lists it and the amount as a
 plain decimal. A plan holds at most 8 legs. `all` reads the account's share balance when the plan is
-made and binds that exact amount. A withdrawal of `all` from a vault an earlier leg deposits into is
-refused. Each leg's receiver is the connected account of its family (EVM or Solana), so a plan with
+made and binds that exact amount, so a withdrawal of `all` must be the first leg on its vault and the
+last: one after an earlier deposit into or withdrawal from the same vault is refused, and so is any leg
+on a vault after its withdrawal of `all`. Each leg's receiver is the connected account of its family (EVM or Solana), so a plan with
 legs in both needs both wallets connected. Every leg is built and gate-checked as its own
 `connect deposit` or `connect withdraw` would be.
 
@@ -387,8 +388,10 @@ Without `--ack` it returns
 `{ status: "needs_acknowledgement", opened: false, legs: [{ leg, action, vault, chain, amount, receiver }], acknowledgement, ack, expiresAtIso, next_step }`
 
 `acknowledgement` is one fixed text: every leg in order (action, amount, chain, the vault's name,
-symbol and explorer link, the receiver and the wallet prompts to expect), the totals, each vault's
-warning once, and the disclosures once. It ends by asking for a yes or a no to exactly those legs.
+symbol and explorer link, the receiver and the wallet prompts to expect), how long the plan lasts and
+how to stop it partway, the totals, each warning once with the vaults it covers, and the disclosures
+once. A withdrawal of `all` is named as the whole position read when the plan was made. It ends by
+asking for a yes or a no to exactly those legs.
 The agent posts it to the operator word for word. `expiresAtIso` is 60 minutes after this run.
 
 On the operator's yes, the same `--legs` with `--ack <ack>` records the yes, opens nothing, and returns
