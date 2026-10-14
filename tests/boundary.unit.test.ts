@@ -185,6 +185,65 @@ const eachNode = (sf: ts.SourceFile, fn: (n: ts.Node) => void) => {
   walk(sf);
 };
 
+/** The one file allowed `process.kill`, for the page lock's signal-0 liveness probe. */
+const PROBE_FILE = "src/connect/session.ts";
+
+/** An expression without the wrappers that leave its value unchanged: parentheses, `as`, `<T>`, `!`, `satisfies`. */
+const unwrap = (e: ts.Expression): ts.Expression => {
+  while (ts.isParenthesizedExpression(e) || ts.isAsExpression(e) || ts.isTypeAssertionExpression(e) || ts.isNonNullExpression(e) || ts.isSatisfiesExpression(e)) e = e.expression;
+  return e;
+};
+/** `globalThis` or `global`, however wrapped. */
+const isGlobalObject = (e: ts.Expression) => {
+  const u = unwrap(e);
+  return ts.isIdentifier(u) && (u.text === "globalThis" || u.text === "global");
+};
+/** The member `name` of `e`, read as `e.name`, `e?.name` or `e["name"]`: the object it is read from. */
+const memberOf = (e: ts.Expression, name: string): ts.Expression | undefined => {
+  const u = unwrap(e);
+  if (ts.isPropertyAccessExpression(u) && u.name.text === name) return u.expression;
+  if (ts.isElementAccessExpression(u) && ts.isStringLiteralLike(u.argumentExpression) && u.argumentExpression.text === name) return u.expression;
+  return undefined;
+};
+/** The global process object: `process`, or `process` read from `globalThis`/`global`, by any of the spellings above. */
+const isProcess = (e: ts.Expression): boolean => {
+  const u = unwrap(e);
+  if (ts.isIdentifier(u)) return u.text === "process";
+  const from = memberOf(u, "process");
+  return from !== undefined && isGlobalObject(from);
+};
+
+/**
+ * Every use of the global `process.kill` in one file: the signal-0 probes in PROBE_FILE, and everything else as a
+ * finding. Aliasing the process object is a finding too, since a kill through the alias could not be read; other
+ * routes to the object (passing it to a function, a reflection call) are the unbounded class the header of this
+ * file describes, and stay outside this rule.
+ */
+function killFindings(sf: ts.SourceFile, path: string): { probes: string[]; bad: string[] } {
+  const probes: string[] = [];
+  const bad: string[] = [];
+  eachNode(sf, (n) => {
+    if (ts.isVariableDeclaration(n) && n.initializer !== undefined && isProcess(n.initializer)) {
+      // `const { kill } = process` takes the same function with no `process.kill` left to read.
+      const takesKill = ts.isObjectBindingPattern(n.name) && n.name.elements.some((el) => (el.propertyName ?? el.name).getText(sf) === "kill");
+      bad.push(takesKill ? `${path} takes kill out of process: ${n.getText(sf).slice(0, 60)}` : `${path} aliases process, so a kill through it could not be checked: ${n.getText(sf).slice(0, 60)}`);
+      return;
+    }
+    if (!(ts.isPropertyAccessExpression(n) || ts.isElementAccessExpression(n))) return;
+    const from = memberOf(n, "kill");
+    if (from === undefined || !isProcess(from)) return;
+    // The call this read feeds, through any wrappers around the callee.
+    let callee: ts.Node = n;
+    while (ts.isParenthesizedExpression(callee.parent) || ts.isNonNullExpression(callee.parent) || ts.isAsExpression(callee.parent)) callee = callee.parent;
+    const call = callee.parent;
+    const signal = ts.isCallExpression(call) && call.expression === callee ? call.arguments[1] : undefined;
+    if (path !== PROBE_FILE) bad.push(`${path} uses process.kill: ${call.getText(sf).slice(0, 60)}`);
+    else if (!signal || !ts.isNumericLiteral(signal) || signal.text !== "0") bad.push(`${path} calls process.kill with a signal other than a literal 0: ${call.getText(sf).slice(0, 60)}`);
+    else probes.push(path);
+  });
+  return { probes, bad };
+}
+
 /** Every module specifier a file reaches, and every one it reaches UNANALYSABLY. */
 function moduleReaches(file: string): { specs: string[]; opaque: string[]; nonDeclaration: string[] } {
   const sf = parse(file);
@@ -627,6 +686,59 @@ describe("E. the AUDITED surface is every .ts under src/, scripts/ and tests/", 
     }
     expect(spawners.sort()).toEqual(Object.keys(MAY_SPAWN).sort());
     expect(bad).toEqual([]);
+  });
+
+  it("process.kill is the page lock's liveness probe and nothing else: signal 0, in the one file that probes", () => {
+    // `process.kill(pid, 0)` sends nothing; it only asks whether `pid` exists. Any other signal, or a kill
+    // from anywhere else, would stop a process this package did not start. (A child's own `.kill()` on a
+    // process a test or script spawned is not this global and is not checked here.)
+    const probes: string[] = [];
+    const bad: string[] = [];
+    for (const f of files) {
+      const found = killFindings(parse(f), rel(f));
+      probes.push(...found.probes);
+      bad.push(...found.bad);
+    }
+    // Positive control: the probe is there to be found, so an empty `bad` is not a walk that saw nothing.
+    expect(probes).toEqual([PROBE_FILE]);
+    expect(bad).toEqual([]);
+  });
+
+  it("the process.kill rule sees every spelling of it: one fixture each, so the rule cannot go quietly blind", () => {
+    const findings = (code: string, path: string) => killFindings(ts.createSourceFile(path, code, ts.ScriptTarget.ESNext, true, ts.ScriptKind.TS), path);
+    const KILLS = [
+      "process.kill(pid, 9)",
+      "process['kill'](pid, 9)",
+      "(process).kill(pid, 9)",
+      "(process as NodeJS.Process).kill(pid, 9)",
+      "(<NodeJS.Process>process).kill(pid, 9)",
+      "process!.kill(pid, 9)",
+      "(process satisfies NodeJS.Process).kill(pid, 9)",
+      "process?.kill(pid, 9)",
+      "process.kill?.(pid, 9)",
+      "(process.kill)(pid, 9)",
+      "process.kill!(pid, 9)",
+      "globalThis.process.kill(pid, 9)",
+      "globalThis?.process.kill(pid, 9)",
+      "globalThis?.process?.kill(pid, 9)",
+      "global.process.kill(pid, 9)",
+      "globalThis['process'].kill(pid, 9)",
+      "(globalThis as any).process.kill(pid, 9)",
+    ];
+    for (const k of KILLS) {
+      // In any other file, every spelling is refused; in the probe file, signal 9 is refused and signal 0 is the probe.
+      expect(findings(`declare const pid: number; ${k};`, "src/other.ts").bad, k).toHaveLength(1);
+      expect(findings(`declare const pid: number; ${k};`, PROBE_FILE).bad, k).toHaveLength(1);
+      const probe = findings(`declare const pid: number; ${k.replace("(pid, 9)", "(pid, 0)")};`, PROBE_FILE);
+      expect([probe.bad, probe.probes], k).toEqual([[], [PROBE_FILE]]);
+    }
+    for (const alias of ["const p = process;", "const p = (process);", "const p = process!;", "const p = globalThis.process;", "const p = globalThis?.process;", "const { kill } = process;", "const { kill: k } = (globalThis as any).process;"]) {
+      expect(findings(alias, PROBE_FILE).bad, alias).toHaveLength(1);
+    }
+    // Not the global: a spawned child's own kill, and a property that merely shares the name.
+    for (const other of ["declare const child: { kill(s?: string): void }; child.kill('SIGTERM');", "const o = { process: 1 }; void o.process;", "declare const x: { process: { kill(): void } }; x.process.kill();"]) {
+      expect(findings(other, "src/other.ts").bad, other).toEqual([]);
+    }
   });
 });
 

@@ -97,6 +97,8 @@ export interface SolanaIntent {
   kind: "deposit" | "withdraw";
   vault: SolanaVaultEntry;
   raw: bigint;
+  /** A withdrawal by amount: the asset's base units the operator acknowledged (`raw` is the shares worth them). */
+  assets?: bigint;
 }
 
 export interface SolanaTxOutcome extends Verdict {
@@ -112,7 +114,44 @@ function tokenDelta(meta: { preTokenBalances?: readonly TokenBal[] | null; postT
   const pick = (list: readonly TokenBal[] | null | undefined) => BigInt(list?.find((b) => b.owner === owner && b.mint === mint)?.uiTokenAmount.amount ?? "0");
   return pick(meta.postTokenBalances) - pick(meta.preTokenBalances);
 }
-type TokenBal = { owner?: string; mint: string; uiTokenAmount: { amount: string } };
+type TokenBal = { accountIndex?: number; owner?: string; mint: string; uiTokenAmount: { amount: string } };
+
+/**
+ * Every token account of `mint` the transaction touched, from its token-balance records: the account's own net
+ * change, and each OTHER owner whose balance rose (money the transaction sent there). `net` is the sum over all
+ * of them, 0 when the transaction only moved the asset around. A string says why the records cannot answer.
+ */
+function assetFlows(meta: { preTokenBalances?: readonly TokenBal[] | null; postTokenBalances?: readonly TokenBal[] | null }, owner: string, mint: string): { own: bigint; rose: { to: string; amountRaw: bigint }[]; net: bigint } | string {
+  const pre = (meta.preTokenBalances ?? []).filter((b) => b.mint === mint);
+  const post = (meta.postTokenBalances ?? []).filter((b) => b.mint === mint);
+  const byIndex = new Map<number, { owner: string | undefined; before: bigint; after?: bigint }>();
+  for (const b of pre) {
+    if (b.accountIndex === undefined) return "the transaction's token-balance records do not name their accounts";
+    byIndex.set(b.accountIndex, { owner: b.owner, before: BigInt(b.uiTokenAmount.amount) });
+  }
+  for (const b of post) {
+    if (b.accountIndex === undefined) return "the transaction's token-balance records do not name their accounts";
+    const row = byIndex.get(b.accountIndex);
+    byIndex.set(b.accountIndex, { owner: b.owner ?? row?.owner, before: row?.before ?? 0n, after: BigInt(b.uiTokenAmount.amount) });
+  }
+  let own = 0n;
+  let net = 0n;
+  const rose: { to: string; amountRaw: bigint }[] = [];
+  for (const row of byIndex.values()) {
+    if (row.owner === undefined) return "the transaction's token-balance records do not name the owner of every account they list";
+    // No record after: the account was closed, which the token program allows only at a balance of 0. One that
+    // held the asset before and has no record after is a record missing, not a balance that fell to 0.
+    if (row.after === undefined) {
+      if (row.before !== 0n) return `the transaction's token-balance records hold no balance after it for an account of ${row.owner} that held ${row.before} base units before`;
+      continue;
+    }
+    const delta = row.after - row.before;
+    net += delta;
+    if (row.owner === owner) own += delta;
+    else if (delta > 0n) rose.push({ to: row.owner, amountRaw: delta });
+  }
+  return { own, rose, net };
+}
 
 /**
  * Did the transaction land, and do the account's own balances say it did what was acknowledged? Read from the
@@ -124,7 +163,7 @@ export async function verifySolanaLanded(
   signature: string,
   intent: SolanaIntent,
   account: string,
-  opts: { attempts?: number; delayMs?: number; deadline: number; built: ReadonlySet<string> },
+  opts: { attempts?: number; delayMs?: number; deadline: number; built: ReadonlySet<string>; simulated?: ReadonlyMap<string, bigint> },
 ): Promise<Verdict> {
   const sig = signature as Signature;
   for (let i = 0; i < (opts.attempts ?? 45) && Date.now() < opts.deadline; i++) {
@@ -135,6 +174,7 @@ export async function verifySolanaLanded(
       if (!tx || !tx.meta) return { verified: "unverified", detail: "the signature is confirmed but its transaction could not be read; look it up before retrying anything" };
       const meta = tx.meta as unknown as { err: unknown; preTokenBalances?: TokenBal[]; postTokenBalances?: TokenBal[] };
       if (meta.err) return { verified: "reverted", detail: `the transaction failed on chain: ${JSON.stringify(meta.err)}` };
+      if (!meta.preTokenBalances || !meta.postTokenBalances) return { verified: "unverified", detail: "the transaction landed, but this RPC returned no token-balance records for it, so what it moved cannot be checked; look it up before retrying anything" };
       // Bound to what this flow built: the page is handed a transaction with a fresh blockhash, recorded in
       // `built`. A signature for any other transaction — an older one of the same shape, or a share transfer
       // — names another blockhash, and its balances say nothing about this deposit or withdrawal.
@@ -168,8 +208,32 @@ export async function verifySolanaLanded(
       if (-shares > intent.raw || -shares + BigInt(legs) < intent.raw) {
         return { verified: "mismatch", detail: `a PARTIAL withdrawal: it burned ${formatAmount(-shares, intent.vault.shareDecimals)} of the ${formatAmount(intent.raw, intent.vault.shareDecimals)} shares acknowledged and paid ${formatAmount(asset > 0n ? asset : 0n, intent.vault.asset.decimals)} ${intent.vault.asset.symbol}; the rest of the shares are still in the account. Check \`earn balance --chain solana\` before withdrawing again.` };
       }
-      if (asset <= 0n) return { verified: "mismatch", detail: `the shares burned but the account's ${a.symbol} did not rise` };
-      return { verified: "matched", detail: `received ${formatAmount(asset, a.decimals)} ${a.symbol}` };
+      // What the vault paid out, from every account of the asset: the account's own rise plus anything the same
+      // transaction sent on to another owner. Each such owner is reported, as an outgoing transfer is on EVM.
+      const flows = assetFlows(meta, account, a.address);
+      if (typeof flows === "string") return { verified: "unverified", detail: `${flows}; look the transaction up before retrying anything` };
+      if (flows.net !== 0n) {
+        return { verified: "mismatch", detail: `the ${a.symbol} balances in this transaction do not add up: they ${flows.net > 0n ? "rose" : "fell"} by ${formatAmount(flows.net > 0n ? flows.net : -flows.net, a.decimals)} ${a.symbol} in total, which a withdrawal cannot do` };
+      }
+      const alsoMoved = flows.rose.map((r) => ({ to: r.to, amountRaw: r.amountRaw.toString() }));
+      const paid = flows.own + flows.rose.reduce((sum, r) => sum + r.amountRaw, 0n);
+      if (paid <= 0n) return { verified: "mismatch", detail: `the shares burned but the account's ${a.symbol} did not rise`, ...(alsoMoved.length ? { alsoMoved } : {}) };
+      // A withdrawal by amount pays what was acknowledged, less what Kamino keeps of each withdraw instruction
+      // (up to 0.001 of the asset, as the acknowledgement says). The shares were rounded up, so it can pay more.
+      const keptPerLeg = 10n ** BigInt(Math.max(a.decimals - 3, 0));
+      if (intent.assets !== undefined && paid + keptPerLeg * BigInt(legs) < intent.assets) {
+        return { verified: "mismatch", detail: `the withdrawal paid ${formatAmount(paid, a.decimals)} ${a.symbol}, less than the ${formatAmount(intent.assets, a.decimals)} ${a.symbol} acknowledged, by more than the up to ${formatAmount(keptPerLeg, a.decimals)} ${a.symbol} Kamino keeps per withdraw instruction. Tell the operator.`, ...(alsoMoved.length ? { alsoMoved } : {}) };
+      }
+      // The simulation of exactly this transaction, before it was handed to the wallet. A share's value only accrues
+      // between the two, so paying less (beyond rounding) means the vault lost value or the transaction differs.
+      const simulated = opts.simulated?.get(message.recentBlockhash);
+      if (simulated !== undefined && paid + BigInt(legs) < simulated) {
+        return { verified: "mismatch", detail: `the withdrawal paid ${formatAmount(paid, a.decimals)} ${a.symbol}, less than the ${formatAmount(simulated, a.decimals)} ${a.symbol} its simulation before sending paid. Tell the operator.`, ...(alsoMoved.length ? { alsoMoved } : {}) };
+      }
+      if (alsoMoved.length) {
+        return { verified: "extra_transfer", detail: `the withdrawal landed and paid ${formatAmount(paid, a.decimals)} ${a.symbol}, and in the same transaction ${formatAmount(paid - flows.own, a.decimals)} ${a.symbol} of it went to another owner (alsoMoved). That was not part of the withdrawal. Tell the operator. (SOL the transaction moved is not checked, as on EVM.)`, alsoMoved };
+      }
+      return { verified: "matched", detail: `received ${formatAmount(paid, a.decimals)} ${a.symbol} (SOL the transaction moved is not checked, as on EVM)` };
     }
     await new Promise((r) => setTimeout(r, opts.delayMs ?? 2_000));
   }
@@ -177,7 +241,7 @@ export async function verifySolanaLanded(
 }
 
 /** Builds the intent's transaction now, holds it to the intent through the gate, and simulates it. */
-export async function buildForIntent(rpc: SolanaRpc, intent: SolanaIntent, account: string): Promise<{ wire: string; expiresAfterBlockHeight: string; blockhash: string }> {
+export async function buildForIntent(rpc: SolanaRpc, intent: SolanaIntent, account: string): Promise<{ wire: string; expiresAfterBlockHeight: string; blockhash: string; received?: bigint }> {
   const v = await readVault(rpc, intent.vault);
   const ixs = intent.kind === "deposit" ? await depositInstructions(v, account, intent.raw) : await withdrawInstructions(v, account, intent.raw);
   const life = await freshLifetime(rpc);
@@ -192,10 +256,11 @@ export async function buildForIntent(rpc: SolanaRpc, intent: SolanaIntent, accou
   } else {
     // A leg the program caps would land as a partial withdrawal with no error, so the shares it burns are
     // checked here, before the page opens, rather than only after it lands.
-    const { sim, burned, legs } = await simulateWithdrawal(rpc, v, account, ixs);
+    const { sim, burned, legs, received } = await simulateWithdrawal(rpc, v, account, ixs);
     if (burned === undefined) throw new Error(`the simulated withdraw fails at slot ${sim.slot}: ${describeSimulation(sim)}`);
     const partial = partialWithdrawal(intent.raw, burned, legs, intent.vault.shareDecimals, sim.slot);
     if (partial) throw new Error(`refused: ${partial}`);
+    return { wire, expiresAfterBlockHeight: life.lastValidBlockHeight.toString(), blockhash: life.blockhash, ...(received !== undefined ? { received } : {}) };
   }
   return { wire, expiresAfterBlockHeight: life.lastValidBlockHeight.toString(), blockhash: life.blockhash };
 }
@@ -208,6 +273,8 @@ export async function runConfirmSolana(intent: SolanaIntent, session: Session, d
   const done: SolanaTxOutcome[] = [];
   // Every blockhash a transaction handed to the page was built with: the landed one must name one of them.
   const built = new Set<string>();
+  // What the simulation of each built withdrawal paid, by its blockhash: the landed one is held to it.
+  const simulated = new Map<string, bigint>();
   let stopReason: string | undefined;
   const deadline = Date.now() + deps.ttlMs;
   const a = intent.vault.asset;
@@ -258,8 +325,9 @@ export async function runConfirmSolana(intent: SolanaIntent, session: Session, d
       if (body["build"] === true) {
         if (done.length > 0) return { ok: false, reason: "the transaction was already sent" };
         try {
-          const reply = await buildForIntent(rpc, intent, account);
+          const { received, ...reply } = await buildForIntent(rpc, intent, account);
           built.add(reply.blockhash);
+          if (received !== undefined) simulated.set(reply.blockhash, received);
           return { ok: true, final: false, reply };
         } catch (e) {
           return { ok: false, reason: redactEndpoints(e instanceof Error ? e.message : String(e)) };
@@ -272,7 +340,7 @@ export async function runConfirmSolana(intent: SolanaIntent, session: Session, d
       done.push(entry);
       let verdict: Verdict;
       try {
-        verdict = await verifySolanaLanded(rpc, sig, intent, account, { ...deps.verifyOpts, deadline, built });
+        verdict = await verifySolanaLanded(rpc, sig, intent, account, { ...deps.verifyOpts, deadline, built, simulated });
       } catch (e) {
         verdict = { verified: "unverified", detail: `could not check ${sig}: ${redactEndpoints(e instanceof Error ? e.message : String(e))}; look it up before retrying anything` };
       }
