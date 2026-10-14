@@ -1016,6 +1016,9 @@ export function buildConnectCommands(deps: ConnectDeps = {}): Record<string, Com
       markLeg(plan.code, index, update);
     };
     const replaced = () => readPlan()?.code !== plan.code;
+    // Pending here AND in the file: a `--plan --leg` run of the same plan, in another shell, marks its leg running in
+    // the file, and the page must not start that leg too.
+    const startable = (index: number) => mine.legs[index]?.status === "pending" && readPlan()?.legs[index]?.status === "pending";
     // Once the plan is replaced or cleared, no leg starts: the first one still pending is recorded as stopped.
     const endReplaced = () => {
       const next = mine.legs.findIndex((l) => l.status === "pending");
@@ -1062,7 +1065,11 @@ export function buildConnectCommands(deps: ConnectDeps = {}): Record<string, Com
           return;
         }
         const next = mine.legs.findIndex((l) => l.status === "pending");
-        if (next >= 0) record(next, { status: "stopped", reason: `the operator stopped the plan before this leg: ${reason}` });
+        if (next < 0) return;
+        const stop = { status: "stopped" as const, reason: `the operator stopped the plan before this leg: ${reason}` };
+        // A leg another shell is running keeps its record in the file: that run writes its own outcome.
+        if (startable(next)) record(next, stop);
+        else mine.legs[next] = { ...mine.legs[next]!, ...stop };
       },
       accept: async (body) => {
         if (body["start"] !== undefined) {
@@ -1079,6 +1086,7 @@ export function buildConnectCommands(deps: ConnectDeps = {}): Record<string, Com
           if (planExpired(mine, now())) return { ok: false, fatal: true, reason: `the plan expired at ${mine.expiresAtIso}; legs that had not started do not run` };
           const leg = mine.legs.find((l) => l.leg === body["start"]);
           if (!leg) return { ok: false, reason: `no leg ${String(body["start"])} in this plan` };
+          if (!startable(mine.legs.indexOf(leg))) return { ok: false, reason: `leg ${leg.leg} is running, or has run, elsewhere; this page does not start it` };
           let core: ConfirmCore;
           let index: number;
           try {
@@ -1090,7 +1098,7 @@ export function buildConnectCommands(deps: ConnectDeps = {}): Record<string, Com
           }
           // prepareConfirm awaits the chain reads, and meanwhile the page may have stopped the plan, another tab may have
           // started this leg, or another command may have replaced the plan.
-          if (current || mine.legs[index]?.status !== "pending" || replaced()) return { ok: false, reason: "the plan was stopped, replaced, or this leg started, while it was being prepared" };
+          if (current || !startable(index) || replaced()) return { ok: false, reason: "the plan was stopped, replaced, or this leg started, while it was being prepared" };
           record(index, { status: "running" });
           current = { index, core };
           return { ok: true, final: false, reply: { started: leg.leg } };

@@ -48132,6 +48132,7 @@ function buildConnectCommands(deps = {}) {
       markLeg(plan.code, index2, update);
     };
     const replaced = () => readPlan()?.code !== plan.code;
+    const startable = (index2) => mine.legs[index2]?.status === "pending" && readPlan()?.legs[index2]?.status === "pending";
     const endReplaced = () => {
       const next = mine.legs.findIndex((l) => l.status === "pending");
       if (next >= 0) mine.legs[next] = { ...mine.legs[next], status: "stopped", reason: "the plan was replaced or cleared by another command while its page was open" };
@@ -48176,7 +48177,10 @@ function buildConnectCommands(deps = {}) {
           return;
         }
         const next = mine.legs.findIndex((l) => l.status === "pending");
-        if (next >= 0) record2(next, { status: "stopped", reason: `the operator stopped the plan before this leg: ${reason}` });
+        if (next < 0) return;
+        const stop = { status: "stopped", reason: `the operator stopped the plan before this leg: ${reason}` };
+        if (startable(next)) record2(next, stop);
+        else mine.legs[next] = { ...mine.legs[next], ...stop };
       },
       accept: async (body) => {
         if (body["start"] !== void 0) {
@@ -48192,6 +48196,7 @@ function buildConnectCommands(deps = {}) {
           if (planExpired(mine, now())) return { ok: false, fatal: true, reason: `the plan expired at ${mine.expiresAtIso}; legs that had not started do not run` };
           const leg = mine.legs.find((l) => l.leg === body["start"]);
           if (!leg) return { ok: false, reason: `no leg ${String(body["start"])} in this plan` };
+          if (!startable(mine.legs.indexOf(leg))) return { ok: false, reason: `leg ${leg.leg} is running, or has run, elsewhere; this page does not start it` };
           let core2;
           let index3;
           try {
@@ -48201,7 +48206,7 @@ function buildConnectCommands(deps = {}) {
           } catch (e4) {
             return { ok: false, reason: redactEndpoints(e4 instanceof Error ? e4.message : String(e4)) };
           }
-          if (current || mine.legs[index3]?.status !== "pending" || replaced()) return { ok: false, reason: "the plan was stopped, replaced, or this leg started, while it was being prepared" };
+          if (current || !startable(index3) || replaced()) return { ok: false, reason: "the plan was stopped, replaced, or this leg started, while it was being prepared" };
           record2(index3, { status: "running" });
           current = { index: index3, core: core2 };
           return { ok: true, final: false, reply: { started: leg.leg } };

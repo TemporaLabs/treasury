@@ -755,6 +755,19 @@ describe("connect plan --run: one page for every leg (#174)", () => {
     expect(readPlan()!.legs.map((l) => l.status)).toEqual(["pending", "pending"]);
   });
 
+  it("a leg another shell's `--plan --leg` run has marked running is not started on the page", async () => {
+    await acked();
+    const run = plan({ run: true }, deps({ ttlMs: 10_000, legMinMs: 0 }));
+    const { u, s } = await pageOf();
+    // As `--plan --leg 1` does in another shell, before its own page opens.
+    const p = readPlan()!;
+    writeFileSync(planPath(), JSON.stringify({ ...p, legs: p.legs.map((l, i) => (i === 0 ? { ...l, status: "running" } : l)) }));
+    expect(await send(u, s, { start: 1 })).toMatchObject({ ok: false, reason: expect.stringMatching(/leg 1 is running, or has run, elsewhere/) });
+    await send(u, s, { rejected: true, reason: "done" });
+    await run;
+    expect(readPlan()!.legs[0]!.status).toBe("running");
+  });
+
   it("an expired plan opens no page", async () => {
     await acked();
     clock = new Date(Date.parse(readPlan()!.expiresAtIso) + 1000);
