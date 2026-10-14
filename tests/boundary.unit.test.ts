@@ -155,6 +155,7 @@ const BUILTINS_ALLOWED_PER_FILE: Record<string, string[]> = {
   "src/connect/open.ts": ["child_process"], //             opens the operator's browser at the local page
   "src/connect/session.ts": ["os"], //                     the session file lives under the home directory
   "tests/connect.unit.test.ts": ["os", "net"], //           a temporary session directory; a free local port per test
+  "tests/connect-plan.unit.test.ts": ["os", "net"], //      the same, for `connect plan`
   "tests/fork.test.ts": ["child_process"], //              spawns anvil; anvil holds the keys, this repo never does
   "tests/fork-solana.test.ts": ["child_process", "os"], //  spawns surfpool in a temporary directory; the key is generated per run
   "tests/registry-check.chain.test.ts": ["child_process"], // runs scripts/registry-check.ts against a mock chain

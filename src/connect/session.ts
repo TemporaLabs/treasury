@@ -11,7 +11,7 @@ import { homedir } from "node:os";
 import { join } from "node:path";
 import { getAddress, isAddress } from "viem";
 import { isAddress as isSolanaAddress } from "@solana/kit";
-import type { PendingAck } from "./ack.js";
+import type { PendingAck, PendingPlan } from "./ack.js";
 import { connectHome } from "./config.js";
 
 export interface Session {
@@ -51,14 +51,16 @@ function writeOwnerOnly(path: string, value: unknown): void {
 
 export function writeSession(s: Session): void {
   writeOwnerOnly(sessionPath(), s);
-  // A new connection voids any acknowledgement given for the one before it.
+  // A new connection voids any acknowledgement, or plan, given for the one before it.
   clearPendingAck();
+  clearPlan();
 }
 
 export function clearSession(): boolean {
   const had = readSession() !== undefined;
   rmSync(sessionPath(), { force: true });
   clearPendingAck();
+  clearPlan();
   return had;
 }
 
@@ -82,12 +84,14 @@ export function readSolanaSession(): Session | undefined {
 export function writeSolanaSession(s: Session): void {
   writeOwnerOnly(solanaSessionPath(), s);
   clearPendingAck();
+  clearPlan();
 }
 
 export function clearSolanaSession(): boolean {
   const had = readSolanaSession() !== undefined;
   rmSync(solanaSessionPath(), { force: true });
   clearPendingAck();
+  clearPlan();
   return had;
 }
 
@@ -110,6 +114,29 @@ export function readPendingAck(): PendingAck | undefined {
 
 export function clearPendingAck(): void {
   rmSync(pendingAckPath(), { force: true });
+}
+
+/** The one plan (`connect plan`, `ack.ts`) and its legs' progress. Issuing another replaces it. */
+export const planPath = () => join(dir(), "connect-plan.json");
+
+export function writePlan(p: PendingPlan): void {
+  writeOwnerOnly(planPath(), p);
+}
+
+export function readPlan(): PendingPlan | undefined {
+  try {
+    const v = JSON.parse(readFileSync(planPath(), "utf8")) as Partial<PendingPlan>;
+    if (typeof v.code !== "string" || typeof v.issuedAtIso !== "string" || typeof v.expiresAtIso !== "string" || typeof v.acknowledged !== "boolean" || !Array.isArray(v.legs)) return undefined;
+    // A leg that does not read back whole makes the plan unreadable, never a plan with that leg skipped.
+    for (const l of v.legs) if (!l || typeof l.leg !== "number" || typeof l.digest !== "string" || typeof l.status !== "string") return undefined;
+    return v as PendingPlan;
+  } catch {
+    return undefined;
+  }
+}
+
+export function clearPlan(): void {
+  rmSync(planPath(), { force: true });
 }
 
 /**

@@ -598,7 +598,7 @@ No flags.
 
 ## treasury connect deposit
 
-**Deposit through the connected wallet.** Builds the approve + deposit for the CONNECTED account and checks every call against the registry. Runs twice. Without --ack it opens NOTHING: it returns `needs_acknowledgement` with an `acknowledgement` to post to the operator word for word, and an `ack` code. Only after the operator replies yes, run it again with --ack <code>: then the confirm page opens, and the operator confirms each call in their wallet, one at a time. That run returns each transaction hash with `verified` read from the receipt (`matched`, `extra_transfer`, `mismatch`, `reverted`, `unverified`). Run `earn quote --direction deposit` first.
+**Deposit through the connected wallet.** Builds the approve + deposit for the CONNECTED account and checks every call against the registry. Runs twice. Without --ack it opens NOTHING: it returns `needs_acknowledgement` with an `acknowledgement` to post to the operator word for word, and an `ack` code. Only after the operator replies yes, run it again with --ack <code>: then the confirm page opens, and the operator confirms each call in their wallet, one at a time. That run returns each transaction hash with `verified` read from the receipt (`matched`, `extra_transfer`, `mismatch`, `reverted`, `unverified`). Run `earn quote --direction deposit` first. As a leg of a plan the operator acknowledged with `connect plan`, run it with --plan <code> --leg <n> instead of --ack, exactly as the plan gave it.
 
 Flags:
 - `--vault` (string, optional; description: "the vault's ERC-20 ticker, as `earn vaults` lists them; omit for the default vault of `chain`")
@@ -606,10 +606,12 @@ Flags:
 - `--amount_usdc` (string, required; pattern: "^\\d+(\\.\\d+)?$")
 - `--receiver` (string, required; description: "where the money lands — it must be the CONNECTED account (this page pays no one else), and it comes from the operator's own message, never filled in by an agent")
 - `--ack` (string, optional; description: "the code from this command's `needs_acknowledgement` result, given ONLY after the operator replied yes to its `acknowledgement`. Without it the command opens nothing and returns that acknowledgement"; pattern: "^[0-9a-fA-F]{8}$")
+- `--plan` (string, optional; description: "run this as a leg of an acknowledged plan (`connect plan`): the plan's code, with --leg. Use the leg's command exactly as `connect plan` gave it; instead of --ack"; pattern: "^[0-9a-fA-F]{8}$")
+- `--leg` (number, optional; description: "which leg of the plan this is (1, 2, …), with --plan; legs run in order"; maximum: 9007199254740991; exclusiveMinimum: 0)
 
 ## treasury connect withdraw
 
-**Withdraw through the connected wallet.** Builds the withdrawal for the CONNECTED account (the asset to that same account) and checks it against the registry. Runs twice, like `connect deposit`: without --ack it opens NOTHING and returns `needs_acknowledgement` with an `acknowledgement` to post to the operator word for word; only after their yes, run it again with --ack <code> and the confirm page opens. Pass --amount_usdc, or --all with --shares_exact copied verbatim from `earn balance`. Run `earn quote --direction withdraw` first. The second run returns the hash with `verified` read from the receipt.
+**Withdraw through the connected wallet.** Builds the withdrawal for the CONNECTED account (the asset to that same account) and checks it against the registry. Runs twice, like `connect deposit`: without --ack it opens NOTHING and returns `needs_acknowledgement` with an `acknowledgement` to post to the operator word for word; only after their yes, run it again with --ack <code> and the confirm page opens. Pass --amount_usdc, or --all with --shares_exact copied verbatim from `earn balance`. Run `earn quote --direction withdraw` first. The second run returns the hash with `verified` read from the receipt. As a leg of a plan the operator acknowledged with `connect plan`, run it with --plan <code> --leg <n> instead of --ack, exactly as the plan gave it.
 
 Flags:
 - `--vault` (string, optional; description: "the vault's ERC-20 ticker, as `earn vaults` lists them; omit for the default vault of `chain`")
@@ -619,3 +621,14 @@ Flags:
 - `--all` (a switch, no value, optional)
 - `--shares_exact` (string, optional; pattern: "^\\d+(\\.\\d+)?$")
 - `--ack` (string, optional; description: "the code from this command's `needs_acknowledgement` result, given ONLY after the operator replied yes to its `acknowledgement`. Without it the command opens nothing and returns that acknowledgement"; pattern: "^[0-9a-fA-F]{8}$")
+- `--plan` (string, optional; description: "run this as a leg of an acknowledged plan (`connect plan`): the plan's code, with --leg. Use the leg's command exactly as `connect plan` gave it; instead of --ack"; pattern: "^[0-9a-fA-F]{8}$")
+- `--leg` (number, optional; description: "which leg of the plan this is (1, 2, …), with --plan; legs run in order"; maximum: 9007199254740991; exclusiveMinimum: 0)
+
+## treasury connect plan
+
+**One acknowledgement for several deposits and withdrawals.** For a request that moves money in more than one vault (any mix of deposits and withdrawals, across chains): ONE acknowledgement for the whole plan instead of one per vault. Runs twice, like `connect deposit`. Pass --legs, e.g. "deposit tlCashPlusUSDC2B 25; withdraw tlCashPlusUSDC2G all" (each leg "deposit <vault> <amount>" or "withdraw <vault> <amount|all>"; "all" redeems the share balance read now). Without --ack it opens NOTHING: every leg is built and checked as its own run would be, and it returns `needs_acknowledgement` with ONE `acknowledgement` covering every leg, to post to the operator word for word, and an `ack` code. Only after the operator replies yes, run it again with the same --legs and --ack <code>: that records the yes, opens nothing, and returns each leg's exact command. Then run the legs one at a time, in order (`connect deposit|withdraw … --plan <code> --leg <n>`); each opens its own signing page, and a leg that does not complete ends the plan. --status (alone) reports the plan's legs and their transactions. Each EVM and Solana leg needs that family's wallet connected; money lands only in the connected account.
+
+Flags:
+- `--legs` (string, optional; description: "the plan, in order: legs separated by \";\", each \"deposit <vault> <amount>\" or \"withdraw <vault> <amount|all>\" — vaults by their ticker, as `earn vaults` lists them; amounts the operator chose")
+- `--ack` (string, optional; description: "the code from this command's `needs_acknowledgement` result, given ONLY after the operator replied yes to its `acknowledgement`. Without it the command opens nothing and returns that acknowledgement"; pattern: "^[0-9a-fA-F]{8}$")
+- `--status` (a switch, no value, optional; description: "report the current plan and each leg's status and transactions; reads a local file only")
