@@ -206,9 +206,19 @@ export interface PlanLeg {
   digest: string;
   /** The exact command that runs this leg once the plan is acknowledged. */
   command: string;
+  /** What that command builds the leg's calls from: how `connect plan --run` rebuilds them for its one page. */
+  args?: PlanLegArgs;
   status: PlanLegStatus;
   txs?: { hash: string; verified: string }[];
   reason?: string;
+}
+
+export interface PlanLegArgs {
+  vault: string;
+  receiver: string;
+  amount_usdc?: string;
+  all?: boolean;
+  shares_exact?: string;
 }
 
 export interface PendingPlan {
@@ -217,6 +227,11 @@ export interface PendingPlan {
   expiresAtIso: string;
   acknowledged: boolean;
   legs: PlanLeg[];
+  /**
+   * The one page `connect plan --run` serves for this plan: its secret and port, kept so a run that stops at the
+   * shell's time limit and the run after it serve the same page, and the operator's open tab carries on.
+   */
+  page?: { secret: string; port: number };
 }
 
 /** What a plan IS: its legs' digests, in order. Reordering, adding or dropping a leg changes it. */
@@ -235,7 +250,7 @@ export function issuePlan(legs: Omit<PlanLeg, "status">[], now: Date): PendingPl
   };
 }
 
-const planExpired = (p: PendingPlan, now: Date) => {
+export const planExpired = (p: PendingPlan, now: Date) => {
   const expires = Date.parse(p.expiresAtIso);
   // A missing or unreadable expiry counts as expired, never as no expiry.
   return !Number.isFinite(expires) || now.getTime() > expires;
@@ -322,8 +337,8 @@ export function planAcknowledgementText(legs: AckSummary[], totals: string[]): s
   return [
     `Confirm before any signing page opens. Nothing has been sent.`,
     ``,
-    `This plan has ${n} ${n === 1 ? "leg" : "legs"}, run in this order. Each opens its own signing page, where your wallet asks you to confirm each transaction. If a leg does not complete, the legs after it do not run.`,
-    `The plan lasts ${minutes} minutes: a leg not started by then does not run, and connecting a wallet again cancels it. To stop partway, cancel on a leg's signing page; the legs after it then do not run.`,
+    `This plan has ${n} ${n === 1 ? "leg" : "legs"}, run in this order on one signing page, where your wallet asks you to confirm each transaction. If a leg does not complete, the legs after it do not run.`,
+    `The plan lasts ${minutes} minutes: a leg not started by then does not run, and connecting a wallet again cancels it. To stop partway, reject a transaction in your wallet, or stop the plan on the signing page; the legs after it then do not run.`,
     ``,
     ...legLines,
     ...(totals.length ? [`In total: ${totals.join("; ")}.`, ``] : []),
@@ -336,6 +351,6 @@ export function planAcknowledgementText(legs: AckSummary[], totals: string[]): s
     ...disclosures.map((d) => `  - ${d}`),
     `  ${DISCLOSURES.plain.fullTerms}`,
     ``,
-    `Do you acknowledge and want the signing pages opened, one leg at a time, for exactly these ${n} ${n === 1 ? "leg" : "legs"}? Reply yes or no.`,
+    `Do you acknowledge and want the signing page opened for exactly these ${n} ${n === 1 ? "leg" : "legs"}, run one leg at a time? Reply yes or no.`,
   ].join("\n");
 }

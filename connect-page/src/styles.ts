@@ -73,4 +73,29 @@ li[data-state="done"] .oat-step-mark { background: rgba(31, 122, 74, .12); borde
 .oat-sent { list-style: none; padding: 0; display: grid; gap: 4px; }
 .oat-status[data-tone="ok"] { color: var(--ok); }
 .oat-status[data-tone="bad"] { color: var(--bad); }
+.oat-status:empty { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); } /* an empty live region stays in the accessibility tree but takes no grid row */
+/* A whole plan on one page (plan.tsx): one row per step, in sentence form, with its state. */
+.oat-wrap:has(.oat-legs) { max-width: 600px; }
+.oat-plan-head { display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap; font-size: 13.5px; color: var(--slate); }
+.oat-plan-wallet { display: inline-flex; align-items: center; gap: 8px; }
+.oat-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--ok); }
+.oat-plan-timer { font-family: "IBM Plex Mono", ui-monospace, Menlo, monospace; font-size: 12.5px; font-variant-numeric: tabular-nums; }
+.oat-legs { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; }
+.oat-leg { background: rgba(255, 255, 255, .88); border: 1px solid var(--hair); border-radius: 12px; padding: 12px 14px; display: grid; gap: 8px; }
+.oat-leg[data-state="wallet"], .oat-leg[data-state="sent"] { border-color: var(--navy); box-shadow: 0 0 0 3px rgba(118, 166, 213, .18); }
+.oat-leg-row { display: grid; grid-template-columns: 22px 1fr; gap: 12px; align-items: start; }
+.oat-leg-num { width: 22px; height: 22px; border-radius: 50%; display: grid; place-items: center; font-size: 12px; font-weight: 600; border: 1px solid var(--hair); background: #fff; color: var(--slate); margin-top: 1px; }
+.oat-leg-what { min-width: 0; display: grid; gap: 4px; }
+.oat-leg-sentence { margin: 0; font-size: 15px; line-height: 1.45; color: var(--ink); overflow-wrap: anywhere; }
+.oat-leg-meta { margin: 0; display: flex; flex-wrap: wrap; gap: 4px 12px; align-items: center; font-size: 13px; color: var(--slate); }
+.oat-leg-status { font-size: 12.5px; font-weight: 500; border-radius: 999px; padding: 3px 10px; background: #f3f6f9; border: 1px solid var(--hair); color: var(--slate); }
+.oat-leg-status[data-state="wallet"], .oat-leg-status[data-state="sent"] { background: rgba(118, 166, 213, .26); border-color: transparent; color: var(--navy); }
+.oat-leg-status[data-state="confirmed"] { background: rgba(31, 122, 74, .12); border-color: transparent; color: var(--ok); }
+.oat-leg-status[data-state="declined"], .oat-leg-status[data-state="notrun"], .oat-leg-status[data-state="maybe"] { background: #fbf1da; border-color: transparent; color: #7a5000; }
+.oat-leg-status[data-state="failed"], .oat-leg-status[data-state="mismatch"], .oat-leg-status[data-state="stopped"] { background: #fbe9e9; border-color: transparent; color: var(--bad); }
+.oat-leg-tx { margin: 0; font-size: 13px; }
+.oat-leg-detail { background: #f3f6f9; border-radius: 10px; padding: 10px 12px; margin-left: 34px; }
+.oat-linkbtn { font: inherit; font-size: 13px; padding: 0; border: 0; background: none; color: var(--navy); cursor: pointer; text-decoration: underline; text-underline-offset: 2px; }
+.oat-now { margin: 0; font-size: 14px; line-height: 1.5; color: var(--steel); background: #f3f6f9; border-radius: 12px; padding: 12px 14px; }
+@media (max-width: 480px) { .oat-leg-detail { margin-left: 0; } }
 `;

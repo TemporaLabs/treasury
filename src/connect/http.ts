@@ -25,7 +25,12 @@ export type Accepted<T> =
 export type Settled<T> = { ok: true; value: T } | { ok: false; reason: string };
 
 export interface Flow<T> {
-  mode: "connect" | "confirm";
+  mode: "connect" | "confirm" | "plan";
+  /**
+   * The page's secret, when it must outlive this server: `connect plan --run` serves one plan's page across
+   * several runs, so the operator's open tab keeps working. A fresh random one otherwise.
+   */
+  secret?: string;
   ttlMs: number;
   /** The page served at `/<mode>`, as a function of the flow's secret. */
   html: (secret: string) => string;
@@ -52,6 +57,8 @@ export interface Flow<T> {
 
 export interface Handle<T> {
   url: string;
+  /** The port the page was served on. */
+  port: number;
   done: Promise<Settled<T>>;
   close: () => void;
 }
@@ -62,8 +69,11 @@ const same = (a: string, b: string) => {
   return x.length === y.length && timingSafeEqual(x, y);
 };
 
+/** A page secret: what every request back to the process must carry. */
+export const newSecret = () => randomBytes(24).toString("hex");
+
 export async function serveOnce<T>(flow: Flow<T>): Promise<Handle<T>> {
-  const secret = randomBytes(24).toString("hex");
+  const secret = flow.secret ?? newSecret();
   // Privy matches allowed origins by exact string, and `localhost` is the host it documents. Set to
   // the port being tried; a request can only arrive on the port that was bound.
   let origin = "";
@@ -259,5 +269,5 @@ export async function serveOnce<T>(flow: Flow<T>): Promise<Handle<T>> {
   );
   timer.unref();
   void done.then(() => clearTimeout(timer));
-  return { url: `${origin}/${flow.mode}?s=${secret}`, done, close: () => finish({ ok: false, reason: "cancelled" }) };
+  return { url: `${origin}/${flow.mode}?s=${secret}`, port: Number(new URL(origin).port), done, close: () => finish({ ok: false, reason: "cancelled" }) };
 }

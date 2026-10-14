@@ -160,10 +160,10 @@ mix. Each vault is one **leg** with its own transactions; nothing moves money in
    operator's explicit yes, run it again with the same `--legs` and `--ack <code>`: that records the yes, opens nothing,
    and returns each leg's `command`. Full `earn_terms` still come first, before the operator's first deposit. A plan
    with legs on EVM chains and on Solana needs both wallets connected.
-4. **Then run the legs one at a time, in order, each exactly as its `command` gives it** (`connect deposit|withdraw …
-   --plan <code> --leg <n>`), each shell call with a timeout of at least 9 minutes. **The yes covers every leg: do not
-   ask again between them.** Report each leg's result as in **Handing calls to the signer**, step 4. Every leg must
-   start before the plan's `expiresAtIso`, 60 minutes after its first run.
+4. **Then run the plan on one signing page: `connect plan --run`**, each shell call with a timeout of at least 9
+   minutes. It returns `in_progress` near that limit: run it again at once, and the operator's open page carries on.
+   A plan with a Solana leg runs leg by leg instead, each exactly as its `command` gives it. **The yes covers every leg:
+   do not ask again between them.** Report each leg as in **Handing calls to the signer**, step 4.
 5. **Stop at the first leg that does not complete**; the CLI refuses the rest. Report every leg (vault, chain, amount,
    transactions, and which did not run; `connect plan --status` lists them). What is left needs a new plan and a new yes.
 
