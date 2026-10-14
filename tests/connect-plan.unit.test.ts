@@ -176,6 +176,18 @@ describe("connect plan without --ack: one acknowledgement for every leg, and not
     expect(JSON.parse(readFileSync(pendingAckPath(), "utf8")).code).toBe(single["ack"]);
   });
 
+  it("the acknowledgement says how the plan runs: one page for EVM legs, a page per leg once a Solana leg is in it", async () => {
+    const evm = String((await plan({ legs: `deposit ${vault.symbol} 1; withdraw ${other.symbol} all` }))["acknowledgement"]);
+    expect(evm).toMatch(/run in this order on one signing page/);
+    expect(evm).toMatch(/stop the plan on the signing page/);
+    expect(evm).toMatch(/want the signing page opened for exactly these 2 legs/);
+    const mixed = String((await plan({ legs: LEGS }))["acknowledgement"]);
+    expect(mixed).toMatch(/run in this order each on its own signing page/);
+    expect(mixed).toMatch(/stop the plan on that leg's signing page/);
+    expect(mixed).toMatch(/want the signing pages opened for exactly these 3 legs/);
+    expect(mixed).not.toMatch(/one signing page/);
+  });
+
   it("a plan on one vault keeps the fee sentence as a single acknowledgement words it", async () => {
     const r = await plan({ legs: `deposit ${vault.symbol} 1; withdraw ${vault.symbol} 0.5` });
     const text = String(r["acknowledgement"]);
@@ -341,6 +353,16 @@ describe("a plan's legs: in order, each held to what was acknowledged, and a leg
     expect(opened).toHaveLength(1);
   });
 
+  it("a leg whose page never opens sent nothing: it stays pending, and the plan stands", async () => {
+    const { commands } = await acknowledged();
+    // A sign-in page holds this machine's page lock, so the leg's page cannot open.
+    const holder = cmd("connect_wallet", {}, deps({ ttlMs: 1000 })).catch(() => undefined);
+    for (let i = 0; i < 100 && opened.length === 0; i++) await new Promise((r) => setTimeout(r, 10));
+    await expect(runLeg(commands[0]!)).rejects.toThrow(/no page opened and nothing was sent; leg 1 of the plan can run again/);
+    expect(readPlan()!.legs[0]!.status).toBe("pending");
+    await holder;
+  });
+
   it("a leg is marked running before its page opens: it cannot be started twice, and no later leg starts meanwhile", async () => {
     const { commands } = await acknowledged();
     const first = runLeg(commands[0]!, deps({ ttlMs: 400 }));
@@ -389,12 +411,12 @@ describe("a plan's legs: in order, each held to what was acknowledged, and a leg
     await expect(runLeg(commands[0]!.replace("--amount_usdc 2.5", "--amount_usdc 3"))).rejects.toThrow(/not leg 1 as the operator acknowledged it/);
     expect(opened).toEqual([]);
     // Past the plan's check the flow goes on to read the vault, which this stub RPC cannot serve (as in the single
-    // acknowledgement's Solana tests): what matters is that the leg was accepted, marked, and cannot run again.
+    // acknowledgement's Solana tests): the leg was accepted, and failed before any page opened.
     const err = await runLeg(commands[0]!).then(() => "", (e: Error) => e.message);
-    expect(err).not.toMatch(/acknowledged|plan/);
-    // A leg whose run throws is not_reported, with the error as its reason: never left "running".
-    expect(readPlan()!.legs[0]).toMatchObject({ status: "not_reported", reason: err });
-    await expect(runLeg(commands[0]!)).rejects.toThrow(/already run/);
+    expect(err).toMatch(/^kamino: VaultState is .*\(no page opened and nothing was sent; leg 1 of the plan can run again\)$/);
+    // Nothing could have been sent, so the leg is pending again, never left "running", and the plan stands.
+    expect(readPlan()!.legs[0]!.status).toBe("pending");
+    expect(readPlan()!.legs[0]!.reason).toBeUndefined();
   });
 
   it("a leg that lands but does not match (here, reverted) is stopped, and ends the plan: the next leg never runs", async () => {
@@ -662,6 +684,152 @@ describe("connect plan --run: one page for every leg (#174)", () => {
     writeFileSync(planPath(), JSON.stringify({ ...p, legs: p.legs.map((l, i) => (i === 1 ? { ...l, args: { ...l.args!, amount_usdc: "9" } } : l)) }));
     await expect(plan({ run: true })).rejects.toThrow(/leg 2 is not what the operator acknowledged/);
     expect(opened).toEqual([]);
+  });
+
+  it("a plan replaced while a leg is in the wallet: the outcome stays on the run's own plan, and the newer plan is untouched", async () => {
+    await acked();
+    receipts = landedReceipts();
+    const run = plan({ run: true }, deps({ ttlMs: 10_000, legMinMs: 0 }));
+    const { u, s } = await pageOf();
+    await send(u, s, { start: 1 });
+    await send(u, s, { index: 0, hash: h1 });
+    // Another shell issues a different plan while the deposit is still in the wallet.
+    const newer = await plan({ legs: `withdraw ${vault.symbol} 0.3; deposit ${vault.symbol} 0.7` });
+    const t0 = Date.now();
+    expect(await send(u, s, { index: 1, hash: h2 })).toMatchObject({ ok: true, legDone: true });
+    const r = await run;
+    // The run ends at once (the page's limit is 10 s): nothing more can run on a plan that is gone.
+    expect(Date.now() - t0).toBeLessThan(5000);
+    expect(r["status"]).toBe("stopped");
+    const legs = r["legs"] as { status: string; reason?: string; txs: unknown[] }[];
+    expect(legs[0]).toMatchObject({ status: "completed", txs: [{ hash: h1, verified: "matched" }, { hash: h2, verified: "matched" }] });
+    expect(legs[1]).toMatchObject({ status: "stopped", reason: expect.stringMatching(/replaced or cleared by another command/) });
+    // The newer plan carries nothing of the older plan's run.
+    const p = readPlan()!;
+    expect(p.code).toBe(newer["ack"]);
+    expect(p.legs.map((l) => [l.status, l.txs ?? []])).toEqual([
+      ["pending", []],
+      ["pending", []],
+    ]);
+  });
+
+  it("a plan cleared by `connect disconnect` mid-leg: the run still reports the transactions that landed", async () => {
+    await acked();
+    receipts = landedReceipts();
+    const run = plan({ run: true }, deps({ ttlMs: 10_000, legMinMs: 0 }));
+    const { u, s } = await pageOf();
+    await send(u, s, { start: 1 });
+    await send(u, s, { index: 0, hash: h1 });
+    clearSession();
+    const t0 = Date.now();
+    expect(await send(u, s, { index: 1, hash: h2 })).toMatchObject({ ok: true, legDone: true });
+    const r = await run;
+    expect(Date.now() - t0).toBeLessThan(5000);
+    expect(r["status"]).toBe("stopped");
+    expect((r["legs"] as { status: string; txs: unknown[] }[]).map((l) => [l.status, l.txs.length])).toEqual([
+      ["completed", 2],
+      ["stopped", 0],
+    ]);
+    expect(readPlan()).toBeUndefined();
+  });
+
+  it("a start after the plan was replaced is refused and ends the run; so is a start after the plan expired", async () => {
+    await acked();
+    const run = plan({ run: true }, deps({ ttlMs: 10_000, legMinMs: 0 }));
+    const { u, s } = await pageOf();
+    await plan({ legs: `deposit ${vault.symbol} 0.9` });
+    let t0 = Date.now();
+    expect(await send(u, s, { start: 1 })).toMatchObject({ ok: false, reason: expect.stringMatching(/replaced or cleared/) });
+    expect((await run)["status"]).toBe("stopped");
+    expect(Date.now() - t0).toBeLessThan(5000);
+
+    await acked();
+    await new Promise((r) => setTimeout(r, 1600));
+    const run2 = plan({ run: true }, deps({ ttlMs: 10_000, legMinMs: 0 }));
+    const page2 = await pageOf(opened.length);
+    clock = new Date(Date.parse(readPlan()!.expiresAtIso) + 1000);
+    t0 = Date.now();
+    expect(await send(page2.u, page2.s, { start: 1 })).toMatchObject({ ok: false, reason: expect.stringMatching(/expired/) });
+    expect((await run2)["status"]).toBe("expired");
+    expect(Date.now() - t0).toBeLessThan(5000);
+    expect(readPlan()!.legs.map((l) => l.status)).toEqual(["pending", "pending"]);
+  });
+
+  it("an expired plan opens no page", async () => {
+    await acked();
+    clock = new Date(Date.parse(readPlan()!.expiresAtIso) + 1000);
+    expect((await plan({ run: true }))["status"]).toBe("expired");
+    expect(opened).toEqual([]);
+  });
+
+  it("a receipt that arrives after the time limit ended its leg cannot overwrite the leg's not_reported", async () => {
+    await acked();
+    let release!: () => void;
+    const gate = new Promise<void>((r) => (release = r));
+    const d = deps({
+      ttlMs: 1500,
+      legMinMs: 0,
+      client: () => ({
+        getTransactionReceipt: async ({ hash }: { hash: Hex }) => {
+          if (hash === h2) await gate;
+          return (hash === h1 ? { status: "success", logs: [approvalLog(600_000n)] } : { status: "success", logs: [transferLog(600_000n), depositLog(600_000n)] }) as never;
+        },
+        readContract: async (q: { functionName: string }) => (q.functionName === "balanceOf" ? shares : q.functionName === "allowance" ? 10n ** 30n : 0n) as never,
+      }),
+    });
+    const run = plan({ run: true }, d);
+    const { u, s } = await pageOf();
+    await send(u, s, { start: 1 });
+    await send(u, s, { index: 0, hash: h1 });
+    const late = send(u, s, { index: 1, hash: h2 }).catch(() => undefined);
+    expect((await run)["status"]).toBe("not_reported");
+    release();
+    await late;
+    await new Promise((r) => setTimeout(r, 50));
+    expect(readPlan()!.legs.map((l) => l.status)).toEqual(["not_reported", "pending"]);
+  });
+
+  it("a page whose port is taken by the next run moves to another port with a NEW secret", async () => {
+    await acked();
+    const first = Number(process.env["TREASURY_CONNECT_PORT"]);
+    const r1 = await (async () => {
+      const run1 = plan({ run: true }, deps({ ttlMs: 10_000, legMinMs: 60_000 }));
+      const { u, s } = await pageOf();
+      await send(u, s, { start: 1 });
+      return { r: await run1, s };
+    })();
+    expect(r1.r["status"]).toBe("in_progress");
+    await new Promise((r) => setTimeout(r, 1600));
+    // Something else now listens on the page's old port; the next run is configured for another.
+    const squat = createServer();
+    await new Promise<void>((r) => squat.listen(first, "127.0.0.1", () => r()));
+    process.env["TREASURY_CONNECT_PORT"] = String(await freePort());
+    try {
+      const run2 = plan({ run: true }, deps({ ttlMs: 10_000, legMinMs: 0 }));
+      const { u, s } = await pageOf(1);
+      expect(Number(u.port)).not.toBe(first);
+      expect(s).not.toBe(r1.s);
+      expect(readPlan()!.page).toEqual({ secret: s, port: Number(u.port) });
+      await send(u, s, { rejected: true, reason: "done" });
+      await run2;
+    } finally {
+      await new Promise<void>((r) => squat.close(() => r()));
+    }
+  });
+
+  it("keeps what else the wallet moved (`alsoMoved`) on a leg's transaction", async () => {
+    await acked();
+    const stranger = getAddress("0x1111111111111111111111111111111111111111");
+    const extra = log(vault.asset.address, encodeEventTopics({ abi: [ev.transfer], eventName: "Transfer", args: { from: ACCOUNT, to: stranger } }) as Hex[], u256(5n));
+    receipts = { ...landedReceipts(), [h2]: { status: "success", logs: [transferLog(600_000n), depositLog(600_000n), extra] } };
+    const run = plan({ run: true }, deps({ ttlMs: 10_000, legMinMs: 0 }));
+    const { u, s } = await pageOf();
+    await send(u, s, { start: 1 });
+    await send(u, s, { index: 0, hash: h1 });
+    await send(u, s, { index: 1, hash: h2 });
+    await send(u, s, { rejected: true, reason: "the operator stopped the plan after the previous step" });
+    await run;
+    expect(readPlan()!.legs[0]!.txs![1]).toEqual({ hash: h2, verified: "extra_transfer", alsoMoved: [{ to: stranger, amountRaw: "5" }] });
   });
 
   it("takes no other flag", async () => {

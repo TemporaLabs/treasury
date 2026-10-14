@@ -91,7 +91,7 @@ li[data-state="done"] .oat-step-mark { background: rgba(31, 122, 74, .12); borde
 .oat-leg-status { font-size: 12.5px; font-weight: 500; border-radius: 999px; padding: 3px 10px; background: #f3f6f9; border: 1px solid var(--hair); color: var(--slate); }
 .oat-leg-status[data-state="wallet"], .oat-leg-status[data-state="sent"] { background: rgba(118, 166, 213, .26); border-color: transparent; color: var(--navy); }
 .oat-leg-status[data-state="confirmed"] { background: rgba(31, 122, 74, .12); border-color: transparent; color: var(--ok); }
-.oat-leg-status[data-state="declined"], .oat-leg-status[data-state="notrun"], .oat-leg-status[data-state="maybe"] { background: #fbf1da; border-color: transparent; color: #7a5000; }
+.oat-leg-status[data-state="declined"], .oat-leg-status[data-state="partial"], .oat-leg-status[data-state="notrun"], .oat-leg-status[data-state="maybe"] { background: #fbf1da; border-color: transparent; color: #7a5000; }
 .oat-leg-status[data-state="failed"], .oat-leg-status[data-state="mismatch"], .oat-leg-status[data-state="stopped"] { background: #fbe9e9; border-color: transparent; color: var(--bad); }
 .oat-leg-tx { margin: 0; font-size: 13px; }
 .oat-leg-detail { background: #f3f6f9; border-radius: 10px; padding: 10px 12px; margin-left: 34px; }
