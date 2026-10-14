@@ -26,6 +26,9 @@ Pre-1.0, minor versions may change tool names, schemas and behaviour.
   GHSA-g7r4-m6w7-qqqr (affected: 0.27.3 up to 0.28.1; tsup accepts only 0.27). tsx keeps its own
   esbuild 0.28.2. The CLI bundle no longer declares `window` and `needed` as class fields on one
   internal error class; the constructor still assigns both, so its instances are unchanged.
+- Development: the connect page's lockfile now resolves ws 8.22.0, uuid 11.1.1 and decode-uri-component
+  0.5.0, clearing its `npm audit` findings (GHSA-96hv-2xvq-fx4p, GHSA-58qx-3vcg-4xpx, GHSA-w5hq-g745-h8pq,
+  GHSA-vcc3-ghjq-m6fr). None of the three is in the built page, which is unchanged.
 
 ## [v0.1.3] - 2026-10-13
 
