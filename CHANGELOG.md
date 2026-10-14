@@ -19,6 +19,13 @@ Pre-1.0, minor versions may change tool names, schemas and behaviour.
   The single `--ack` flow is unchanged. The earn skill uses a plan when a request moves money in
   several vaults through `connect`, and `docs/tools.md` documents the command and its results.
 
+- **One signing page for a whole plan: `connect plan --run`** (#174). After the operator's yes, one page lists
+  every leg (the action, amount, chain, the vault's contract address, where the money goes, and its state) and walks
+  them in order; the wallet asks for each transaction as it always does. Every leg is still rebuilt, held to what was
+  acknowledged, gate-checked and verified from its receipts, and a leg that does not complete ends the plan. Near the
+  shell's time limit the run returns `in_progress` between legs; the next run serves the same page. EVM legs only for
+  now: a plan with a Solana leg runs leg by leg. The acknowledgement now says the legs run on one signing page.
+
 ### Fixed
 - **On Solana, `earn balance` no longer reports a capped exit as a full one** (#154). Kamino caps a
   withdrawal leg its reserve cannot pay instead of failing it, so the simulated full withdrawal could

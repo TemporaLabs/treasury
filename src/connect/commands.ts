@@ -48,13 +48,15 @@ import {
   summarize,
   summarizeSolana,
   type AckSummary,
+  planExpired,
   type PendingPlan,
   type PlanLeg,
+  type PlanLegArgs,
   type PlanLegStatus,
 } from "./ack.js";
 import { connectPorts, privyAppId } from "./config.js";
 import { admit } from "./gate.js";
-import { serveOnce, type Settled } from "./http.js";
+import { newSecret, serveOnce, type Settled } from "./http.js";
 import { openBrowser } from "./open.js";
 import { PAGE_CSP, readPageBundle, shell } from "./page.js";
 import {
@@ -92,6 +94,8 @@ const ackArg = z
 /** One sign-in or one confirmation flow at a time, each whole flow bounded under a shell tool's 10-minute limit. */
 const CONNECT_TTL_MS = 9 * 60_000;
 const CONFIRM_TTL_MS = 9 * 60_000;
+/** Below this much page time left, `connect plan --run` starts no new leg: the next run carries on instead. */
+const LEG_MIN_MS = 3 * 60_000;
 
 export function signInMessage(a: { address: string; origin: string; nonce: string; issuedAt: string }): string {
   return [
@@ -132,6 +136,8 @@ export interface ConnectDeps {
   now?: () => Date;
   /** The Solana flows' chain reads (tests). */
   solanaRpc?: SolanaFlowDeps["rpc"];
+  /** Overrides the page time `connect plan --run` keeps back before starting a leg (tests). */
+  legMinMs?: number;
 }
 
 export async function runConnect(deps: ConnectDeps = {}): Promise<{ result: Settled<Session>; url: string; opened: boolean }> {
@@ -179,13 +185,25 @@ interface TxOutcome extends Verdict {
   hash: string;
 }
 
-export async function runConfirm(
-  calls: UnsignedCall[],
-  session: Session,
-  deps: ConnectDeps = {},
-): Promise<{ result: Settled<TxOutcome[]>; url: string; opened: boolean; done: TxOutcome[]; total: number; stopReason?: string }> {
-  // The gate runs here, on exactly the calls this flow will hand the wallet, so no caller can pass
-  // a check for one batch and the calls of another. It throws before any page opens.
+/** One leg's confirm core: the gate, the chain reads, and the step-by-step verdicts, without the page around it. */
+export interface ConfirmCore {
+  chainId: number;
+  calls: UnsignedCall[];
+  done: TxOutcome[];
+  stopReason: () => string | undefined;
+  info: () => Record<string, unknown>;
+  /** Records the hash for step `index`, reads its receipt, and says whether the next step may go. */
+  accept: (index: unknown, hash: unknown) => Promise<{ ok: false; reason: string } | { ok: true; kind: "next" | "finished" | "stop"; reply: Record<string, unknown> }>;
+  /** Puts a hash the page could not hand over on record, against the step it names. */
+  onReject: (body: Record<string, unknown>) => void;
+}
+
+/**
+ * The confirm flow without its page: the gate runs here, on exactly the calls the page will hand the
+ * wallet, so no caller can pass a check for one batch and the calls of another. It throws before any
+ * page opens. `deadline`: when the page closes, so every chain read stops waiting by then.
+ */
+export async function prepareConfirm(calls: UnsignedCall[], session: Session, deps: ConnectDeps, deadline: number): Promise<ConfirmCore> {
   const admitted = admit(calls, session.account as Address);
   const chainId = calls[0]!.chainId;
   if (!isSupportedChainId(chainId)) throw new Error(`chain ${chainId} unsupported`);
@@ -193,9 +211,6 @@ export async function runConfirm(
   const client = deps.client ? deps.client(chainId) : makePublicClient(chainId, rpcUrlFromEnv(chainId));
   const done: TxOutcome[] = [];
   let stopReason: string | undefined;
-  const ttlMs = deps.ttlMs ?? CONFIRM_TTL_MS;
-  // Every chain read stops waiting when the flow's time limit is up, so the command returns inside it.
-  const deadline = Date.now() + ttlMs;
   // The chain head when the flow starts: a receipt mined in it or before it cannot be from this flow.
   // Read beside the balances below; a read that fails or is slow leaves no floor, never blocks the flow.
   const notBeforeRead = client.getBlockNumber
@@ -241,37 +256,12 @@ export async function runConfirm(
   const verifyOpts = { ...deps.verifyOpts, deadline, ...(notBefore !== undefined ? { notBefore } : {}) };
   const deposit = admitted.find((a) => a.kind === "deposit");
 
-  const handle = await serveOnce<TxOutcome[]>({
-    mode: "confirm",
-    ttlMs,
-    ...(deps.cancelGraceMs !== undefined ? { cancelGraceMs: deps.cancelGraceMs } : {}),
-    timeoutReason: () =>
-      done.length
-        ? `the ${Math.round(ttlMs / 60_000)}-minute limit ran out after ${done.length} of ${calls.length} transactions were reported`
-        : `nothing happened in the browser within ${Math.round(ttlMs / 60_000)} minutes`,
-    // The page reports a hash it could not hand over (its POST failed after the wallet sent):
-    // put it on record, against the step the page names, so the command reports it unchecked
-    // instead of losing it. A hash that names no step is still recorded, as such.
-    onReject: (body) => {
-      const hash = body["hash"];
-      if (!wellFormedHash(hash) || known(hash)) return;
-      const i = body["index"];
-      const call = typeof i === "number" && Number.isInteger(i) && i >= 0 && i < calls.length ? calls[i] : undefined;
-      done.push({
-        step: call?.step ?? 0,
-        description: call?.description ?? "a transaction the page reported for no known step",
-        hash,
-        verified: "unverified",
-        detail: "the page reported this transaction but could not hand it over for checking; look it up before retrying anything",
-      });
-    },
-    html: (s) => shell(s, "Confirm — Open Agent Treasury"),
-    csp: PAGE_CSP,
-    assets: assets(),
-    ports: connectPorts(),
+  return {
+    chainId,
+    calls,
+    done,
+    stopReason: () => stopReason,
     info: () => ({
-      mode: "confirm",
-      appId: privyAppId(),
       account,
       walletType: session.walletType,
       chainId,
@@ -290,12 +280,26 @@ export async function runConfirm(
         to: c.to,
         data: c.data,
         value: c.value,
-        vault: { symbol: admitted[i]!.vault.symbol, name: admitted[i]!.vault.name, address: admitted[i]!.vault.address, asset: admitted[i]!.vault.asset.symbol, links: linksFor(admitted[i]!.vault) },
+        vault: { symbol: admitted[i]!.vault.symbol, name: admitted[i]!.vault.name, address: admitted[i]!.vault.address, asset: admitted[i]!.vault.asset.symbol, assetAddress: admitted[i]!.vault.asset.address, links: linksFor(admitted[i]!.vault) },
       })),
     }),
-    accept: async (body) => {
-      const index = body["index"];
+    // The page reports a hash it could not hand over (its POST failed after the wallet sent):
+    // put it on record, against the step the page names, so the command reports it unchecked
+    // instead of losing it. A hash that names no step is still recorded, as such.
+    onReject: (body) => {
       const hash = body["hash"];
+      if (!wellFormedHash(hash) || known(hash)) return;
+      const i = body["index"];
+      const call = typeof i === "number" && Number.isInteger(i) && i >= 0 && i < calls.length ? calls[i] : undefined;
+      done.push({
+        step: call?.step ?? 0,
+        description: call?.description ?? "a transaction the page reported for no known step",
+        hash,
+        verified: "unverified",
+        detail: "the page reported this transaction but could not hand it over for checking; look it up before retrying anything",
+      });
+    },
+    accept: async (index, hash) => {
       if (index !== done.length) return { ok: false, reason: `expected step ${done.length + 1}` };
       if (!wellFormedHash(hash)) return { ok: false, reason: "malformed transaction hash" };
       const call = calls[index]!;
@@ -318,18 +322,49 @@ export async function runConfirm(
       if (verdict.verified !== "matched" && verdict.verified !== "extra_transfer") {
         // Stop at the first step that did not land as confirmed: the next one depends on it.
         stopReason = `step ${call.step} (${call.description}) is ${verdict.verified}: ${verdict.detail ?? "it did not land as confirmed"}`;
-        return { ok: true, final: true, value: done, reply: { stop: true, verdict } };
+        return { ok: true, kind: "stop", reply: { stop: true, verdict } };
       }
-      if (index + 1 === calls.length) return { ok: true, final: true, value: done, reply: { finished: true, verdict } };
+      if (index + 1 === calls.length) return { ok: true, kind: "finished", reply: { finished: true, verdict } };
       if (!(await allowanceVisible(index + 1))) {
         stopReason = "the approval landed, but its allowance is not visible on this RPC yet; the deposit was not sent";
-        return { ok: true, final: true, value: done, reply: { stop: true, reason: stopReason } };
+        return { ok: true, kind: "stop", reply: { stop: true, reason: stopReason } };
       }
-      return { ok: true, final: false, reply: { next: index + 1, verdict } };
+      return { ok: true, kind: "next", reply: { next: index + 1, verdict } };
+    },
+  };
+}
+
+export async function runConfirm(
+  calls: UnsignedCall[],
+  session: Session,
+  deps: ConnectDeps = {},
+): Promise<{ result: Settled<TxOutcome[]>; url: string; opened: boolean; done: TxOutcome[]; total: number; stopReason?: string }> {
+  const ttlMs = deps.ttlMs ?? CONFIRM_TTL_MS;
+  const core = await prepareConfirm(calls, session, deps, Date.now() + ttlMs);
+  const { done } = core;
+  const handle = await serveOnce<TxOutcome[]>({
+    mode: "confirm",
+    ttlMs,
+    ...(deps.cancelGraceMs !== undefined ? { cancelGraceMs: deps.cancelGraceMs } : {}),
+    timeoutReason: () =>
+      done.length
+        ? `the ${Math.round(ttlMs / 60_000)}-minute limit ran out after ${done.length} of ${calls.length} transactions were reported`
+        : `nothing happened in the browser within ${Math.round(ttlMs / 60_000)} minutes`,
+    onReject: core.onReject,
+    html: (s) => shell(s, "Confirm — Open Agent Treasury"),
+    csp: PAGE_CSP,
+    assets: assets(),
+    ports: connectPorts(),
+    info: () => ({ mode: "confirm", appId: privyAppId(), ...core.info() }),
+    accept: async (body) => {
+      const r = await core.accept(body["index"], body["hash"]);
+      if (!r.ok) return r;
+      return r.kind === "next" ? { ok: true, final: false, reply: r.reply } : { ok: true, final: true, value: done, reply: r.reply };
     },
   });
   const opened = (deps.open ?? announce)(handle.url);
   const result = await handle.done;
+  const stopReason = core.stopReason();
   return { result, url: handle.url, opened, done, total: calls.length, ...(stopReason ? { stopReason } : {}) };
 }
 
@@ -863,19 +898,236 @@ export function buildConnectCommands(deps: ConnectDeps = {}): Record<string, Com
       `--leg ${leg}`,
     ].join(" ");
 
+  /** A leg's arguments as the plan file keeps them, so `--run` rebuilds the same calls. */
+  const legArgs = (a: WithdrawArgs): PlanLegArgs => ({
+    vault: a.vault!,
+    receiver: a.receiver,
+    ...(a.all ? { all: true, shares_exact: a.shares_exact! } : { amount_usdc: a.amount_usdc! }),
+  });
+
+  /** The calls leg `leg` was acknowledged as, rebuilt for the connected account; `checkPlanLeg` holds them to its digest. */
+  const legCalls = (leg: PlanLeg, session: Session): UnsignedCall[] => {
+    const a = leg.args;
+    if (!a) throw new Error(`refused: leg ${leg.leg} was recorded without its arguments (a plan made by an older version); make the plan again with \`connect plan --legs\``);
+    const vault = resolveVault(a.vault);
+    const account = session.account as Address;
+    const receiver = (isAddress(a.receiver) ? getAddress(a.receiver) : a.receiver) as Address;
+    if (leg.action === "deposit") return buildDeposit(vault, { assetsHuman: a.amount_usdc!, receiver, account });
+    return a.all ? buildWithdraw(vault, { receiver, owner: account, all: true, sharesExact: a.shares_exact! }) : buildWithdraw(vault, { receiver, owner: account, assetsHuman: a.amount_usdc! });
+  };
+
+  /** What the page shows for a leg: the sentence, where the money goes, and how far it got. */
+  const legView = (leg: PlanLeg) => {
+    const v = resolveVault(leg.vault);
+    return {
+      leg: leg.leg,
+      action: leg.action,
+      amount: leg.amount,
+      chainId: v.chainId,
+      chainName: CHAIN_INFO[v.chainId].name,
+      vault: { symbol: v.symbol, name: v.name, address: v.address, asset: v.asset.symbol, assetAddress: v.asset.address, links: linksFor(v) },
+      receiver: leg.args?.receiver,
+      status: leg.status,
+      ...(leg.reason ? { reason: leg.reason } : {}),
+      txs: leg.txs ?? [],
+      txBase: explorerTxUrl(v.chainId, ""),
+    };
+  };
+
+  /** The plan as `--run` and `--status` report it. */
+  const planSummary = (p: PendingPlan) => p.legs.map((l) => ({ leg: l.leg, action: l.action, vault: l.vault, chain: l.chain, amount: l.amount, status: l.status, ...(l.reason ? { reason: l.reason } : {}), txs: l.txs ?? [] }));
+
+  /**
+   * `connect plan --run`: ONE page for every leg of the acknowledged plan (#174). Each leg is still rebuilt, held to
+   * the digest it was acknowledged as (`checkPlanLeg`), admitted by the same gate and checked from its receipts
+   * (`prepareConfirm`), one leg at a time; a leg that does not complete ends the plan, exactly as `--plan --leg`.
+   * The page lives across runs: it keeps the plan's secret and port, so a run that stops for the shell's time limit
+   * (`in_progress`, never mid-leg) and the run after it serve the same page, and the operator's tab carries on.
+   */
+  const runPlanPage = async (): Promise<string> => {
+    const plan = readPlan();
+    if (!plan) throw new Error("no plan is pending; `connect plan --legs …` makes one");
+    if (!plan.acknowledged) throw new Error(`refused: plan ${plan.code} has not been acknowledged; post its acknowledgement and, on the operator's yes, run \`connect plan\` with --ack ${plan.code}`);
+    if (plan.legs.some((l) => l.chain === "solana")) {
+      throw new Error("refused: `--run` serves EVM legs only for now, and this plan has a Solana leg; run its legs one at a time, each with the `command` `connect plan --ack` returned");
+    }
+    const session = readSession();
+    if (!session) throw notConnected();
+    const report = (status: string, p: PendingPlan, extra: Record<string, unknown>, next_step: string) =>
+      JSON.stringify({ status, code: p.code, expiresAtIso: p.expiresAtIso, ...extra, legs: planSummary(p), next_step }, null, 2);
+    const endedReport = (p: PendingPlan) => {
+      const ended = p.legs.find((l) => l.status !== "pending" && l.status !== "completed");
+      if (ended) {
+        return report(
+          ended.status === "running" ? "not_reported" : ended.status,
+          p,
+          { opened: false },
+          ended.status === "running"
+            ? `Leg ${ended.leg}'s run never finished, so whether it sent anything is not known here. Check the account with \`earn balance\` and tell the operator; the legs after it do not run.`
+            : `The plan ended at leg ${ended.leg} (${ended.status}${ended.reason ? `: ${ended.reason}` : ""}); the legs after it did not run. Report each leg's transactions to the operator, check the account with \`earn balance\`, and do not retry blindly.`,
+        );
+      }
+      if (p.legs.every((l) => l.status === "completed")) {
+        return report("completed", p, { opened: false }, "Every leg landed as confirmed. Report each leg's transactions to the operator; any `extra_transfer` is money the wallet moved besides the call — say so.");
+      }
+      return undefined;
+    };
+    const done0 = endedReport(plan);
+    if (done0) return done0;
+    if (planExpired(plan, now())) {
+      return report("expired", plan, { opened: false }, `The plan expired at ${plan.expiresAtIso}; legs that had not started did not run. Tell the operator; for what is left, make a new plan and ask again.`);
+    }
+    // Every leg still to run must rebuild to what was acknowledged, for this connected account, before a page opens.
+    const account = session.account as Address;
+    for (const l of plan.legs.filter((x) => x.status === "pending")) {
+      if (callsDigest(legCalls(l, session), account) !== l.digest) {
+        throw new Error(`refused: leg ${l.leg} is not what the operator acknowledged for the connected account ${account} (the account, an amount or a share balance changed); make a new plan with \`connect plan --legs\``);
+      }
+    }
+
+    const ttlMs = deps.ttlMs ?? CONFIRM_TTL_MS;
+    const legMinMs = deps.legMinMs ?? LEG_MIN_MS;
+    const endsAt = Date.now() + ttlMs;
+    let current: { index: number; core: ConfirmCore } | undefined;
+    let paused = false;
+    const reused = plan.page;
+    const page = reused ?? { secret: newSecret(), port: 0 };
+    const ports = reused?.port ? [reused.port, ...connectPorts().filter((p) => p !== reused.port)] : connectPorts();
+    const legStatusOf = (status: PlanLegStatus, txs: TxOutcome[], reason?: string) => ({ status, txs: txs.map((t) => ({ hash: t.hash, verified: t.verified })), ...(reason ? { reason } : {}) });
+    const pendingLeft = () => (readPlan()?.legs ?? []).some((l) => l.status === "pending");
+
+    const handle = await serveOnce<"settled">({
+      mode: "plan",
+      secret: page.secret,
+      ttlMs,
+      ...(deps.cancelGraceMs !== undefined ? { cancelGraceMs: deps.cancelGraceMs } : {}),
+      timeoutReason: () => (current ? "the page's time limit ran out during a leg" : "paused for the shell's time limit"),
+      html: (s) => shell(s, "Your plan — Open Agent Treasury"),
+      csp: PAGE_CSP,
+      assets: assets(),
+      ports,
+      info: () => {
+        const p = readPlan() ?? plan;
+        return {
+          mode: "plan",
+          appId: privyAppId(),
+          account,
+          walletType: session.walletType,
+          code: p.code,
+          expiresAtIso: p.expiresAtIso,
+          legMinMs,
+          legs: p.legs.map(legView),
+          current: current ? { leg: p.legs[current.index]!.leg, ...current.core.info() } : null,
+        };
+      },
+      // The operator stopped the plan on the page: after the wallet declined (nothing sent), or between legs. A hash
+      // the page could not hand over is put on record first, and its leg is then "may have been sent".
+      onReject: (body) => {
+        const p = readPlan();
+        if (!p) return;
+        const reason = typeof body["reason"] === "string" ? body["reason"].slice(0, 300) : "stopped on the page";
+        if (current) {
+          current.core.onReject(body);
+          const out = current.core.done;
+          const unverified = out.some((t) => t.verified === "unverified");
+          markLeg(p.code, current.index, unverified ? legStatusOf("not_reported", out, `may have been sent: ${reason}`) : legStatusOf(body["declined"] === true ? "stopped" : "not_reported", out, reason));
+          current = undefined;
+          return;
+        }
+        const next = p.legs.findIndex((l) => l.status === "pending");
+        if (next >= 0) markLeg(p.code, next, { status: "stopped", reason: `the operator stopped the plan before this leg: ${reason}` });
+      },
+      accept: async (body) => {
+        if (body["start"] !== undefined) {
+          if (current) return { ok: false, reason: "a leg is already in progress on this page" };
+          // Never start a leg the page cannot finish: hand over to the next run instead.
+          if (endsAt - Date.now() < legMinMs) {
+            paused = true;
+            return { ok: true, final: true, value: "settled", reply: { paused: true } };
+          }
+          const p = readPlan();
+          const leg = p?.legs.find((l) => l.leg === body["start"]);
+          if (!p || !leg) return { ok: false, reason: `no leg ${String(body["start"])} in this plan` };
+          let core: ConfirmCore;
+          let index: number;
+          try {
+            const calls = legCalls(leg, session);
+            index = checkPlanLeg(p.code, leg.leg, p, callsDigest(calls, account), now());
+            core = await prepareConfirm(calls, session, deps, endsAt);
+          } catch (e) {
+            return { ok: false, reason: redactEndpoints(e instanceof Error ? e.message : String(e)) };
+          }
+          markLeg(p.code, index, { status: "running" });
+          current = { index, core };
+          return { ok: true, final: false, reply: { started: leg.leg } };
+        }
+        if (!current) return { ok: false, reason: "no leg is in progress; start one first" };
+        const r = await current.core.accept(body["index"], body["hash"]);
+        if (!r.ok) return r;
+        if (r.kind === "next") return { ok: true, final: false, reply: r.reply };
+        const p = readPlan()!;
+        const { index, core } = current;
+        current = undefined;
+        if (r.kind === "stop") {
+          markLeg(p.code, index, legStatusOf("stopped", core.done, core.stopReason()));
+          return { ok: true, final: true, value: "settled", reply: r.reply };
+        }
+        markLeg(p.code, index, legStatusOf("completed", core.done));
+        if (!pendingLeft()) return { ok: true, final: true, value: "settled", reply: { ...r.reply, planDone: true } };
+        if (endsAt - Date.now() < legMinMs) {
+          paused = true;
+          return { ok: true, final: true, value: "settled", reply: { ...r.reply, legDone: true, paused: true } };
+        }
+        return { ok: true, final: false, reply: { ...r.reply, legDone: true } };
+      },
+    });
+    // The page outlives this run: its secret and port stay on the plan for the next one.
+    const pNow = readPlan();
+    if (pNow && pNow.code === plan.code) writePlan({ ...pNow, page: { secret: page.secret, port: handle.port } });
+    const sameTab = reused !== undefined && reused.port === handle.port;
+    const opened = sameTab ? (process.stderr.write(`The plan's page is already open: ${handle.url}\n`), false) : (deps.open ?? announce)(handle.url);
+    const result = await handle.done;
+    if (current) {
+      // The time limit or a cancel ended the page while a leg was in the wallet: whether it went out is not known here.
+      const p = readPlan();
+      if (p) markLeg(p.code, current.index, legStatusOf("not_reported", current.core.done, result.ok ? "the page closed during this leg" : result.reason));
+    }
+    const after = readPlan() ?? plan;
+    const ended = endedReport(after);
+    if (ended) return ended.replace('"opened": false', `"opened": ${opened}`);
+    if (planExpired(after, now())) {
+      return report("expired", after, { opened }, `The plan expired at ${after.expiresAtIso}; legs that had not started did not run. Tell the operator; for what is left, make a new plan and ask again.`);
+    }
+    const nextLeg = after.legs.find((l) => l.status === "pending");
+    return report(
+      "in_progress",
+      after,
+      { opened, ...(paused ? {} : { reason: result.ok ? "paused" : result.reason }) },
+      `The plan's page is waiting for you: run \`connect plan --run\` again now, with no other flag, and the operator's open page carries on${nextLeg ? ` from leg ${nextLeg.leg}` : ""}. Do not ask the operator again: their yes covers every leg. Give the shell call a timeout of at least 9 minutes.`,
+    );
+  };
+
   register(
     "connect_plan",
     {
       title: "One acknowledgement for several deposits and withdrawals",
       description:
-        'For a request that moves money in more than one vault (any mix of deposits and withdrawals, across chains): ONE acknowledgement for the whole plan instead of one per vault. Runs twice, like `connect deposit`. Pass --legs, e.g. "deposit tlCashPlusUSDC2B 25; withdraw tlCashPlusUSDC2G all" (each leg "deposit <vault> <amount>" or "withdraw <vault> <amount|all>"; "all" redeems the share balance read now). Without --ack it opens NOTHING: every leg is built and checked as its own run would be, and it returns `needs_acknowledgement` with ONE `acknowledgement` covering every leg, to post to the operator word for word, and an `ack` code. Only after the operator replies yes, run it again with the same --legs and --ack <code>: that records the yes, opens nothing, and returns each leg\'s exact command. Then run the legs one at a time, in order (`connect deposit|withdraw … --plan <code> --leg <n>`); each opens its own signing page, and a leg that does not complete ends the plan. --status (alone) reports the plan\'s legs and their transactions. Each EVM and Solana leg needs that family\'s wallet connected; money lands only in the connected account.',
+        'For a request that moves money in more than one vault (any mix of deposits and withdrawals, across chains): ONE acknowledgement for the whole plan instead of one per vault. Runs twice, like `connect deposit`. Pass --legs, e.g. "deposit tlCashPlusUSDC2B 25; withdraw tlCashPlusUSDC2G all" (each leg "deposit <vault> <amount>" or "withdraw <vault> <amount|all>"; "all" redeems the share balance read now). Without --ack it opens NOTHING: every leg is built and checked as its own run would be, and it returns `needs_acknowledgement` with ONE `acknowledgement` covering every leg, to post to the operator word for word, and an `ack` code. Only after the operator replies yes, run it again with the same --legs and --ack <code>: that records the yes, opens nothing, and returns each leg\'s exact command. Then, for a plan of EVM legs, run `connect plan --run`: one signing page walks every leg in order. A plan with a Solana leg runs its legs one at a time instead (`connect deposit|withdraw … --plan <code> --leg <n>`), each on its own page. Either way, a leg that does not complete ends the plan. --status (alone) reports the plan\'s legs and their transactions. Each EVM and Solana leg needs that family\'s wallet connected; money lands only in the connected account.',
       inputSchema: {
         legs: z.string().optional().describe('the plan, in order: legs separated by ";", each "deposit <vault> <amount>" or "withdraw <vault> <amount|all>" — vaults by their ticker, as `earn vaults` lists them; amounts the operator chose'),
         ack: ackArg,
         status: z.boolean().optional().describe("report the current plan and each leg's status and transactions; reads a local file only"),
+        run: z
+          .boolean()
+          .optional()
+          .describe("open ONE signing page for every leg of the acknowledged plan (EVM legs), instead of one page per leg; returns `in_progress` when the shell's time limit is near: run it again and the operator's open page carries on"),
       },
     },
-    async ({ legs, ack, status }) => {
+    async ({ legs, ack, status, run }) => {
+      if (run) {
+        if (legs !== undefined || ack !== undefined || status) throw new Error("--run takes no other flag: it runs the acknowledged plan");
+        return runPlanPage();
+      }
       if (status) {
         if (legs !== undefined || ack !== undefined) throw new Error("--status takes no other flag");
         const p = readPlan();
@@ -887,7 +1139,7 @@ export function buildConnectCommands(deps: ConnectDeps = {}): Record<string, Com
       const digests = described.map((l) => l.d.digest);
       if (ack === undefined) {
         const plan = issuePlan(
-          described.map((l, i) => ({ leg: i + 1, action: l.action, vault: l.symbol, chain: l.chain, amount: l.d.summary.amount, digest: l.d.digest, command: "" })),
+          described.map((l, i) => ({ leg: i + 1, action: l.action, vault: l.symbol, chain: l.chain, amount: l.d.summary.amount, digest: l.d.digest, command: "", args: legArgs(l.args) })),
           now(),
         );
         plan.legs = plan.legs.map((x, i) => ({ ...x, command: legCommand(described[i]!, plan.code, i + 1) }));
@@ -921,7 +1173,9 @@ export function buildConnectCommands(deps: ConnectDeps = {}): Record<string, Com
           code: plan!.code,
           expiresAtIso: plan!.expiresAtIso,
           legs: plan!.legs.map((x) => ({ leg: x.leg, action: x.action, vault: x.vault, chain: x.chain, amount: x.amount, command: x.command })),
-          next_step: `The operator's yes covers every leg: do not ask again between legs. Run the legs one at a time, in order, each exactly as its \`command\` gives it; each opens its own signing page and waits up to 9 minutes, so give each shell call a timeout of at least 9 minutes. After each leg, report its result; stop at the first leg that does not complete. Start with leg 1: ${first.command}`,
+          next_step: plan!.legs.some((x) => x.chain === "solana")
+            ? `The operator's yes covers every leg: do not ask again between legs. Run the legs one at a time, in order, each exactly as its \`command\` gives it; each opens its own signing page and waits up to 9 minutes, so give each shell call a timeout of at least 9 minutes. After each leg, report its result; stop at the first leg that does not complete. Start with leg 1: ${first.command}`
+            : "The operator's yes covers every leg: do not ask again between legs. Run `connect plan --run`: it opens ONE signing page that walks every leg in order, and waits up to 9 minutes, so give the shell call a timeout of at least 9 minutes. If it returns `in_progress`, run it again at once: the operator's open page carries on. When it returns any other status, report each leg's result and transactions to the operator.",
         },
         null,
         2,

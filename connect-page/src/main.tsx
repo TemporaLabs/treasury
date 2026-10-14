@@ -24,10 +24,10 @@ import {
 } from "@privy-io/react-auth/solana";
 import { arbitrum, base, mainnet, monad, robinhood } from "viem/chains";
 import { CSS } from "./styles";
+import { secret, type WalletType, post, reject, errText, type Phase, rejected, fmt, Page, Status, WalletMark, CheckMark, ButtonIcon } from "./shared";
+import { Plan, type PlanInfo } from "./plan";
 
-const secret = new URLSearchParams(location.search).get("s") ?? "";
 
-type WalletType = "external" | "embedded";
 type Call = {
   step: number;
   of: number;
@@ -78,29 +78,9 @@ type Info =
       chain?: undefined;
     };
 
-async function post(path: string, body: Record<string, unknown>): Promise<Record<string, unknown> & { ok: boolean; reason?: string }> {
-  const r = await fetch(path, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ s: secret, ...body }) });
-  return r.json();
-}
-const reject = (reason: string, sent?: { hash: string; index: number }) => post("/result", { rejected: true, reason, ...sent }).catch(() => undefined);
-const errText = (e: unknown) => (e instanceof Error ? e.message : typeof e === "object" && e && "message" in e ? String((e as { message: unknown }).message) : String(e));
 
-type Phase = { text: string; tone?: "ok" | "bad"; busy?: boolean; done?: boolean; retry?: boolean };
 
-/** A wallet's "no": EIP-1193 code 4001, or the words wallets use for it. Nothing was sent. */
-const rejected = (e: unknown) => {
-  const code = typeof e === "object" && e && "code" in e ? (e as { code: unknown }).code : undefined;
-  return code === 4001 || code === "ACTION_REJECTED" || /user (rejected|denied|cancel+ed)|rejected the request|request rejected/i.test(errText(e));
-};
 
-/** Raw units as a person reads them: no trailing zeros, at most six decimals. */
-function fmt(raw: string | bigint, decimals: number): string {
-  const v = BigInt(raw);
-  const unit = 10n ** BigInt(decimals);
-  const whole = v / unit;
-  const frac = (v % unit).toString().padStart(decimals, "0").slice(0, 6).replace(/0+$/, "");
-  return frac ? `${whole}.${frac}` : whole.toString();
-}
 
 const actionName = (c: Call) =>
   c.kind === "approve" ? `Approve ${c.vault.asset}` : c.kind === "deposit" ? `Deposit ${c.vault.asset}` : c.kind === "withdraw" ? `Withdraw ${c.vault.asset}` : `Redeem ${c.vault.symbol} shares`;
@@ -116,19 +96,6 @@ const actionLede = (c: Call) =>
 const methodName = (m: string | null): string | undefined =>
   ({ email: "email", google: "Google", apple: "Apple", twitter: "X" } as Record<string, string>)[m ?? ""];
 
-/** One centred column: a mark, what is being asked, and the one action. */
-function Page({ mark, title, lede, children }: { mark: React.ReactNode; title: string; lede: React.ReactNode; children: React.ReactNode }) {
-  return (
-    <main className="oat-wrap">
-      <div className="oat-intro">
-        <span className="oat-mark">{mark}</span>
-        <h1 className="oat-h1">{title}</h1>
-        <p className="oat-lede">{lede}</p>
-      </div>
-      {children}
-    </main>
-  );
-}
 
 const Tick = () => (
   <svg width="18" height="18" viewBox="0 0 18 18" fill="none" stroke="#2f6fb0" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
@@ -136,13 +103,6 @@ const Tick = () => (
   </svg>
 );
 
-function Status({ phase }: { phase: Phase }) {
-  return phase.text ? (
-    <p className="oat-status" data-tone={phase.tone} aria-live="polite">
-      {phase.text}
-    </p>
-  ) : null;
-}
 
 /** The connected wallet: which kind it is, and its address in full. */
 function WalletBox({ address, walletType, name, signedInWith, network }: { address: string; walletType: WalletType; name?: string; signedInWith?: string; network?: string }) {
@@ -173,23 +133,6 @@ function WalletBox({ address, walletType, name, signedInWith, network }: { addre
   );
 }
 
-const WalletMark = () => (
-  <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="#1E3553" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-    <path d="M4 7.5A2.5 2.5 0 0 1 6.5 5H17a2 2 0 0 1 2 2v1" />
-    <rect x="4" y="8" width="16" height="11" rx="2.5" />
-    <path d="M16 13.5h1.5" />
-  </svg>
-);
-const CheckMark = () => (
-  <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="#1F7A4A" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-    <path d="m5 12.5 4.5 4.5L19 7.5" />
-  </svg>
-);
-const ButtonIcon = () => (
-  <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-    <path d="M6.5 3H4a1.5 1.5 0 0 0-1.5 1.5v7A1.5 1.5 0 0 0 4 13h2.5M10 5l3 3-3 3M13 8H6.5" />
-  </svg>
-);
 
 /** The wallet that matches how the operator just signed in: a browser wallet for a wallet login, the Privy wallet otherwise. */
 function pick(wallets: ConnectedWallet[], method: string | null): ConnectedWallet | undefined {
@@ -825,7 +768,8 @@ function ConfirmSolana({ info }: { info: SolanaConfirm }) {
   );
 }
 
-function App({ info }: { info: Info }) {
+function App({ info }: { info: Info | PlanInfo }) {
+  if (info.mode === "plan") return <Plan info={info} />;
   if (info.chain === "solana") return info.mode === "connect" ? <ConnectSolana /> : <ConfirmSolana info={info as SolanaConfirm} />;
   return info.mode === "connect" ? <Connect /> : <Confirm info={info as Extract<Info, { mode: "confirm"; chain?: undefined }>} />;
 }
@@ -843,10 +787,10 @@ async function main() {
       </Page>,
     );
   }
-  const info = (await res.json()) as Info;
+  const info = (await res.json()) as Info | PlanInfo;
   // A Solana flow gets Privy's Solana side: Solana wallets on the first screen, a Privy Solana wallet for an
   // email or social login, and Privy's own Solana RPC for that wallet to send through. An EVM flow is unchanged.
-  if (info.chain === "solana") {
+  if (info.mode !== "plan" && info.chain === "solana") {
     return root.render(
       <PrivyProvider
         appId={info.appId}

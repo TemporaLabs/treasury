@@ -296,7 +296,7 @@ confirm it in the wallet. Nothing here signs. See [`security-model.md`](security
 | `connect wallet` | `--chain` (optional; `solana` connects a Solana wallet: Phantom, Solflare, Backpack, or a Privy wallet) | opens the sign-in page: one Connect button, then Privy's window. The wallet signs a free sign-in message; waits up to 9 minutes and returns `{ status: "connected", account, walletType, connectedAtIso, opened }`. If the sign-in does not finish, it exits 1 with `not connected: <reason>` |
 | `connect deposit` | `--amount_usdc`, `--receiver`, optional `--vault`, `--chain`, then `--ack`, or `--plan` with `--leg` | builds approve + deposit for the connected account and checks them against the registry. Without `--ack`, opens nothing and returns the operator's acknowledgement; with its code, hands each call to the wallet in turn |
 | `connect withdraw` | `--receiver`, then `--amount_usdc` or `--all --shares_exact`, optional `--vault`, `--chain`, then `--ack`, or `--plan` with `--leg` | the same for a withdrawal |
-| `connect plan` | `--legs`, then `--ack`; or `--status` alone | one acknowledgement for several deposits and withdrawals, across vaults and chains. Opens nothing; returns each leg's command, which runs with `--plan` and `--leg`. See [below](#a-plan-one-acknowledgement-for-several-legs) |
+| `connect plan` | `--legs`, then `--ack`; then `--run`; or `--status` alone | one acknowledgement for several deposits and withdrawals, across vaults and chains. `--legs` and `--ack` open nothing; `--run` opens one signing page for every EVM leg; each leg's command also runs alone with `--plan` and `--leg`. See [below](#a-plan-one-acknowledgement-for-several-legs) |
 | `connect disconnect` | — | forgets the connected accounts, EVM and Solana; moves nothing |
 
 `--receiver` must be the connected account: this page pays no one else. It comes from the operator's
@@ -402,7 +402,24 @@ The code is refused if it is not the pending plan's, the plan has expired or was
 acknowledged, or the legs are not the ones acknowledged (a leg, its order or amount, a vault, or a
 share balance changed).
 
-Each leg then runs exactly as its `command` gives it:
+**One page for the whole plan: `connect plan --run`** (#174), alone, after the `--ack` run. It opens one
+signing page that lists every leg (what it does, on which chain, the vault's contract address, where the money
+goes, and its state) and walks them in order: the page switches the wallet to each leg's chain, and the wallet
+asks for each transaction as it always does (a deposit: approve, then deposit). Each leg is still rebuilt, held
+to the digest it was acknowledged as, admitted by the same gate and checked from its receipts, and a leg that
+does not complete ends the plan. Only the wallet's own answer or a receipt moves a leg: a "no" in the wallet
+sends nothing, and the operator can ask the wallet again or stop the plan there. It returns
+
+`{ status, code, expiresAtIso, opened, reason?, legs: [{ leg, action, vault, chain, amount, status, reason?, txs }], next_step }`
+
+with `status` `completed`, `stopped`, `not_reported` (a leg may have been sent; check before anything else),
+`expired`, or `in_progress`. No leg starts with less than 3 minutes of the run's 9 left: the run then returns
+`in_progress`, and the agent runs `connect plan --run` again at once. The page keeps its secret and port in the
+plan file, so that run serves the same page and the operator's open tab carries on. `--run` serves EVM legs
+only; a plan with a Solana leg runs leg by leg, as below. It refuses a plan not yet acknowledged, and a leg that
+no longer rebuilds to what was acknowledged (another connected account, amount or share balance).
+
+Each leg can also run alone, exactly as its `command` gives it:
 `connect deposit|withdraw --vault <vault> (--amount_usdc <n> | --all --shares_exact <s>) --receiver <r> --plan <code> --leg <n>`.
 `--plan` and `--leg` take the place of `--ack` and cannot be combined with it. The leg opens its own
 signing page and returns the result [above](#what-the-confirm-flow-returns), plus
