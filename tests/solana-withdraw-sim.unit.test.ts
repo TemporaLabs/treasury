@@ -156,6 +156,8 @@ describe("a Solana withdrawal whose simulation burns fewer shares than asked for
     simulated = { burns: 10_000_000n, pays: 10_200_000n };
     const built = await buildForIntent(rpc as unknown as SolanaRpc, intent, ACCOUNT);
     expect(built.wire.length).toBeGreaterThan(0);
+    // What the simulation paid, which the landed withdrawal is then held to.
+    expect(built.received).toBe(10_200_000n);
 
     const legs = await legsFor(intent.raw);
     simulated = { burns: intent.raw - legs, pays: 10_199_999n };
@@ -167,7 +169,9 @@ describe("a Solana withdrawal whose simulation burns fewer shares than asked for
   it("connect deposit: built when the simulation succeeds, refused when it fails, with no share check", async () => {
     const intent = { kind: "deposit" as const, vault, raw: 1_000_000n };
     simulated = { burns: 0n, pays: 0n };
-    expect((await buildForIntent(rpc as unknown as SolanaRpc, intent, ACCOUNT)).wire.length).toBeGreaterThan(0);
+    const built = await buildForIntent(rpc as unknown as SolanaRpc, intent, ACCOUNT);
+    expect(built.wire.length).toBeGreaterThan(0);
+    expect(built.received).toBeUndefined();
     simulated = { burns: 0n, pays: 0n, err: { InstructionError: [2, { Custom: 1 }] } };
     await expect(buildForIntent(rpc as unknown as SolanaRpc, intent, ACCOUNT)).rejects.toThrow(/the simulated deposit fails/);
   });

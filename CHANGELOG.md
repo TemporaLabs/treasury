@@ -20,6 +20,13 @@ Pre-1.0, minor versions may change tool names, schemas and behaviour.
   several vaults through `connect`, and `docs/tools.md` documents the command and its results.
 
 ### Fixed
+- **On Solana, a landed withdrawal is checked for what it paid, not only that the asset rose** (#154).
+  The check reads every token account of the vault's asset in the transaction. Any other owner whose
+  balance rose in the same transaction is reported as `extra_transfer` with `alsoMoved`, as on EVM.
+  Balances that do not add up are a `mismatch`. So is paying less than the simulation of the same
+  transaction paid, or, for a withdrawal by amount, less than the acknowledged amount minus the up to
+  0.001 USDC that Kamino keeps per withdraw instruction. A transaction whose token-balance records are
+  missing or cannot be paired is `unverified`, never `matched`. SOL movements are not checked, as on EVM.
 - **On Solana, `earn balance` no longer reports a capped exit as a full one** (#154). Kamino caps a
   withdrawal leg its reserve cannot pay instead of failing it, so the simulated full withdrawal could
   succeed while burning only part of the shares. `exit` now applies the same check as quote and

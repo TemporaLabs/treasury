@@ -139,7 +139,13 @@ open for nothing but the calls that text described.
   `mismatch`, whatever its balances show. Its token-balance changes must then match: a deposit takes
   the acknowledged amount of the asset, or less by under one share's worth (the program mints whole shares
   and takes only what backs them), and mints shares (more taken is `extra_transfer`), and a withdrawal burns
-  the acknowledged shares, less at most one share unit of rounding per withdraw instruction, and pays the asset. A wallet that rebuilt the
+  the acknowledged shares, less at most one share unit of rounding per withdraw instruction, and pays the asset.
+  What a withdrawal paid is read from every token account of the asset in the transaction: the balances must
+  add up, any other owner whose balance rose is reported in `alsoMoved` as `extra_transfer`, and what was paid
+  (including that) must be at least what the simulation of the same transaction paid and, for a withdrawal by
+  amount, the amount acknowledged less what Kamino keeps per withdraw instruction; less is `mismatch`. A
+  transaction with no token-balance records, or records that cannot be paired, is `unverified`. SOL the
+  transaction moved is not checked, just as ETH is not on EVM. A wallet that rebuilt the
   transaction with a newer blockhash would be reported as `mismatch` rather than matched. The next call
   is offered only after the previous one is confirmed this way.
 - **No WalletConnect code ships.** The page bundle stubs out every `@walletconnect` / `@reown` module
