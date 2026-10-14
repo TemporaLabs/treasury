@@ -639,7 +639,11 @@ describe("E. the AUDITED surface is every .ts under src/, scripts/ and tests/", 
     for (const f of files) {
       const sf = parse(f);
       eachNode(sf, (n) => {
-        const onProcess = (e: ts.Expression) => e.getText(sf).replace(/\s+/g, "") === "process";
+        // The global process by any of its names. An alias (`const p = process`) is refused below, since a kill
+        // through it could not be read; other routes to the object (passing it to a function, a reflection
+        // call) are the unbounded class the header of this file describes, and stay outside this rule.
+        const PROCESS_NAMES = ["process", "globalThis.process", "global.process", 'globalThis["process"]', "globalThis['process']"];
+        const onProcess = (e: ts.Expression) => PROCESS_NAMES.includes(e.getText(sf).replace(/\s+/g, ""));
         const isKill =
           (ts.isPropertyAccessExpression(n) && n.name.text === "kill" && onProcess(n.expression)) ||
           (ts.isElementAccessExpression(n) && onProcess(n.expression) && ts.isStringLiteralLike(n.argumentExpression) && n.argumentExpression.text === "kill");
@@ -648,6 +652,7 @@ describe("E. the AUDITED surface is every .ts under src/, scripts/ and tests/", 
           ts.isVariableDeclaration(n) && n.initializer !== undefined && onProcess(n.initializer) && ts.isObjectBindingPattern(n.name) &&
           n.name.elements.some((el) => (el.propertyName ?? el.name).getText(sf) === "kill");
         if (destructured) bad.push(`${rel(f)} takes kill out of process: ${n.getText(sf).slice(0, 60)}`);
+        else if (ts.isVariableDeclaration(n) && n.initializer !== undefined && onProcess(n.initializer)) bad.push(`${rel(f)} aliases process, so a kill through it could not be checked: ${n.getText(sf).slice(0, 60)}`);
         if (!isKill) return;
         const call = n.parent;
         const signal = ts.isCallExpression(call) && call.expression === n ? call.arguments[1] : undefined;
