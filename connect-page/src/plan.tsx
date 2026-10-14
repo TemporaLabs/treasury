@@ -71,8 +71,11 @@ function legState(l: LegView, local: { leg: number; phase: Phase } | null, planO
     const last = l.txs[l.txs.length - 1]?.verified;
     if (last === "reverted") return "failed";
     if (last === "mismatch") return "mismatch";
-    // A deposit stopped after its approval landed: something was sent, so never "nothing sent".
-    if (l.txs.length > 0) return "partial";
+    // A receipt that was never read: that transaction may have gone out.
+    if (last === "unverified") return "maybe";
+    // A deposit stopped after its approval landed (the deposit was declined, or never asked for): the approval was
+    // sent, so never "nothing sent".
+    if (l.action === "deposit" && (last === "matched" || last === "extra_transfer")) return "partial";
     if (/^not prepared/.test(l.reason ?? "")) return "unprepared";
     if (/^declined|the operator stopped/.test(l.reason ?? "")) return "declined";
     return "stopped";
@@ -335,6 +338,7 @@ export function Plan({ info: first }: { info: PlanInfo }) {
               declined: "was declined, and nothing was sent for it",
               unprepared: "could not be prepared, and nothing was sent for it",
               partial: "stopped after its approval landed: the approval is in place, and the deposit was not sent",
+              maybe: "may have been sent; check your wallet before doing anything else",
             }[legState(failedLeg, null, true) as string] ?? "did not land as approved"
           }.`}{" "}
       {landed} of {legs.length} steps landed; the steps after it did not run, and nothing else will be sent.
