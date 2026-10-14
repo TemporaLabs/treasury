@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach } from "vitest";
-import { existsSync, mkdtempSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs";
+import { existsSync, mkdtempSync, readFileSync, rmSync, statSync, utimesSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { createServer } from "node:net";
@@ -9,7 +9,7 @@ import { buildDeposit, buildWithdraw } from "../src/build.js";
 import { admit, type GateCall } from "../src/connect/gate.js";
 import { verifyLanded } from "../src/connect/verify.js";
 import { buildConnectCommands, outcome, runConfirm, runConnect, signInMessage, type ConnectDeps } from "../src/connect/commands.js";
-import { pageLockPath, pendingAckPath, readSession, writeSession } from "../src/connect/session.js";
+import { claimPageLock, pageLockPath, pendingAckPath, readSession, replaceStale, writeSession } from "../src/connect/session.js";
 import { serveOnce, type Flow } from "../src/connect/http.js";
 import { DEFAULT_CONNECT_PORTS, connectPorts } from "../src/connect/config.js";
 import { PAGE_CSP, shell } from "../src/connect/page.js";
@@ -1417,5 +1417,60 @@ describe("the page port: the first free one of a list, and one page at a time", 
     writeFileSync(pageLockPath(), JSON.stringify({ pid: process.ppid, expiresAt: Date.now() + 60_000, token: "theirs", port: 53682 }));
     await expect(serveOnce(flow([await freePort()]))).rejects.toThrow(/still open on port 53682;/);
     expect(JSON.parse(readFileSync(pageLockPath(), "utf8")).token).toBe("theirs");
+  });
+
+  it("a run that judged a lock stale does not remove the lock another run has just made from it (#154)", async () => {
+    const stale = JSON.stringify({ pid: 2 ** 30, expiresAt: Date.now() + 60_000, token: "old" });
+    writeFileSync(pageLockPath(), stale);
+    // The first run takes the stale lock over; the second judged the same stale content before that.
+    const first = await claimPageLock(60_000);
+    const mine = readFileSync(pageLockPath(), "utf8");
+    expect(replaceStale(pageLockPath(), stale)).toBe(false);
+    expect(readFileSync(pageLockPath(), "utf8")).toBe(mine);
+    await expect(claimPageLock(60_000)).rejects.toThrow(/another sign-in or confirmation page is still open/);
+    first.release();
+    expect(existsSync(pageLockPath())).toBe(false);
+    // And the stale content itself is removed when it is what is there.
+    writeFileSync(pageLockPath(), stale);
+    expect(replaceStale(pageLockPath(), stale)).toBe(true);
+    expect(existsSync(pageLockPath())).toBe(false);
+  });
+
+  it("replaces a beating lock whose process ID is alive but which nobody has touched (a reused PID, #154)", async () => {
+    // This same process's PID: alive, but not the page's process any more.
+    writeFileSync(pageLockPath(), JSON.stringify({ pid: process.pid, expiresAt: Date.now() + 60_000, token: "old", beat: true }));
+    const old = new Date(Date.now() - 120_000);
+    utimesSync(pageLockPath(), old, old);
+    const lock = await claimPageLock(60_000, { waitMs: 50 });
+    expect(JSON.parse(readFileSync(pageLockPath(), "utf8")).token).not.toBe("old");
+    lock.release();
+  });
+
+  it("keeps a suspect lock whose holder touches it during the wait (a laptop that slept)", async () => {
+    writeFileSync(pageLockPath(), JSON.stringify({ pid: process.pid, expiresAt: Date.now() + 60_000, token: "theirs", beat: true, port: 53682 }));
+    const old = new Date(Date.now() - 120_000);
+    utimesSync(pageLockPath(), old, old);
+    const touch = setTimeout(() => utimesSync(pageLockPath(), new Date(), new Date()), 20);
+    await expect(claimPageLock(60_000, { waitMs: 200 })).rejects.toThrow(/still open on port 53682;/);
+    clearTimeout(touch);
+    expect(JSON.parse(readFileSync(pageLockPath(), "utf8")).token).toBe("theirs");
+  });
+
+  it("judges a lock from a version that does not beat by its process ID alone, however old the file", async () => {
+    writeFileSync(pageLockPath(), JSON.stringify({ pid: process.ppid, expiresAt: Date.now() + 60_000, token: "theirs" }));
+    const old = new Date(Date.now() - 120_000);
+    utimesSync(pageLockPath(), old, old);
+    await expect(claimPageLock(60_000, { waitMs: 10 })).rejects.toThrow(/another sign-in or confirmation page is still open/);
+    expect(JSON.parse(readFileSync(pageLockPath(), "utf8")).token).toBe("theirs");
+  });
+
+  it("touches its own lock while held, and stops once released", async () => {
+    const lock = await claimPageLock(60_000, { beatMs: 20 });
+    const old = new Date(Date.now() - 120_000);
+    utimesSync(pageLockPath(), old, old);
+    await new Promise((r) => setTimeout(r, 120));
+    expect(Date.now() - statSync(pageLockPath()).mtimeMs).toBeLessThan(5_000);
+    lock.release();
+    expect(existsSync(pageLockPath())).toBe(false);
   });
 });
