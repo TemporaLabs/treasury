@@ -628,6 +628,38 @@ describe("E. the AUDITED surface is every .ts under src/, scripts/ and tests/", 
     expect(spawners.sort()).toEqual(Object.keys(MAY_SPAWN).sort());
     expect(bad).toEqual([]);
   });
+
+  it("process.kill is the page lock's liveness probe and nothing else: signal 0, in the one file that probes", () => {
+    // `process.kill(pid, 0)` sends nothing; it only asks whether `pid` exists. Any other signal, or a kill
+    // from anywhere else, would stop a process this package did not start. (A child's own `.kill()` on a
+    // process a test or script spawned is not this global and is not checked here.)
+    const PROBE_FILE = "src/connect/session.ts";
+    const probes: string[] = [];
+    const bad: string[] = [];
+    for (const f of files) {
+      const sf = parse(f);
+      eachNode(sf, (n) => {
+        const onProcess = (e: ts.Expression) => e.getText(sf).replace(/\s+/g, "") === "process";
+        const isKill =
+          (ts.isPropertyAccessExpression(n) && n.name.text === "kill" && onProcess(n.expression)) ||
+          (ts.isElementAccessExpression(n) && onProcess(n.expression) && ts.isStringLiteralLike(n.argumentExpression) && n.argumentExpression.text === "kill");
+        // `const { kill } = process` takes the same function with no `process.kill` left to read.
+        const destructured =
+          ts.isVariableDeclaration(n) && n.initializer !== undefined && onProcess(n.initializer) && ts.isObjectBindingPattern(n.name) &&
+          n.name.elements.some((el) => (el.propertyName ?? el.name).getText(sf) === "kill");
+        if (destructured) bad.push(`${rel(f)} takes kill out of process: ${n.getText(sf).slice(0, 60)}`);
+        if (!isKill) return;
+        const call = n.parent;
+        const signal = ts.isCallExpression(call) && call.expression === n ? call.arguments[1] : undefined;
+        if (rel(f) !== PROBE_FILE) bad.push(`${rel(f)} uses process.kill: ${call.getText(sf).slice(0, 60)}`);
+        else if (!signal || !ts.isNumericLiteral(signal) || signal.text !== "0") bad.push(`${rel(f)} calls process.kill with a signal other than a literal 0: ${call.getText(sf).slice(0, 60)}`);
+        else probes.push(rel(f));
+      });
+    }
+    // Positive control: the probe is there to be found, so an empty `bad` is not a walk that saw nothing.
+    expect(probes).toEqual([PROBE_FILE]);
+    expect(bad).toEqual([]);
+  });
 });
 
 /**
