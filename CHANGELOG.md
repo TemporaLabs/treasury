@@ -6,6 +6,19 @@ Pre-1.0, minor versions may change tool names, schemas and behaviour.
 
 ## [v0.1.4] - Unreleased
 
+### Added
+- **One acknowledgement for a plan of several deposits and withdrawals: `connect plan`** (#155). A
+  request that moves money in more than one vault, on one chain or several, used to need one
+  acknowledgement and one yes per vault. `connect plan --legs "deposit <vault> <amount>; withdraw
+  <vault> <amount|all>"` builds and checks every leg, then returns one acknowledgement text listing
+  each leg, its receiver, the warnings and the disclosures. After the operator's yes, run again with
+  `--ack`, it returns each leg's command; the legs then run one at a time, in order, with the new
+  `--plan <code> --leg <n>` flags on `connect deposit` and `connect withdraw`, each through its own
+  signing page and without asking again. A plan holds at most 8 legs and expires after 60 minutes; a
+  leg that does not complete ends it. `connect plan --status` lists the legs and their transactions.
+  The single `--ack` flow is unchanged. The earn skill uses a plan when a request moves money in
+  several vaults through `connect`, and `docs/tools.md` documents the command and its results.
+
 ### Fixed
 - **On Solana, `earn balance` no longer reports a capped exit as a full one** (#154). Kamino caps a
   withdrawal leg its reserve cannot pay instead of failing it, so the simulated full withdrawal could
