@@ -608,7 +608,7 @@ describe("connect plan --run: one page for every leg (#174)", () => {
     const leg1 = readPlan()!.legs[0]!;
     expect(leg1.status).toBe("not_reported");
     expect(leg1.reason).toMatch(/^may have been sent/);
-    expect(leg1.txs!.map((t) => t.hash)).toEqual([h1, h2]);
+    expect(leg1.txs).toEqual([{ hash: h1, verified: "matched" }, { hash: h2, verified: "matched" }]);
     expect(readPlan()!.legs[1]!.status).toBe("pending");
   });
 

@@ -109,6 +109,8 @@ export function Plan({ info: first }: { info: PlanInfo }) {
   const [now, setNow] = useState(Date.now());
   const running = useRef(false);
   const whyRef = useRef<string | undefined>(undefined);
+  // Too little of the run was left to ask the wallet: asking again cannot help before the run ends, so only Stop is offered.
+  const lateRef = useRef(false);
   // The leg this tab is driving: the only running leg it may ask the wallet about.
   const owned = useRef<number | null>(null);
   // This tab was walking the plan when the process went away between runs: carry on when it is back.
@@ -176,7 +178,9 @@ export function Plan({ info: first }: { info: PlanInfo }) {
           return undefined;
         }
         // A wallet prompt must not outlive the run: the process would then end this leg as "may have been sent".
-        if (live.msLeft < 60_000) throw new Error("less than a minute is left before your agent's run pauses, too little to confirm in your wallet");
+        if (live.msLeft < 60_000) {
+          throw Object.assign(new Error("less than a minute is left before your agent's run pauses, too little to confirm in your wallet"), { late: true });
+        }
         stage = "send";
         hash = (await provider.request({ method: "eth_sendTransaction", params: [{ ...tx, chainId: `0x${leg.chainId.toString(16)}`, gas: `0x${((est * 3n) / 2n).toString(16)}` }] })) as string;
         setLocal({ leg: leg.leg, phase: "sent" });
@@ -199,6 +203,14 @@ export function Plan({ info: first }: { info: PlanInfo }) {
           throw Object.assign(new Error(`Your wallet returned an error without a transaction hash, so this page cannot tell whether step ${leg.leg} was sent. Check your wallet's activity.`), { ended: true });
         }
         // Before the wallet was asked: nothing was sent.
+        if ((e as { late?: boolean }).late) {
+          lateRef.current = true;
+          setLocal({ leg: leg.leg, phase: "unprepared" });
+          throw Object.assign(
+            new Error(`Less than a minute is left before your agent's run pauses, too little to confirm step ${leg.leg} in your wallet. Nothing more was sent. Stop the plan here; your agent reports what landed and can make a new plan for the rest.`),
+            { idle: true, why: text },
+          );
+        }
         setLocal({ leg: leg.leg, phase: "unprepared" });
         throw Object.assign(new Error(`This page could not prepare step ${leg.leg}: ${text}. Nothing was sent.`), { idle: true, why: text });
       }
@@ -212,6 +224,7 @@ export function Plan({ info: first }: { info: PlanInfo }) {
     running.current = true;
     setBusy(true);
     setNote(null);
+    lateRef.current = false;
     try {
       for (;;) {
         let cur = await refresh();
@@ -275,7 +288,7 @@ export function Plan({ info: first }: { info: PlanInfo }) {
 
   // A leg this tab cannot vouch for: end the plan there, on record as "may have been sent".
   const endOrphan = async () => {
-    await post("/result", { rejected: true, reason: "the page was reloaded or reopened during this step, which may have been sent" }).catch(() => undefined);
+    await post("/result", { rejected: true, reason: "ended from a tab that was not running this step (a reload or another tab); it may have been sent" }).catch(() => undefined);
     await refresh();
   };
 
@@ -321,8 +334,9 @@ export function Plan({ info: first }: { info: PlanInfo }) {
     <>The plan expired. Steps that had not started did not run, and nothing else will be sent. For what is left, ask your agent for a new plan.</>
   ) : orphan ? (
     <>
-      Step {orphan.leg} was in progress when this page was reloaded or opened, so your wallet may already have sent it. Check your wallet's activity. This page will not ask
-      your wallet for it again; end the plan here, and your agent reports what landed.
+      Step {orphan.leg} is in progress in another tab, or was when this page was reloaded, so your wallet may already have sent it. Check your wallet's activity. This
+      page will not ask your wallet for it. If another tab is still working on it, use that tab. Otherwise end the plan here (this ends it in every tab), and your agent
+      reports what landed.
     </>
   ) : local?.phase === "wallet" && current ? (
     <>
@@ -418,7 +432,7 @@ export function Plan({ info: first }: { info: PlanInfo }) {
         </p>
       )}
       {/* One live region, always mounted, so each change of its line is announced. */}
-      <p className="oat-status" role="status" aria-live="polite" data-tone={note?.tone} hidden={!statusLine}>
+      <p className="oat-status" role="status" aria-live="polite" data-tone={note?.tone}>
         {statusLine}
       </p>
       {!planOver &&
@@ -439,12 +453,20 @@ export function Plan({ info: first }: { info: PlanInfo }) {
           </>
         ) : local?.phase === "declined" || local?.phase === "unprepared" ? (
           <>
-            <button ref={againRef} className="oat-btn" disabled={busy} onClick={() => void go()}>
-              {local.phase === "declined" ? "Ask my wallet again" : "Try again"}
-            </button>
-            <button className="oat-text" disabled={busy} onClick={() => void stopHere()}>
-              Stop the plan here
-            </button>
+            {local.phase === "unprepared" && lateRef.current ? (
+              <button ref={againRef} className="oat-btn" disabled={busy} onClick={() => void stopHere()}>
+                Stop the plan here
+              </button>
+            ) : (
+              <>
+                <button ref={againRef} className="oat-btn" disabled={busy} onClick={() => void go()}>
+                  {local.phase === "declined" ? "Ask my wallet again" : "Try again"}
+                </button>
+                <button className="oat-text" disabled={busy} onClick={() => void stopHere()}>
+                  Stop the plan here
+                </button>
+              </>
+            )}
           </>
         ) : (
           <>

@@ -73,6 +73,7 @@ li[data-state="done"] .oat-step-mark { background: rgba(31, 122, 74, .12); borde
 .oat-sent { list-style: none; padding: 0; display: grid; gap: 4px; }
 .oat-status[data-tone="ok"] { color: var(--ok); }
 .oat-status[data-tone="bad"] { color: var(--bad); }
+.oat-status:empty { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); } /* an empty live region stays in the accessibility tree but takes no grid row */
 /* A whole plan on one page (plan.tsx): one row per step, in sentence form, with its state. */
 .oat-wrap:has(.oat-legs) { max-width: 600px; }
 .oat-plan-head { display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap; font-size: 13.5px; color: var(--slate); }
