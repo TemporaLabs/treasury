@@ -4,7 +4,7 @@ All notable changes to Agent Treasury are recorded here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versions follow [SemVer](https://semver.org/).
 Pre-1.0, minor versions may change tool names, schemas and behaviour.
 
-## [v0.1.4] - Unreleased
+## [v0.1.4] - 2026-10-14
 
 ### Added
 - **One acknowledgement for a plan of several deposits and withdrawals: `connect plan`** (#155). A
@@ -12,10 +12,11 @@ Pre-1.0, minor versions may change tool names, schemas and behaviour.
   acknowledgement and one yes per vault. `connect plan --legs "deposit <vault> <amount>; withdraw
   <vault> <amount|all>"` builds and checks every leg, then returns one acknowledgement text listing
   each leg, its receiver, the warnings and the disclosures. After the operator's yes, run again with
-  `--ack`, it returns each leg's command; the legs then run one at a time, in order, with the new
+  `--ack`, it returns each leg's command. A plan of EVM legs then runs on one signing page
+  (`connect plan --run`, below); a plan with a Solana leg runs leg by leg with the new
   `--plan <code> --leg <n>` flags on `connect deposit` and `connect withdraw`, each through its own
   signing page and without asking again. A plan holds at most 8 legs and expires after 60 minutes; a
-  leg that does not complete ends it. `connect plan --status` lists the legs and their transactions.
+  leg that does not complete ends it, and a leg whose page never opened sent nothing and can run again. `connect plan --status` lists the legs and their transactions.
   The single `--ack` flow is unchanged. The earn skill uses a plan when a request moves money in
   several vaults through `connect`, and `docs/tools.md` documents the command and its results.
 
@@ -23,8 +24,10 @@ Pre-1.0, minor versions may change tool names, schemas and behaviour.
   every leg (the action, amount, chain, the vault's contract address, where the money goes, and its state) and walks
   them in order; the wallet asks for each transaction as it always does. Every leg is still rebuilt, held to what was
   acknowledged, gate-checked and verified from its receipts, and a leg that does not complete ends the plan. Near the
-  shell's time limit the run returns `in_progress` between legs; the next run serves the same page. EVM legs only for
-  now: a plan with a Solana leg runs leg by leg. The acknowledgement now says the legs run on one signing page.
+  shell's time limit the run returns `in_progress` between legs (no leg starts with less than 5 minutes left); the
+  next run serves the same page. A run records only on its own plan: if another command replaces or clears the plan
+  while the page is open, no further leg starts and the run still reports what landed. EVM legs only for now: a plan
+  with a Solana leg runs leg by leg. The acknowledgement says which: one signing page, or a page per leg.
 
 ### Fixed
 - **On Solana, a landed withdrawal is checked for what it paid, not only that the asset rose** (#154).
@@ -48,14 +51,14 @@ Pre-1.0, minor versions may change tool names, schemas and behaviour.
 
 ### Dependencies
 - Development: source-map-js 1.2.2, used only by the build tooling, fixing GHSA-68fv-2mgg-jv7q. The
-  CLI bundle is unchanged.
+  CLI bundle does not include it.
 - Development: esbuild 0.27.2 for tsup and vitest, through an override, which predates
   GHSA-g7r4-m6w7-qqqr (affected: 0.27.3 up to 0.28.1; tsup accepts only 0.27). tsx keeps its own
   esbuild 0.28.2. The CLI bundle no longer declares `window` and `needed` as class fields on one
   internal error class; the constructor still assigns both, so its instances are unchanged.
 - Development: the connect page's lockfile now resolves ws 8.22.0, uuid 11.1.1 and decode-uri-component
   0.5.0, clearing its `npm audit` findings (GHSA-96hv-2xvq-fx4p, GHSA-58qx-3vcg-4xpx, GHSA-w5hq-g745-h8pq,
-  GHSA-vcc3-ghjq-m6fr). None of the three is in the built page, which is unchanged.
+  GHSA-vcc3-ghjq-m6fr). None of the three is in the built page, so this change does not alter it.
 
 ## [v0.1.3] - 2026-10-13
 

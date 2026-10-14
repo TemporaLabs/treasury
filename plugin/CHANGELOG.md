@@ -4,6 +4,17 @@ All notable changes to the Agent Treasury plugin are recorded here. The format f
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versions follow [SemVer](https://semver.org/).
 The product's own changes are in the repository's [`CHANGELOG.md`](../CHANGELOG.md).
 
+## [v0.1.4] - 2026-10-14
+
+Carries `@temporalabs/treasury` v0.1.4.
+
+### Added
+- **One acknowledgement for several deposits and withdrawals.** When a request moves money in more than one
+  vault through `connect`, the `earn` skill makes a plan (`connect plan --legs`), posts its one acknowledgement,
+  and on the operator's yes runs it: on one signing page for EVM legs (`connect plan --run`, run again while it
+  returns `in_progress`), or leg by leg when the plan has a Solana leg. It does not ask again between legs, and
+  stops at the first leg that does not complete.
+
 ## [v0.1.3] - 2026-10-13
 
 Carries `@temporalabs/treasury` v0.1.3.

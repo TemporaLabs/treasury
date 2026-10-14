@@ -200,7 +200,9 @@ The vault on Solana is a Kamino vault, and the same commands answer for it with 
   and the prepare refuses. `expected` and `simulated` say what the simulation minted or paid.
 - `earn_quote --direction withdraw` reports `receives`, the USDC the account's balance would rise by: each
   withdraw instruction keeps up to 0.001 USDC in the vault (Kamino's charge, which it can change).
-- `earn_balance` reports shares, `usdcValue` and `exit` (a simulated full withdrawal); `entryBasisUsdc`,
+- `earn_balance` reports shares, `usdcValue` and `exit`: a simulated full withdrawal, or, when Kamino would cap
+  it, `measuredAs` `a simulated partial withdrawal` (what a withdrawal of just the shares that burned pays) or
+  `a capped withdrawal` with `exitableNow: unknown`; `entryBasisUsdc`,
   `accruedYieldUsdc` and `scan.wholeHistory` say the history was not read.
 - `earn_status` with `account` returns `OPEN_READY`, `NEEDS_FUNDS` (no USDC, or no SOL for the fee),
   `REVERTED_OTHER` (including a vault that requires a co-signer) or `UNRESOLVED`. With no SOL, `canDeposit` is
@@ -388,7 +390,7 @@ Without `--ack` it returns
 `{ status: "needs_acknowledgement", opened: false, legs: [{ leg, action, vault, chain, amount, receiver }], acknowledgement, ack, expiresAtIso, next_step }`
 
 `acknowledgement` is one fixed text: every leg in order (action, amount, chain, the vault's name,
-symbol and explorer link, the receiver and the wallet prompts to expect), how long the plan lasts and
+symbol and explorer link, the receiver and the wallet prompts to expect), how long the plan lasts, whether its legs run on one signing page or (with a Solana leg) each on its own,
 how to stop it partway, the totals, each warning once with the vaults it covers, and the disclosures
 once. A withdrawal of `all` is named as the whole position read when the plan was made. It ends by
 asking for a yes or a no to exactly those legs.
@@ -410,14 +412,18 @@ to the digest it was acknowledged as, admitted by the same gate and checked from
 does not complete ends the plan. Only the wallet's own answer or a receipt moves a leg: a "no" in the wallet
 sends nothing, and the operator can ask the wallet again or stop the plan there. It returns
 
-`{ status, code, expiresAtIso, opened, reason?, legs: [{ leg, action, vault, chain, amount, status, reason?, txs }], next_step }`
+`{ status, code, expiresAtIso, opened, reason?, legs: [{ leg, action, vault, chain, amount, status, reason?, txs: [{ hash, verified, alsoMoved? }] }], next_step }`
 
 with `status` `completed`, `stopped`, `not_reported` (a leg may have been sent; check before anything else),
-`expired`, or `in_progress`. No leg starts with less than 3 minutes of the run's 9 left: the run then returns
+`expired`, or `in_progress`. A leg's own `status` is `pending`, `running`, `completed`, `stopped` or
+`not_reported`. No leg starts with less than 5 minutes of the run's 9 left: the run then returns
 `in_progress`, and the agent runs `connect plan --run` again at once. The page keeps its secret and port in the
 plan file, so that run serves the same page and the operator's open tab carries on. `--run` serves EVM legs
 only; a plan with a Solana leg runs leg by leg, as below. It refuses a plan not yet acknowledged, and a leg that
-no longer rebuilds to what was acknowledged (another connected account, amount or share balance).
+no longer rebuilds to what was acknowledged (another connected account, amount or share balance). A run records
+only on its own plan: if another command replaces or clears the plan while the page is open (`connect plan
+--legs`, `connect wallet`, `connect disconnect`), or the plan expires, no further leg starts, the run ends at once,
+and it still reports every transaction that landed.
 
 Each leg can also run alone, exactly as its `command` gives it:
 `connect deposit|withdraw --vault <vault> (--amount_usdc <n> | --all --shares_exact <s>) --receiver <r> --plan <code> --leg <n>`.
@@ -432,12 +438,15 @@ A leg is refused, and nothing opens, when:
 - an earlier leg has not completed, or this leg already ran or is running;
 - its calls differ from the acknowledged leg (another amount, vault, chain, receiver or connected account).
 
-A leg whose flow does not end `completed` (`stopped`, `not_reported`, or an error) ends the plan:
-no later leg runs, and what is left needs a new plan and a new yes.
+A leg whose flow does not end `completed` (`stopped`, `not_reported`, or an error once its page has
+opened) ends the plan: no later leg runs, and what is left needs a new plan and a new yes. A leg that
+fails before its page opens (another page is open, a port is taken, a read fails) sent nothing: it
+stays pending, and the same command can run it again.
 
 `connect plan --status`, alone, reads a local file only. It returns `{ status: "none" }`, or
-`{ status, code, expiresAtIso, legs: [{ leg, action, vault, chain, amount, digest, command, status, txs?, reason? }] }`
-with the plan's `status` `needs_acknowledgement` or `acknowledged`. The plan sits in `connect-plan.json`
+`{ status, code, expiresAtIso, legs: [{ leg, action, vault, chain, amount, digest, command, args, status, txs?, reason? }] }`
+with the plan's `status` `needs_acknowledgement` or `acknowledged`, and each leg's `status` as above. A leg
+still `running` when no run is serving the plan means that run never finished: check before anything else. The plan sits in `connect-plan.json`
 beside `connect-ack.json`, owner-readable only; a `connect wallet` that completes a sign-in, or a
 `connect disconnect`, clears it. A single acknowledgement with `--ack` works as before.
 
