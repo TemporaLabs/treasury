@@ -4,6 +4,75 @@ All notable changes to Agent Treasury are recorded here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versions follow [SemVer](https://semver.org/).
 Pre-1.0, minor versions may change tool names, schemas and behaviour.
 
+## [v0.1.4] - 2026-10-14
+
+### Added
+- **One acknowledgement for a plan of several deposits and withdrawals: `connect plan`** (#155). A
+  request that moves money in more than one vault, on one chain or several, used to need one
+  acknowledgement and one yes per vault. `connect plan --legs "deposit <vault> <amount>; withdraw
+  <vault> <amount|all>"` builds and checks every leg, then returns one acknowledgement text listing
+  each leg, its receiver, the warnings and the disclosures. After the operator's yes, run again with
+  `--ack`, it returns each leg's command. The plan then runs on one signing page
+  (`connect plan --run`, below); each leg can also run alone with the new
+  `--plan <code> --leg <n>` flags on `connect deposit` and `connect withdraw`, each through its own
+  signing page and without asking again. A plan holds at most 8 legs and expires after 60 minutes; a
+  leg that does not complete ends it, and a leg whose page never opened sent nothing and can run again. `connect plan --status` lists the legs and their transactions.
+  The single `--ack` flow is unchanged. The earn skill uses a plan when a request moves money in
+  several vaults through `connect`, and `docs/tools.md` documents the command and its results.
+
+- **One signing page for a whole plan: `connect plan --run`** (#174). After the operator's yes, one page lists
+  every leg (the action, amount, chain, the vault's contract address, where the money goes, and its state) and walks
+  them in order; the wallet asks for each transaction as it always does. Every leg is still rebuilt, held to what was
+  acknowledged, gate-checked and verified from its receipts, and a leg that does not complete ends the plan. Near the
+  shell's time limit the run returns `in_progress` between legs (no leg starts with less than 5 minutes left); the
+  next run serves the same page. A run records only on its own plan: if another command replaces or clears the plan
+  while the page is open, no further leg starts and the run still reports what landed.
+
+- **Solana legs on the same plan page** (#184). `connect plan --run` used to refuse a plan with a Solana leg, which
+  then ran one page per leg. Now every leg runs on the one page, in order. A Solana leg is held to its acknowledged
+  intent and gate-checked when it starts, its transaction is built again when the operator presses for it, and what
+  landed is checked as a single Solana run checks it. The page uses the wallet the operator signed in with: a plan
+  with EVM legs connects that wallet's Solana account at Start (the wallet may ask once) and checks it is the
+  connected Solana account, and a wallet that cannot ends the plan there with nothing sent. A plan of only Solana
+  legs needs only the Solana wallet connected. The acknowledgement now always says one signing page.
+
+### Fixed
+- **A page lock left by a crashed run is replaced safely** (#154). Two runs that found the same leftover lock at
+  the same instant could both take it over and both open a page; a run now moves the old file aside and keeps it
+  only if it is the one it judged stale. And a leftover lock whose process ID had been reused (by another program,
+  or by the same process) was read as live until it expired, about ten minutes later; the page's process now
+  touches the file every 5 seconds, and a lock untouched for 30 seconds, and still untouched two beats later, is
+  replaced. A lock written by an earlier version, which does not touch its file, is judged by its process ID as before.
+- **On Solana, a landed withdrawal is checked for what it paid, not only that the asset rose** (#154).
+  The check reads every token account of the vault's asset in the transaction. Any other owner whose
+  balance rose in the same transaction is reported as `extra_transfer` with `alsoMoved`, as on EVM.
+  Balances that do not add up are a `mismatch`. So is paying less than the simulation of the same
+  transaction paid, or, for a withdrawal by amount, less than the acknowledged amount minus the up to
+  0.001 USDC that Kamino keeps per withdraw instruction. A transaction whose token-balance records are
+  missing or cannot be paired is `unverified`, never `matched`. SOL movements are not checked, as on EVM.
+- **On Solana, `earn balance` no longer reports a capped exit as a full one** (#154). Kamino caps a
+  withdrawal leg its reserve cannot pay instead of failing it, so the simulated full withdrawal could
+  succeed while burning only part of the shares. `exit` now applies the same check as quote and
+  prepare, and the note says when a full withdrawal cannot be prepared now. A smaller amount is
+  reported only if a withdrawal of just the shares that did burn simulates without a cap
+  (`measuredAs: "a simulated partial withdrawal"`); otherwise `exitableNow` is `unknown`
+  (`measuredAs: "a capped withdrawal"`).
+- **On Solana, the `setup_required` hint now appears with `NODE_ENV=production` too** (#154). In that
+  mode the Solana client's errors carry a code instead of a sentence, so a rate limit (429) or a
+  failing endpoint (5xx) on the public endpoint reached the operator without the hint naming
+  `TREASURY_RPC_SOLANA`. The error is now described from its code and status, in either mode.
+
+### Dependencies
+- Development: source-map-js 1.2.2, used only by the build tooling, fixing GHSA-68fv-2mgg-jv7q. The
+  CLI bundle does not include it.
+- Development: esbuild 0.27.2 for tsup and vitest, through an override, which predates
+  GHSA-g7r4-m6w7-qqqr (affected: 0.27.3 up to 0.28.1; tsup accepts only 0.27). tsx keeps its own
+  esbuild 0.28.2. The CLI bundle no longer declares `window` and `needed` as class fields on one
+  internal error class; the constructor still assigns both, so its instances are unchanged.
+- Development: the connect page's lockfile now resolves ws 8.22.0, uuid 11.1.1 and decode-uri-component
+  0.5.0, clearing its `npm audit` findings (GHSA-96hv-2xvq-fx4p, GHSA-58qx-3vcg-4xpx, GHSA-w5hq-g745-h8pq,
+  GHSA-vcc3-ghjq-m6fr). None of the three is in the built page, so this change does not alter it.
+
 ## [v0.1.3] - 2026-10-13
 
 ### Added — Ethereum and Monad

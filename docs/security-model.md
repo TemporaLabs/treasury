@@ -127,9 +127,20 @@ open for nothing but the calls that text described.
   exactly those calls. It does not prove the operator read the text or said yes, because the agent
   that receives the code can pass it back; asking is the agent's conduct, which the skill requires,
   and the wallet's own prompt remains the confirmation no agent can give.
+- **A plan** (`connect plan`) is one fixed text for up to 8 deposits and withdrawals, with its own code,
+  valid for 60 minutes and spent leg by leg, in order. Each leg is bound to the same digest its own
+  acknowledgement would be, and is rebuilt, held to that digest and admitted by the gate when it runs; a
+  leg that does not complete ends the plan. `connect plan --run` serves one page for every leg, EVM and Solana: a Solana leg is gate-checked when it
+  starts and its transaction built again at the operator's press, and only a signature for a transaction built for
+  that leg, paid for by the connected Solana account, verifies. Its
+  secret and port are kept in the owner-readable `connect-plan.json` for the plan's life, so a later run
+  serves the same tab; a secret is only ever served on the port it was minted for. A run records only
+  on its own plan, and a completed sign-in or a disconnect deletes the plan.
 - **The operator confirms every call twice:** on the page, which shows the builder's description of the call
   (amount, vault, receiver), the vault, its address and explorer link; and in the wallet's own prompt
-  (the extension, or Privy's dialog, which the page always asks Privy to show).
+  (the extension, or Privy's dialog, which the page always asks Privy to show). On a plan's page every
+  leg is listed this way before the operator starts it; the page then asks the wallet for each call in
+  turn, and the wallet's prompt is that call's confirmation.
 - **What landed is read from the receipt.** A smart-account wallet relays a call inside a batch, so the
   transaction's own `from`/`to` name a relayer. The check is the vault's or token's own event for the
   connected account and the exact amount; any other movement of the asset out of the account in the
@@ -139,7 +150,13 @@ open for nothing but the calls that text described.
   `mismatch`, whatever its balances show. Its token-balance changes must then match: a deposit takes
   the acknowledged amount of the asset, or less by under one share's worth (the program mints whole shares
   and takes only what backs them), and mints shares (more taken is `extra_transfer`), and a withdrawal burns
-  the acknowledged shares, less at most one share unit of rounding per withdraw instruction, and pays the asset. A wallet that rebuilt the
+  the acknowledged shares, less at most one share unit of rounding per withdraw instruction, and pays the asset.
+  What a withdrawal paid is read from every token account of the asset in the transaction: the balances must
+  add up, any other owner whose balance rose is reported in `alsoMoved` as `extra_transfer`, and what was paid
+  (including that) must be at least what the simulation of the same transaction paid and, for a withdrawal by
+  amount, the amount acknowledged less what Kamino keeps per withdraw instruction; less is `mismatch`. A
+  transaction with no token-balance records, or records that cannot be paired, is `unverified`. SOL the
+  transaction moved is not checked, just as ETH is not on EVM. A wallet that rebuilt the
   transaction with a newer blockhash would be reported as `mismatch` rather than matched. The next call
   is offered only after the previous one is confirmed this way.
 - **No WalletConnect code ships.** The page bundle stubs out every `@walletconnect` / `@reown` module
