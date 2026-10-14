@@ -16,7 +16,14 @@ import { fileURLToPath } from "node:url";
 const WIN = process.platform === "win32";
 const ROOT = fileURLToPath(new URL("../..", import.meta.url));
 const MAX_MS = Number(process.env.CLI_EXIT_MAX_MS ?? 20000);
-const BASE_RPC = "https://mainnet.base.org";
+// The job's own endpoints when the repository provides them (CI_RPC_BASE, CI_RPC_SOLANA), so six
+// matrix legs do not share the public endpoints' rate limits; the public endpoints otherwise, which is
+// what a fork's pull request gets, since it is not given the repository's secrets.
+const BASE_RPC = process.env.CI_RPC_BASE || "https://mainnet.base.org";
+const RPC_ENV = {
+  ...(process.env.CI_RPC_BASE ? { TREASURY_RPC_BASE: process.env.CI_RPC_BASE } : {}),
+  ...(process.env.CI_RPC_SOLANA ? { TREASURY_RPC_SOLANA: process.env.CI_RPC_SOLANA } : {}),
+};
 const EVM_ACCOUNT = "0xBBBBBbbBBb9cC5e90e3b3Af64bdAF62C37EEFFCb"; // a Base address that holds USDC; read only
 const SOLANA_ACCOUNT = "4Nd1mBQtrMJVYVfKf2PJy9NZUZdTAsp7D4xWLs4gDB4T"; // an unfunded Solana address; read only
 const VAULT_2B = "0x91BcEbA5feCB9E92d80F1845B55cC56621E9352F";
@@ -131,7 +138,7 @@ function call(l, args, env) {
     // PowerShell takes one command string: the npm shim, each argument single-quoted, then its exit code.
     const argv = l.ps1 ? [...l.pre, `& '${l.ps1}' ${args.map((a) => `'${a}'`).join(" ")}; exit $LASTEXITCODE`] : [...l.pre, ...args];
     const child = spawn(l.cmd, l.shell ? argv.map((a) => (/[\s"]/.test(a) ? `"${a}"` : a)) : argv, {
-      env: { ...process.env, ...env },
+      env: { ...process.env, ...RPC_ENV, ...env },
       shell: l.shell,
       windowsHide: true,
     });

@@ -379,9 +379,17 @@ jobs:
           npm pack --ignore-scripts --pack-destination "$RUNNER_TEMP"
           npm install --prefix "$RUNNER_TEMP/cur" --ignore-scripts --no-audit --no-fund "$RUNNER_TEMP"/temporalabs-treasury-*.tgz
           npm install --prefix "$RUNNER_TEMP/v012" --ignore-scripts --no-audit --no-fund @temporalabs/treasury@0.1.2
+      # The endpoint URLs are secrets; a pull request from a fork gets neither, and the script then
+      # uses the public endpoints. Each URL's token is masked on its own too, in case anything prints
+      # the token without the rest of the URL.
       - name: the built CLI exits 0 with a chain-read answer, and 1 on a refused argument
         shell: bash
-        run: CLI_EXIT_PREFIX="$RUNNER_TEMP/cur" node .github/scripts/cli-exit.mjs "--reference=v0.1.2=$RUNNER_TEMP/v012"
+        env:
+          CI_RPC_BASE: ${{ secrets.CI_RPC_BASE }}
+          CI_RPC_SOLANA: ${{ secrets.CI_RPC_SOLANA }}
+        run: |
+          for u in "$CI_RPC_BASE" "$CI_RPC_SOLANA"; do t="${u%/}"; t="${t##*/}"; if [ -n "$t" ]; then echo "::add-mask::$t"; fi; done
+          CLI_EXIT_PREFIX="$RUNNER_TEMP/cur" node .github/scripts/cli-exit.mjs "--reference=v0.1.2=$RUNNER_TEMP/v012"
 
   # ── Bundle provenance ──────────────────────────────────────────────────────────────────────────
   # This job attests the COMMITTED root dist/treasury.mjs. A marketplace install runs
