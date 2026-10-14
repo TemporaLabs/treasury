@@ -1,8 +1,14 @@
 /**
- * A whole plan on one page (`connect plan --run`, #174). Every leg is a row: what it does, on which chain, where
+ * A whole plan on one page (`connect plan --run`, #174, #184). Every leg is a row: what it does, on which chain, where
  * the money goes, and how far it got. One button starts the plan; from then on the page walks the legs in order,
- * switching the wallet to each leg's chain, and the wallet asks for each transaction as it always does (a deposit:
- * approve, then deposit). The local process admits and checks every transaction exactly as for a single leg.
+ * switching the wallet to each EVM leg's chain, and the wallet asks for each transaction as it always does (a deposit:
+ * approve, then deposit; a Solana leg: one transaction, built when its turn comes). The local process admits and
+ * checks every transaction exactly as for a single leg.
+ *
+ * A Solana leg uses the wallet the operator signed in with, never another: on a plan that also has EVM legs, the
+ * Solana account of that same wallet (the Wallet Standard wallet of the same name, or the Privy login's own Solana
+ * wallet), connected and checked against the connected Solana account when the plan starts, before any leg runs. A
+ * wallet that cannot, ends the plan there with nothing sent.
  *
  * What moves a leg: the wallet's own answer (a "no" sends nothing), or the process's verdict on a receipt. The page
  * never ends a leg while the wallet may still be asking. Between runs of the command (the shell's time limit) the
@@ -14,14 +20,17 @@
  */
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import { useLogin, usePrivy, useWallets } from "@privy-io/react-auth";
-import { secret, post, reject, errText, rejected, Page, WalletMark, CheckMark, ButtonIcon, type WalletType } from "./shared";
+import { useSignAndSendTransaction, useStandardWallets, useWallets as useSolanaWallets, type ConnectedStandardSolanaWallet, type SolanaStandardWallet } from "@privy-io/react-auth/solana";
+import { secret, post, reject, errText, rejected, base58, fromBase64, Page, WalletMark, CheckMark, ButtonIcon, type WalletType } from "./shared";
 
 type PlanCall = { step: number; of: number; kind: "approve" | "deposit" | "withdraw" | "redeem"; description: string; to: `0x${string}`; data: `0x${string}`; value: string };
 type LegView = {
   leg: number;
   action: "deposit" | "withdraw";
   amount: string;
-  chainId: number;
+  family: "evm" | "solana";
+  /** `null` for a Solana leg, which has no chain id. */
+  chainId: number | null;
   chainName: string;
   vault: { symbol: string; name: string; address: string; asset: string; assetAddress: string; links: { explorer: string } };
   receiver?: string;
@@ -33,14 +42,28 @@ type LegView = {
 export type PlanInfo = {
   mode: "plan";
   appId: string;
-  account: string;
-  walletType: WalletType;
+  /** The connected EVM account, when the plan has an EVM leg. */
+  account?: string;
+  walletType?: WalletType;
+  /** The connected Solana account, when the plan has a Solana leg. */
+  solanaAccount?: string;
+  solanaWalletType?: WalletType;
   code: string;
   expiresAtIso: string;
   legMinMs: number;
   msLeft: number;
   legs: LegView[];
-  current: null | { leg: number; next: number; chainId: number; calls: PlanCall[] };
+  current: null | { leg: number; next: number; chain?: undefined; chainId: number; calls: PlanCall[] } | { leg: number; next: number; chain: "solana" };
+};
+
+/** What a plan with a Solana leg adds to the page: the Solana account, connected and checked, and its wallet's prompt. */
+type SolanaSide = {
+  /** A Solana-only plan: the Privy login's wallet for the connected Solana account is on this page. */
+  signedIn: boolean;
+  /** Connects the Solana account the Solana legs pay, if it is not yet, and checks it; says why not when it cannot. */
+  ensure: () => Promise<string | undefined>;
+  /** Asks the wallet to sign and send one transaction; resolves with its base58 signature. */
+  send: (wire: string) => Promise<string>;
 };
 
 /** What the operator sees for a leg. */
@@ -85,7 +108,8 @@ function legState(l: LegView, local: { leg: number; phase: Phase } | null, planO
 }
 
 const short = (a: string) => `${a.slice(0, 6)}…${a.slice(-4)}`;
-const confirmations = (l: LegView) => (l.action === "deposit" ? "2 confirmations in your wallet: approve, then deposit" : "1 confirmation in your wallet");
+const isSolana = (l: LegView) => l.family === "solana";
+const confirmations = (l: LegView) => (l.action === "deposit" && !isSolana(l) ? "2 confirmations in your wallet: approve, then deposit" : "1 confirmation in your wallet");
 const mmss = (ms: number) => `${String(Math.floor(ms / 60_000)).padStart(2, "0")}:${String(Math.floor((ms % 60_000) / 1000)).padStart(2, "0")}`;
 
 async function readInfo(): Promise<PlanInfo | "gone"> {
@@ -99,7 +123,79 @@ async function readInfo(): Promise<PlanInfo | "gone"> {
   }
 }
 
-export function Plan({ info: first }: { info: PlanInfo }) {
+/** A plan of EVM legs only renders exactly as before; one with a Solana leg also carries the Solana side. */
+export function Plan({ info }: { info: PlanInfo }) {
+  return info.legs.some(isSolana) ? <PlanWithSolana info={info} /> : <PlanPage info={info} />;
+}
+
+/**
+ * The Solana side, on a plan with a Solana leg. A plan of only Solana legs signs in as a single Solana confirmation does,
+ * and uses the login's wallet for the connected Solana account. A plan that also has EVM legs signs in with the EVM
+ * wallet, and uses that same wallet's Solana account: the Wallet Standard wallet whose name is the EVM wallet's, or the
+ * Privy login's own Solana wallet. The name only picks which wallet to ask; the account it gives must be the connected
+ * Solana account. There is no fallback to any other wallet.
+ */
+function PlanWithSolana({ info }: { info: PlanInfo }) {
+  const { wallets } = useWallets();
+  const { wallets: solanaWallets } = useSolanaWallets();
+  const { wallets: standard } = useStandardWallets();
+  const { signAndSendTransaction } = useSignAndSendTransaction();
+  const target = useRef<{ kind: "privy"; wallet: ConnectedStandardSolanaWallet } | { kind: "standard"; wallet: SolanaStandardWallet; account: SolanaStandardWallet["accounts"][number] } | null>(null);
+  const expected = info.solanaAccount ?? "";
+  const privyWallet = solanaWallets.find((w) => w.address === expected);
+  const evmLegs = info.legs.some((l) => !isSolana(l));
+
+  const ensure = useCallback(async (): Promise<string | undefined> => {
+    if (privyWallet) {
+      target.current = { kind: "privy", wallet: privyWallet };
+      return undefined;
+    }
+    if (target.current?.kind === "standard") return undefined;
+    if (!evmLegs) return `the connected Solana wallet ${short(expected)} is not available on this page`;
+    const evm = wallets.find((w) => w.address.toLowerCase() === (info.account ?? "").toLowerCase());
+    if (!evm) return "the connected wallet is not available on this page";
+    if (info.walletType === "embedded") return `your Privy login has no Solana wallet ${short(expected)} on this page`;
+    const name = evm.meta?.name;
+    const std = name ? standard.find((w) => w.name === name && w.features["solana:signAndSendTransaction"]) : undefined;
+    if (!name || !std) return `${name ?? "The wallet you signed in with"} shows no Solana account on this page, and the plan's Solana legs need its Solana account ${short(expected)}`;
+    let accounts = std.accounts;
+    if (!accounts.some((a) => a.address === expected)) {
+      try {
+        const connect = std.features["standard:connect"];
+        if (!connect) return `${name} cannot connect a Solana account on this page`;
+        accounts = (await connect.connect()).accounts;
+      } catch (e) {
+        return rejected(e) ? `connecting ${name}'s Solana account was declined in the wallet` : `${name} could not connect its Solana account: ${errText(e)}`;
+      }
+    }
+    const account = accounts.find((a) => a.address === expected);
+    if (!account) {
+      const got = accounts[0]?.address;
+      return `${name}'s Solana account${got ? ` ${short(got)}` : ""} is not the connected Solana account ${short(expected)}`;
+    }
+    target.current = { kind: "standard", wallet: std, account };
+    return undefined;
+  }, [privyWallet, evmLegs, expected, wallets, info.account, info.walletType, standard]);
+
+  const send = useCallback(
+    async (wire: string): Promise<string> => {
+      const t = target.current;
+      if (!t) throw new Error("the Solana wallet is not connected on this page");
+      const transaction = fromBase64(wire);
+      if (t.kind === "privy") return base58((await signAndSendTransaction({ transaction, wallet: t.wallet, chain: "solana:mainnet" })).signature);
+      const feature = t.wallet.features["solana:signAndSendTransaction"];
+      if (!feature) throw new Error(`${t.wallet.name} cannot send a Solana transaction`);
+      const [out] = await feature.signAndSendTransaction({ account: t.account, transaction, chain: "solana:mainnet" });
+      if (!out) throw new Error(`${t.wallet.name} returned no signature`);
+      return base58(out.signature);
+    },
+    [signAndSendTransaction],
+  );
+
+  return <PlanPage info={info} solana={{ signedIn: Boolean(privyWallet), ensure, send }} />;
+}
+
+function PlanPage({ info: first, solana }: { info: PlanInfo; solana?: SolanaSide }) {
   const { ready, authenticated, logout } = usePrivy();
   const { wallets } = useWallets();
   const { login } = useLogin();
@@ -124,7 +220,8 @@ export function Plan({ info: first }: { info: PlanInfo }) {
   const againRef = useRef<HTMLButtonElement>(null);
   const stopAfterRef = useRef(false);
   stopAfterRef.current = stopAfter;
-  const wallet = wallets.find((w) => w.address.toLowerCase() === info.account.toLowerCase());
+  const evmLegs = first.legs.some((l) => !isSolana(l));
+  const wallet = wallets.find((w) => w.address.toLowerCase() === (info.account ?? "").toLowerCase());
 
   useEffect(() => {
     const t = setInterval(() => setNow(Date.now()), 1000);
@@ -162,6 +259,35 @@ export function Plan({ info: first }: { info: PlanInfo }) {
   const nextLeg = legs.find((l) => l.status === "pending");
   const landed = legs.filter((l) => l.status === "completed").length;
 
+  /** What a failure to send means, and what the page does next: shared by an EVM call and a Solana transaction. */
+  const failed = useCallback(async (leg: LegView, e: unknown, stage: "prepare" | "estimate" | "send", hash: string | undefined, index: number): Promise<never> => {
+    const text = errText(e);
+    if (hash) {
+      // The wallet returned a hash: the transaction is out, whatever failed after.
+      await reject(`sent, but the page could not finish checking it: ${text}`, { hash, index });
+      throw Object.assign(new Error(`Step ${leg.leg} was sent but not confirmed here. Look it up before doing anything else.`), { ended: true });
+    }
+    if (rejected(e)) {
+      setLocal({ leg: leg.leg, phase: "declined" });
+      throw Object.assign(new Error("You declined it in your wallet. Nothing was sent."), { idle: true });
+    }
+    if (stage === "send") {
+      await reject(`the wallet returned an error without a transaction hash; it may or may not have been sent: ${text}`);
+      throw Object.assign(new Error(`Your wallet returned an error without a transaction hash, so this page cannot tell whether step ${leg.leg} was sent. Check your wallet's activity.`), { ended: true });
+    }
+    // Before the wallet was asked: nothing was sent.
+    if ((e as { late?: boolean }).late) {
+      lateRef.current = true;
+      setLocal({ leg: leg.leg, phase: "unprepared" });
+      throw Object.assign(
+        new Error(`Less than a minute is left before your agent's run pauses, too little to confirm step ${leg.leg} in your wallet. Nothing more was sent. Stop the plan here; your agent reports what landed and can make a new plan for the rest.`),
+        { idle: true, why: text },
+      );
+    }
+    setLocal({ leg: leg.leg, phase: "unprepared" });
+    throw Object.assign(new Error(`This page could not prepare step ${leg.leg}: ${text}. Nothing was sent.`), { idle: true, why: text });
+  }, []);
+
   /** Sends one call of the current leg; resolves with the process's reply, or undefined once the plan stopped here. */
   const sendCall = useCallback(
     async (leg: LegView, call: PlanCall, index: number, chainId: number): Promise<Record<string, unknown> | undefined> => {
@@ -194,34 +320,45 @@ export function Plan({ info: first }: { info: PlanInfo }) {
         if (!r.ok) throw new Error(r.reason ?? "refused");
         return r;
       } catch (e) {
-        const text = errText(e);
-        if (hash) {
-          // The wallet returned a hash: the transaction is out, whatever failed after.
-          await reject(`sent, but the page could not finish checking it: ${text}`, { hash, index });
-          throw Object.assign(new Error(`Step ${leg.leg} was sent but not confirmed here. Look it up before doing anything else.`), { ended: true });
-        }
-        if (rejected(e)) {
-          setLocal({ leg: leg.leg, phase: "declined" });
-          throw Object.assign(new Error("You declined it in your wallet. Nothing was sent."), { idle: true });
-        }
-        if (stage === "send") {
-          await reject(`the wallet returned an error without a transaction hash; it may or may not have been sent: ${text}`);
-          throw Object.assign(new Error(`Your wallet returned an error without a transaction hash, so this page cannot tell whether step ${leg.leg} was sent. Check your wallet's activity.`), { ended: true });
-        }
-        // Before the wallet was asked: nothing was sent.
-        if ((e as { late?: boolean }).late) {
-          lateRef.current = true;
-          setLocal({ leg: leg.leg, phase: "unprepared" });
-          throw Object.assign(
-            new Error(`Less than a minute is left before your agent's run pauses, too little to confirm step ${leg.leg} in your wallet. Nothing more was sent. Stop the plan here; your agent reports what landed and can make a new plan for the rest.`),
-            { idle: true, why: text },
-          );
-        }
-        setLocal({ leg: leg.leg, phase: "unprepared" });
-        throw Object.assign(new Error(`This page could not prepare step ${leg.leg}: ${text}. Nothing was sent.`), { idle: true, why: text });
+        return failed(leg, e, stage, hash, index);
       }
     },
-    [wallet],
+    [wallet, failed],
+  );
+
+  /**
+   * A Solana leg's one transaction: built by the process when it is asked for here (a blockhash lasts about a minute),
+   * then signed and sent by the wallet. Resolves with the process's verdict, or undefined once the plan stopped here.
+   */
+  const sendSolana = useCallback(
+    async (leg: LegView): Promise<Record<string, unknown> | undefined> => {
+      let signature: string | undefined;
+      let stage: "prepare" | "send" = "prepare";
+      try {
+        if (!solana) throw new Error("this page has no Solana wallet");
+        setLocal({ leg: leg.leg, phase: "wallet" });
+        const live = await readInfo();
+        if (live === "gone") throw new Error("the page lost its connection to your agent");
+        if (live.current?.leg !== leg.leg || live.current.next !== 0) {
+          setNote({ text: "This step was already handled, perhaps in another tab. Close this tab and use the other one.", tone: "bad" });
+          return undefined;
+        }
+        if (live.msLeft < 60_000) {
+          throw Object.assign(new Error("less than a minute is left before your agent's run pauses, too little to confirm in your wallet"), { late: true });
+        }
+        const built = await post("/result", { build: true });
+        if (!built.ok || typeof built["wire"] !== "string") throw new Error(built.reason ?? "the transaction could not be prepared");
+        stage = "send";
+        signature = await solana.send(built["wire"]);
+        setLocal({ leg: leg.leg, phase: "sent" });
+        const r = await post("/result", { hash: signature });
+        if (!r.ok) throw new Error(r.reason ?? "refused");
+        return r;
+      } catch (e) {
+        return failed(leg, e, stage, signature, 0);
+      }
+    },
+    [solana, failed],
   );
 
   /** Runs legs from the next pending one until the plan is done, stopped, paused, or the operator said stop. */
@@ -245,6 +382,23 @@ export function Plan({ info: first }: { info: PlanInfo }) {
             await refresh();
             return setNote({ text: "Stopped. Nothing else will be sent." });
           }
+          // Before every leg while a Solana leg is still to run: the Solana account, connected and checked. It can fail
+          // after earlier steps sent transactions (a reload forgets the wallet it found, or the wallet drops it); then
+          // only this step and the ones after it are stopped, and the note says so.
+          if (solana && cur.legs.some((l) => l.status === "pending" && isSolana(l))) {
+            const why = await solana.ensure();
+            if (why) {
+              const first = !cur.legs.some((l) => l.txs.length > 0);
+              await post("/result", { rejected: true, unprepared: true, reason: `the Solana wallet check before ${first ? "the plan started" : `step ${leg.leg}`}: ${why}` }).catch(() => undefined);
+              await refresh();
+              return setNote({
+                text: first
+                  ? `The plan was stopped before any step ran, and nothing was sent: ${why}.`
+                  : `The plan was stopped before step ${leg.leg}, and nothing more was sent: ${why}. The steps before it are as shown.`,
+                tone: "bad",
+              });
+            }
+          }
           const s = await post("/result", { start: leg.leg });
           if (!s.ok) return setNote({ text: s.reason ?? "This step could not start.", tone: "bad" });
           if (s["paused"]) return (resumeOnReturn.current = true), setAway(true);
@@ -252,11 +406,16 @@ export function Plan({ info: first }: { info: PlanInfo }) {
           cur = await refresh();
           if (!cur?.current) return;
         }
-        const leg = cur.legs.find((l) => l.leg === cur!.current!.leg)!;
+        const step = cur.current!;
+        const leg = cur.legs.find((l) => l.leg === step.leg)!;
         let r: Record<string, unknown> | undefined;
-        for (let i = cur.current!.next; i < cur.current!.calls.length; i++) {
-          r = await sendCall(leg, cur.current!.calls[i]!, i, cur.current!.chainId);
-          if (!r || r["stop"]) break;
+        if (step.chain === "solana") {
+          r = await sendSolana(leg);
+        } else {
+          for (let i = step.next; i < step.calls.length; i++) {
+            r = await sendCall(leg, step.calls[i]!, i, step.chainId);
+            if (!r || r["stop"]) break;
+          }
         }
         setLocal(null);
         owned.current = null;
@@ -277,7 +436,7 @@ export function Plan({ info: first }: { info: PlanInfo }) {
       running.current = false;
       setBusy(false);
     }
-  }, [refresh, sendCall]);
+  }, [refresh, sendCall, sendSolana, solana]);
 
   // Nothing is outstanding in the wallet for this leg: the operator ends the plan here, and the leg sent nothing.
   const stopHere = async () => {
@@ -363,19 +522,33 @@ export function Plan({ info: first }: { info: PlanInfo }) {
     </>
   );
 
-  const signInNeeded = ready && (!authenticated || !wallet);
+  // The sign-in a plan needs: the EVM wallet when it has an EVM leg (its Solana account is connected at Start), else the
+  // login's Solana wallet.
+  const signInNeeded = ready && (!authenticated || (evmLegs ? !wallet : !solana?.signedIn));
   const progress = runningLeg && !orphan ? `Step ${runningLeg.leg} of ${legs.length}: ${LABEL[legState(runningLeg, local, planOver)]}.` : "";
   const statusLine =
     away && !planOver
       ? `Waiting for your agent to continue. This page carries on by itself once it does; keep it open.${awayPolls >= 20 ? " If your agent opened a new page, use that one." : ""}`
       : (note?.text ?? progress);
+  const ownAccount = (l: LegView) => (isSolana(l) ? info.solanaAccount : info.account);
+  const signInWith = evmLegs ? info.account : info.solanaAccount;
 
   return (
     <Page mark={allDone ? <CheckMark /> : <WalletMark />} title={title} lede={lede}>
       <div className="oat-plan-head">
         <span className="oat-plan-wallet">
           <span className="oat-dot" aria-hidden="true" />
-          {info.walletType === "embedded" ? "Privy wallet" : "Your wallet"} <span className="oat-mono">{short(info.account)}</span>
+          {info.account && (
+            <>
+              {info.walletType === "embedded" ? "Privy wallet" : "Your wallet"} <span className="oat-mono">{short(info.account)}</span>
+            </>
+          )}
+          {info.account && info.solanaAccount && " · "}
+          {info.solanaAccount && (
+            <>
+              {info.account ? "Solana" : info.solanaWalletType === "embedded" ? "Privy wallet (Solana)" : "Your wallet (Solana)"} <span className="oat-mono">{short(info.solanaAccount)}</span>
+            </>
+          )}
         </span>
         {!planOver && <span className="oat-plan-timer">{msLeft < 10 * 60_000 ? `Plan expires in ${mmss(msLeft)}` : `expires in ${mmss(msLeft)}`}</span>}
       </div>
@@ -383,6 +556,9 @@ export function Plan({ info: first }: { info: PlanInfo }) {
         {legs.map((l) => {
           const st = orphan?.leg === l.leg ? "maybe" : legState(l, local, planOver);
           const lands = l.action === "deposit" ? "Shares go to" : "Funds go to";
+          const own = ownAccount(l) ?? "";
+          const to = l.receiver ?? own;
+          const mine = isSolana(l) ? to === own : to.toLowerCase() === own.toLowerCase();
           return (
             <li key={l.leg} className="oat-leg" data-state={st}>
               <div className="oat-leg-row">
@@ -413,23 +589,23 @@ export function Plan({ info: first }: { info: PlanInfo }) {
               </div>
               {open[l.leg] && (
                 <dl className="oat-dl oat-leg-detail">
-                  <dt>Vault contract</dt>
+                  <dt>Vault {isSolana(l) ? "account" : "contract"}</dt>
                   <dd className="oat-mono">{l.vault.address}</dd>
                   {l.action === "deposit" && (
                     <>
-                      <dt>{l.vault.asset} token</dt>
+                      <dt>
+                        {l.vault.asset} {isSolana(l) ? "mint" : "token"}
+                      </dt>
                       <dd className="oat-mono">{l.vault.assetAddress}</dd>
                     </>
                   )}
                   <dt>Network</dt>
-                  <dd>
-                    {l.chainName} (chain {l.chainId})
-                  </dd>
+                  <dd>{l.chainId === null ? `${l.chainName} (mainnet-beta)` : `${l.chainName} (chain ${l.chainId})`}</dd>
                   <dt>{lands}</dt>
                   <dd>
-                    <span className="oat-mono">{l.receiver ?? info.account}</span>
+                    <span className="oat-mono">{to}</span>
                     <br />
-                    {(l.receiver ?? info.account).toLowerCase() === info.account.toLowerCase() ? "✓ your connected wallet" : "NOT your connected wallet: do not confirm"}
+                    {mine ? "✓ your connected wallet" : "NOT your connected wallet: do not confirm"}
                   </dd>
                 </dl>
               )}
@@ -442,6 +618,7 @@ export function Plan({ info: first }: { info: PlanInfo }) {
           Every step runs in order; your wallet asks you to confirm each transaction. If a step fails or you reject it in your wallet, the steps after it do not run. The
           plan expires {new Date(deadlineAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}; a step not started by then does not run. If you close this page,
           a step already in your wallet can still go through if you confirm it there, and no further steps start.
+          {evmLegs && solana && " At Start, your wallet may ask you to connect its Solana account to this page: the Solana steps use that account, and no other wallet."}
         </p>
       )}
       {/* One live region, always mounted, so each change of its line is announced. */}
@@ -462,7 +639,7 @@ export function Plan({ info: first }: { info: PlanInfo }) {
               <ButtonIcon />
               Connect
             </button>
-            <p className="oat-fine">Connect with the same wallet you signed in with before ({short(info.account)}).</p>
+            <p className="oat-fine">Connect with the same wallet you signed in with before ({short(signInWith ?? "")}).</p>
           </>
         ) : local?.phase === "declined" || local?.phase === "unprepared" ? (
           <>

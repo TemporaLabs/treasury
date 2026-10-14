@@ -9,6 +9,8 @@ import { clearSession, pendingAckPath, planPath, readPlan, writeSession, writeSo
 import { PLAN_MAX_LEGS, PLAN_TTL_MS, operatorWarning } from "../src/connect/ack.js";
 import { DISCLOSURES } from "../src/disclosures.js";
 import { defaultVault, listSolanaVaults, listVaults } from "../src/registry.js";
+import { getBase58Decoder } from "@solana/kit";
+import { associatedTokenAccount } from "../src/solana/kvault.js";
 
 /**
  * `connect plan` (#155): one acknowledgement for several deposits and withdrawals, then each leg run in order
@@ -176,16 +178,15 @@ describe("connect plan without --ack: one acknowledgement for every leg, and not
     expect(JSON.parse(readFileSync(pendingAckPath(), "utf8")).code).toBe(single["ack"]);
   });
 
-  it("the acknowledgement says how the plan runs: one page for EVM legs, a page per leg once a Solana leg is in it", async () => {
+  it("the acknowledgement says the plan runs on one signing page, with or without a Solana leg (#184)", async () => {
     const evm = String((await plan({ legs: `deposit ${vault.symbol} 1; withdraw ${other.symbol} all` }))["acknowledgement"]);
-    expect(evm).toMatch(/run in this order on one signing page/);
-    expect(evm).toMatch(/stop the plan on the signing page/);
-    expect(evm).toMatch(/want the signing page opened for exactly these 2 legs/);
     const mixed = String((await plan({ legs: LEGS }))["acknowledgement"]);
-    expect(mixed).toMatch(/run in this order each on its own signing page/);
-    expect(mixed).toMatch(/stop the plan on that leg's signing page/);
-    expect(mixed).toMatch(/want the signing pages opened for exactly these 3 legs/);
-    expect(mixed).not.toMatch(/one signing page/);
+    for (const [text, n] of [[evm, 2], [mixed, 3]] as const) {
+      expect(text).toMatch(/run in this order on one signing page/);
+      expect(text).toMatch(/stop the plan on the signing page/);
+      expect(text).toMatch(new RegExp(`want the signing page opened for exactly these ${n} legs`));
+      expect(text).not.toMatch(/its own signing page|signing pages/);
+    }
   });
 
   it("a plan on one vault keeps the fee sentence as a single acknowledgement words it", async () => {
@@ -244,9 +245,9 @@ describe("connect plan --ack: records the operator's yes, opens nothing", () => 
       `connect deposit --vault ${sol.symbol} --amount_usdc 2.5 --receiver ${SOL_ACCOUNT} --plan ${ack} --leg 3`,
     ]);
     expect(String(r["next_step"])).toContain("do not ask again between legs");
-    // This plan has a Solana leg, so its legs run one at a time; `--run` serves EVM legs only.
-    expect(String(r["next_step"])).toContain(`Start with leg 1: ${legs[0]!.command}`);
-    expect(String(r["next_step"])).not.toContain("--run");
+    // A Solana leg runs on the same page as the EVM legs (#184): the plan points at `--run`.
+    expect(String(r["next_step"])).toContain("Run `connect plan --run`");
+    expect(String(r["next_step"])).not.toContain("Start with leg 1");
     expect(readPlan()!.acknowledged).toBe(true);
   });
 
@@ -682,12 +683,9 @@ describe("connect plan --run: one page for every leg (#174)", () => {
     expect((await run2)["status"]).toBe("stopped");
   });
 
-  it("refuses before the plan is acknowledged, a plan with a Solana leg, and a leg that no longer rebuilds to what was acknowledged", async () => {
+  it("refuses before the plan is acknowledged, and a leg that no longer rebuilds to what was acknowledged", async () => {
     await plan({ legs: EVM_LEGS });
     await expect(plan({ run: true })).rejects.toThrow(/has not been acknowledged/);
-    const { ack } = await plan({ legs: LEGS });
-    await plan({ legs: LEGS, ack });
-    await expect(plan({ run: true })).rejects.toThrow(/EVM legs only/);
     await acked();
     const p = readPlan()!;
     writeFileSync(planPath(), JSON.stringify({ ...p, legs: p.legs.map((l, i) => (i === 1 ? { ...l, args: { ...l.args!, amount_usdc: "9" } } : l)) }));
@@ -898,5 +896,407 @@ describe("connect plan --run: one page for every leg (#174)", () => {
 
   it("takes no other flag", async () => {
     await expect(plan({ run: true, status: true })).rejects.toThrow(/--run takes no other flag/);
+  });
+});
+
+describe("connect plan --run with Solana legs: the same page, each Solana leg held to its own run's checks (#184)", () => {
+  const snapshot = JSON.parse(readFileSync(new URL("./fixtures/solana/vault-snapshot.json", import.meta.url), "utf8")) as { slot: number; accounts: Record<string, { data: string }> };
+  const BLOCKHASH = "4sGjMW1sUnHzSxGspuhpqLDx6wiyjNtZAMdL4VZHirAn";
+  /** The stub chain hands out a new blockhash on every read, as a real one does once a slot passes, so each build of
+   * each leg is told apart; `sameBlockhash` makes every read return BLOCKHASH instead (two builds in one slot). */
+  let reads: number;
+  let sameBlockhash: boolean;
+  let lastBlockhash: string;
+  const SIG = getBase58Decoder().decode(new Uint8Array(64).fill(7));
+  const [h1, h2, h3] = ([1, 2, 3] as const).map((n) => `0x${String(n).padStart(2, "0").repeat(32)}` as Hex);
+  const bal = (accountIndex: number, owner: string, mint: string, amount: bigint) => ({ accountIndex, owner, mint, uiTokenAmount: { amount: amount.toString() } });
+
+  /** What the stub chain does this test: how many simulations pass, what a withdrawal's simulation burns, and what landed. */
+  let sim: { failAfter: number; builds: number; burn?: bigint };
+  let landed: { err?: unknown; blockhash?: string; pre: ReturnType<typeof bal>[]; post: ReturnType<typeof bal>[] };
+  let sharesAta: string;
+  let tokenAta: string;
+
+  const solanaRpc = () =>
+    ({
+      getAccountInfo: (a: string) => ({
+        send: async () => ({ value: snapshot.accounts[String(a)] ? { data: [snapshot.accounts[String(a)]!.data, "base64"] } : { data: tokenAccount(String(a) === sharesAta ? solShares : 0n) }, context: { slot: BigInt(snapshot.slot) } }),
+      }),
+      getMultipleAccounts: (ks: string[]) => ({ send: async () => ({ value: ks.map((k) => ({ data: [snapshot.accounts[String(k)]!.data, "base64"] })), context: { slot: BigInt(snapshot.slot) } }) }),
+      getLatestBlockhash: () => ({
+        send: async () => {
+          lastBlockhash = sameBlockhash ? BLOCKHASH : getBase58Decoder().decode(new Uint8Array(32).fill(++reads));
+          return { value: { blockhash: lastBlockhash, lastValidBlockHeight: 1150n } };
+        },
+      }),
+      getBlockHeight: () => ({ send: async () => 1000n }),
+      getBalance: () => ({ send: async () => ({ value: 10_000_000n }) }),
+      simulateTransaction: (_tx: string, cfg?: { accounts?: { addresses: string[] } }) => ({
+        send: async () => {
+          sim.builds++;
+          const err = sim.builds > sim.failAfter ? { InstructionError: [1, { Custom: 6001 }] } : null;
+          const accounts = (cfg?.accounts?.addresses ?? []).map((k) => ({ data: tokenAccount(k === sharesAta ? solShares - (sim.burn ?? 0n) : k === tokenAta ? (sim.burn ?? 0n) : 0n) }));
+          return { context: { slot: BigInt(snapshot.slot) }, value: { err, logs: err ? ["Program log: Error Message: the vault refused it"] : [], unitsConsumed: 100_000n, accounts } };
+        },
+      }),
+      getSignatureStatuses: () => ({ send: async () => ({ value: [landed.err ? { err: landed.err, confirmationStatus: "confirmed" } : { confirmationStatus: "confirmed" }] }) }),
+      getTransaction: () => ({
+        send: async () => ({ transaction: { message: { recentBlockhash: landed.blockhash ?? lastBlockhash, accountKeys: [SOL_ACCOUNT] } }, meta: { err: landed.err ?? null, preTokenBalances: landed.pre, postTokenBalances: landed.post } }),
+      }),
+    }) as never;
+
+  /** A Solana deposit of 2.5 USDC that lands as built (on the last blockhash handed out): the asset falls by exactly
+   * 2.5, and shares arrive. */
+  const depositLanded = () => ({ pre: [bal(1, SOL_ACCOUNT, sol.asset.address, 5_000_000n)], post: [bal(1, SOL_ACCOUNT, sol.asset.address, 2_500_000n), bal(2, SOL_ACCOUNT, sol.sharesMint, 2_400_000n)] });
+  const receiptsEvm = () => ({
+    [h1]: { status: "success", logs: [approvalLog(600_000n)] },
+    [h2]: { status: "success", logs: [transferLog(600_000n), depositLog(600_000n)] },
+    [h3]: { status: "success", logs: [withdrawLog(250_000n)] },
+  });
+  const d = (over: Partial<ConnectDeps> = {}) => deps({ ttlMs: 10_000, legMinMs: 0, solanaRpc: solanaRpc(), ...over });
+
+  beforeEach(async () => {
+    sim = { failAfter: Infinity, builds: 0 };
+    reads = 0;
+    sameBlockhash = false;
+    landed = depositLanded();
+    sharesAta = String(await associatedTokenAccount(SOL_ACCOUNT, sol.sharesMint));
+    tokenAta = String(await associatedTokenAccount(SOL_ACCOUNT, sol.asset.address));
+  });
+
+  async function acked(legs: string) {
+    const { ack } = await plan({ legs }, d());
+    await plan({ legs, ack }, d());
+  }
+  async function pageOf(before = 0) {
+    for (let i = 0; i < 300 && opened.length <= before; i++) await new Promise((r) => setTimeout(r, 10));
+    const u = new URL(opened.at(-1)!);
+    return { u, s: u.searchParams.get("s")! };
+  }
+  const send = async (u: URL, s: string, body: Record<string, unknown>) =>
+    (await fetch(`${u.origin}/result`, { method: "POST", headers: { "content-type": "application/json", origin: u.origin }, body: JSON.stringify({ s, ...body }) })).json() as Promise<Record<string, unknown>>;
+  const info = async (u: URL, s: string) => (await fetch(`${u.origin}/info?s=${s}`)).json() as Promise<Record<string, unknown>>;
+
+  const MIXED = `deposit ${vault.symbol} 0.6; deposit ${sol.symbol} 2.5; withdraw ${vault.symbol} 0.25`;
+
+  it("EVM → Solana → EVM on ONE page: in order, the Solana leg built at its press and checked from what landed, the third leg only after it matched", async () => {
+    await acked(MIXED);
+    receipts = receiptsEvm();
+    const run = plan({ run: true }, d());
+    const { u, s } = await pageOf();
+    const i0 = await info(u, s);
+    expect(i0).toMatchObject({ account: ACCOUNT, solanaAccount: SOL_ACCOUNT, solanaWalletType: "external" });
+    expect((i0["legs"] as Record<string, unknown>[]).map((l) => [l["family"], l["chainId"], l["receiver"]])).toEqual([
+      ["evm", vault.chainId, ACCOUNT],
+      ["solana", null, SOL_ACCOUNT],
+      ["evm", vault.chainId, ACCOUNT],
+    ]);
+    // Leg 2 (Solana) cannot start before leg 1.
+    expect((await send(u, s, { start: 2 }))["ok"]).toBe(false);
+    await send(u, s, { start: 1 });
+    await send(u, s, { index: 0, hash: h1 });
+    expect(await send(u, s, { index: 1, hash: h2 })).toMatchObject({ ok: true, legDone: true });
+    expect(await send(u, s, { start: 2 })).toMatchObject({ ok: true, started: 2 });
+    const i2 = await info(u, s);
+    expect(i2["current"]).toMatchObject({ leg: 2, chain: "solana", next: 0, kind: "deposit", account: SOL_ACCOUNT });
+    // Leg 3 waits for the Solana leg's verdict.
+    expect(await send(u, s, { start: 3 })).toMatchObject({ ok: false, reason: expect.stringMatching(/already in progress/) });
+    const built = await send(u, s, { build: true });
+    expect(built).toMatchObject({ ok: true, blockhash: lastBlockhash });
+    expect(String(built["wire"]).length).toBeGreaterThan(0);
+    expect(await send(u, s, { hash: SIG })).toMatchObject({ ok: true, finished: true, legDone: true, verdict: { verified: "matched" } });
+    expect(await send(u, s, { start: 3 })).toMatchObject({ ok: true, started: 3 });
+    expect(await send(u, s, { index: 0, hash: h3 })).toMatchObject({ ok: true, finished: true, planDone: true });
+    const r = await run;
+    expect(r["status"]).toBe("completed");
+    expect((r["legs"] as { status: string; txs: { hash: string; verified: string }[] }[]).map((l) => [l.status, l.txs.map((t) => t.verified)])).toEqual([
+      ["completed", ["matched", "matched"]],
+      ["completed", ["matched"]],
+      ["completed", ["matched"]],
+    ]);
+    expect(readPlan()!.legs[1]!.txs).toEqual([{ hash: SIG, verified: "matched" }]);
+    expect(opened).toHaveLength(1);
+  });
+
+  it("a Solana-only plan runs on the page with only the Solana wallet connected", async () => {
+    clearSession();
+    writeFileSync(join(home, "connect-session-solana.json"), JSON.stringify({ account: SOL_ACCOUNT, walletType: "external", connectedAtIso: "2026-10-13T11:59:00Z" }));
+    await acked(`deposit ${sol.symbol} 2.5`);
+    const run = plan({ run: true }, d());
+    const { u, s } = await pageOf();
+    const i0 = await info(u, s);
+    expect(i0["account"]).toBeUndefined();
+    expect(i0["solanaAccount"]).toBe(SOL_ACCOUNT);
+    await send(u, s, { start: 1 });
+    await send(u, s, { build: true });
+    expect(await send(u, s, { hash: SIG })).toMatchObject({ ok: true, finished: true, planDone: true });
+    expect((await run)["status"]).toBe("completed");
+  });
+
+  const TWO_SOLANA = `deposit ${sol.symbol} 2.5; deposit ${sol.symbol} 2.5`;
+  const SIG2 = getBase58Decoder().decode(new Uint8Array(64).fill(8));
+
+  it("a transaction built for an earlier Solana leg does not complete a later one: its blockhash was never handed to that leg", async () => {
+    await acked(TWO_SOLANA);
+    const run = plan({ run: true }, d());
+    const { u, s } = await pageOf();
+    await send(u, s, { start: 1 });
+    const first = String((await send(u, s, { build: true }))["blockhash"]);
+    expect(await send(u, s, { hash: SIG })).toMatchObject({ ok: true, finished: true, legDone: true });
+    await send(u, s, { start: 2 });
+    expect((await send(u, s, { build: true }))["blockhash"]).not.toBe(first);
+    // Another signature, for a transaction built with leg 1's blockhash: an older one of the same shape.
+    landed = { ...depositLanded(), blockhash: first };
+    const r2 = await send(u, s, { hash: SIG2 });
+    expect(r2).toMatchObject({ ok: true, stop: true, verdict: { verified: "mismatch" } });
+    expect(String((r2["verdict"] as { detail: string }).detail)).toMatch(/blockhash is not one handed to the page/);
+    expect((await run)["status"]).toBe("stopped");
+    expect(readPlan()!.legs.map((l) => [l.status, (l.txs ?? []).map((t) => [t.hash, t.verified])])).toEqual([
+      ["completed", [[SIG, "matched"]]],
+      ["stopped", [[SIG2, "mismatch"]]],
+    ]);
+  });
+
+  it("two identical Solana legs built in one slot: the signature already on leg 1 does not complete leg 2", async () => {
+    sameBlockhash = true;
+    await acked(TWO_SOLANA);
+    const run = plan({ run: true }, d());
+    const { u, s } = await pageOf();
+    await send(u, s, { start: 1 });
+    await send(u, s, { build: true });
+    expect(await send(u, s, { hash: SIG })).toMatchObject({ ok: true, finished: true, legDone: true });
+    await send(u, s, { start: 2 });
+    expect(await send(u, s, { build: true })).toMatchObject({ ok: true, blockhash: BLOCKHASH });
+    // Same blockhash, same transaction: what landed on chain matches leg 2 byte for byte, but it is leg 1's.
+    const r2 = await send(u, s, { hash: SIG });
+    expect(r2).toMatchObject({ ok: true, stop: true, verdict: { verified: "mismatch" } });
+    expect(String((r2["verdict"] as { detail: string }).detail)).toMatch(/is the transaction of an earlier step of this plan/);
+    expect((await run)["status"]).toBe("stopped");
+    expect(readPlan()!.legs.map((l) => [l.status, (l.txs ?? []).map((t) => [t.hash, t.verified])])).toEqual([
+      ["completed", [[SIG, "matched"]]],
+      ["stopped", [[SIG, "mismatch"]]],
+    ]);
+  });
+
+  it("run leg by leg, two identical Solana legs built in one slot: the signature already on leg 1 does not complete leg 2", async () => {
+    sameBlockhash = true;
+    const { ack } = await plan({ legs: TWO_SOLANA }, d());
+    const commands = ((await plan({ legs: TWO_SOLANA, ack }, d()))["legs"] as { command: string }[]).map((l) => l.command);
+    const leg1 = runLeg(commands[0]!, d());
+    const p1 = await pageOf();
+    await send(p1.u, p1.s, { build: true });
+    await send(p1.u, p1.s, { hash: SIG });
+    expect((await leg1)["status"]).toBe("completed");
+    // A real leg runs in its own process after the last one exited; here the first page's server may still hold its port.
+    process.env["TREASURY_CONNECT_PORT"] = String(await freePort());
+    const leg2 = runLeg(commands[1]!, d());
+    const p2 = await pageOf(1);
+    expect(await send(p2.u, p2.s, { build: true })).toMatchObject({ ok: true, blockhash: BLOCKHASH });
+    const r2 = await send(p2.u, p2.s, { hash: SIG });
+    expect(r2).toMatchObject({ ok: true, stop: true, verdict: { verified: "mismatch" } });
+    expect(String((r2["verdict"] as { detail: string }).detail)).toMatch(/is the transaction of an earlier step of this plan/);
+    expect((await leg2)["status"]).toBe("stopped");
+    expect(readPlan()!.legs.map((l) => [l.status, (l.txs ?? []).map((t) => [t.hash, t.verified])])).toEqual([
+      ["completed", [[SIG, "matched"]]],
+      ["stopped", [[SIG, "mismatch"]]],
+    ]);
+  });
+
+  it("refuses before any page opens when the plan has a Solana leg and no Solana wallet is connected", async () => {
+    await acked(MIXED);
+    rmSync(join(home, "connect-session-solana.json"));
+    await expect(plan({ run: true }, d())).rejects.toThrow(/no Solana wallet is connected/);
+    expect(opened).toEqual([]);
+  });
+
+  it("a Solana leg that fails on chain (the wallet's own compute limit ran out) is stopped as failed, and ends the plan", async () => {
+    await acked(`deposit ${sol.symbol} 2.5; deposit ${vault.symbol} 0.6`);
+    landed = { ...depositLanded(), err: { InstructionError: [3, "ComputationalBudgetExceeded"] } };
+    const run = plan({ run: true }, d());
+    const { u, s } = await pageOf();
+    await send(u, s, { start: 1 });
+    await send(u, s, { build: true });
+    const r1 = await send(u, s, { hash: SIG });
+    expect(r1).toMatchObject({ ok: true, stop: true, verdict: { verified: "reverted" } });
+    expect(String((r1["verdict"] as { detail: string }).detail)).toMatch(/ComputationalBudgetExceeded/);
+    const r = await run;
+    expect(r["status"]).toBe("stopped");
+    expect(readPlan()!.legs.map((l) => [l.status, (l.txs ?? []).map((t) => t.verified)])).toEqual([
+      ["stopped", ["reverted"]],
+      ["pending", []],
+    ]);
+    expect(readPlan()!.legs[0]!.reason).toMatch(/the deposit is reverted/);
+  });
+
+  it("a Solana leg whose transaction is refused at its own build press sent nothing; stopped there, the plan ends", async () => {
+    await acked(`deposit ${sol.symbol} 2.5; deposit ${vault.symbol} 0.6`);
+    // The start's gate simulation passes; the one at the operator's press fails.
+    sim.failAfter = 1;
+    const run = plan({ run: true }, d());
+    const { u, s } = await pageOf();
+    expect(await send(u, s, { start: 1 })).toMatchObject({ ok: true, started: 1 });
+    expect(await send(u, s, { build: true })).toMatchObject({ ok: false, reason: expect.stringMatching(/the simulated deposit fails/) });
+    // Nothing was handed to the wallet: the page's "Stop the plan here".
+    await send(u, s, { rejected: true, declined: true, reason: "not prepared: this page could not prepare the step (the simulated deposit fails); the operator stopped the plan" });
+    expect((await run)["status"]).toBe("stopped");
+    expect(readPlan()!.legs.map((l) => [l.status, l.txs ?? []])).toEqual([
+      ["stopped", []],
+      ["pending", []],
+    ]);
+    expect(readPlan()!.legs[0]!.reason).toMatch(/^not prepared/);
+  });
+
+  it("a Solana withdrawal whose simulation would land partial is refused when its leg starts, before the wallet is asked", async () => {
+    await acked(`withdraw ${sol.symbol} all`);
+    // The whole position is 3 shares; the simulation burns 2.
+    sim.burn = 2_000_000n;
+    const run = plan({ run: true }, d());
+    const { u, s } = await pageOf();
+    expect(await send(u, s, { start: 1 })).toMatchObject({ ok: false, reason: expect.stringMatching(/^refused: the simulated withdrawal .* partial withdrawal/) });
+    expect(readPlan()!.legs[0]!.status).toBe("pending");
+    await send(u, s, { rejected: true, declined: true, reason: "not prepared: this page could not prepare the step; the operator stopped the plan" });
+    await run;
+    expect(readPlan()!.legs.map((l) => [l.status, l.txs ?? []])).toEqual([["stopped", []]]);
+  });
+
+  it("refuses before any page opens a Solana leg that no longer rebuilds to what was acknowledged: an amount, or a receiver", async () => {
+    await acked(MIXED);
+    const p = readPlan()!;
+    writeFileSync(planPath(), JSON.stringify({ ...p, legs: p.legs.map((l, i) => (i === 1 ? { ...l, args: { ...l.args!, amount_usdc: "2.6" } } : l)) }));
+    await expect(plan({ run: true }, d())).rejects.toThrow(/leg 2 is not what the operator acknowledged for the connected account 9xQe/);
+    writeFileSync(planPath(), JSON.stringify({ ...p, legs: p.legs.map((l, i) => (i === 1 ? { ...l, args: { ...l.args!, receiver: "4Nd1mBQtrMJVYVfKf2PJy9NZUZdTAsp7D4xWLs4gDB4T" } } : l)) }));
+    await expect(plan({ run: true }, d())).rejects.toThrow(/leg 2 pays 4Nd1.*not the connected Solana account/);
+    expect(opened).toEqual([]);
+  });
+
+  it("the Solana check at Start failed (another wallet, or no Solana account): leg 1 is stopped as not prepared, and nothing runs", async () => {
+    await acked(MIXED);
+    const run = plan({ run: true }, d());
+    const { u, s } = await pageOf();
+    await send(u, s, { rejected: true, unprepared: true, reason: "the Solana wallet check before the plan started: Rabby shows no Solana account on this page" });
+    expect((await run)["status"]).toBe("stopped");
+    const legs = readPlan()!.legs;
+    expect(legs.map((l) => l.status)).toEqual(["stopped", "pending", "pending"]);
+    expect(legs[0]!.reason).toBe("not prepared: the Solana wallet check before the plan started: Rabby shows no Solana account on this page");
+    expect(legs[0]!.txs ?? []).toEqual([]);
+  });
+
+  it("a wallet error with no signature on a Solana leg leaves it 'may have been sent' (not_reported), never 'nothing sent'", async () => {
+    await acked(`deposit ${sol.symbol} 2.5`);
+    const run = plan({ run: true }, d());
+    const { u, s } = await pageOf();
+    await send(u, s, { start: 1 });
+    await send(u, s, { build: true });
+    await send(u, s, { rejected: true, reason: "the wallet returned an error without a transaction hash; it may or may not have been sent: Internal error" });
+    expect((await run)["status"]).toBe("not_reported");
+    expect(readPlan()!.legs[0]!.status).toBe("not_reported");
+  });
+
+  it("a signature the page could not hand over is kept on the Solana leg as unverified", async () => {
+    await acked(`deposit ${sol.symbol} 2.5`);
+    const run = plan({ run: true }, d());
+    const { u, s } = await pageOf();
+    await send(u, s, { start: 1 });
+    await send(u, s, { build: true });
+    await send(u, s, { rejected: true, reason: "the page lost its connection", hash: SIG, index: 0 });
+    expect((await run)["status"]).toBe("not_reported");
+    const leg = readPlan()!.legs[0]!;
+    expect(leg.reason).toMatch(/^may have been sent/);
+    expect(leg.txs).toEqual([{ hash: SIG, verified: "unverified" }]);
+  });
+
+  it("the time limit while a Solana transaction is in the wallet: not_reported, and a signature that arrives later cannot overwrite it", async () => {
+    await acked(`deposit ${sol.symbol} 2.5`);
+    let release!: () => void;
+    const gate = new Promise<void>((r) => (release = r));
+    const rpc = solanaRpc() as unknown as Record<string, unknown>;
+    const slow = { ...rpc, getSignatureStatuses: () => ({ send: async () => (await gate, { value: [{ confirmationStatus: "confirmed" }] }) }) };
+    const run = plan({ run: true }, d({ ttlMs: 1500, solanaRpc: slow as never }));
+    const { u, s } = await pageOf();
+    await send(u, s, { start: 1 });
+    await send(u, s, { build: true });
+    const late = send(u, s, { hash: SIG }).catch(() => undefined);
+    expect((await run)["status"]).toBe("not_reported");
+    release();
+    await late;
+    await new Promise((r) => setTimeout(r, 50));
+    expect(readPlan()!.legs.map((l) => l.status)).toEqual(["not_reported"]);
+  });
+
+  it("a plan replaced while a Solana transaction is in the wallet: the outcome stays on the run's own plan, and the newer plan is untouched", async () => {
+    await acked(`deposit ${sol.symbol} 2.5; deposit ${vault.symbol} 0.6`);
+    const run = plan({ run: true }, d());
+    const { u, s } = await pageOf();
+    await send(u, s, { start: 1 });
+    await send(u, s, { build: true });
+    const newer = await plan({ legs: `deposit ${vault.symbol} 0.7` }, d());
+    expect(await send(u, s, { hash: SIG })).toMatchObject({ ok: true, legDone: true });
+    const r = await run;
+    expect(r["status"]).toBe("stopped");
+    expect((r["legs"] as { status: string; txs: unknown[] }[]).map((l) => [l.status, l.txs])).toEqual([
+      ["completed", [{ hash: SIG, verified: "matched" }]],
+      ["stopped", []],
+    ]);
+    const p = readPlan()!;
+    expect(p.code).toBe(newer["ack"]);
+    expect(p.legs.map((l) => [l.status, l.txs ?? []])).toEqual([["pending", []]]);
+  });
+
+  it("a plan cleared by disconnecting while a Solana transaction is in the wallet: the run still reports what landed", async () => {
+    await acked(`deposit ${sol.symbol} 2.5; deposit ${vault.symbol} 0.6`);
+    const run = plan({ run: true }, d());
+    const { u, s } = await pageOf();
+    await send(u, s, { start: 1 });
+    await send(u, s, { build: true });
+    clearSession();
+    expect(await send(u, s, { hash: SIG })).toMatchObject({ ok: true, legDone: true });
+    const r = await run;
+    expect((r["legs"] as { status: string; txs: unknown[] }[]).map((l) => [l.status, l.txs.length])).toEqual([
+      ["completed", 1],
+      ["stopped", 0],
+    ]);
+    expect(readPlan()).toBeUndefined();
+  });
+
+  it("a build still running when the page stops the leg is refused: no transaction reaches a stopped leg", async () => {
+    await acked(`deposit ${sol.symbol} 2.5; deposit ${vault.symbol} 0.6`);
+    let reading!: () => void;
+    const inBuild = new Promise<void>((r) => (reading = r));
+    let release!: () => void;
+    const gate = new Promise<void>((r) => (release = r));
+    const rpc = solanaRpc() as unknown as Record<string, () => { send: () => Promise<unknown> }>;
+    let blockhashReads = 0;
+    // The start's gate reads a blockhash first; the operator's press reads the second, which waits here.
+    const slow = { ...rpc, getLatestBlockhash: () => ({ send: async () => (++blockhashReads > 1 && (reading(), await gate), rpc["getLatestBlockhash"]!().send()) }) };
+    const run = plan({ run: true }, d({ solanaRpc: slow as never }));
+    const { u, s } = await pageOf();
+    await send(u, s, { start: 1 });
+    const build = send(u, s, { build: true });
+    await inBuild;
+    await send(u, s, { rejected: true, declined: true, reason: "declined in the wallet; the operator stopped the plan" });
+    release();
+    expect(await build).toEqual({ ok: false, reason: "the plan was stopped on the page while this step was being prepared" });
+    await run;
+    expect(readPlan()!.legs.map((l) => l.status)).toEqual(["stopped", "pending"]);
+  });
+
+  it("a plan file whose Solana leg names an EVM vault is refused before any page opens, saying so", async () => {
+    await acked(MIXED);
+    const p = readPlan()!;
+    writeFileSync(planPath(), JSON.stringify({ ...p, legs: p.legs.map((l, i) => (i === 1 ? { ...l, args: { ...l.args!, vault: vault.symbol } } : l)) }));
+    await expect(plan({ run: true }, d())).rejects.toThrow(new RegExp(`leg 2 names ${vault.symbol}, which is not a vault on Solana`));
+    expect(opened).toEqual([]);
+  });
+
+  it("a leg stopped on the page before its transaction was asked for: stopped, nothing built for the wallet, the next leg never runs", async () => {
+    await acked(`deposit ${sol.symbol} 2.5; deposit ${vault.symbol} 0.6`);
+    const run = plan({ run: true }, d());
+    const { u, s } = await pageOf();
+    await send(u, s, { start: 1 });
+    await send(u, s, { rejected: true, declined: true, reason: "declined in the wallet; the operator stopped the plan" });
+    await run;
+    expect(readPlan()!.legs.map((l) => l.status)).toEqual(["stopped", "pending"]);
+    // Only the start's gate simulation ran.
+    expect(sim.builds).toBe(1);
   });
 });
