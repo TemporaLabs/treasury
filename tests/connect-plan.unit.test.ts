@@ -579,6 +579,39 @@ describe("connect plan --run: one page for every leg (#174)", () => {
     expect(readPlan()!.legs.map((l) => l.status)).toEqual(["completed", "pending"]);
   });
 
+  it("a stop that arrives while a step's receipt is being read: the step is refused plainly, the leg stays 'may have been sent'", async () => {
+    await acked();
+    let release!: () => void;
+    const gate = new Promise<void>((r) => (release = r));
+    const d = deps({
+      ttlMs: 10_000,
+      legMinMs: 0,
+      client: () => ({
+        getTransactionReceipt: async ({ hash }: { hash: Hex }) => {
+          if (hash === h2) await gate;
+          return (hash === h1 ? { status: "success", logs: [approvalLog(600_000n)] } : { status: "success", logs: [transferLog(600_000n), depositLog(600_000n)] }) as never;
+        },
+        readContract: async (q: { functionName: string }) => (q.functionName === "balanceOf" ? shares : q.functionName === "allowance" ? 10n ** 30n : 0n) as never,
+      }),
+    });
+    const run = plan({ run: true }, d);
+    const { u, s } = await pageOf();
+    await send(u, s, { start: 1 });
+    await send(u, s, { index: 0, hash: h1 });
+    const inFlight = send(u, s, { index: 1, hash: h2 }); // the server is now reading h2's receipt
+    await new Promise((r) => setTimeout(r, 100));
+    // A second tab, or the first POST dropped: the page stops the plan with the hash it holds.
+    await send(u, s, { rejected: true, reason: "the page lost its connection", hash: h2, index: 1 });
+    release();
+    expect(await inFlight).toEqual({ ok: false, reason: "the plan was stopped on the page while this step was being checked" });
+    expect((await run)["status"]).toBe("not_reported");
+    const leg1 = readPlan()!.legs[0]!;
+    expect(leg1.status).toBe("not_reported");
+    expect(leg1.reason).toMatch(/^may have been sent/);
+    expect(leg1.txs!.map((t) => t.hash)).toEqual([h1, h2]);
+    expect(readPlan()!.legs[1]!.status).toBe("pending");
+  });
+
   it("stopping between legs ends the plan before the next leg", async () => {
     await acked();
     receipts = landedReceipts();

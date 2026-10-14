@@ -7,6 +7,10 @@
  * What moves a leg: the wallet's own answer (a "no" sends nothing), or the process's verdict on a receipt. The page
  * never ends a leg while the wallet may still be asking. Between runs of the command (the shell's time limit) the
  * process is briefly away; the page waits, then carries on where it was.
+ *
+ * A leg this tab did not drive (a reload, or another tab) is never resumed: the wallet may already have been asked for
+ * its next call, and the page stores nothing in the browser that could say otherwise, so it offers only to end the
+ * plan there, on record as "may have been sent".
  */
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import { useLogin, usePrivy, useWallets } from "@privy-io/react-auth";
@@ -40,13 +44,16 @@ export type PlanInfo = {
 };
 
 /** What the operator sees for a leg. */
-type LegState = "waiting" | "wallet" | "sent" | "confirmed" | "declined" | "maybe" | "failed" | "mismatch" | "stopped" | "notrun";
+type LegState = "waiting" | "wallet" | "sent" | "confirmed" | "declined" | "unprepared" | "maybe" | "failed" | "mismatch" | "stopped" | "notrun";
+/** This tab's own phase of the running leg. "declined" and "unprepared" have nothing outstanding in the wallet. */
+type Phase = "wallet" | "sent" | "declined" | "unprepared";
 const LABEL: Record<LegState, string> = {
   waiting: "Waiting",
   wallet: "In your wallet",
   sent: "Sent · confirming",
   confirmed: "Confirmed",
   declined: "Declined · nothing sent",
+  unprepared: "Couldn't prepare · nothing sent",
   maybe: "May have been sent",
   failed: "Failed on chain",
   mismatch: "Didn't match",
@@ -55,7 +62,7 @@ const LABEL: Record<LegState, string> = {
 };
 
 /** A leg's state from the plan file, refined by what this page is doing with the current leg right now. */
-function legState(l: LegView, local: { leg: number; phase: "wallet" | "sent" | "declined" } | null, planOver: boolean): LegState {
+function legState(l: LegView, local: { leg: number; phase: Phase } | null, planOver: boolean): LegState {
   if (local && local.leg === l.leg && l.status === "running") return local.phase;
   if (l.status === "completed") return "confirmed";
   if (l.status === "not_reported") return "maybe";
@@ -63,6 +70,7 @@ function legState(l: LegView, local: { leg: number; phase: "wallet" | "sent" | "
     const last = l.txs[l.txs.length - 1]?.verified;
     if (last === "reverted") return "failed";
     if (last === "mismatch") return "mismatch";
+    if (/^not prepared/.test(l.reason ?? "")) return "unprepared";
     if (/^declined|the operator stopped/.test(l.reason ?? "")) return "declined";
     return "stopped";
   }
@@ -91,7 +99,8 @@ export function Plan({ info: first }: { info: PlanInfo }) {
   const { login } = useLogin();
   const [info, setInfo] = useState<PlanInfo>(first);
   const [away, setAway] = useState(false);
-  const [local, setLocal] = useState<{ leg: number; phase: "wallet" | "sent" | "declined" } | null>(null);
+  const [awayPolls, setAwayPolls] = useState(0);
+  const [local, setLocal] = useState<{ leg: number; phase: Phase } | null>(null);
   const [note, setNote] = useState<{ text: string; tone?: "bad" | "ok" } | null>(null);
   const [busy, setBusy] = useState(false);
   const [open, setOpen] = useState<Record<number, boolean>>({});
@@ -99,6 +108,12 @@ export function Plan({ info: first }: { info: PlanInfo }) {
   const [deadlineAt] = useState(() => Date.parse(first.expiresAtIso));
   const [now, setNow] = useState(Date.now());
   const running = useRef(false);
+  const whyRef = useRef<string | undefined>(undefined);
+  // The leg this tab is driving: the only running leg it may ask the wallet about.
+  const owned = useRef<number | null>(null);
+  // This tab was walking the plan when the process went away between runs: carry on when it is back.
+  const resumeOnReturn = useRef(false);
+  const againRef = useRef<HTMLButtonElement>(null);
   const stopAfterRef = useRef(false);
   stopAfterRef.current = stopAfter;
   const wallet = wallets.find((w) => w.address.toLowerCase() === info.account.toLowerCase());
@@ -112,33 +127,42 @@ export function Plan({ info: first }: { info: PlanInfo }) {
     const v = await readInfo();
     if (v === "gone") return setAway(true), undefined;
     setAway(false);
+    setAwayPolls(0);
     setInfo(v);
     return v;
   }, []);
 
-  // While the process is away (between runs), check every few seconds and carry on when it is back.
+  // While the process is away (between runs), check every few seconds.
   useEffect(() => {
     if (!away) return;
-    const t = setInterval(() => void refresh(), 3000);
+    const t = setInterval(() => {
+      setAwayPolls((n) => n + 1);
+      void refresh();
+    }, 3000);
     return () => clearInterval(t);
   }, [away, refresh]);
 
   const legs = info.legs;
   const failedLeg = legs.find((l) => l.status === "stopped" || l.status === "not_reported");
   const allDone = legs.every((l) => l.status === "completed");
-  const expired = now > deadlineAt && legs.some((l) => l.status === "pending") && !failedLeg;
+  const runningLeg = legs.find((l) => l.status === "running");
+  // Never "expired" while a leg is still running: a step may be in the wallet, and the process decides that leg.
+  const expired = now > deadlineAt && legs.some((l) => l.status === "pending") && !failedLeg && !runningLeg && !local;
+  // A running leg this tab is not driving (a reload or another tab): it may have been sent, and is never resumed here.
+  const orphan = runningLeg && owned.current !== runningLeg.leg && !running.current ? runningLeg : undefined;
   const planOver = Boolean(failedLeg) || allDone || expired;
   const nextLeg = legs.find((l) => l.status === "pending");
   const landed = legs.filter((l) => l.status === "completed").length;
 
   /** Sends one call of the current leg; resolves with the process's reply, or undefined once the plan stopped here. */
   const sendCall = useCallback(
-    async (leg: LegView, call: PlanCall, index: number): Promise<Record<string, unknown> | undefined> => {
+    async (leg: LegView, call: PlanCall, index: number, chainId: number): Promise<Record<string, unknown> | undefined> => {
       if (!wallet) throw new Error("the connected wallet is not available on this page");
       let hash: string | undefined;
       let stage: "prepare" | "estimate" | "send" = "prepare";
       try {
         setLocal({ leg: leg.leg, phase: "wallet" });
+        if (chainId !== leg.chainId) throw new Error(`this step's calls are for chain ${chainId}, not ${leg.chainName}`);
         await wallet.switchChain(leg.chainId);
         const provider = await wallet.getEthereumProvider();
         const tx = { from: wallet.address, to: call.to, data: call.data, value: call.value };
@@ -146,11 +170,13 @@ export function Plan({ info: first }: { info: PlanInfo }) {
         const est = BigInt((await provider.request({ method: "eth_estimateGas", params: [tx] })) as string);
         stage = "prepare";
         const live = await readInfo();
-        if (live === "gone") throw new Error("the page lost its connection to your agent before this was sent; nothing was sent");
+        if (live === "gone") throw new Error("the page lost its connection to your agent");
         if (live.current?.leg !== leg.leg || live.current.next !== index) {
           setNote({ text: "This step was already handled, perhaps in another tab. Close this tab and use the other one.", tone: "bad" });
           return undefined;
         }
+        // A wallet prompt must not outlive the run: the process would then end this leg as "may have been sent".
+        if (live.msLeft < 60_000) throw new Error("less than a minute is left before your agent's run pauses, too little to confirm in your wallet");
         stage = "send";
         hash = (await provider.request({ method: "eth_sendTransaction", params: [{ ...tx, chainId: `0x${leg.chainId.toString(16)}`, gas: `0x${((est * 3n) / 2n).toString(16)}` }] })) as string;
         setLocal({ leg: leg.leg, phase: "sent" });
@@ -166,14 +192,15 @@ export function Plan({ info: first }: { info: PlanInfo }) {
         }
         if (rejected(e)) {
           setLocal({ leg: leg.leg, phase: "declined" });
-          throw Object.assign(new Error("You declined it in your wallet. Nothing was sent."), { declined: true });
+          throw Object.assign(new Error("You declined it in your wallet. Nothing was sent."), { idle: true });
         }
         if (stage === "send") {
           await reject(`the wallet returned an error without a transaction hash; it may or may not have been sent: ${text}`);
           throw Object.assign(new Error(`Your wallet returned an error without a transaction hash, so this page cannot tell whether step ${leg.leg} was sent. Check your wallet's activity.`), { ended: true });
         }
-        setLocal({ leg: leg.leg, phase: "declined" });
-        throw Object.assign(new Error(`Your wallet could not prepare this transaction: ${text}. Nothing was sent.`), { declined: true });
+        // Before the wallet was asked: nothing was sent.
+        setLocal({ leg: leg.leg, phase: "unprepared" });
+        throw Object.assign(new Error(`This page could not prepare step ${leg.leg}: ${text}. Nothing was sent.`), { idle: true, why: text });
       }
     },
     [wallet],
@@ -189,7 +216,8 @@ export function Plan({ info: first }: { info: PlanInfo }) {
       for (;;) {
         let cur = await refresh();
         if (!cur) return;
-        // Resume a leg this page already started (the wallet said no, then "ask again"); otherwise start the next.
+        // Resume only a leg this tab is driving (the wallet said no, then "ask again"); otherwise start the next.
+        if (cur.current && owned.current !== cur.current.leg) return;
         if (!cur.current) {
           const leg = cur.legs.find((l) => l.status === "pending");
           if (!leg) return;
@@ -200,40 +228,68 @@ export function Plan({ info: first }: { info: PlanInfo }) {
           }
           const s = await post("/result", { start: leg.leg });
           if (!s.ok) return setNote({ text: s.reason ?? "This step could not start.", tone: "bad" });
-          if (s["paused"]) return setAway(true);
+          if (s["paused"]) return (resumeOnReturn.current = true), setAway(true);
+          owned.current = leg.leg;
           cur = await refresh();
           if (!cur?.current) return;
         }
         const leg = cur.legs.find((l) => l.leg === cur!.current!.leg)!;
         let r: Record<string, unknown> | undefined;
         for (let i = cur.current!.next; i < cur.current!.calls.length; i++) {
-          r = await sendCall(leg, cur.current!.calls[i]!, i);
+          r = await sendCall(leg, cur.current!.calls[i]!, i, cur.current!.chainId);
           if (!r || r["stop"]) break;
         }
         setLocal(null);
+        owned.current = null;
         await refresh();
         if (!r || r["stop"] || r["planDone"]) return;
-        if (r["paused"]) return setAway(true);
+        if (r["paused"]) return (resumeOnReturn.current = true), setAway(true);
       }
     } catch (e) {
-      const err = e as Error & { declined?: boolean; ended?: boolean };
+      const err = e as Error & { idle?: boolean; ended?: boolean; why?: string };
       setNote({ text: err.message, tone: "bad" });
       if (err.ended) {
         setLocal(null);
+        owned.current = null;
         await refresh();
       }
+      if (err.idle) whyRef.current = err.why;
     } finally {
       running.current = false;
       setBusy(false);
     }
   }, [refresh, sendCall]);
 
+  // Nothing is outstanding in the wallet for this leg: the operator ends the plan here, and the leg sent nothing.
   const stopHere = async () => {
-    await post("/result", { rejected: true, declined: true, reason: "declined in the wallet; the operator stopped the plan" }).catch(() => undefined);
+    const reason =
+      local?.phase === "unprepared"
+        ? `not prepared: this page could not prepare the step${whyRef.current ? ` (${whyRef.current})` : ""}; the operator stopped the plan`
+        : "declined in the wallet; the operator stopped the plan";
+    await post("/result", { rejected: true, declined: true, reason }).catch(() => undefined);
     setLocal(null);
+    owned.current = null;
     setNote({ text: "Stopped. Nothing else will be sent." });
     await refresh();
   };
+
+  // A leg this tab cannot vouch for: end the plan there, on record as "may have been sent".
+  const endOrphan = async () => {
+    await post("/result", { rejected: true, reason: "the page was reloaded or reopened during this step, which may have been sent" }).catch(() => undefined);
+    await refresh();
+  };
+
+  // Back from between runs, and this tab was walking the plan: carry on (only ever between legs).
+  useEffect(() => {
+    if (away || !resumeOnReturn.current || info.current || running.current) return;
+    resumeOnReturn.current = false;
+    void go();
+  }, [away, info.current, go]);
+
+  // A decline or a failed prepare replaces the focused button: put focus on the way forward.
+  useEffect(() => {
+    if (local?.phase === "declined" || local?.phase === "unprepared") againRef.current?.focus();
+  }, [local?.phase]);
 
   const msLeft = Math.max(0, deadlineAt - now);
   const current = local ? legs.find((l) => l.leg === local.leg) : undefined;
@@ -243,6 +299,8 @@ export function Plan({ info: first }: { info: PlanInfo }) {
       ? "Plan stopped"
       : expired
         ? "Plan expired"
+        : orphan
+          ? `Step ${orphan.leg} may have been sent`
         : local?.phase === "wallet"
           ? `Step ${local.leg} of ${legs.length} is in your wallet`
           : local?.phase === "sent"
@@ -261,6 +319,11 @@ export function Plan({ info: first }: { info: PlanInfo }) {
     </>
   ) : expired ? (
     <>The plan expired. Steps that had not started did not run, and nothing else will be sent. For what is left, ask your agent for a new plan.</>
+  ) : orphan ? (
+    <>
+      Step {orphan.leg} was in progress when this page was reloaded or opened, so your wallet may already have sent it. Check your wallet's activity. This page will not ask
+      your wallet for it again; end the plan here, and your agent reports what landed.
+    </>
   ) : local?.phase === "wallet" && current ? (
     <>
       Your wallet is on <b>{current.chainName}</b>. Check the amount and that the money goes to your wallet, then confirm. To skip it, reject it in your wallet.
@@ -274,6 +337,11 @@ export function Plan({ info: first }: { info: PlanInfo }) {
   );
 
   const signInNeeded = ready && (!authenticated || !wallet);
+  const progress = runningLeg && !orphan ? `Step ${runningLeg.leg} of ${legs.length}: ${LABEL[legState(runningLeg, local, planOver)]}.` : "";
+  const statusLine =
+    away && !planOver
+      ? `Waiting for your agent to continue. This page carries on by itself once it does; keep it open.${awayPolls >= 20 ? " If your agent opened a new page, use that one." : ""}`
+      : (note?.text ?? progress);
 
   return (
     <Page mark={allDone ? <CheckMark /> : <WalletMark />} title={title} lede={lede}>
@@ -284,14 +352,9 @@ export function Plan({ info: first }: { info: PlanInfo }) {
         </span>
         {!planOver && <span className="oat-plan-timer">{msLeft < 10 * 60_000 ? `Plan expires in ${mmss(msLeft)}` : `expires in ${mmss(msLeft)}`}</span>}
       </div>
-      {away && !planOver && (
-        <p className="oat-status" aria-live="polite">
-          Waiting for your agent to continue. This page carries on by itself; keep it open.
-        </p>
-      )}
       <ol className="oat-legs" aria-label="The steps in this plan">
         {legs.map((l) => {
-          const st = legState(l, local, planOver);
+          const st = orphan?.leg === l.leg ? "maybe" : legState(l, local, planOver);
           const lands = l.action === "deposit" ? "Shares go to" : "Funds go to";
           return (
             <li key={l.leg} className="oat-leg" data-state={st}>
@@ -354,13 +417,17 @@ export function Plan({ info: first }: { info: PlanInfo }) {
           a step already in your wallet can still go through if you confirm it there, and no further steps start.
         </p>
       )}
-      {note && (
-        <p className="oat-status" data-tone={note.tone} aria-live="polite">
-          {note.text}
-        </p>
-      )}
+      {/* One live region, always mounted, so each change of its line is announced. */}
+      <p className="oat-status" role="status" aria-live="polite" data-tone={note?.tone} hidden={!statusLine}>
+        {statusLine}
+      </p>
       {!planOver &&
-        (!ready ? (
+        (orphan ? (
+          // Ending the plan needs no wallet: it asks the wallet for nothing.
+          <button className="oat-btn" onClick={() => void endOrphan()}>
+            End the plan here
+          </button>
+        ) : !ready ? (
           <p className="oat-status">Loading.</p>
         ) : signInNeeded ? (
           <>
@@ -370,10 +437,10 @@ export function Plan({ info: first }: { info: PlanInfo }) {
             </button>
             <p className="oat-fine">Connect with the same wallet you signed in with before ({short(info.account)}).</p>
           </>
-        ) : local?.phase === "declined" ? (
+        ) : local?.phase === "declined" || local?.phase === "unprepared" ? (
           <>
-            <button className="oat-btn" disabled={busy} onClick={() => void go()}>
-              Ask my wallet again
+            <button ref={againRef} className="oat-btn" disabled={busy} onClick={() => void go()}>
+              {local.phase === "declined" ? "Ask my wallet again" : "Try again"}
             </button>
             <button className="oat-text" disabled={busy} onClick={() => void stopHere()}>
               Stop the plan here

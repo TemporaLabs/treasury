@@ -1057,16 +1057,27 @@ export function buildConnectCommands(deps: ConnectDeps = {}): Record<string, Com
           } catch (e) {
             return { ok: false, reason: redactEndpoints(e instanceof Error ? e.message : String(e)) };
           }
+          // The page may have stopped the plan, or started this leg from another tab, while it was being prepared.
+          // (prepareConfirm reads nothing before it returns today, so this holds should it ever await a read.)
+          if (current || readPlan()?.legs[index]?.status !== "pending") return { ok: false, reason: "the plan was stopped, or this leg started, while it was being prepared" };
           markLeg(p.code, index, { status: "running" });
           current = { index, core };
           return { ok: true, final: false, reply: { started: leg.leg } };
         }
         if (!current) return { ok: false, reason: "no leg is in progress; start one first" };
-        const r = await current.core.accept(body["index"], body["hash"]);
+        const cur = current;
+        const r = await cur.core.accept(body["index"], body["hash"]);
+        if (current !== cur) {
+          // The plan was stopped on the page while this step's receipt was being read, and its leg is already on
+          // record as stopped there. Its status stands; only its transactions take what the read found.
+          const p = readPlan();
+          if (p) markLeg(p.code, cur.index, { txs: cur.core.done.map((t) => ({ hash: t.hash, verified: t.verified })) });
+          return { ok: false, reason: "the plan was stopped on the page while this step was being checked" };
+        }
         if (!r.ok) return r;
         if (r.kind === "next") return { ok: true, final: false, reply: r.reply };
         const p = readPlan()!;
-        const { index, core } = current;
+        const { index, core } = cur;
         current = undefined;
         if (r.kind === "stop") {
           markLeg(p.code, index, legStatusOf("stopped", core.done, core.stopReason()));

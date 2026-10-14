@@ -48131,16 +48131,23 @@ function buildConnectCommands(deps = {}) {
           } catch (e4) {
             return { ok: false, reason: redactEndpoints(e4 instanceof Error ? e4.message : String(e4)) };
           }
+          if (current || readPlan()?.legs[index3]?.status !== "pending") return { ok: false, reason: "the plan was stopped, or this leg started, while it was being prepared" };
           markLeg(p2.code, index3, { status: "running" });
           current = { index: index3, core: core2 };
           return { ok: true, final: false, reply: { started: leg.leg } };
         }
         if (!current) return { ok: false, reason: "no leg is in progress; start one first" };
-        const r = await current.core.accept(body["index"], body["hash"]);
+        const cur = current;
+        const r = await cur.core.accept(body["index"], body["hash"]);
+        if (current !== cur) {
+          const p2 = readPlan();
+          if (p2) markLeg(p2.code, cur.index, { txs: cur.core.done.map((t) => ({ hash: t.hash, verified: t.verified })) });
+          return { ok: false, reason: "the plan was stopped on the page while this step was being checked" };
+        }
         if (!r.ok) return r;
         if (r.kind === "next") return { ok: true, final: false, reply: r.reply };
         const p = readPlan();
-        const { index: index2, core } = current;
+        const { index: index2, core } = cur;
         current = void 0;
         if (r.kind === "stop") {
           markLeg(p.code, index2, legStatusOf("stopped", core.done, core.stopReason()));
