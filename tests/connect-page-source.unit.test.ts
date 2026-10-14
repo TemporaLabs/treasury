@@ -1,6 +1,7 @@
 import { describe, it, expect } from "vitest";
 import { readdirSync, readFileSync } from "node:fs";
 import { join, relative } from "node:path";
+import ts from "typescript";
 import { PAGE_CSP } from "../src/connect/page.js";
 
 /**
@@ -20,6 +21,11 @@ const walk = (d: string): string[] => readdirSync(d, { withFileTypes: true }).fl
 const files = walk(dir).filter((f) => /\.(m|c)?[jt]sx?$/.test(f));
 const source = files.map((f) => readFileSync(f, "utf8")).join("\n");
 const main = readFileSync(join(dir, "main.tsx"), "utf8");
+// The same files with every comment removed by the TypeScript parser itself, so a `//` inside a string is not taken
+// for one: what a comment names is not held to the checks that read this.
+const code = files
+  .map((f) => ts.createPrinter({ removeComments: true }).printFile(ts.createSourceFile(f, readFileSync(f, "utf8"), ts.ScriptTarget.Latest, false, /x$/.test(f) ? ts.ScriptKind.TSX : ts.ScriptKind.TS)))
+  .join("\n");
 
 describe("the connect page's source", () => {
   it("control: the scan reads the page", () => {
@@ -85,7 +91,6 @@ describe("the connect page's source", () => {
    */
   it("calls a Solana wallet's own features only to connect it and to sign and send a transaction", () => {
     // Comments may name a feature; only code is held to this.
-    const code = source.replace(/\/\*[\s\S]*?\*\//g, "").replace(/(^|[^:"'`\\])\/\/.*$/gm, "$1");
     const features = [...code.matchAll(/features\s*\[\s*"([^"]+)"\s*\]/g)].map((m) => m[1]);
     expect(features.length).toBeGreaterThan(0);
     expect(new Set(features)).toEqual(new Set(["standard:connect", "solana:signAndSendTransaction"]));

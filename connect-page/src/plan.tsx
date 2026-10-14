@@ -382,9 +382,9 @@ function PlanPage({ info: first, solana }: { info: PlanInfo; solana?: SolanaSide
             await refresh();
             return setNote({ text: "Stopped. Nothing else will be sent." });
           }
-          // Before any leg of a plan with a Solana leg still to run: the Solana account, connected and checked. It runs
-          // again after a reload, so it can fail after earlier steps sent transactions; then only this step and the
-          // ones after it are stopped, and the note says so.
+          // Before every leg while a Solana leg is still to run: the Solana account, connected and checked. It can fail
+          // after earlier steps sent transactions (a reload forgets the wallet it found, or the wallet drops it); then
+          // only this step and the ones after it are stopped, and the note says so.
           if (solana && cur.legs.some((l) => l.status === "pending" && isSolana(l))) {
             const why = await solana.ensure();
             if (why) {

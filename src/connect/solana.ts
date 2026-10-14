@@ -59,6 +59,8 @@ export interface SolanaFlowDeps {
   /** The confirm flow's chain reads, injectable for tests. */
   rpc?: SolanaRpc;
   verifyOpts?: { attempts?: number; delayMs?: number };
+  /** Run as a plan's leg: a signature already on record for another leg of that plan is never this one's. */
+  recordedElsewhere?: (signature: string) => boolean;
   html: (secret: string, title: string) => string;
   csp: string;
   assets: Record<string, { type: string; body: string | Buffer }>;
@@ -378,7 +380,7 @@ export async function runConfirmSolana(intent: SolanaIntent, session: Session, d
   const rpc = deps.rpc ?? makeSolanaRpc(solanaRpcUrlFromEnv());
   // The gate runs before any page opens, on a transaction built for exactly this intent.
   await buildForIntent(rpc, intent, session.account);
-  const core = await prepareConfirmSolana(intent, session, rpc, deps.verifyOpts, Date.now() + deps.ttlMs);
+  const core = await prepareConfirmSolana(intent, session, rpc, deps.verifyOpts, Date.now() + deps.ttlMs, deps.recordedElsewhere);
   const { done } = core;
   const handle = await serveOnce<SolanaTxOutcome[]>({
     mode: "confirm",

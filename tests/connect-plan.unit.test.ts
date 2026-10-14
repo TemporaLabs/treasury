@@ -1078,6 +1078,30 @@ describe("connect plan --run with Solana legs: the same page, each Solana leg he
     ]);
   });
 
+  it("run leg by leg, two identical Solana legs built in one slot: the signature already on leg 1 does not complete leg 2", async () => {
+    sameBlockhash = true;
+    const { ack } = await plan({ legs: TWO_SOLANA }, d());
+    const commands = ((await plan({ legs: TWO_SOLANA, ack }, d()))["legs"] as { command: string }[]).map((l) => l.command);
+    const leg1 = runLeg(commands[0]!, d());
+    const p1 = await pageOf();
+    await send(p1.u, p1.s, { build: true });
+    await send(p1.u, p1.s, { hash: SIG });
+    expect((await leg1)["status"]).toBe("completed");
+    // A real leg runs in its own process after the last one exited; here the first page's server may still hold its port.
+    process.env["TREASURY_CONNECT_PORT"] = String(await freePort());
+    const leg2 = runLeg(commands[1]!, d());
+    const p2 = await pageOf(1);
+    expect(await send(p2.u, p2.s, { build: true })).toMatchObject({ ok: true, blockhash: BLOCKHASH });
+    const r2 = await send(p2.u, p2.s, { hash: SIG });
+    expect(r2).toMatchObject({ ok: true, stop: true, verdict: { verified: "mismatch" } });
+    expect(String((r2["verdict"] as { detail: string }).detail)).toMatch(/is the transaction of an earlier step of this plan/);
+    expect((await leg2)["status"]).toBe("stopped");
+    expect(readPlan()!.legs.map((l) => [l.status, (l.txs ?? []).map((t) => [t.hash, t.verified])])).toEqual([
+      ["completed", [[SIG, "matched"]]],
+      ["stopped", [[SIG, "mismatch"]]],
+    ]);
+  });
+
   it("refuses before any page opens when the plan has a Solana leg and no Solana wallet is connected", async () => {
     await acked(MIXED);
     rmSync(join(home, "connect-session-solana.json"));

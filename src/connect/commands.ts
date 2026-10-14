@@ -624,7 +624,11 @@ export function buildConnectCommands(deps: ConnectDeps = {}): Record<string, Com
     if (mode.kind === "plan") {
       const plan = readPlan();
       const index = checkPlanLeg(mode.code, mode.leg, plan, digest, now());
-      return runPlanLeg(plan!, index, async (open) => solanaOutcome(session, await runConfirmSolana(await intent(), session, { ...solanaDeps(), open })));
+      const recordedElsewhere = (sig: string) => {
+        const file = readPlan();
+        return file?.code === plan!.code && file.legs.some((l) => l.txs?.some((t) => t.hash === sig));
+      };
+      return runPlanLeg(plan!, index, async (open) => solanaOutcome(session, await runConfirmSolana(await intent(), session, { ...solanaDeps(), open, recordedElsewhere })));
     }
     checkAckDigest(mode.ack!, readPendingAck(), digest, now());
     clearPendingAck();

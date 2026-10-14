@@ -47084,7 +47084,7 @@ async function prepareConfirmSolana(intent, session, rpc, verifyOpts, deadline, 
 async function runConfirmSolana(intent, session, deps) {
   const rpc = deps.rpc ?? makeSolanaRpc(solanaRpcUrlFromEnv());
   await buildForIntent(rpc, intent, session.account);
-  const core = await prepareConfirmSolana(intent, session, rpc, deps.verifyOpts, Date.now() + deps.ttlMs);
+  const core = await prepareConfirmSolana(intent, session, rpc, deps.verifyOpts, Date.now() + deps.ttlMs, deps.recordedElsewhere);
   const { done } = core;
   const handle = await serveOnce({
     mode: "confirm",
@@ -47900,7 +47900,11 @@ function buildConnectCommands(deps = {}) {
     if (mode.kind === "plan") {
       const plan = readPlan();
       const index2 = checkPlanLeg(mode.code, mode.leg, plan, digest, now());
-      return runPlanLeg(plan, index2, async (open2) => solanaOutcome(session, await runConfirmSolana(await intent(), session, { ...solanaDeps(), open: open2 })));
+      const recordedElsewhere = (sig) => {
+        const file2 = readPlan();
+        return file2?.code === plan.code && file2.legs.some((l) => l.txs?.some((t) => t.hash === sig));
+      };
+      return runPlanLeg(plan, index2, async (open2) => solanaOutcome(session, await runConfirmSolana(await intent(), session, { ...solanaDeps(), open: open2, recordedElsewhere })));
     }
     checkAckDigest(mode.ack, readPendingAck(), digest, now());
     clearPendingAck();
