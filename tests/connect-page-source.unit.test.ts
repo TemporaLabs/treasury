@@ -84,11 +84,16 @@ describe("the connect page's source", () => {
    * never signing a message or a transaction it keeps, and never a feature named at run time.
    */
   it("calls a Solana wallet's own features only to connect it and to sign and send a transaction", () => {
-    const features = [...source.matchAll(/features\s*\[\s*"([^"]+)"\s*\]/g)].map((m) => m[1]);
+    // Comments may name a feature; only code is held to this.
+    const code = source.replace(/\/\*[\s\S]*?\*\//g, "").replace(/(^|[^:"'`\\])\/\/.*$/gm, "$1");
+    const features = [...code.matchAll(/features\s*\[\s*"([^"]+)"\s*\]/g)].map((m) => m[1]);
     expect(features.length).toBeGreaterThan(0);
     expect(new Set(features)).toEqual(new Set(["standard:connect", "solana:signAndSendTransaction"]));
-    expect(source).not.toMatch(/features\s*\[\s*[^"\s]/);
-    expect(source).not.toMatch(/features\s*\.\s*\w/);
+    // Every other way to reach the features object (`features?.[…]`, `features.x`, destructuring it, or giving it
+    // another name) leaves a `features` that is not one of those lookups: outside comments, each must be one.
+    const lookups = [...code.matchAll(/\bfeatures\s*\[\s*"(standard:connect|solana:signAndSendTransaction)"\s*\]/g)].length;
+    expect(lookups).toBeGreaterThan(0);
+    expect([...code.matchAll(/\bfeatures\b/g)].length).toBe(lookups);
   });
 
   it("writes no HTML from strings, evaluates no code, and stores nothing in the browser", () => {

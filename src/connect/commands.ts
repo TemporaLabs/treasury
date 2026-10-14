@@ -1138,7 +1138,10 @@ export function buildConnectCommands(deps: ConnectDeps = {}): Record<string, Com
               const index = checkPlanLeg(plan.code, leg.leg, mine, sl.digest, now());
               const intent = await sl.intent();
               await buildForIntent(solanaRpc(), intent, solSession!.account);
-              next = { index, family: "solana", core: await prepareConfirmSolana(intent, solSession!, solanaRpc(), deps.verifyOpts, endsAt) };
+              next = { index, family: "solana", core: await prepareConfirmSolana(intent, solSession!, solanaRpc(), deps.verifyOpts, endsAt, (sig) => {
+                const file = readPlan();
+                return [mine.legs, file?.code === plan.code ? file.legs : []].some((legs) => legs.some((l) => l.txs?.some((t) => t.hash === sig)));
+              }) };
             } else {
               const calls = legCalls(leg, session!);
               const index = checkPlanLeg(plan.code, leg.leg, mine, callsDigest(calls, account!), now());

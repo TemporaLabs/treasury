@@ -283,7 +283,15 @@ export interface SolanaConfirmCore {
  * opens or leg starts; the transaction the wallet gets is built again at the operator's press (`build`), and only a
  * signature for a transaction built here, for this intent, can verify. `deadline`: when every chain read stops waiting.
  */
-export async function prepareConfirmSolana(intent: SolanaIntent, session: Session, rpc: SolanaRpc, verifyOpts: SolanaFlowDeps["verifyOpts"], deadline: number): Promise<SolanaConfirmCore> {
+export async function prepareConfirmSolana(
+  intent: SolanaIntent,
+  session: Session,
+  rpc: SolanaRpc,
+  verifyOpts: SolanaFlowDeps["verifyOpts"],
+  deadline: number,
+  /** A plan's earlier steps: a signature already on record for one of them is never this step's transaction. */
+  recordedElsewhere?: (signature: string) => boolean,
+): Promise<SolanaConfirmCore> {
   const account = session.account;
   const done: SolanaTxOutcome[] = [];
   // Every blockhash a transaction handed to the page was built with: the landed one must name one of them.
@@ -340,6 +348,13 @@ export async function prepareConfirmSolana(intent: SolanaIntent, session: Sessio
     accept: async (sig) => {
       if (done.length > 0) return { ok: false, reason: "the transaction was already reported" };
       if (!wellFormedSignature(sig)) return { ok: false, reason: "malformed transaction signature" };
+      // Two identical steps can be built on the same blockhash, so the blockhash binding alone cannot tell them apart.
+      if (recordedElsewhere?.(sig)) {
+        const detail = `${sig} is the transaction of an earlier step of this plan, not one built for this step; check \`earn balance --chain solana\` before retrying anything`;
+        done.push({ step: 1, description, hash: sig, verified: "mismatch", detail });
+        stopReason = `the ${intent.kind} is mismatch: ${detail}`;
+        return { ok: true, kind: "stop", reply: { stop: true, verdict: { verified: "mismatch", detail } } };
+      }
       const entry: SolanaTxOutcome = { step: 1, description, hash: sig, verified: "unverified", detail: "the flow ended while this transaction was still being checked" };
       done.push(entry);
       let verdict: Verdict;

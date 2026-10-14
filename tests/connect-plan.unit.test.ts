@@ -902,13 +902,18 @@ describe("connect plan --run: one page for every leg (#174)", () => {
 describe("connect plan --run with Solana legs: the same page, each Solana leg held to its own run's checks (#184)", () => {
   const snapshot = JSON.parse(readFileSync(new URL("./fixtures/solana/vault-snapshot.json", import.meta.url), "utf8")) as { slot: number; accounts: Record<string, { data: string }> };
   const BLOCKHASH = "4sGjMW1sUnHzSxGspuhpqLDx6wiyjNtZAMdL4VZHirAn";
+  /** The stub chain hands out a new blockhash on every read, as a real one does once a slot passes, so each build of
+   * each leg is told apart; `sameBlockhash` makes every read return BLOCKHASH instead (two builds in one slot). */
+  let reads: number;
+  let sameBlockhash: boolean;
+  let lastBlockhash: string;
   const SIG = getBase58Decoder().decode(new Uint8Array(64).fill(7));
   const [h1, h2, h3] = ([1, 2, 3] as const).map((n) => `0x${String(n).padStart(2, "0").repeat(32)}` as Hex);
   const bal = (accountIndex: number, owner: string, mint: string, amount: bigint) => ({ accountIndex, owner, mint, uiTokenAmount: { amount: amount.toString() } });
 
   /** What the stub chain does this test: how many simulations pass, what a withdrawal's simulation burns, and what landed. */
   let sim: { failAfter: number; builds: number; burn?: bigint };
-  let landed: { err?: unknown; blockhash: string; pre: ReturnType<typeof bal>[]; post: ReturnType<typeof bal>[] };
+  let landed: { err?: unknown; blockhash?: string; pre: ReturnType<typeof bal>[]; post: ReturnType<typeof bal>[] };
   let sharesAta: string;
   let tokenAta: string;
 
@@ -918,7 +923,12 @@ describe("connect plan --run with Solana legs: the same page, each Solana leg he
         send: async () => ({ value: snapshot.accounts[String(a)] ? { data: [snapshot.accounts[String(a)]!.data, "base64"] } : { data: tokenAccount(String(a) === sharesAta ? solShares : 0n) }, context: { slot: BigInt(snapshot.slot) } }),
       }),
       getMultipleAccounts: (ks: string[]) => ({ send: async () => ({ value: ks.map((k) => ({ data: [snapshot.accounts[String(k)]!.data, "base64"] })), context: { slot: BigInt(snapshot.slot) } }) }),
-      getLatestBlockhash: () => ({ send: async () => ({ value: { blockhash: BLOCKHASH, lastValidBlockHeight: 1150n } }) }),
+      getLatestBlockhash: () => ({
+        send: async () => {
+          lastBlockhash = sameBlockhash ? BLOCKHASH : getBase58Decoder().decode(new Uint8Array(32).fill(++reads));
+          return { value: { blockhash: lastBlockhash, lastValidBlockHeight: 1150n } };
+        },
+      }),
       getBlockHeight: () => ({ send: async () => 1000n }),
       getBalance: () => ({ send: async () => ({ value: 10_000_000n }) }),
       simulateTransaction: (_tx: string, cfg?: { accounts?: { addresses: string[] } }) => ({
@@ -931,12 +941,13 @@ describe("connect plan --run with Solana legs: the same page, each Solana leg he
       }),
       getSignatureStatuses: () => ({ send: async () => ({ value: [landed.err ? { err: landed.err, confirmationStatus: "confirmed" } : { confirmationStatus: "confirmed" }] }) }),
       getTransaction: () => ({
-        send: async () => ({ transaction: { message: { recentBlockhash: landed.blockhash, accountKeys: [SOL_ACCOUNT] } }, meta: { err: landed.err ?? null, preTokenBalances: landed.pre, postTokenBalances: landed.post } }),
+        send: async () => ({ transaction: { message: { recentBlockhash: landed.blockhash ?? lastBlockhash, accountKeys: [SOL_ACCOUNT] } }, meta: { err: landed.err ?? null, preTokenBalances: landed.pre, postTokenBalances: landed.post } }),
       }),
     }) as never;
 
-  /** A Solana deposit of 2.5 USDC that lands as built: the asset falls by exactly 2.5, and shares arrive. */
-  const depositLanded = () => ({ blockhash: BLOCKHASH, pre: [bal(1, SOL_ACCOUNT, sol.asset.address, 5_000_000n)], post: [bal(1, SOL_ACCOUNT, sol.asset.address, 2_500_000n), bal(2, SOL_ACCOUNT, sol.sharesMint, 2_400_000n)] });
+  /** A Solana deposit of 2.5 USDC that lands as built (on the last blockhash handed out): the asset falls by exactly
+   * 2.5, and shares arrive. */
+  const depositLanded = () => ({ pre: [bal(1, SOL_ACCOUNT, sol.asset.address, 5_000_000n)], post: [bal(1, SOL_ACCOUNT, sol.asset.address, 2_500_000n), bal(2, SOL_ACCOUNT, sol.sharesMint, 2_400_000n)] });
   const receiptsEvm = () => ({
     [h1]: { status: "success", logs: [approvalLog(600_000n)] },
     [h2]: { status: "success", logs: [transferLog(600_000n), depositLog(600_000n)] },
@@ -946,6 +957,8 @@ describe("connect plan --run with Solana legs: the same page, each Solana leg he
 
   beforeEach(async () => {
     sim = { failAfter: Infinity, builds: 0 };
+    reads = 0;
+    sameBlockhash = false;
     landed = depositLanded();
     sharesAta = String(await associatedTokenAccount(SOL_ACCOUNT, sol.sharesMint));
     tokenAta = String(await associatedTokenAccount(SOL_ACCOUNT, sol.asset.address));
@@ -989,7 +1002,7 @@ describe("connect plan --run with Solana legs: the same page, each Solana leg he
     // Leg 3 waits for the Solana leg's verdict.
     expect(await send(u, s, { start: 3 })).toMatchObject({ ok: false, reason: expect.stringMatching(/already in progress/) });
     const built = await send(u, s, { build: true });
-    expect(built).toMatchObject({ ok: true, blockhash: BLOCKHASH });
+    expect(built).toMatchObject({ ok: true, blockhash: lastBlockhash });
     expect(String(built["wire"]).length).toBeGreaterThan(0);
     expect(await send(u, s, { hash: SIG })).toMatchObject({ ok: true, finished: true, legDone: true, verdict: { verified: "matched" } });
     expect(await send(u, s, { start: 3 })).toMatchObject({ ok: true, started: 3 });
@@ -1018,6 +1031,51 @@ describe("connect plan --run with Solana legs: the same page, each Solana leg he
     await send(u, s, { build: true });
     expect(await send(u, s, { hash: SIG })).toMatchObject({ ok: true, finished: true, planDone: true });
     expect((await run)["status"]).toBe("completed");
+  });
+
+  const TWO_SOLANA = `deposit ${sol.symbol} 2.5; deposit ${sol.symbol} 2.5`;
+  const SIG2 = getBase58Decoder().decode(new Uint8Array(64).fill(8));
+
+  it("a transaction built for an earlier Solana leg does not complete a later one: its blockhash was never handed to that leg", async () => {
+    await acked(TWO_SOLANA);
+    const run = plan({ run: true }, d());
+    const { u, s } = await pageOf();
+    await send(u, s, { start: 1 });
+    const first = String((await send(u, s, { build: true }))["blockhash"]);
+    expect(await send(u, s, { hash: SIG })).toMatchObject({ ok: true, finished: true, legDone: true });
+    await send(u, s, { start: 2 });
+    expect((await send(u, s, { build: true }))["blockhash"]).not.toBe(first);
+    // Another signature, for a transaction built with leg 1's blockhash: an older one of the same shape.
+    landed = { ...depositLanded(), blockhash: first };
+    const r2 = await send(u, s, { hash: SIG2 });
+    expect(r2).toMatchObject({ ok: true, stop: true, verdict: { verified: "mismatch" } });
+    expect(String((r2["verdict"] as { detail: string }).detail)).toMatch(/blockhash is not one handed to the page/);
+    expect((await run)["status"]).toBe("stopped");
+    expect(readPlan()!.legs.map((l) => [l.status, (l.txs ?? []).map((t) => [t.hash, t.verified])])).toEqual([
+      ["completed", [[SIG, "matched"]]],
+      ["stopped", [[SIG2, "mismatch"]]],
+    ]);
+  });
+
+  it("two identical Solana legs built in one slot: the signature already on leg 1 does not complete leg 2", async () => {
+    sameBlockhash = true;
+    await acked(TWO_SOLANA);
+    const run = plan({ run: true }, d());
+    const { u, s } = await pageOf();
+    await send(u, s, { start: 1 });
+    await send(u, s, { build: true });
+    expect(await send(u, s, { hash: SIG })).toMatchObject({ ok: true, finished: true, legDone: true });
+    await send(u, s, { start: 2 });
+    expect(await send(u, s, { build: true })).toMatchObject({ ok: true, blockhash: BLOCKHASH });
+    // Same blockhash, same transaction: what landed on chain matches leg 2 byte for byte, but it is leg 1's.
+    const r2 = await send(u, s, { hash: SIG });
+    expect(r2).toMatchObject({ ok: true, stop: true, verdict: { verified: "mismatch" } });
+    expect(String((r2["verdict"] as { detail: string }).detail)).toMatch(/is the transaction of an earlier step of this plan/);
+    expect((await run)["status"]).toBe("stopped");
+    expect(readPlan()!.legs.map((l) => [l.status, (l.txs ?? []).map((t) => [t.hash, t.verified])])).toEqual([
+      ["completed", [[SIG, "matched"]]],
+      ["stopped", [[SIG, "mismatch"]]],
+    ]);
   });
 
   it("refuses before any page opens when the plan has a Solana leg and no Solana wallet is connected", async () => {

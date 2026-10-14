@@ -47005,7 +47005,7 @@ async function buildForIntent(rpc, intent, account) {
   }
   return { wire, expiresAfterBlockHeight: life.lastValidBlockHeight.toString(), blockhash: life.blockhash };
 }
-async function prepareConfirmSolana(intent, session, rpc, verifyOpts, deadline) {
+async function prepareConfirmSolana(intent, session, rpc, verifyOpts, deadline, recordedElsewhere) {
   const account = session.account;
   const done = [];
   const built = /* @__PURE__ */ new Set();
@@ -47057,6 +47057,12 @@ async function prepareConfirmSolana(intent, session, rpc, verifyOpts, deadline) 
     accept: async (sig) => {
       if (done.length > 0) return { ok: false, reason: "the transaction was already reported" };
       if (!wellFormedSignature(sig)) return { ok: false, reason: "malformed transaction signature" };
+      if (recordedElsewhere?.(sig)) {
+        const detail = `${sig} is the transaction of an earlier step of this plan, not one built for this step; check \`earn balance --chain solana\` before retrying anything`;
+        done.push({ step: 1, description, hash: sig, verified: "mismatch", detail });
+        stopReason = `the ${intent.kind} is mismatch: ${detail}`;
+        return { ok: true, kind: "stop", reply: { stop: true, verdict: { verified: "mismatch", detail } } };
+      }
       const entry = { step: 1, description, hash: sig, verified: "unverified", detail: "the flow ended while this transaction was still being checked" };
       done.push(entry);
       let verdict;
@@ -48295,7 +48301,10 @@ function buildConnectCommands(deps = {}) {
               const index3 = checkPlanLeg(plan.code, leg.leg, mine, sl.digest, now());
               const intent = await sl.intent();
               await buildForIntent(solanaRpc(), intent, solSession.account);
-              next = { index: index3, family: "solana", core: await prepareConfirmSolana(intent, solSession, solanaRpc(), deps.verifyOpts, endsAt) };
+              next = { index: index3, family: "solana", core: await prepareConfirmSolana(intent, solSession, solanaRpc(), deps.verifyOpts, endsAt, (sig) => {
+                const file2 = readPlan();
+                return [mine.legs, file2?.code === plan.code ? file2.legs : []].some((legs) => legs.some((l) => l.txs?.some((t) => t.hash === sig)));
+              }) };
             } else {
               const calls = legCalls(leg, session);
               const index3 = checkPlanLeg(plan.code, leg.leg, mine, callsDigest(calls, account), now());

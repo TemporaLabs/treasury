@@ -382,14 +382,21 @@ function PlanPage({ info: first, solana }: { info: PlanInfo; solana?: SolanaSide
             await refresh();
             return setNote({ text: "Stopped. Nothing else will be sent." });
           }
-          // Before any leg of a plan with a Solana leg still to run: the Solana account, connected and checked. A wallet
-          // that cannot ends the plan here, with nothing sent, rather than after other legs moved money.
+          // Before any leg of a plan with a Solana leg still to run: the Solana account, connected and checked. It runs
+          // again after a reload, so it can fail after earlier steps sent transactions; then only this step and the
+          // ones after it are stopped, and the note says so.
           if (solana && cur.legs.some((l) => l.status === "pending" && isSolana(l))) {
             const why = await solana.ensure();
             if (why) {
-              await post("/result", { rejected: true, unprepared: true, reason: `the Solana wallet check before the plan started: ${why}` }).catch(() => undefined);
+              const first = !cur.legs.some((l) => l.txs.length > 0);
+              await post("/result", { rejected: true, unprepared: true, reason: `the Solana wallet check before ${first ? "the plan started" : `step ${leg.leg}`}: ${why}` }).catch(() => undefined);
               await refresh();
-              return setNote({ text: `The plan was stopped before any step ran, and nothing was sent: ${why}.`, tone: "bad" });
+              return setNote({
+                text: first
+                  ? `The plan was stopped before any step ran, and nothing was sent: ${why}.`
+                  : `The plan was stopped before step ${leg.leg}, and nothing more was sent: ${why}. The steps before it are as shown.`,
+                tone: "bad",
+              });
             }
           }
           const s = await post("/result", { start: leg.leg });
