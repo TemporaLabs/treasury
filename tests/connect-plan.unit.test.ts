@@ -1176,6 +1176,36 @@ describe("connect plan --run with Solana legs: the same page, each Solana leg he
     expect(readPlan()).toBeUndefined();
   });
 
+  it("a build still running when the page stops the leg is refused: no transaction reaches a stopped leg", async () => {
+    await acked(`deposit ${sol.symbol} 2.5; deposit ${vault.symbol} 0.6`);
+    let reading!: () => void;
+    const inBuild = new Promise<void>((r) => (reading = r));
+    let release!: () => void;
+    const gate = new Promise<void>((r) => (release = r));
+    const rpc = solanaRpc() as unknown as Record<string, () => { send: () => Promise<unknown> }>;
+    let blockhashReads = 0;
+    // The start's gate reads a blockhash first; the operator's press reads the second, which waits here.
+    const slow = { ...rpc, getLatestBlockhash: () => ({ send: async () => (++blockhashReads > 1 && (reading(), await gate), rpc["getLatestBlockhash"]!().send()) }) };
+    const run = plan({ run: true }, d({ solanaRpc: slow as never }));
+    const { u, s } = await pageOf();
+    await send(u, s, { start: 1 });
+    const build = send(u, s, { build: true });
+    await inBuild;
+    await send(u, s, { rejected: true, declined: true, reason: "declined in the wallet; the operator stopped the plan" });
+    release();
+    expect(await build).toEqual({ ok: false, reason: "the plan was stopped on the page while this step was being prepared" });
+    await run;
+    expect(readPlan()!.legs.map((l) => l.status)).toEqual(["stopped", "pending"]);
+  });
+
+  it("a plan file whose Solana leg names an EVM vault is refused before any page opens, saying so", async () => {
+    await acked(MIXED);
+    const p = readPlan()!;
+    writeFileSync(planPath(), JSON.stringify({ ...p, legs: p.legs.map((l, i) => (i === 1 ? { ...l, args: { ...l.args!, vault: vault.symbol } } : l)) }));
+    await expect(plan({ run: true }, d())).rejects.toThrow(new RegExp(`leg 2 names ${vault.symbol}, which is not a vault on Solana`));
+    expect(opened).toEqual([]);
+  });
+
   it("a leg stopped on the page before its transaction was asked for: stopped, nothing built for the wallet, the next leg never runs", async () => {
     await acked(`deposit ${sol.symbol} 2.5; deposit ${vault.symbol} 0.6`);
     const run = plan({ run: true }, d());
