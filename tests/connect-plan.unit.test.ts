@@ -363,6 +363,15 @@ describe("a plan's legs: in order, each held to what was acknowledged, and a leg
     await holder;
   });
 
+  it("a leg that fails AFTER its page opened is not_reported, never put back to pending", async () => {
+    const { commands } = await acknowledged();
+    const d = deps({ open: (u) => (opened.push(u), (() => { throw new Error("the browser could not be started"); })()) });
+    await expect(runLeg(commands[0]!, d)).rejects.toThrow(/the browser could not be started/);
+    expect(opened).toHaveLength(1);
+    expect(readPlan()!.legs[0]).toMatchObject({ status: "not_reported", reason: "the browser could not be started" });
+    await expect(runLeg(commands[0]!)).rejects.toThrow(/already run/);
+  });
+
   it("a leg is marked running before its page opens: it cannot be started twice, and no later leg starts meanwhile", async () => {
     const { commands } = await acknowledged();
     const first = runLeg(commands[0]!, deps({ ttlMs: 400 }));
@@ -766,6 +775,48 @@ describe("connect plan --run: one page for every leg (#174)", () => {
     await send(u, s, { rejected: true, reason: "done" });
     await run;
     expect(readPlan()!.legs[0]!.status).toBe("running");
+  });
+
+  it("by default no leg starts with less than 5 minutes of the run left", async () => {
+    await acked();
+    // 4.5 minutes of page time: more than 3, less than 5.
+    const run = plan({ run: true }, deps({ ttlMs: 270_000 }));
+    const { u, s } = await pageOf();
+    expect(await send(u, s, { start: 1 })).toMatchObject({ ok: true, paused: true });
+    expect((await run)["status"]).toBe("in_progress");
+    expect(readPlan()!.legs.map((l) => l.status)).toEqual(["pending", "pending"]);
+  });
+
+  it("a plan replaced while a leg is being prepared: the start is refused and the leg never runs", async () => {
+    await acked();
+    let reading!: () => void;
+    const inRead = new Promise<void>((r) => (reading = r));
+    let release!: () => void;
+    const gate = new Promise<void>((r) => (release = r));
+    const d = deps({
+      ttlMs: 10_000,
+      legMinMs: 0,
+      balanceTimeoutMs: 5000,
+      client: () => ({
+        getTransactionReceipt: async () => new Promise<never>(() => {}),
+        readContract: async (q: { functionName: string }) => {
+          reading();
+          await gate;
+          return (q.functionName === "balanceOf" ? shares : q.functionName === "allowance" ? 10n ** 30n : 0n) as never;
+        },
+      }),
+    });
+    const run = plan({ run: true }, d);
+    const { u, s } = await pageOf();
+    const start = send(u, s, { start: 1 });
+    await inRead; // the start is past its first checks, inside the leg's chain reads
+    const newer = await plan({ legs: `deposit ${vault.symbol} 0.9` });
+    release();
+    expect(await start).toMatchObject({ ok: false, reason: expect.stringMatching(/replaced/) });
+    await send(u, s, { rejected: true, reason: "done" });
+    await run;
+    expect(readPlan()!.code).toBe(newer["ack"]);
+    expect(readPlan()!.legs.map((l) => l.status)).toEqual(["pending"]);
   });
 
   it("an expired plan opens no page", async () => {
