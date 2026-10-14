@@ -13,7 +13,7 @@ not permission to deposit it. **How much to deposit or withdraw is the operator'
 not pick.** Not a small test amount, not a round number, not the wallet's balance: if the operator has
 not named an amount, ask for one before you quote. The
 bundled `treasury` CLI gives you eight `earn` commands that read the vault and **prepare unsigned
-calls**, and five `connect` commands that put those calls in front of the operator's own wallet in a
+calls**, and six `connect` commands that put those calls in front of the operator's own wallet in a
 browser page. Run each one with the shell, exactly like this (nothing stays running between commands):
 
 ```bash
@@ -139,41 +139,47 @@ bridge. An operator can still put money into several vaults, on one chain or sev
 
 ### Several vaults in one request
 
-An operator can spread money across vaults in one sitting — "1 USDC on Base and 3 on Solana", "2 USDC on every chain",
-"1 in 2B and 1 in 2E". The vaults may be on different chains or the same one. That is **one deposit per vault**, each a
-complete deposit of its own with its own transaction; nothing moves money into several vaults at once.
+An operator can move money in several vaults in one sitting — "1 USDC on Base and 3 on Solana", "2 USDC on every chain",
+"withdraw 1 from 2B and deposit 1 into 2C". Vaults may be on different chains or one, and deposits and withdrawals may
+mix. Each vault is one **leg** with its own transactions; nothing moves money in several vaults at once.
 
-1. **Settle the list from the operator's own words.** Each vault, its chain and its amount. A chain named
-   without a vault means that chain's default vault. "Every chain" means every entry in `earn_vaults` →
-   `chains`, each with its default vault; "every vault" means every vault in `earn_vaults` →
-   `depositable`. A listed vault that is not in `depositable` cannot take the deposit: name it to the
-   operator rather than dropping it silently. Do not add, drop or resize a leg on your own.
-2. **Check every leg before any money moves:** `earn_quote` with `direction: "deposit"`, the real account and amount,
-   for each vault. The asset has to be on that vault's chain already (USDG, not USDC, on Robinhood Chain); this skill
-   does not bridge, so a leg whose funds are elsewhere cannot go ahead until the operator moves them. Two legs on one
-   chain draw on the same balance: check it covers both. On Solana the account also needs SOL, and on Ethereum gas can
-   be a large share of a small amount: say so for that leg.
-3. **Show one plan and get a yes to it:** a row per leg (vault, chain, amount, asset) with the total, and
-   which legs cannot go ahead and why. Changing the plan is the operator's call, not yours.
-4. **Then run the legs one at a time, each through the whole deposit flow below.** Each leg has its own receiver check,
-   and through `connect` its own acknowledgement and yes. `earn_terms` comes once, before the operator's first deposit,
-   as below. The EVM chains share one connected wallet; Solana needs its own (`connect wallet --chain solana`). Do not
-   start the next leg until the last one has landed or been abandoned.
-5. **If a leg fails or the operator stops it, stop and ask before the rest.** Then report every leg:
-   vault, chain, amount, transaction, and which did not happen.
+1. **Settle the legs from the operator's own words:** each leg's action, vault, chain and amount. A chain named without a
+   vault means its default vault. "Every chain" means every entry in `earn_vaults` → `chains`, each with its default
+   vault; "every vault" means every vault in `depositable` (a listed vault outside it cannot take a deposit: name it,
+   do not drop it silently). "Withdraw everything" means every vault whose `earn_balance` holds shares, each withdrawn in
+   full. Do not add, drop or resize a leg on your own.
+2. **Check every leg before any money moves:** `earn_quote` with the leg's direction, the real account and amount. The
+   asset has to be on that vault's chain already (USDG, not USDC, on Robinhood Chain); this skill does not bridge. Two
+   deposits on one chain draw on one balance: check it covers both. On Solana the account also needs SOL, and on
+   Ethereum gas can be a large share of a small amount: say so for that leg. A vault that cannot pay its withdrawal now
+   (liquidity) is a leg that cannot go ahead as asked: say so, and do not shrink it on your own.
+3. **Through `connect`, one acknowledgement covers the whole request: `connect plan`.** Pass the legs in order,
+   `--legs "deposit <vault> <amount>; withdraw <vault> <amount|all>"`: vault tickers, at most 8 legs; `all` binds the
+   share balance read at that moment. Like `connect deposit`, the first run opens nothing and returns one
+   `acknowledgement` listing every leg, its receiver and the warnings: post it word for word and wait. Only on the
+   operator's explicit yes, run it again with the same `--legs` and `--ack <code>`: that records the yes, opens nothing,
+   and returns each leg's `command`. Full `earn_terms` still come first, before the operator's first deposit. A plan
+   with legs on EVM chains and on Solana needs both wallets connected.
+4. **Then run the legs one at a time, in order, each exactly as its `command` gives it** (`connect deposit|withdraw …
+   --plan <code> --leg <n>`), each shell call with a timeout of at least 9 minutes. **The yes covers every leg: do not
+   ask again between them.** Report each leg's result as in **Handing calls to the signer**, step 4. Every leg must
+   start before the plan's `expiresAtIso`, 60 minutes after its first run.
+5. **Stop at the first leg that does not complete**; the CLI refuses the rest. Report every leg (vault, chain, amount,
+   transactions, and which did not run; `connect plan --status` lists them). What is left needs a new plan and a new yes.
 
-**Positions and withdrawals across vaults work the same way.** "What do I hold?" is `earn_balance` on every vault `earn_vaults` lists (the EVM account and the Solana account each), reported as one table: per vault, its chain, what it is worth and what it can
-be withdrawn for now, with the totals. "Withdraw everything" or "10 USDC from each" is settled from the operator's words the same way: the vaults that hold shares, each quoted with `direction: "withdraw"` (for everything, the amount its `earn_balance` `exit` gives, and the withdrawal then takes `--all` with that vault's own
-`sharesExact`), one plan with what each can pay now and a yes to it, then one complete withdrawal per vault, one at a time. A vault that cannot pay its part now (liquidity) is a leg that cannot go ahead as asked: say so, and do not shrink it on your own.
+**Without `connect`, the plan is yours to show:** one table, a row per leg with the total, and a yes to it; then one
+complete deposit or withdrawal per vault through the prepare commands, one at a time, each with its own destination check
+(to withdraw everything, `--all` with that vault's own `sharesExact`). **"What do I hold?"** is `earn_balance` on every
+vault `earn_vaults` lists (the EVM and the Solana account each), as one table: per vault, its chain, what it is worth
+and what it can be withdrawn for now, with the totals.
 
 ## Solana is different
 
 The vault on Solana (`chain: "solana"`) is a Kamino vault, not an ERC-4626 one. The same commands work on it,
 with these differences — say them to the operator where they apply:
 
-- **Addresses are Solana addresses** (base58, no `0x`). An EVM address for a vault on Solana is refused, and the
-  other way round. The operator's Solana address comes from their own message, through the destination check,
-  like any other.
+- **Addresses are Solana addresses** (base58, no `0x`). An EVM address for a vault on Solana is refused, and the other
+  way round. The operator's Solana address comes from their own message, through the destination check, like any other.
 - **`--receiver` must be the account itself.** The vault mints shares to the depositing account and pays a
   withdrawal to the account whose shares burn; there is no other receiver, and anything else is refused.
 - **One transaction, and it expires.** `earn prepare_deposit` / `prepare_withdraw` return ONE unsigned
@@ -185,8 +191,7 @@ with these differences — say them to the operator where they apply:
   account. `earn status --chain solana --account …` says `NEEDS_FUNDS` when it lacks USDC or SOL.
 - **Each withdraw instruction keeps up to 0.001 USDC in the vault** — Kamino's charge for every vault on its
   program, which Kamino can change; a withdrawal split across reserves pays it per part — and one worth 0.001
-  USDC or less is refused. Quotes report `receives`, exact and net of it; say so before a
-  small withdrawal.
+  USDC or less is refused. Quotes report `receives`, exact and net of it; say so before a small withdrawal.
 - **No history on Solana:** `earn_balance` reports shares, value and what a full exit would pay now, but
   `entryBasisUsdc` and `accruedYieldUsdc` read `unknown`. Do not present the value as profit.
 - **`connect wallet --chain solana`** connects a Solana wallet (Phantom, Solflare, Backpack, or a Privy wallet
@@ -269,12 +274,9 @@ instant-withdrawal fuses these differ by 10× — measured on a live Fusion test
 worth 14.999970 USDC, `maxWithdraw()` agreed, and 1.498874 USDC already reverted because the vault
 pays from its own 1.498873 USDC balance. `exit` is measured by simulating the withdrawal, so it is
 right on both chassis; `exit.maxWithdrawSays` is reported only because other interfaces show it.
-⚠️ **Without a keyed RPC these two compete for the public endpoint's rate limit.** Measured
-2026-09-15 on a live Tempora Labs vault: with a key, both the exit and a whole-history scan complete in
-about 15-22 s; with no key, one of them usually degrades — the exit reports `not measured`, or the
-scan reports CUT SHORT. Each says so in its own result, so the answer is smaller, never wrong. A
-keyed RPC for the vault's chain (`TREASURY_RPC_BASE`, `TREASURY_RPC_ARBITRUM`, `TREASURY_RPC_ROBINHOOD`, `TREASURY_RPC_ETHEREUM`, `TREASURY_RPC_MONAD`) is what makes both available in one call. On Solana,
-which has no scan, the keyed RPC is `TREASURY_RPC_SOLANA`.
+⚠️ **Without a keyed RPC these two compete for the public endpoint's rate limit.** Measured 2026-09-15: with a key,
+the exit and a whole-history scan both complete in about 15-22 s; with none, one usually degrades (the exit `not
+measured`, or the scan CUT SHORT) and says so. The vault's chain's `TREASURY_RPC_*` (Setup) makes both available.
 
 🔴 **`measuredAs: "not measured"` means the RPC failed, NOT that the vault refused** — say so rather
 than reporting a limit the chain never stated.
@@ -321,7 +323,7 @@ node "${CLAUDE_PLUGIN_ROOT}/dist/treasury.mjs" connect deposit --vault <symbol> 
    chain, vault and its explorer link, the receiver, the vault's warning and the disclosures) and an
    `ack` code. **Post `acknowledgement` to the operator word for word and wait for their answer.** Do
    not summarise it, shorten it, or skip it because they acknowledged an earlier one or said "go"
-   before they saw it: every page open has its own.
+   before they saw it: every page open has its own, except the legs of one `connect plan` (above).
 3. **Only on the operator's explicit yes to that text**, run the same command again with `--ack <code>`
    added. The page opens; the operator confirms each call there and in the wallet; the command returns
    when they finish. Any answer but yes: stop. A refused `--ack` (expired after 15 minutes, already used,
@@ -480,9 +482,8 @@ you do it, and here is why the key stays with you."
 ## Reporting
 
 State what was measured and when: the vault's `symbol` and its `chain`, the pre-flight `status`, `measuredAtBlock`,
-and — after a transaction — the resulting shares and value. Quote `findings` verbatim when
-something stopped you. An operator who can see the block and the exact revert can act; one
-who is told "it didn't work" cannot.
+and — after a transaction — the resulting shares and value. Quote `findings` verbatim when something stopped you. An
+operator who can see the block and the exact revert can act; one who is told "it didn't work" cannot.
 
 **Show the transactions, not just the totals.** `earn_balance`'s `scan.depositTxs` and
 `scan.withdrawTxs` carry `{ txHash, blockNumber, amountUsdc }` for the events behind the basis, and
@@ -491,6 +492,6 @@ on Arbitrum One, `https://robinhoodchain.blockscout.com/tx/<txHash>` on Robinhoo
 on Ethereum and `https://monadscan.com/tx/<txHash>` on Monad. ⚠️ That is a DIFFERENT path from the
 vault's `links.explorer`, which is `https://basescan.org/address/<vault>` (or the Arbiscan, Blockscout, Etherscan or MonadScan equivalent) — swap the `/address/…`
 segment for `/tx/<txHash>`, never append to it, or the result is a URL that resolves to nothing.
-With the link the operator can open what actually landed instead of taking your word for it. ⚠️ **Each list holds at most the
-100 most recent, while `scan.deposits`/`scan.withdrawals` stay the TOTALS** — when the two disagree
-the list is partial, and saying so is the difference between a summary and a misleading one.
+With the link the operator can open what actually landed instead of taking your word for it. ⚠️ **Each list holds at
+most the 100 most recent, while `scan.deposits`/`scan.withdrawals` stay the TOTALS**: when the two disagree the list is
+partial, and say so.

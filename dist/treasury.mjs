@@ -45898,6 +45898,8 @@ var DISCLOSURES = {
       "You can withdraw, but in stressed markets part of your money may not come out right away.",
       "Tempora Labs runs this vault and can charge fees on it. It is offered because it is a Tempora Labs vault, not because it pays the most. Its holdings and fees are public on-chain."
     ],
+    /** The last `deposit` sentence, for an acknowledgement that names more than one vault (`connect plan`). */
+    feesSeveral: "Tempora Labs runs these vaults and can charge fees on them. They are offered because they are Tempora Labs vaults, not because they pay the most. Their holdings and fees are public on-chain.",
     /** Added before a deposit into a vault whose registry row is not open to every account. */
     gatedDeposit: "This vault only accepts deposits from accounts Tempora Labs has admitted. If yours is not one, the deposit will fail.",
     always: [
@@ -46460,11 +46462,13 @@ function writeOwnerOnly(path, value) {
 function writeSession(s2) {
   writeOwnerOnly(sessionPath(), s2);
   clearPendingAck();
+  clearPlan();
 }
 function clearSession() {
   const had = readSession() !== void 0;
   rmSync(sessionPath(), { force: true });
   clearPendingAck();
+  clearPlan();
   return had;
 }
 var solanaSessionPath = () => join(dir(), "connect-session-solana.json");
@@ -46481,11 +46485,13 @@ function readSolanaSession() {
 function writeSolanaSession(s2) {
   writeOwnerOnly(solanaSessionPath(), s2);
   clearPendingAck();
+  clearPlan();
 }
 function clearSolanaSession() {
   const had = readSolanaSession() !== void 0;
   rmSync(solanaSessionPath(), { force: true });
   clearPendingAck();
+  clearPlan();
   return had;
 }
 var pendingAckPath = () => join(dir(), "connect-ack.json");
@@ -46503,6 +46509,23 @@ function readPendingAck() {
 }
 function clearPendingAck() {
   rmSync(pendingAckPath(), { force: true });
+}
+var planPath = () => join(dir(), "connect-plan.json");
+function writePlan(p) {
+  writeOwnerOnly(planPath(), p);
+}
+function readPlan() {
+  try {
+    const v = JSON.parse(readFileSync(planPath(), "utf8"));
+    if (typeof v.code !== "string" || typeof v.issuedAtIso !== "string" || typeof v.expiresAtIso !== "string" || typeof v.acknowledged !== "boolean" || !Array.isArray(v.legs)) return void 0;
+    for (const l of v.legs) if (!l || typeof l.leg !== "number" || typeof l.digest !== "string" || typeof l.status !== "string") return void 0;
+    return v;
+  } catch {
+    return void 0;
+  }
+}
+function clearPlan() {
+  rmSync(planPath(), { force: true });
 }
 var pageLockPath = () => join(dir(), "connect-page.lock");
 var LOCK_WRITE_GRACE_MS = 2e3;
@@ -47053,6 +47076,107 @@ function acknowledgementText(s2) {
     `Do you acknowledge and want the signing page opened for exactly this ${s2.action}? Reply yes or no.`
   ].join("\n");
 }
+var PLAN_TTL_MS = 60 * 6e4;
+var PLAN_MAX_LEGS = 8;
+function planDigest(digests) {
+  return keccak256(stringToHex(JSON.stringify(["plan", digests])));
+}
+function issuePlan(legs, now) {
+  const a = issueAckForDigest(planDigest(legs.map((l) => l.digest)), now);
+  return {
+    code: a.code,
+    issuedAtIso: a.issuedAtIso,
+    expiresAtIso: new Date(now.getTime() + PLAN_TTL_MS).toISOString(),
+    acknowledged: false,
+    legs: legs.map((l) => ({ ...l, status: "pending" }))
+  };
+}
+var planExpired = (p, now) => {
+  const expires = Date.parse(p.expiresAtIso);
+  return !Number.isFinite(expires) || now.getTime() > expires;
+};
+function checkPlanAck(code, plan, digests, now) {
+  const again = "run the same `connect plan` without --ack, post its `acknowledgement` to the operator, and wait for their yes";
+  if (!plan) throw new Error(`refused: no plan is pending; ${again}`);
+  if (code.trim().toLowerCase() !== plan.code) throw new Error(`refused: --ack ${code} is not the pending plan's code; ${again}`);
+  if (planExpired(plan, now)) throw new Error(`refused: the plan expired at ${plan.expiresAtIso}; ${again}`);
+  if (plan.acknowledged) throw new Error(`refused: this plan was already acknowledged; run its legs (\`connect plan --status\` lists them)`);
+  if (planDigest(digests) !== planDigest(plan.legs.map((l) => l.digest))) {
+    throw new Error(`refused: these legs are not the ones the operator acknowledged (a leg, its order, amount, vault, or a share balance changed); ${again}`);
+  }
+}
+function checkPlanLeg(code, leg, plan, digest, now) {
+  const again = "acknowledge a new plan with `connect plan`";
+  if (!plan) throw new Error(`refused: no plan is pending; ${again}`);
+  if (code.trim().toLowerCase() !== plan.code) throw new Error(`refused: --plan ${code} is not the pending plan's code; ${again}`);
+  if (!plan.acknowledged) throw new Error(`refused: plan ${plan.code} has not been acknowledged; post its acknowledgement and, on the operator's yes, run \`connect plan\` with --ack ${plan.code}`);
+  if (planExpired(plan, now)) throw new Error(`refused: the plan expired at ${plan.expiresAtIso}; legs that have not started do not run; ${again}`);
+  const i = plan.legs.findIndex((l) => l.leg === leg);
+  if (i < 0) throw new Error(`refused: plan ${plan.code} has no leg ${leg}; it has legs 1 to ${plan.legs.length}`);
+  const ended = plan.legs.find((l) => l.status !== "pending" && l.status !== "completed");
+  if (ended && ended.leg !== leg) {
+    throw new Error(
+      ended.status === "running" ? `refused: leg ${ended.leg} is still running, or its run never finished; no later leg runs until it has completed` : `refused: the plan ended at leg ${ended.leg} (${ended.status}), so no later leg runs; ${again}`
+    );
+  }
+  if (plan.legs[i].status !== "pending") throw new Error(`refused: leg ${leg} has already run (${plan.legs[i].status})`);
+  const before = plan.legs.slice(0, i).find((l) => l.status !== "completed");
+  if (before) throw new Error(`refused: legs run in order, and leg ${before.leg} has not completed; run it first`);
+  if (digest !== plan.legs[i].digest) {
+    throw new Error(`refused: these calls are not leg ${leg} as the operator acknowledged it (the amount, vault, chain, receiver or connected account changed); ${again}`);
+  }
+  return i;
+}
+function planAcknowledgementText(legs, totals) {
+  const n = legs.length;
+  const advice = (w) => w.match(/Deposit only .*?\.(?=\s|$)/g)?.join(" ") ?? "";
+  const warnings = [];
+  for (const s2 of legs) {
+    const base2 = operatorWarning(s2.warning, "withdraw");
+    const w = warnings.find((x) => x.text === base2) ?? warnings[warnings.push({ text: base2, vaults: [], advice: "", depositVaults: [] }) - 1];
+    if (!w.vaults.includes(s2.vault.symbol)) w.vaults.push(s2.vault.symbol);
+    if (s2.action === "deposit" && advice(s2.warning)) {
+      w.advice = advice(s2.warning);
+      if (!w.depositVaults.includes(s2.vault.symbol)) w.depositVaults.push(s2.vault.symbol);
+    }
+  }
+  const several = new Set(legs.map((s2) => s2.vault.symbol)).size > 1;
+  const fees = DISCLOSURES.plain.deposit.find((d) => d.startsWith("Tempora Labs runs this vault"));
+  const disclosures = [...new Set(legs.flatMap((s2) => s2.disclosures))].map((d) => several && d === fees ? DISCLOSURES.plain.feesSeveral : d);
+  const minutes = Math.round(PLAN_TTL_MS / 6e4);
+  const legLines = legs.flatMap((s2, i) => {
+    const lands = s2.action === "deposit" ? "Shares go to" : `${s2.asset} goes to`;
+    const prompts = s2.prompts ?? (s2.action === "deposit" ? `Your wallet will ask you twice: first to approve ${s2.amount} to the vault, then to make the deposit.` : `Your wallet will ask you once, to make the withdrawal.`);
+    return [
+      `  ${i + 1}. ${s2.action === "deposit" ? "Deposit" : "Withdraw"}: ${s2.amount}`,
+      s2.chainId === null ? `     Chain: ${s2.chain} (mainnet-beta)` : `     Chain: ${s2.chain} (chainId ${s2.chainId})`,
+      `     Vault: ${s2.vault.name} (${s2.vault.symbol})`,
+      `            ${s2.vault.explorer}`,
+      `     ${lands}: ${s2.receiver} (the connected wallet)`,
+      `     ${prompts}`,
+      ``
+    ];
+  });
+  return [
+    `Confirm before any signing page opens. Nothing has been sent.`,
+    ``,
+    `This plan has ${n} ${n === 1 ? "leg" : "legs"}, run in this order. Each opens its own signing page, where your wallet asks you to confirm each transaction. If a leg does not complete, the legs after it do not run.`,
+    `The plan lasts ${minutes} minutes: a leg not started by then does not run, and connecting a wallet again cancels it. To stop partway, cancel on a leg's signing page; the legs after it then do not run.`,
+    ``,
+    ...legLines,
+    ...totals.length ? [`In total: ${totals.join("; ")}.`, ``] : [],
+    ...warnings.flatMap((w) => [
+      `WARNING (${w.vaults.join(", ")}): ${w.text}`,
+      ...w.advice ? [`  For the ${w.depositVaults.length === 1 ? "deposit" : "deposits"} (${w.depositVaults.join(", ")}): ${w.advice}`] : []
+    ]),
+    ``,
+    `Before you agree:`,
+    ...disclosures.map((d) => `  - ${d}`),
+    `  ${DISCLOSURES.plain.fullTerms}`,
+    ``,
+    `Do you acknowledge and want the signing pages opened, one leg at a time, for exactly these ${n} ${n === 1 ? "leg" : "legs"}? Reply yes or no.`
+  ].join("\n");
+}
 
 // src/connect/gate.ts
 var UNLIMITED = 2n ** 128n;
@@ -47551,11 +47675,56 @@ function buildConnectCommands(deps = {}) {
     appId: privyAppId()
   });
   const notConnectedSolana = () => new Error("no Solana wallet is connected \u2014 run `treasury connect wallet --chain solana` first, and let the operator sign in");
-  const confirmSolana = async (acked, amountText, session, ack, intent) => {
+  const markLeg = (code, index2, update) => {
+    const cur = readPlan();
+    if (!cur || cur.code !== code) return;
+    cur.legs[index2] = { ...cur.legs[index2], ...update };
+    writePlan(cur);
+  };
+  const runPlanLeg = async (plan, index2, run2) => {
+    markLeg(plan.code, index2, { status: "running" });
+    let text2;
+    try {
+      text2 = await run2();
+    } catch (e4) {
+      markLeg(plan.code, index2, { status: "not_reported", reason: redactEndpoints(e4 instanceof Error ? e4.message : String(e4)) });
+      throw e4;
+    }
+    const r = JSON.parse(text2);
+    const status = r.status === "completed" ? "completed" : r.status === "stopped" ? "stopped" : "not_reported";
+    markLeg(plan.code, index2, { status, txs: (r.txs ?? []).map((t) => ({ hash: t.hash, verified: t.verified })), ...r.reason ? { reason: r.reason } : {} });
+    const leg = plan.legs[index2];
+    const next = plan.legs[index2 + 1];
+    const next_step = status !== "completed" ? `The plan ended at leg ${leg.leg} of ${plan.legs.length}: the legs after it will not run. ${r.next_step}` : next ? `Leg ${leg.leg} of ${plan.legs.length} completed. Report its hashes to the operator, then run leg ${next.leg} without asking again (their yes covered every leg): ${next.command}` : `Leg ${leg.leg} of ${plan.legs.length} completed, and with it the whole plan. Report every leg's hashes to the operator (\`connect plan --status\` lists them).`;
+    return JSON.stringify({ ...r, plan: { code: plan.code, leg: leg.leg, of: plan.legs.length }, next_step }, null, 2);
+  };
+  const solanaOutcome = (session, r) => {
+    const txs = r.result.ok ? r.result.value : r.done;
+    const all = txs.length === r.total && txs.every((t) => t.verified === "matched" || t.verified === "extra_transfer");
+    const status = r.result.ok ? all ? "completed" : "stopped" : txs.length ? "stopped" : "not_reported";
+    const reason = (r.result.ok ? r.stopReason : r.result.reason) ?? (status === "stopped" ? "the flow ended before the transaction was confirmed" : void 0);
+    return JSON.stringify(
+      {
+        status,
+        chain: "solana",
+        chainId: null,
+        account: session.account,
+        opened: r.opened,
+        ...reason ? { reason } : {},
+        calls_total: r.total,
+        txs,
+        next_step: status === "completed" ? "The transaction landed as confirmed. Report its signature to the operator; any `extra_transfer` is money the wallet moved besides the call \u2014 say so." : status === "stopped" ? "Stopped before the transaction landed as confirmed. Do not retry blindly: read `reason` and the transaction's `verified` and `detail`, check the account with `earn balance --chain solana`, and tell the operator." : "No transaction was reported to this command. That is not proof that none was sent: if the wallet showed a confirmation, check the account with `earn balance --chain solana` before any retry. Tell the operator why (reason)."
+      },
+      null,
+      2
+    );
+  };
+  const confirmSolana = async (acked, amountText, session, mode, intent) => {
     const digest = solanaIntentDigest(session.account, acked.vault.address, acked.kind, acked.raw);
-    if (ack === void 0) {
+    if (mode.kind === "describe" || mode.kind === "ack" && mode.ack === void 0) {
       await intent();
       const summary = summarizeSolana(acked.kind === "deposit" ? "deposit" : "withdraw", acked.vault, amountText, session.account);
+      if (mode.kind === "describe") return { digest, summary };
       const pending = issueAckForDigest(digest, now());
       writePendingAck(pending);
       return JSON.stringify(
@@ -47578,28 +47747,14 @@ function buildConnectCommands(deps = {}) {
         2
       );
     }
-    checkAckDigest(ack, readPendingAck(), digest, now());
+    if (mode.kind === "plan") {
+      const plan = readPlan();
+      const index2 = checkPlanLeg(mode.code, mode.leg, plan, digest, now());
+      return runPlanLeg(plan, index2, async () => solanaOutcome(session, await runConfirmSolana(await intent(), session, solanaDeps())));
+    }
+    checkAckDigest(mode.ack, readPendingAck(), digest, now());
     clearPendingAck();
-    const r = await runConfirmSolana(await intent(), session, solanaDeps());
-    const txs = r.result.ok ? r.result.value : r.done;
-    const all = txs.length === r.total && txs.every((t) => t.verified === "matched" || t.verified === "extra_transfer");
-    const status = r.result.ok ? all ? "completed" : "stopped" : txs.length ? "stopped" : "not_reported";
-    const reason = (r.result.ok ? r.stopReason : r.result.reason) ?? (status === "stopped" ? "the flow ended before the transaction was confirmed" : void 0);
-    return JSON.stringify(
-      {
-        status,
-        chain: "solana",
-        chainId: null,
-        account: session.account,
-        opened: r.opened,
-        ...reason ? { reason } : {},
-        calls_total: r.total,
-        txs,
-        next_step: status === "completed" ? "The transaction landed as confirmed. Report its signature to the operator; any `extra_transfer` is money the wallet moved besides the call \u2014 say so." : status === "stopped" ? "Stopped before the transaction landed as confirmed. Do not retry blindly: read `reason` and the transaction's `verified` and `detail`, check the account with `earn balance --chain solana`, and tell the operator." : "No transaction was reported to this command. That is not proof that none was sent: if the wallet showed a confirmation, check the account with `earn balance --chain solana` before any retry. Tell the operator why (reason)."
-      },
-      null,
-      2
-    );
+    return solanaOutcome(session, await runConfirmSolana(await intent(), session, solanaDeps()));
   };
   const solanaWithdrawShares = async (vault, amount_usdc, shares_exact) => {
     if (shares_exact !== void 0) return parseAmount(shares_exact, vault.shareDecimals, "shares_exact");
@@ -47608,8 +47763,15 @@ function buildConnectCommands(deps = {}) {
     if (v.holdings.netAum === 0n) throw new Error(`${vault.symbol} holds nothing to withdraw`);
     return (amount * v.state.sharesIssued + v.holdings.netAum - 1n) / v.holdings.netAum;
   };
-  const confirmInWallet = async (action, calls, session, receiver, ack) => {
+  const confirmInWallet = async (action, calls, session, receiver, mode) => {
     const account = session.account;
+    if (mode.kind === "describe") return { digest: callsDigest(calls, account), summary: summarize(action, calls, admit(calls, account), receiver) };
+    if (mode.kind === "plan") {
+      const plan = readPlan();
+      const index2 = checkPlanLeg(mode.code, mode.leg, plan, callsDigest(calls, account), now());
+      return runPlanLeg(plan, index2, async () => outcome(calls[0].chainId, session.account, await runConfirm(calls, session, deps)));
+    }
+    const ack = mode.ack;
     if (ack === void 0) {
       const summary = summarize(action, calls, admit(calls, account), receiver);
       const pending = issueAck(calls, account, now());
@@ -47639,37 +47801,91 @@ function buildConnectCommands(deps = {}) {
     const r = await runConfirm(calls, session, deps);
     return outcome(calls[0].chainId, session.account, r);
   };
+  const modeOf = (a) => {
+    if (a.plan !== void 0 || a.leg !== void 0) {
+      if (a.ack !== void 0) throw new Error("give --ack (a single acknowledgement) or --plan with --leg (a leg of an acknowledged plan), not both");
+      if (a.plan === void 0 || a.leg === void 0) throw new Error("--plan and --leg go together: the plan's code and the leg's number, as `connect plan` gave them");
+      return { kind: "plan", code: a.plan, leg: a.leg };
+    }
+    return { kind: "ack", ack: a.ack };
+  };
+  const asText = (r) => {
+    if (typeof r !== "string") throw new Error("internal: a run returned a description");
+    return r;
+  };
+  const depositLeg = async ({ vault: symbol2, chain, amount_usdc, receiver: rawReceiver }, mode) => {
+    const target = resolveAnyVault(symbol2, chain);
+    if (target.family === "solana") {
+      const session2 = readSolanaSession();
+      if (!session2) throw notConnectedSolana();
+      if (rawReceiver !== session2.account) throw new Error(`refused: --receiver ${rawReceiver} is not the connected Solana account ${session2.account}; on Solana the shares can only go to the account that deposits`);
+      const raw = parseAmount(amount_usdc, target.vault.asset.decimals, `deposit amount (${target.vault.asset.symbol})`);
+      if (raw === 0n) throw new Error("a deposit of 0");
+      const intent = { kind: "deposit", vault: target.vault, raw };
+      return confirmSolana(intent, `${formatAmount(raw, target.vault.asset.decimals)} ${target.vault.asset.symbol}`, session2, mode, async () => intent);
+    }
+    const session = readSession();
+    if (!session) throw notConnected();
+    const receiver = isAddress2(rawReceiver) ? getAddress(rawReceiver) : rawReceiver;
+    if (receiver !== session.account) throw new Error(`refused: --receiver ${receiver} is not the connected account ${session.account}; this page pays only the connected account (use \`earn prepare_deposit\` with the operator's own signer for anything else)`);
+    const vault = resolveVault(symbol2, chain);
+    return confirmInWallet("deposit", buildDeposit(vault, { assetsHuman: amount_usdc, receiver, account: session.account }), session, receiver, mode);
+  };
+  const withdrawLeg = async ({ vault: symbol2, chain, receiver: rawReceiver, amount_usdc, all, shares_exact }, mode) => {
+    if (all && amount_usdc) throw new Error("give --amount_usdc or --all with --shares_exact, not both");
+    if (!all && shares_exact) throw new Error("--shares_exact goes with --all; for an amount in the asset, use --amount_usdc alone");
+    if (all && !shares_exact) throw new Error("--all requires --shares_exact (copy it verbatim from `earn balance`)");
+    if (!all && !amount_usdc) throw new Error("provide --amount_usdc, or --all with --shares_exact");
+    const target = resolveAnyVault(symbol2, chain);
+    if (target.family === "solana") {
+      const session2 = readSolanaSession();
+      if (!session2) throw notConnectedSolana();
+      if (rawReceiver !== session2.account) throw new Error(`refused: --receiver ${rawReceiver} is not the connected Solana account ${session2.account}; on Solana a withdrawal pays only the account whose shares burn`);
+      const v = target.vault;
+      const intent = async () => {
+        const raw = await solanaWithdrawShares(v, all ? void 0 : amount_usdc, all ? shares_exact : void 0);
+        if (raw === 0n) throw new Error("a withdrawal of 0");
+        return { kind: "withdraw", vault: v, raw };
+      };
+      if (all) {
+        const shares = parseAmount(shares_exact, v.shareDecimals, "shares_exact");
+        return confirmSolana({ kind: "withdraw", vault: v, raw: shares }, `${formatAmount(shares, v.shareDecimals)} ${v.symbol} shares`, session2, mode, intent);
+      }
+      const assets2 = parseAmount(amount_usdc, v.asset.decimals, `withdrawal amount (${v.asset.symbol})`);
+      return confirmSolana({ kind: "withdraw-assets", vault: v, raw: assets2 }, `${formatAmount(assets2, v.asset.decimals)} ${v.asset.symbol}`, session2, mode, intent);
+    }
+    const session = readSession();
+    if (!session) throw notConnected();
+    const receiver = isAddress2(rawReceiver) ? getAddress(rawReceiver) : rawReceiver;
+    if (receiver !== session.account) throw new Error(`refused: --receiver ${receiver} is not the connected account ${session.account}; this page pays only the connected account`);
+    const vault = resolveVault(symbol2, chain);
+    const owner = session.account;
+    let calls;
+    if (all) {
+      if (!shares_exact) throw new Error("--all requires --shares_exact (copy it verbatim from `earn balance`)");
+      calls = buildWithdraw(vault, { receiver, owner, all: true, sharesExact: shares_exact });
+    } else {
+      if (!amount_usdc) throw new Error("provide --amount_usdc, or --all with --shares_exact");
+      calls = buildWithdraw(vault, { receiver, owner, assetsHuman: amount_usdc });
+    }
+    return confirmInWallet("withdraw", calls, session, receiver, mode);
+  };
+  const planCodeArg = external_exports.string().regex(/^[0-9a-fA-F]{8}$/, "the 8-character code of an acknowledged plan, from `connect plan`").optional().describe("run this as a leg of an acknowledged plan (`connect plan`): the plan's code, with --leg. Use the leg's command exactly as `connect plan` gave it; instead of --ack");
+  const legArg = external_exports.number().int().positive().optional().describe("which leg of the plan this is (1, 2, \u2026), with --plan; legs run in order");
   register(
     "connect_deposit",
     {
       title: "Deposit through the connected wallet",
-      description: "Builds the approve + deposit for the CONNECTED account and checks every call against the registry. Runs twice. Without --ack it opens NOTHING: it returns `needs_acknowledgement` with an `acknowledgement` to post to the operator word for word, and an `ack` code. Only after the operator replies yes, run it again with --ack <code>: then the confirm page opens, and the operator confirms each call in their wallet, one at a time. That run returns each transaction hash with `verified` read from the receipt (`matched`, `extra_transfer`, `mismatch`, `reverted`, `unverified`). Run `earn quote --direction deposit` first.",
-      inputSchema: { vault: vaultArg2, chain: chainArg2, amount_usdc: amountArg2, receiver: receiverArg, ack: ackArg }
+      description: "Builds the approve + deposit for the CONNECTED account and checks every call against the registry. Runs twice. Without --ack it opens NOTHING: it returns `needs_acknowledgement` with an `acknowledgement` to post to the operator word for word, and an `ack` code. Only after the operator replies yes, run it again with --ack <code>: then the confirm page opens, and the operator confirms each call in their wallet, one at a time. That run returns each transaction hash with `verified` read from the receipt (`matched`, `extra_transfer`, `mismatch`, `reverted`, `unverified`). Run `earn quote --direction deposit` first. As a leg of a plan the operator acknowledged with `connect plan`, run it with --plan <code> --leg <n> instead of --ack, exactly as the plan gave it.",
+      inputSchema: { vault: vaultArg2, chain: chainArg2, amount_usdc: amountArg2, receiver: receiverArg, ack: ackArg, plan: planCodeArg, leg: legArg }
     },
-    async ({ vault: symbol2, chain, amount_usdc, receiver: rawReceiver, ack }) => {
-      const target = resolveAnyVault(symbol2, chain);
-      if (target.family === "solana") {
-        const session2 = readSolanaSession();
-        if (!session2) throw notConnectedSolana();
-        if (rawReceiver !== session2.account) throw new Error(`refused: --receiver ${rawReceiver} is not the connected Solana account ${session2.account}; on Solana the shares can only go to the account that deposits`);
-        const raw = parseAmount(amount_usdc, target.vault.asset.decimals, `deposit amount (${target.vault.asset.symbol})`);
-        if (raw === 0n) throw new Error("a deposit of 0");
-        const intent = { kind: "deposit", vault: target.vault, raw };
-        return confirmSolana(intent, `${formatAmount(raw, target.vault.asset.decimals)} ${target.vault.asset.symbol}`, session2, ack, async () => intent);
-      }
-      const session = readSession();
-      if (!session) throw notConnected();
-      const receiver = isAddress2(rawReceiver) ? getAddress(rawReceiver) : rawReceiver;
-      if (receiver !== session.account) throw new Error(`refused: --receiver ${receiver} is not the connected account ${session.account}; this page pays only the connected account (use \`earn prepare_deposit\` with the operator's own signer for anything else)`);
-      const vault = resolveVault(symbol2, chain);
-      return confirmInWallet("deposit", buildDeposit(vault, { assetsHuman: amount_usdc, receiver, account: session.account }), session, receiver, ack);
-    }
+    async (args) => asText(await depositLeg(args, modeOf(args)))
   );
   register(
     "connect_withdraw",
     {
       title: "Withdraw through the connected wallet",
-      description: "Builds the withdrawal for the CONNECTED account (the asset to that same account) and checks it against the registry. Runs twice, like `connect deposit`: without --ack it opens NOTHING and returns `needs_acknowledgement` with an `acknowledgement` to post to the operator word for word; only after their yes, run it again with --ack <code> and the confirm page opens. Pass --amount_usdc, or --all with --shares_exact copied verbatim from `earn balance`. Run `earn quote --direction withdraw` first. The second run returns the hash with `verified` read from the receipt.",
+      description: "Builds the withdrawal for the CONNECTED account (the asset to that same account) and checks it against the registry. Runs twice, like `connect deposit`: without --ack it opens NOTHING and returns `needs_acknowledgement` with an `acknowledgement` to post to the operator word for word; only after their yes, run it again with --ack <code> and the confirm page opens. Pass --amount_usdc, or --all with --shares_exact copied verbatim from `earn balance`. Run `earn quote --direction withdraw` first. The second run returns the hash with `verified` read from the receipt. As a leg of a plan the operator acknowledged with `connect plan`, run it with --plan <code> --leg <n> instead of --ack, exactly as the plan gave it.",
       inputSchema: {
         vault: vaultArg2,
         chain: chainArg2,
@@ -47677,47 +47893,154 @@ function buildConnectCommands(deps = {}) {
         amount_usdc: amountArg2.optional(),
         all: external_exports.boolean().optional(),
         shares_exact: external_exports.string().regex(/^\d+(\.\d+)?$/).optional(),
-        ack: ackArg
+        ack: ackArg,
+        plan: planCodeArg,
+        leg: legArg
       }
     },
-    async ({ vault: symbol2, chain, receiver: rawReceiver, amount_usdc, all, shares_exact, ack }) => {
-      if (all && amount_usdc) throw new Error("give --amount_usdc or --all with --shares_exact, not both");
-      if (!all && shares_exact) throw new Error("--shares_exact goes with --all; for an amount in the asset, use --amount_usdc alone");
-      if (all && !shares_exact) throw new Error("--all requires --shares_exact (copy it verbatim from `earn balance`)");
-      if (!all && !amount_usdc) throw new Error("provide --amount_usdc, or --all with --shares_exact");
-      const target = resolveAnyVault(symbol2, chain);
-      if (target.family === "solana") {
-        const session2 = readSolanaSession();
-        if (!session2) throw notConnectedSolana();
-        if (rawReceiver !== session2.account) throw new Error(`refused: --receiver ${rawReceiver} is not the connected Solana account ${session2.account}; on Solana a withdrawal pays only the account whose shares burn`);
-        const v = target.vault;
-        const intent = async () => {
-          const raw = await solanaWithdrawShares(v, all ? void 0 : amount_usdc, all ? shares_exact : void 0);
-          if (raw === 0n) throw new Error("a withdrawal of 0");
-          return { kind: "withdraw", vault: v, raw };
-        };
-        if (all) {
-          const shares = parseAmount(shares_exact, v.shareDecimals, "shares_exact");
-          return confirmSolana({ kind: "withdraw", vault: v, raw: shares }, `${formatAmount(shares, v.shareDecimals)} ${v.symbol} shares`, session2, ack, intent);
-        }
-        const assets2 = parseAmount(amount_usdc, v.asset.decimals, `withdrawal amount (${v.asset.symbol})`);
-        return confirmSolana({ kind: "withdraw-assets", vault: v, raw: assets2 }, `${formatAmount(assets2, v.asset.decimals)} ${v.asset.symbol}`, session2, ack, intent);
+    async (args) => asText(await withdrawLeg(args, modeOf(args)))
+  );
+  const parseLegs = (text2) => {
+    const parts = text2.split(/[;\n]/).map((p) => p.trim()).filter(Boolean);
+    if (parts.length === 0) throw new Error('--legs names no leg; give e.g. "deposit tlCashPlusUSDC2B 1; withdraw tlCashPlusUSDC2C all"');
+    if (parts.length > PLAN_MAX_LEGS) throw new Error(`a plan holds at most ${PLAN_MAX_LEGS} legs, and --legs names ${parts.length}; split it into more than one plan`);
+    return parts.map((p, i) => {
+      const [action, vault, amount, ...rest] = p.split(/\s+/);
+      const where = `leg ${i + 1} ("${p}")`;
+      if (rest.length || !vault || !amount) throw new Error(`${where}: write each leg as "deposit <vault> <amount>" or "withdraw <vault> <amount|all>"`);
+      if (action !== "deposit" && action !== "withdraw") throw new Error(`${where}: the action is "deposit" or "withdraw", not "${action}"`);
+      if (amount === "all") {
+        if (action === "deposit") throw new Error(`${where}: "all" withdraws a whole position; a deposit takes an amount the operator chose`);
+      } else if (!/^\d+(\.\d+)?$/.test(amount)) throw new Error(`${where}: "${amount}" is not a plain decimal amount (e.g. "25" or "12.5"), or "all" for a whole withdrawal`);
+      return { action, vault, amount };
+    });
+  };
+  const wholePosition = async (symbol2, account) => {
+    const target = resolveAnyVault(symbol2);
+    if (target.family === "solana") {
+      const v2 = target.vault;
+      const held = await tokenBalance(deps.solanaRpc ?? makeSolanaRpc(solanaRpcUrlFromEnv()), await associatedTokenAccount(account, v2.sharesMint));
+      return formatAmount(held.amount, v2.shareDecimals);
+    }
+    const v = target.vault;
+    const client = deps.client ? deps.client(v.chainId) : makePublicClient(v.chainId, rpcUrlFromEnv(v.chainId));
+    const shares = await client.readContract({ address: v.address, abi: erc4626Abi, functionName: "balanceOf", args: [account] });
+    return formatAmount(shares, v.shareDecimals);
+  };
+  const describeLegs = async (text2) => {
+    const parsed = parseLegs(text2);
+    const out = [];
+    for (const [i, l] of parsed.entries()) {
+      const target = resolveAnyVault(l.vault);
+      const session = target.family === "solana" ? readSolanaSession() : readSession();
+      if (!session) throw target.family === "solana" ? notConnectedSolana() : notConnected();
+      const chain = target.family === "solana" ? "solana" : CHAIN_INFO[target.vault.chainId].key;
+      const whole = l.amount === "all";
+      const earlier = out.find((o2) => o2.symbol === target.vault.symbol);
+      if (whole && earlier) {
+        throw new Error(`leg ${i + 1} withdraws all of ${target.vault.symbol}, which an earlier leg ${earlier.action === "deposit" ? "deposits into" : "withdraws from"}; the share balance is read now, before that leg runs, so withdraw it in a later plan`);
       }
-      const session = readSession();
-      if (!session) throw notConnected();
-      const receiver = isAddress2(rawReceiver) ? getAddress(rawReceiver) : rawReceiver;
-      if (receiver !== session.account) throw new Error(`refused: --receiver ${receiver} is not the connected account ${session.account}; this page pays only the connected account`);
-      const vault = resolveVault(symbol2, chain);
-      const owner = session.account;
-      let calls;
-      if (all) {
-        if (!shares_exact) throw new Error("--all requires --shares_exact (copy it verbatim from `earn balance`)");
-        calls = buildWithdraw(vault, { receiver, owner, all: true, sharesExact: shares_exact });
-      } else {
-        if (!amount_usdc) throw new Error("provide --amount_usdc, or --all with --shares_exact");
-        calls = buildWithdraw(vault, { receiver, owner, assetsHuman: amount_usdc });
+      if (earlier?.whole) {
+        throw new Error(`leg ${i + 1} is on ${target.vault.symbol}, which an earlier leg withdraws in full; put it in a later plan`);
       }
-      return confirmInWallet("withdraw", calls, session, receiver, ack);
+      let args = { vault: target.vault.symbol, receiver: session.account, amount_usdc: l.amount };
+      if (whole) {
+        const shares = await wholePosition(target.vault.symbol, session.account);
+        if (/^0(\.0+)?$/.test(shares)) throw new Error(`leg ${i + 1} withdraws all of ${target.vault.symbol}, but ${session.account} holds no shares of it`);
+        args = { vault: target.vault.symbol, receiver: session.account, all: true, shares_exact: shares };
+      }
+      const d = l.action === "deposit" ? await depositLeg({ vault: target.vault.symbol, receiver: session.account, amount_usdc: l.amount }, { kind: "describe" }) : await withdrawLeg(args, { kind: "describe" });
+      if (typeof d === "string") throw new Error("internal: a leg did not describe itself");
+      if (whole) d.summary.amount = `${args.shares_exact} ${target.vault.symbol} shares (your whole position, read when this plan was made; shares that arrive after that are not included)`;
+      out.push({ action: l.action, symbol: target.vault.symbol, chain, family: target.family, args, d, whole, asset: target.vault.asset });
+    }
+    return out;
+  };
+  const planTotals = (legs) => {
+    const sum = (action) => {
+      const by = /* @__PURE__ */ new Map();
+      for (const l of legs.filter((x) => x.action === action && !x.whole)) {
+        const t = by.get(l.asset.symbol) ?? { raw: 0n, decimals: l.asset.decimals };
+        t.raw += parseAmount(l.args.amount_usdc, l.asset.decimals, "amount");
+        by.set(l.asset.symbol, t);
+      }
+      const parts = [...by].map(([s2, t]) => `${formatAmount(t.raw, t.decimals)} ${s2}`);
+      const whole = legs.filter((x) => x.action === action && x.whole).length;
+      if (whole) parts.push(`the whole position in ${whole} ${whole === 1 ? "vault" : "vaults"}`);
+      return parts.length ? `${action} ${parts.join(" and ")}` : void 0;
+    };
+    return [sum("deposit"), sum("withdraw")].filter((x) => x !== void 0);
+  };
+  const legCommand = (l, code, leg) => [
+    `connect ${l.action}`,
+    `--vault ${l.symbol}`,
+    ...l.args.all ? ["--all", `--shares_exact ${l.args.shares_exact}`] : [`--amount_usdc ${l.args.amount_usdc}`],
+    `--receiver ${l.args.receiver}`,
+    `--plan ${code}`,
+    `--leg ${leg}`
+  ].join(" ");
+  register(
+    "connect_plan",
+    {
+      title: "One acknowledgement for several deposits and withdrawals",
+      description: 'For a request that moves money in more than one vault (any mix of deposits and withdrawals, across chains): ONE acknowledgement for the whole plan instead of one per vault. Runs twice, like `connect deposit`. Pass --legs, e.g. "deposit tlCashPlusUSDC2B 25; withdraw tlCashPlusUSDC2G all" (each leg "deposit <vault> <amount>" or "withdraw <vault> <amount|all>"; "all" redeems the share balance read now). Without --ack it opens NOTHING: every leg is built and checked as its own run would be, and it returns `needs_acknowledgement` with ONE `acknowledgement` covering every leg, to post to the operator word for word, and an `ack` code. Only after the operator replies yes, run it again with the same --legs and --ack <code>: that records the yes, opens nothing, and returns each leg\'s exact command. Then run the legs one at a time, in order (`connect deposit|withdraw \u2026 --plan <code> --leg <n>`); each opens its own signing page, and a leg that does not complete ends the plan. --status (alone) reports the plan\'s legs and their transactions. Each EVM and Solana leg needs that family\'s wallet connected; money lands only in the connected account.',
+      inputSchema: {
+        legs: external_exports.string().optional().describe('the plan, in order: legs separated by ";", each "deposit <vault> <amount>" or "withdraw <vault> <amount|all>" \u2014 vaults by their ticker, as `earn vaults` lists them; amounts the operator chose'),
+        ack: ackArg,
+        status: external_exports.boolean().optional().describe("report the current plan and each leg's status and transactions; reads a local file only")
+      }
+    },
+    async ({ legs, ack, status }) => {
+      if (status) {
+        if (legs !== void 0 || ack !== void 0) throw new Error("--status takes no other flag");
+        const p = readPlan();
+        if (!p) return JSON.stringify({ status: "none", next_step: "no plan is pending; `connect plan --legs \u2026` makes one" }, null, 2);
+        return JSON.stringify({ status: p.acknowledged ? "acknowledged" : "needs_acknowledgement", code: p.code, expiresAtIso: p.expiresAtIso, legs: p.legs }, null, 2);
+      }
+      if (legs === void 0) throw new Error('give --legs (e.g. "deposit tlCashPlusUSDC2B 25; withdraw tlCashPlusUSDC2C all"), or --status');
+      const described = await describeLegs(legs);
+      const digests = described.map((l) => l.d.digest);
+      if (ack === void 0) {
+        const plan2 = issuePlan(
+          described.map((l, i) => ({ leg: i + 1, action: l.action, vault: l.symbol, chain: l.chain, amount: l.d.summary.amount, digest: l.d.digest, command: "" })),
+          now()
+        );
+        plan2.legs = plan2.legs.map((x, i) => ({ ...x, command: legCommand(described[i], plan2.code, i + 1) }));
+        writePlan(plan2);
+        return JSON.stringify(
+          {
+            status: "needs_acknowledgement",
+            opened: false,
+            legs: plan2.legs.map((x, i) => ({ leg: x.leg, action: x.action, vault: x.vault, chain: x.chain, amount: x.amount, receiver: described[i].args.receiver })),
+            acknowledgement: planAcknowledgementText(
+              described.map((l) => l.d.summary),
+              planTotals(described)
+            ),
+            ack: plan2.code,
+            expiresAtIso: plan2.expiresAtIso,
+            next_step: `Post \`acknowledgement\` to the operator word for word, as it is, and wait for their reply. Only an explicit yes they give after reading it is an acknowledgement: not a "go" from before they saw it, and not your own reading of the conversation. On yes, run this same command again, with the same --legs, and --ack ${plan2.code} added: that records the yes, opens nothing, and returns each leg's command. On anything else, stop. The plan is good until ${plan2.expiresAtIso}; a leg not started by then does not run.`
+          },
+          null,
+          2
+        );
+      }
+      const plan = readPlan();
+      checkPlanAck(ack, plan, digests, now());
+      plan.acknowledged = true;
+      writePlan(plan);
+      const first = plan.legs[0];
+      return JSON.stringify(
+        {
+          status: "acknowledged",
+          opened: false,
+          code: plan.code,
+          expiresAtIso: plan.expiresAtIso,
+          legs: plan.legs.map((x) => ({ leg: x.leg, action: x.action, vault: x.vault, chain: x.chain, amount: x.amount, command: x.command })),
+          next_step: `The operator's yes covers every leg: do not ask again between legs. Run the legs one at a time, in order, each exactly as its \`command\` gives it; each opens its own signing page and waits up to 9 minutes, so give each shell call a timeout of at least 9 minutes. After each leg, report its result; stop at the first leg that does not complete. Start with leg 1: ${first.command}`
+        },
+        null,
+        2
+      );
     }
   );
   return commands;

@@ -102,7 +102,7 @@ Claude Code plugin carries; [`runbooks/verify_the_bundle.md`](runbooks/verify_th
 to check it from the tarball. A checkout of the repository at the tag, or the plugin cache after a
 Claude Code install, holds the same file if you would rather not install from npm.
 
-The CLI carries exactly the eight `earn` commands and five `connect` commands in [`tools.md`](tools.md),
+The CLI carries exactly the eight `earn` commands and six `connect` commands in [`tools.md`](tools.md),
 each printing one JSON document; a refusal exits 1 with `{ "error": … }` on stderr. No command signs:
 the `connect` commands hand calls to your own wallet for approval, and your runtime's own signer
 takes the calls `earn prepare_deposit` and `earn prepare_withdraw` return. The `earn` skill ships with

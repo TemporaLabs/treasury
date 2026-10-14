@@ -20,7 +20,7 @@ Earn puts idle USDC to work in vaults curated by Tempora Labs on Base, Arbitrum 
 
 Earn takes the vault's own asset in and pays it out: USDC on Base, Arbitrum One, Ethereum, Monad and Solana,
 USDG on Robinhood Chain. It runs as a command line: eight `earn` commands, READ commands that
-return facts from the chain and PREPARE commands that return unsigned calls, and five `connect`
+return facts from the chain and PREPARE commands that return unsigned calls, and six `connect`
 commands that hand calls to the operator's own wallet for approval. CI asserts both command lists on
 every build, so a signing command cannot slip in.
 
