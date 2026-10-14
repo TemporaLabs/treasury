@@ -46571,7 +46571,9 @@ function replaceStale(path, seen) {
   try {
     renameSync(path, aside);
   } catch (e4) {
-    if (e4.code === "ENOENT") return true;
+    const code = e4.code;
+    if (code === "ENOENT") return true;
+    if (code === "EPERM" || code === "EBUSY" || code === "EACCES") return false;
     throw e4;
   }
   let moved;
@@ -46583,13 +46585,20 @@ function replaceStale(path, seen) {
   if (moved !== seen) {
     try {
       linkSync(aside, path);
-    } catch {
+    } catch (e4) {
+      if (e4.code !== "EEXIST") {
+        try {
+          renameSync(aside, path);
+        } catch {
+        }
+        return false;
+      }
     }
   }
   rmSync(aside, { force: true });
   return moved === seen;
 }
-async function claimPageLock(ttlMs, { beatMs = LOCK_BEAT_MS, waitMs = LOCK_BEAT_MS + 1e3 } = {}) {
+async function claimPageLock(ttlMs, { beatMs = LOCK_BEAT_MS, waitMs = 2 * LOCK_BEAT_MS + 1e3 } = {}) {
   mkdirSync(dir(), { recursive: true, mode: 448 });
   const path = pageLockPath();
   const token = `${process.pid}.${Date.now()}.${Math.random().toString(36).slice(2)}`;

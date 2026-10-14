@@ -154,7 +154,10 @@ const LOCK_WRITE_GRACE_MS = 2_000;
  * a process ID alone can be reused, by another program or by this same one, after the holder has gone.
  */
 const LOCK_BEAT_MS = 5_000;
-/** A lock not touched for this long is suspect; it is replaced only if it is still not touched one beat later. */
+/**
+ * A lock not touched for this long is suspect; it is replaced only if it is still not touched two beats later (a
+ * holder's interval timer can land a beat late after the machine wakes).
+ */
 const LOCK_BEAT_STALE_MS = 30_000;
 
 const alive = (pid: number) => {
@@ -211,7 +214,10 @@ export function replaceStale(path: string, seen: string): boolean {
   try {
     renameSync(path, aside);
   } catch (e) {
-    if ((e as NodeJS.ErrnoException).code === "ENOENT") return true;
+    const code = (e as NodeJS.ErrnoException).code;
+    if (code === "ENOENT") return true;
+    // Windows refuses to rename a file another process holds open: treat it as held, never as an error.
+    if (code === "EPERM" || code === "EBUSY" || code === "EACCES") return false;
     throw e;
   }
   let moved: string | undefined;
@@ -223,8 +229,17 @@ export function replaceStale(path: string, seen: string): boolean {
   if (moved !== seen) {
     try {
       linkSync(aside, path);
-    } catch {
-      // Another run has claimed the lock in between; its claim stands.
+    } catch (e) {
+      // EEXIST: another run has claimed the lock in between; its claim stands. Anything else (a filesystem without
+      // hard links): rename it back, and keep it aside rather than delete a live lock if even that fails.
+      if ((e as NodeJS.ErrnoException).code !== "EEXIST") {
+        try {
+          renameSync(aside, path);
+        } catch {
+          // Left aside.
+        }
+        return false;
+      }
     }
   }
   rmSync(aside, { force: true });
@@ -238,7 +253,7 @@ export function replaceStale(path: string, seen: string): boolean {
  */
 export async function claimPageLock(
   ttlMs: number,
-  { beatMs = LOCK_BEAT_MS, waitMs = LOCK_BEAT_MS + 1_000 }: { beatMs?: number; waitMs?: number } = {},
+  { beatMs = LOCK_BEAT_MS, waitMs = 2 * LOCK_BEAT_MS + 1_000 }: { beatMs?: number; waitMs?: number } = {},
 ): Promise<{ setPort: (port: number) => void; release: () => void }> {
   mkdirSync(dir(), { recursive: true, mode: 0o700 });
   const path = pageLockPath();
