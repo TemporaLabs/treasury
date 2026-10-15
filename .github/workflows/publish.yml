@@ -29,7 +29,7 @@ permissions:
 
 jobs:
   publish:
-    runs-on: ubuntu-latest
+    runs-on: blacksmith-4vcpu-ubuntu-2404
     # The resolve poll below alone may take ten minutes; the gates before it need headroom too.
     timeout-minutes: 25
     permissions:
@@ -38,7 +38,7 @@ jobs:
       # no other job in this repository has it except ci.yml's `attest`.
       id-token: write
     steps:
-      - uses: actions/checkout@v7
+      - uses: useblacksmith/checkout@v1
         with:
           # The TAG is what gets published, never a branch head — a branch can move between the
           # moment someone reads it and the moment this runs.
