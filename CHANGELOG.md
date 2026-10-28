@@ -4,7 +4,7 @@ All notable changes to Agent Treasury are recorded here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versions follow [SemVer](https://semver.org/).
 Pre-1.0, minor versions may change tool names, schemas and behaviour.
 
-## [v0.1.4] - 2026-10-14
+## [v0.1.4] - 2026-10-28
 
 ### Added
 - **One acknowledgement for a plan of several deposits and withdrawals: `connect plan`** (#155). A
