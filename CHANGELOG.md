@@ -65,10 +65,15 @@ Pre-1.0, minor versions may change tool names, schemas and behaviour.
 ### Dependencies
 - Development: source-map-js 1.2.2, used only by the build tooling, fixing GHSA-68fv-2mgg-jv7q. The
   CLI bundle does not include it.
-- Development: esbuild 0.27.2 for tsup and vitest, through an override, which predates
-  GHSA-g7r4-m6w7-qqqr (affected: 0.27.3 up to 0.28.1; tsup accepts only 0.27). tsx keeps its own
-  esbuild 0.28.2. The CLI bundle no longer declares `window` and `needed` as class fields on one
-  internal error class; the constructor still assigns both, so its instances are unchanged.
+- Development: tsup 9.0.0 and vitest 5.0.5. tsup 9 builds the CLI with its own esbuild 0.28.2, as tsx
+  already did; both are past GHSA-g7r4-m6w7-qqqr (affected: 0.27.3 up to 0.28.1). The esbuild left for
+  vite and tsup's config loader stays at 0.27.2 through an override, which predates that advisory.
+  tsup 9 needs Node 22.18 or later to build; running the CLI still needs Node 22. The CLI bundle no
+  longer declares `window` and `needed` as class fields on one internal error class; the constructor
+  still assigns both, so its instances are unchanged.
+- viem 2.57.7, zod 4.6.7 and @solana/kit 8.5.0, inlined in the CLI bundle.
+- The connect page: @privy-io/react-auth 3.50.0, viem 2.57.7, React and React DOM 19.3.1, inlined in
+  `dist/connect-page.js`.
 - Development: the connect page's lockfile now resolves ws 8.22.0, uuid 11.1.1 and decode-uri-component
   0.5.0, clearing its `npm audit` findings (GHSA-96hv-2xvq-fx4p, GHSA-58qx-3vcg-4xpx, GHSA-w5hq-g745-h8pq,
   GHSA-vcc3-ghjq-m6fr). None of the three is in the built page, so this change does not alter it.
