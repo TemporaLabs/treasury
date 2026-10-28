@@ -3,7 +3,7 @@
 // a correct answer and still exited non-zero.
 //
 // Subjects: this tree's bundle, and optionally the published v0.1.2 package (where the failure was
-// first seen), given as `--subject name=<install prefix>`. Each is run directly (`node dist/treasury.mjs`)
+// first seen), given as `--subject name=<install prefix>` (or `--subject=name=<install prefix>`). Each is run directly (`node dist/treasury.mjs`)
 // and through the `treasury` bin npm installs: from cmd and PowerShell on Windows, from sh elsewhere.
 // Every call is reported before the verdict, so a red run shows each one's real exit code (with its hex
 // form, which names a Windows crash), duration and output instead of stopping at the first mismatch.
@@ -16,7 +16,14 @@ import { fileURLToPath } from "node:url";
 const WIN = process.platform === "win32";
 const ROOT = fileURLToPath(new URL("../..", import.meta.url));
 const MAX_MS = Number(process.env.CLI_EXIT_MAX_MS ?? 20000);
-const BASE_RPC = "https://mainnet.base.org";
+// The job's own endpoints when the repository provides them (CI_RPC_BASE, CI_RPC_SOLANA), so six
+// matrix legs do not share the public endpoints' rate limits; the public endpoints otherwise, which is
+// what a fork's pull request gets, since it is not given the repository's secrets.
+const BASE_RPC = process.env.CI_RPC_BASE || "https://mainnet.base.org";
+const RPC_ENV = {
+  ...(process.env.CI_RPC_BASE ? { TREASURY_RPC_BASE: process.env.CI_RPC_BASE } : {}),
+  ...(process.env.CI_RPC_SOLANA ? { TREASURY_RPC_SOLANA: process.env.CI_RPC_SOLANA } : {}),
+};
 const EVM_ACCOUNT = "0xBBBBBbbBBb9cC5e90e3b3Af64bdAF62C37EEFFCb"; // a Base address that holds USDC; read only
 const SOLANA_ACCOUNT = "4Nd1mBQtrMJVYVfKf2PJy9NZUZdTAsp7D4xWLs4gDB4T"; // an unfunded Solana address; read only
 const VAULT_2B = "0x91BcEbA5feCB9E92d80F1845B55cC56621E9352F";
@@ -98,9 +105,18 @@ const cases = [
 // a published release kept beside this tree for comparison, and a release that shipped a defect this
 // tree fixes would otherwise keep the job red for good. (A reference that is missing still fails.)
 const subjects = [{ name: "this tree", version: JSON.parse(readFileSync(join(ROOT, "package.json"), "utf8")).version, file: join(ROOT, "dist", "treasury.mjs"), prefix: process.env.CLI_EXIT_PREFIX }];
-for (const a of process.argv.slice(2)) {
-  const m = /^--(subject|reference)=([^=]+)=(.+)$/.exec(a);
-  if (m) subjects.push({ name: m[2], version: m[2].replace(/^v/, ""), file: join(m[3], "node_modules", "@temporalabs", "treasury", "dist", "treasury.mjs"), prefix: m[3], reference: m[1] === "reference" });
+// Each takes `name=<prefix>` as the next argument or after `=`. Any other argument stops the run: one that
+// was silently skipped would leave its subject unchecked and the job green.
+const args = process.argv.slice(2);
+for (let i = 0; i < args.length; i++) {
+  const flag = /^--(subject|reference)(?:=(.*))?$/.exec(args[i]);
+  const value = flag ? (flag[2] ?? args[++i]) : undefined;
+  const m = value === undefined ? null : /^([^=]+)=(.+)$/.exec(value);
+  if (!flag || !m) {
+    console.error(`cli-exit: unrecognised argument ${JSON.stringify(args[i] ?? args[i - 1])}; give --subject name=<install prefix> or --reference name=<install prefix>`);
+    process.exit(2);
+  }
+  subjects.push({ name: m[1], version: m[1].replace(/^v/, ""), file: join(m[2], "node_modules", "@temporalabs", "treasury", "dist", "treasury.mjs"), prefix: m[2], reference: flag[1] === "reference" });
 }
 
 function launches(s) {
@@ -122,7 +138,7 @@ function call(l, args, env) {
     // PowerShell takes one command string: the npm shim, each argument single-quoted, then its exit code.
     const argv = l.ps1 ? [...l.pre, `& '${l.ps1}' ${args.map((a) => `'${a}'`).join(" ")}; exit $LASTEXITCODE`] : [...l.pre, ...args];
     const child = spawn(l.cmd, l.shell ? argv.map((a) => (/[\s"]/.test(a) ? `"${a}"` : a)) : argv, {
-      env: { ...process.env, ...env },
+      env: { ...process.env, ...RPC_ENV, ...env },
       shell: l.shell,
       windowsHide: true,
     });

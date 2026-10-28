@@ -4,10 +4,11 @@
  * shapes did not include, so the hint never attached on Solana.
  */
 import { describe, it, expect, vi, beforeEach } from "vitest";
+import { SolanaError, SOLANA_ERROR__RPC__TRANSPORT_HTTP_ERROR } from "@solana/kit";
 import { SOLANA_INFO } from "../src/client.js";
 
-let failure = "HTTP error (429): Too Many Requests";
-const dead = new Proxy({}, { get: () => () => ({ send: async () => { throw new Error(failure); } }) });
+let failure: string | (() => Error) = "HTTP error (429): Too Many Requests";
+const dead = new Proxy({}, { get: () => () => ({ send: async () => { throw typeof failure === "string" ? new Error(failure) : failure(); } }) });
 vi.mock("../src/solana/rpc.js", async (load) => ({ ...(await load<typeof import("../src/solana/rpc.js")>()), makeSolanaRpc: () => dead }));
 
 type Handler = (a: unknown, extra: unknown) => Promise<string>;
@@ -39,5 +40,30 @@ describe("the Solana setup hint", () => {
   it("does not attach to a 4xx that is not a rate limit: that is not a setup problem", async () => {
     failure = "HTTP error (404): Not Found";
     expect((await status()).setup_required).toBeUndefined();
+  });
+
+  // Under NODE_ENV=production the Solana client's errors carry a code instead of a sentence
+  // ("Solana error #8100002; Decode this error by running …"), so a match on the sentence never fires.
+  describe("under NODE_ENV=production, where the error's message is only a code", () => {
+    // The error as the production build constructs it: the same code and context, with the coded message
+    // (measured: "Solana error #8100002; Decode this error by running `npx @solana/errors decode -- 8100002 '…'`").
+    const httpError = (statusCode: number, message: string) => () => {
+      const e = new SolanaError(SOLANA_ERROR__RPC__TRANSPORT_HTTP_ERROR, { headers: new Headers(), message, statusCode });
+      Object.defineProperty(e, "message", { value: `Solana error #${SOLANA_ERROR__RPC__TRANSPORT_HTTP_ERROR}; Decode this error by running \`npx @solana/errors decode -- ${SOLANA_ERROR__RPC__TRANSPORT_HTTP_ERROR} 'X19jb2Rl'\`` });
+      return e;
+    };
+
+    it("still attaches to a 429 and a 5xx", async () => {
+      failure = httpError(429, "Too Many Requests");
+      expect(failure().message).toMatch(/^Solana error #/);
+      expect((await status()).setup_required).toMatch(/TREASURY_RPC_SOLANA/);
+      failure = httpError(503, "Service Unavailable");
+      expect((await status()).setup_required).toMatch(/TREASURY_RPC_SOLANA/);
+    });
+
+    it("still does not attach to a 404", async () => {
+      failure = httpError(404, "Not Found");
+      expect((await status()).setup_required).toBeUndefined();
+    });
   });
 });

@@ -1,7 +1,7 @@
 # Open Agent Treasury (OAT)
 
 **The open-source treasury management system for AI agents.** Built by Tempora Labs. Apache-2.0.
-Current release: **v0.1.3** (October 2026).
+Current release: **v0.1.4** (October 2026).
 
 Open Agent Treasury gives an AI agent a safe way to manage on-chain capital. The agent reads the
 chain directly, works out what it wants to do, and hands back unsigned transactions. A human, or
@@ -20,7 +20,7 @@ Earn puts idle USDC to work in vaults curated by Tempora Labs on Base, Arbitrum 
 
 Earn takes the vault's own asset in and pays it out: USDC on Base, Arbitrum One, Ethereum, Monad and Solana,
 USDG on Robinhood Chain. It runs as a command line: eight `earn` commands, READ commands that
-return facts from the chain and PREPARE commands that return unsigned calls, and five `connect`
+return facts from the chain and PREPARE commands that return unsigned calls, and six `connect`
 commands that hand calls to the operator's own wallet for approval. CI asserts both command lists on
 every build, so a signing command cannot slip in.
 
@@ -51,7 +51,7 @@ page for its current total.
 
 ```bash
 export TREASURY_RPC_BASE=https://...   # your Base RPC URL
-claude plugin marketplace add TemporaLabs/treasury@v0.1.3
+claude plugin marketplace add TemporaLabs/treasury@v0.1.4
 claude plugin install treasury@treasury
 ```
 
@@ -62,7 +62,7 @@ repository as of v0.1.1. If you installed from the earlier `treasury-plugin` rep
 ### Any agent with a shell
 
 ```bash
-npm install --save-exact @temporalabs/treasury@0.1.3
+npm install --save-exact @temporalabs/treasury@0.1.4
 npx --no-install treasury earn --help
 ```
 
@@ -99,6 +99,13 @@ no money. Later:
 - **Verifiable builds:** CI checks the committed bundle, and each npm release carries provenance.
 - Vulnerabilities go through private reporting, not public issues.
 
+## New in v0.1.4
+
+One acknowledgement for a plan of several deposits and withdrawals, across vaults and chains, and
+one signing page that walks the whole plan in the operator's wallet (EVM vaults; a plan with the
+Solana vault runs a page per step). On Solana, a landed withdrawal is checked for what it paid, and
+`earn balance` no longer reports a capped exit as a full one.
+
 ## New in v0.1.3
 
 Three more chains: Ethereum and Monad, each with a Morpho vault over USDC, and Solana, with a Kamino
@@ -121,6 +128,6 @@ More yield configurations across the risk/return spectrum.
 - Source: https://github.com/TemporaLabs/treasury
 - Plugin and the Earn skill: https://github.com/TemporaLabs/treasury/tree/main/plugin
 - npm: https://www.npmjs.com/package/@temporalabs/treasury
-- Release notes: https://github.com/TemporaLabs/treasury/releases/tag/v0.1.3
+- Release notes: https://github.com/TemporaLabs/treasury/releases/tag/v0.1.4
 - Docs: tools, configuration, risks, security model: https://github.com/TemporaLabs/treasury/tree/main/docs
 - Licence: Apache-2.0. Forks must not claim to be the official distribution.

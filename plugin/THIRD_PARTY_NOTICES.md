@@ -12,32 +12,32 @@ by hand.
 |---|---|---|
 | `@noble/curves` | 1.9.1 | MIT |
 | `@noble/hashes` | 1.8.0 | MIT |
-| `@solana/addresses` | 8.4.0 | MIT |
-| `@solana/assertions` | 8.4.0 | MIT |
-| `@solana/codecs-core` | 8.4.0 | MIT |
-| `@solana/codecs-data-structures` | 8.4.0 | MIT |
-| `@solana/codecs-numbers` | 8.4.0 | MIT |
-| `@solana/codecs-strings` | 8.4.0 | MIT |
-| `@solana/errors` | 8.4.0 | MIT |
-| `@solana/fast-stable-stringify` | 8.4.0 | MIT |
-| `@solana/functional` | 8.4.0 | MIT |
-| `@solana/instructions` | 8.4.0 | MIT |
-| `@solana/keys` | 8.4.0 | MIT |
-| `@solana/promises` | 8.4.0 | MIT |
-| `@solana/rpc` | 8.4.0 | MIT |
-| `@solana/rpc-api` | 8.4.0 | MIT |
-| `@solana/rpc-spec` | 8.4.0 | MIT |
-| `@solana/rpc-spec-types` | 8.4.0 | MIT |
-| `@solana/rpc-transformers` | 8.4.0 | MIT |
-| `@solana/rpc-transport-http` | 8.4.0 | MIT |
-| `@solana/rpc-types` | 8.4.0 | MIT |
-| `@solana/subscribable` | 8.4.0 | MIT |
-| `@solana/transaction-messages` | 8.4.0 | MIT |
-| `@solana/transactions` | 8.4.0 | MIT |
+| `@solana/addresses` | 8.5.0 | MIT |
+| `@solana/assertions` | 8.5.0 | MIT |
+| `@solana/codecs-core` | 8.5.0 | MIT |
+| `@solana/codecs-data-structures` | 8.5.0 | MIT |
+| `@solana/codecs-numbers` | 8.5.0 | MIT |
+| `@solana/codecs-strings` | 8.5.0 | MIT |
+| `@solana/errors` | 8.5.0 | MIT |
+| `@solana/fast-stable-stringify` | 8.5.0 | MIT |
+| `@solana/functional` | 8.5.0 | MIT |
+| `@solana/instructions` | 8.5.0 | MIT |
+| `@solana/keys` | 8.5.0 | MIT |
+| `@solana/promises` | 8.5.0 | MIT |
+| `@solana/rpc` | 8.5.0 | MIT |
+| `@solana/rpc-api` | 8.5.0 | MIT |
+| `@solana/rpc-spec` | 8.5.0 | MIT |
+| `@solana/rpc-spec-types` | 8.5.0 | MIT |
+| `@solana/rpc-transformers` | 8.5.0 | MIT |
+| `@solana/rpc-transport-http` | 8.5.0 | MIT |
+| `@solana/rpc-types` | 8.5.0 | MIT |
+| `@solana/subscribable` | 8.5.0 | MIT |
+| `@solana/transaction-messages` | 8.5.0 | MIT |
+| `@solana/transactions` | 8.5.0 | MIT |
 | `abitype` | 1.2.3 | MIT |
-| `ox` | 0.14.45 | MIT |
-| `viem` | 2.57.3 | MIT |
-| `zod` | 4.6.5 | MIT |
+| `ox` | 0.14.56 | MIT |
+| `viem` | 2.57.7 | MIT |
+| `zod` | 4.6.7 | MIT |
 
 ## @noble/curves 1.9.1 (MIT)
 
@@ -91,7 +91,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 THE SOFTWARE.
 ```
 
-## @solana/addresses 8.4.0 (MIT)
+## @solana/addresses 8.5.0 (MIT)
 
 ```text
 Copyright (c) 2023 Solana Labs, Inc
@@ -116,7 +116,7 @@ OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION
 WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 ```
 
-## @solana/assertions 8.4.0 (MIT)
+## @solana/assertions 8.5.0 (MIT)
 
 ```text
 Copyright (c) 2023 Solana Labs, Inc
@@ -141,7 +141,7 @@ OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION
 WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 ```
 
-## @solana/codecs-core 8.4.0 (MIT)
+## @solana/codecs-core 8.5.0 (MIT)
 
 ```text
 Copyright (c) 2023 Solana Labs, Inc
@@ -166,7 +166,7 @@ OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION
 WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 ```
 
-## @solana/codecs-data-structures 8.4.0 (MIT)
+## @solana/codecs-data-structures 8.5.0 (MIT)
 
 ```text
 Copyright (c) 2023 Solana Labs, Inc
@@ -191,7 +191,7 @@ OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION
 WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 ```
 
-## @solana/codecs-numbers 8.4.0 (MIT)
+## @solana/codecs-numbers 8.5.0 (MIT)
 
 ```text
 Copyright (c) 2023 Solana Labs, Inc
@@ -216,7 +216,7 @@ OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION
 WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 ```
 
-## @solana/codecs-strings 8.4.0 (MIT)
+## @solana/codecs-strings 8.5.0 (MIT)
 
 ```text
 Copyright (c) 2023 Solana Labs, Inc
@@ -241,7 +241,7 @@ OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION
 WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 ```
 
-## @solana/errors 8.4.0 (MIT)
+## @solana/errors 8.5.0 (MIT)
 
 ```text
 Copyright (c) 2023 Solana Labs, Inc
@@ -266,7 +266,7 @@ OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION
 WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 ```
 
-## @solana/fast-stable-stringify 8.4.0 (MIT)
+## @solana/fast-stable-stringify 8.5.0 (MIT)
 
 ```text
 Copyright (c) 2023 Solana Labs, Inc
@@ -292,7 +292,7 @@ OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION
 WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 ```
 
-## @solana/functional 8.4.0 (MIT)
+## @solana/functional 8.5.0 (MIT)
 
 ```text
 Copyright (c) 2023 Solana Labs, Inc
@@ -317,7 +317,7 @@ OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION
 WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 ```
 
-## @solana/instructions 8.4.0 (MIT)
+## @solana/instructions 8.5.0 (MIT)
 
 ```text
 Copyright (c) 2023 Solana Labs, Inc
@@ -342,7 +342,7 @@ OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION
 WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 ```
 
-## @solana/keys 8.4.0 (MIT)
+## @solana/keys 8.5.0 (MIT)
 
 ```text
 Copyright (c) 2023 Solana Labs, Inc
@@ -367,7 +367,7 @@ OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION
 WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 ```
 
-## @solana/promises 8.4.0 (MIT)
+## @solana/promises 8.5.0 (MIT)
 
 ```text
 Copyright (c) 2023 Solana Labs, Inc
@@ -392,7 +392,7 @@ OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION
 WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 ```
 
-## @solana/rpc 8.4.0 (MIT)
+## @solana/rpc 8.5.0 (MIT)
 
 ```text
 Copyright (c) 2023 Solana Labs, Inc
@@ -417,7 +417,7 @@ OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION
 WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 ```
 
-## @solana/rpc-api 8.4.0 (MIT)
+## @solana/rpc-api 8.5.0 (MIT)
 
 ```text
 Copyright (c) 2023 Solana Labs, Inc
@@ -442,7 +442,7 @@ OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION
 WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 ```
 
-## @solana/rpc-spec 8.4.0 (MIT)
+## @solana/rpc-spec 8.5.0 (MIT)
 
 ```text
 Copyright (c) 2023 Solana Labs, Inc
@@ -467,7 +467,7 @@ OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION
 WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 ```
 
-## @solana/rpc-spec-types 8.4.0 (MIT)
+## @solana/rpc-spec-types 8.5.0 (MIT)
 
 ```text
 Copyright (c) 2023 Solana Labs, Inc
@@ -492,7 +492,7 @@ OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION
 WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 ```
 
-## @solana/rpc-transformers 8.4.0 (MIT)
+## @solana/rpc-transformers 8.5.0 (MIT)
 
 ```text
 Copyright (c) 2023 Solana Labs, Inc
@@ -517,7 +517,7 @@ OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION
 WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 ```
 
-## @solana/rpc-transport-http 8.4.0 (MIT)
+## @solana/rpc-transport-http 8.5.0 (MIT)
 
 ```text
 Copyright (c) 2023 Solana Labs, Inc
@@ -542,7 +542,7 @@ OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION
 WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 ```
 
-## @solana/rpc-types 8.4.0 (MIT)
+## @solana/rpc-types 8.5.0 (MIT)
 
 ```text
 Copyright (c) 2023 Solana Labs, Inc
@@ -567,7 +567,7 @@ OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION
 WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 ```
 
-## @solana/subscribable 8.4.0 (MIT)
+## @solana/subscribable 8.5.0 (MIT)
 
 ```text
 Copyright (c) 2023 Solana Labs, Inc
@@ -592,7 +592,7 @@ OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION
 WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 ```
 
-## @solana/transaction-messages 8.4.0 (MIT)
+## @solana/transaction-messages 8.5.0 (MIT)
 
 ```text
 Copyright (c) 2023 Solana Labs, Inc
@@ -617,7 +617,7 @@ OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION
 WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 ```
 
-## @solana/transactions 8.4.0 (MIT)
+## @solana/transactions 8.5.0 (MIT)
 
 ```text
 Copyright (c) 2023 Solana Labs, Inc
@@ -668,7 +668,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 ```
 
-## ox 0.14.45 (MIT)
+## ox 0.14.56 (MIT)
 
 ```text
 MIT License
@@ -694,7 +694,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 ```
 
-## viem 2.57.3 (MIT)
+## viem 2.57.7 (MIT)
 
 ```text
 MIT License
@@ -720,7 +720,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 ```
 
-## zod 4.6.5 (MIT)
+## zod 4.6.7 (MIT)
 
 ```text
 MIT License

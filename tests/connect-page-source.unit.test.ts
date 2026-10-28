@@ -1,6 +1,7 @@
 import { describe, it, expect } from "vitest";
 import { readdirSync, readFileSync } from "node:fs";
 import { join, relative } from "node:path";
+import ts from "typescript";
 import { PAGE_CSP } from "../src/connect/page.js";
 
 /**
@@ -20,6 +21,11 @@ const walk = (d: string): string[] => readdirSync(d, { withFileTypes: true }).fl
 const files = walk(dir).filter((f) => /\.(m|c)?[jt]sx?$/.test(f));
 const source = files.map((f) => readFileSync(f, "utf8")).join("\n");
 const main = readFileSync(join(dir, "main.tsx"), "utf8");
+// The same files with every comment removed by the TypeScript parser itself, so a `//` inside a string is not taken
+// for one: what a comment names is not held to the checks that read this.
+const code = files
+  .map((f) => ts.createPrinter({ removeComments: true }).printFile(ts.createSourceFile(f, readFileSync(f, "utf8"), ts.ScriptTarget.Latest, false, /x$/.test(f) ? ts.ScriptKind.TSX : ts.ScriptKind.TS)))
+  .join("\n");
 
 describe("the connect page's source", () => {
   it("control: the scan reads the page", () => {
@@ -64,7 +70,7 @@ describe("the connect page's source", () => {
         .map((x) => x.trim().replace(/^type\s+/, "").split(/\s+as\s+/)[0]!)
         .filter(Boolean);
     expect(new Set(imports("@privy-io/react-auth/solana"))).toEqual(
-      new Set(["defaultSolanaRpcsPlugin", "toSolanaWalletConnectors", "useSignAndSendTransaction", "useSignMessage", "useWallets", "ConnectedStandardSolanaWallet"]),
+      new Set(["defaultSolanaRpcsPlugin", "toSolanaWalletConnectors", "useSignAndSendTransaction", "useSignMessage", "useWallets", "useStandardWallets", "ConnectedStandardSolanaWallet", "SolanaStandardWallet"]),
     );
     for (const name of imports("@privy-io/react-auth")) expect(name, "an EVM signing hook from the main entry").not.toMatch(/^use(Sign|Send)/);
     // The named-import list above is the only way a Privy hook reaches the page: no namespace or default
@@ -75,6 +81,24 @@ describe("the connect page's source", () => {
     expect(source).not.toMatch(/\.\s*use(Sign|Send)\w*/);
     // The Solana message the page signs is the sign-in challenge the local process issued, and nothing else.
     expect([...source.matchAll(/signMessage\(\{\s*message:\s*([^,]+),/g)].map((m) => m[1]!.trim())).toEqual(['new TextEncoder().encode(ch["message"])']);
+  });
+
+  /**
+   * A plan with EVM and Solana legs connects the Solana account of the wallet the operator signed in with, and asks it
+   * to sign and send through the Wallet Standard (`useStandardWallets`), as Privy itself does for an external Solana
+   * wallet (#184). The only features the page may call are connecting an account and signing and sending a transaction:
+   * never signing a message or a transaction it keeps, and never a feature named at run time.
+   */
+  it("calls a Solana wallet's own features only to connect it and to sign and send a transaction", () => {
+    // Comments may name a feature; only code is held to this.
+    const features = [...code.matchAll(/features\s*\[\s*"([^"]+)"\s*\]/g)].map((m) => m[1]);
+    expect(features.length).toBeGreaterThan(0);
+    expect(new Set(features)).toEqual(new Set(["standard:connect", "solana:signAndSendTransaction"]));
+    // Every other way to reach the features object (`features?.[…]`, `features.x`, destructuring it, or giving it
+    // another name) leaves a `features` that is not one of those lookups: outside comments, each must be one.
+    const lookups = [...code.matchAll(/\bfeatures\s*\[\s*"(standard:connect|solana:signAndSendTransaction)"\s*\]/g)].length;
+    expect(lookups).toBeGreaterThan(0);
+    expect([...code.matchAll(/\bfeatures\b/g)].length).toBe(lookups);
   });
 
   it("writes no HTML from strings, evaluates no code, and stores nothing in the browser", () => {
