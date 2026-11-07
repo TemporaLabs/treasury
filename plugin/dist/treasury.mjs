@@ -36387,6 +36387,7 @@ var SOLANA_ERROR__WALLET__ACCOUNT_NOT_AVAILABLE = 8900003;
 var SOLANA_ERROR__WALLET__INVALID_MESSAGE_SIGNATURE = 8900004;
 var SOLANA_ERROR__WALLET__INVALID_SIGN_IN_OUTPUT = 8900005;
 var SOLANA_ERROR__WALLET__INVALID_NUMBER_OF_OUTPUTS = 8900006;
+var SOLANA_ERROR__WALLET__FEATURE_VERSION_UNSUPPORTED = 8900007;
 var SOLANA_ERROR__REACT__MISSING_PROVIDER = 9e6;
 var SOLANA_ERROR__REACT__MISSING_CAPABILITY = 9000001;
 var SOLANA_ERROR__REACT__SUBSCRIPTION_CLOSED_WITHOUT_ERROR = 9000002;
@@ -36763,6 +36764,7 @@ var SolanaErrorMessages = {
   [SOLANA_ERROR__WALLET__NO_SIGNER_CONNECTED]: "No signing wallet connected (status: $status)",
   [SOLANA_ERROR__WALLET__SIGNER_NOT_AVAILABLE]: "Connected wallet does not support signing",
   [SOLANA_ERROR__WALLET__ACCOUNT_NOT_AVAILABLE]: 'Account $address is not available in wallet "$walletName"',
+  [SOLANA_ERROR__WALLET__FEATURE_VERSION_UNSUPPORTED]: 'Wallet "$walletName" supports version $actualVersion of `$featureName`, but version $requiredVersion or newer is required',
   [SOLANA_ERROR__WALLET__INVALID_MESSAGE_SIGNATURE]: 'Wallet "$walletName" did not return a valid signature of the requested message for account $address',
   [SOLANA_ERROR__WALLET__INVALID_NUMBER_OF_OUTPUTS]: 'Wallet "$walletName" returned $actual outputs from `$featureName`, but $expected were requested',
   [SOLANA_ERROR__WALLET__INVALID_SIGN_IN_OUTPUT]: 'Wallet "$walletName" returned an invalid sign-in output for account $address'
@@ -41170,7 +41172,7 @@ function createDefaultRpcTransport(config2) {
         ...config2.headers ? normalizeHeaders2(config2.headers) : void 0,
         ...{
           // Keep these headers lowercase so they will override any user-supplied headers above.
-          "solana-client": `js/${"8.5.0"}`
+          "solana-client": `js/${"8.6.0"}`
         }
       }
     }),

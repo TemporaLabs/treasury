@@ -49,8 +49,8 @@
     "lint:skill": "bash scripts/lint-skill.sh"
   },
   "dependencies": {
-    "@solana/kit": "^8.4.0",
-    "viem": "^2.57.3",
+    "@solana/kit": "^8.6.0",
+    "viem": "^2.57.7",
     "zod": "^4.1.0"
   },
   "devDependencies": {
@@ -58,7 +58,7 @@
     "tsup": "^9.0.0",
     "tsx": "^4.20.0",
     "typescript": "^5.9.0",
-    "vitest": "^5.0.0"
+    "vitest": "^5.1.0"
   },
   "overrides": {
     "esbuild@^0.27.0": "0.27.2"
