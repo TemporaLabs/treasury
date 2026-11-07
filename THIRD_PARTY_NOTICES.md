@@ -35,8 +35,8 @@ by hand.
 | `@solana/transaction-messages` | 8.6.0 | MIT |
 | `@solana/transactions` | 8.6.0 | MIT |
 | `abitype` | 1.2.3 | MIT |
-| `ox` | 0.14.56 | MIT |
-| `viem` | 2.57.7 | MIT |
+| `ox` | 0.14.59 | MIT |
+| `viem` | 2.57.16 | MIT |
 | `zod` | 4.6.7 | MIT |
 
 ## @noble/curves 1.9.1 (MIT)
@@ -668,7 +668,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 ```
 
-## ox 0.14.56 (MIT)
+## ox 0.14.59 (MIT)
 
 ```text
 MIT License
@@ -694,7 +694,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 ```
 
-## viem 2.57.7 (MIT)
+## viem 2.57.16 (MIT)
 
 ```text
 MIT License
