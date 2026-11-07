@@ -1,9 +1,16 @@
-import { createPublicClient, http, type Chain, type HttpTransport, type PublicClient } from "viem";
+import { createPublicClient, http, type HttpTransport, type PublicClient } from "viem";
 import { arbitrum, base, mainnet, monad, robinhood } from "viem/chains";
 
-export type SupportedChainId = 8453 | 42161 | 4663 | 1 | 143;
-// Annotated so the declaration build need not name viem's internal chain type (TS2742, viem 2.57.8 and later).
-export const chains: { readonly [K in SupportedChainId]: Chain } = { 8453: base, 42161: arbitrum, 4663: robinhood, 1: mainnet, 143: monad };
+export const chains: {
+  readonly 8453: typeof base;
+  readonly 42161: typeof arbitrum;
+  readonly 4663: typeof robinhood;
+  readonly 1: typeof mainnet;
+  readonly 143: typeof monad;
+} = { 8453: base, 42161: arbitrum, 4663: robinhood, 1: mainnet, 143: monad };
+// Annotated per key, so the declaration build need not name viem's internal chain type (TS2742, viem
+// 2.57.8 and later) while each chain keeps its own type for consumers of the published declarations.
+export type SupportedChainId = keyof typeof chains;
 
 export function isSupportedChainId(id: number): id is SupportedChainId {
   return id in chains;
