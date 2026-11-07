@@ -4,7 +4,7 @@ All notable changes to Agent Treasury are recorded here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versions follow [SemVer](https://semver.org/).
 Pre-1.0, minor versions may change tool names, schemas and behaviour.
 
-## [v0.1.4] - 2026-10-28
+## [v0.1.4] - 2026-11-07
 
 ### Added
 - **One acknowledgement for a plan of several deposits and withdrawals: `connect plan`** (#155). A
@@ -71,8 +71,9 @@ Pre-1.0, minor versions may change tool names, schemas and behaviour.
   tsup 9 needs Node 22.18 or later to build; running the CLI still needs Node 22. The CLI bundle no
   longer declares `window` and `needed` as class fields on one internal error class; the constructor
   still assigns both, so its instances are unchanged.
-- viem 2.57.7, zod 4.6.7 and @solana/kit 8.6.0, inlined in the CLI bundle. viem stays at 2.57.7: later
-  releases make the TypeScript declaration build fail on `src/client.ts` (TS2742).
+- viem 2.57.16, zod 4.6.7 and @solana/kit 8.6.0, inlined in the CLI bundle. The supported-chain table
+  in `src/client.ts` is now annotated, since viem 2.57.8 and later make the TypeScript declaration build
+  fail on its inferred type (TS2742); behaviour is unchanged.
 - The connect page: @privy-io/react-auth 3.51.1, viem 2.57.16, React and React DOM 19.3.1, inlined in
   `dist/connect-page.js`.
 - Development: the connect page's lockfile now resolves ws 8.22.0, uuid 11.1.1 and decode-uri-component
