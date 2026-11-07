@@ -3,6 +3,7 @@ import { readdirSync, readFileSync } from "node:fs";
 import { join, relative } from "node:path";
 import ts from "typescript";
 import { PAGE_CSP } from "../src/connect/page.js";
+import { CHAIN_INFO } from "../src/client.js";
 
 /**
  * The confirm page runs in the operator's browser next to their wallet. These checks read its source
@@ -129,6 +130,18 @@ describe("the connect page's source", () => {
 
   it("keeps WalletConnect off", () => {
     expect(main).toMatch(/walletConnect:\s*\{\s*enabled:\s*false\s*\}/);
+  });
+
+  it("gives the wallet only Robinhood Chain's own RPC, not viem's list", () => {
+    // viem's Robinhood definition lists a third-party RPC beside the chain's own. The page's policy keeps the page
+    // itself off it, but a wallet asked to add the chain takes the RPC list it is handed.
+    const chains = /supportedChains:\s*\[([^\]]*)\]/.exec(code)?.[1]?.split(",").map((s) => s.trim());
+    expect(chains).toEqual(["base", "arbitrum", "robinhoodChain", "mainnet", "monad"]);
+    const def = /const robinhoodChain\b[^;]*;/.exec(code)?.[0] ?? "";
+    expect(def).toContain("...robinhood");
+    const urls = [...def.matchAll(/"((?:https?|wss?):\/\/[^"]+)"/g)].map((m) => m[1]);
+    expect(urls).toEqual([CHAIN_INFO[4663].publicRpc]);
+    expect(def).toMatch(/rpcUrls:\s*\{\s*default:\s*\{\s*http:\s*\[[^\]]*\]\s*\}\s*\}/);
   });
 });
 

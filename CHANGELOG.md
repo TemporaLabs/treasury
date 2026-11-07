@@ -76,6 +76,11 @@ Pre-1.0, minor versions may change tool names, schemas and behaviour.
   fail on its inferred type (TS2742); behaviour is unchanged.
 - The connect page: @privy-io/react-auth 3.51.1, viem 2.57.16, React and React DOM 19.3.1, inlined in
   `dist/connect-page.js`.
+  Privy 3.51.1 brings its own viem 2.57.8, so the page bundle holds two copies of viem and grew from
+  about 3.8 MB to 4.8 MB. The page offers the wallet no new signing or sending method.
+- The connect page gives the wallet only Robinhood Chain's own RPC (`https://rpc.mainnet.chain.robinhood.com`).
+  viem's definition of the chain also lists a third-party RPC; the page's Content-Security-Policy already
+  kept the page itself off it, and now a wallet asked to add the chain is not handed it either.
 - Development: the connect page's lockfile now resolves ws 8.22.0, uuid 11.1.1 and decode-uri-component
   0.5.0, clearing its `npm audit` findings (GHSA-96hv-2xvq-fx4p, GHSA-58qx-3vcg-4xpx, GHSA-w5hq-g745-h8pq,
   GHSA-vcc3-ghjq-m6fr). None of the three is in the built page, so this change does not alter it.
