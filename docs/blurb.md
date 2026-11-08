@@ -1,7 +1,7 @@
 # Open Agent Treasury (OAT)
 
 **The open-source treasury management system for AI agents.** Built by Tempora Labs. Apache-2.0.
-Current release: **v0.1.4** (October 2026).
+Current release: **v0.1.4** (November 2026).
 
 Open Agent Treasury gives an AI agent a safe way to manage on-chain capital. The agent reads the
 chain directly, works out what it wants to do, and hands back unsigned transactions. A human, or
@@ -102,8 +102,7 @@ no money. Later:
 ## New in v0.1.4
 
 One acknowledgement for a plan of several deposits and withdrawals, across vaults and chains, and
-one signing page that walks the whole plan in the operator's wallet (EVM vaults; a plan with the
-Solana vault runs a page per step). On Solana, a landed withdrawal is checked for what it paid, and
+one signing page that walks the whole plan in the operator's wallet, Solana legs included. On Solana, a landed withdrawal is checked for what it paid, and
 `earn balance` no longer reports a capped exit as a full one.
 
 ## New in v0.1.3
