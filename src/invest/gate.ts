@@ -10,7 +10,9 @@
  *   - on BNB Chain (56), debiting the owner's own smart account (`verifyingContract`), paying the
  *     owner's own wallet (`recipientAccountId` = `eip155:56:<owner>`), for the named portfolio;
  *   - a sale settles in USDT; a transfer moves only USDT;
- *   - every amount is a whole number of units, and no batch names an asset twice;
+ *   - every amount is a whole number of units, each asset entry carries exactly its two signed
+ *     fields, and no batch names an asset twice;
+ *   - it expires in the future, and no later than `INVEST.maxAuthorizationLifetimeSeconds` from now;
  *   - **the amounts are bounded by the chain, not by the service's plan.** The owner asks for `all`
  *     or a fraction of each holding. Each asset's total across every batch must be at most that
  *     fraction of the asset's `balanceOf` on the smart account, read through the owner's own RPC
@@ -25,6 +27,7 @@
  * full ordered set of batches, which the acknowledgement is bound to.
  */
 import { concat, getAddress, hashTypedData, keccak256, type Address, type Hex, type TypedDataDefinition } from "viem";
+import { INVEST } from "../config/invest.js";
 import { BNB_INFO, BNB_USDT_ASSET_ID, tokenOf } from "./chain.js";
 
 /** One EIP-712 authorization as the service returns it: untrusted until `admitWithdrawal` passes it. */
@@ -158,6 +161,9 @@ export function admitWithdrawal(batches: readonly WithdrawalAuthorization[], fra
     const expiry = typeof m["expiresAt"] === "number" || typeof m["expiresAt"] === "string" ? Number(m["expiresAt"]) : NaN;
     if (!Number.isSafeInteger(expiry) || expiry <= 0) notTheForm();
     if (expiry * 1000 <= expect.now) refuse("it has expired");
+    if (expiry * 1000 > expect.now + INVEST.maxAuthorizationLifetimeSeconds * 1000) {
+      refuse(`it stays valid for more than ${INVEST.maxAuthorizationLifetimeSeconds / 60} minutes`);
+    }
     earliest = Math.min(earliest, expiry);
 
     const assets = Array.isArray(m["assets"]) ? (m["assets"] as { assetId?: unknown; amountRaw?: unknown }[]) : [];
@@ -168,6 +174,8 @@ export function admitWithdrawal(batches: readonly WithdrawalAuthorization[], fra
       if (!token || typeof x?.amountRaw !== "string" || !/^[1-9]\d*$/.test(x.amountRaw)) {
         refuse(`it names an asset that is not a token on ${BNB_INFO.name}, or an amount that is not a whole number of units`);
       }
+      // Each element is exactly { assetId, amountRaw }: a key that is shown but not signed is refused.
+      if (!sameSet(Object.keys(x), Object.keys(ASSET_TYPES))) notTheForm();
       if (seen.has(token!)) refuse("it names the same asset twice");
       seen.add(token!);
       if (!sale && x.assetId !== BNB_USDT_ASSET_ID) refuse("it would move a holding other than USDT without selling it");

@@ -7,6 +7,7 @@ import { describe, expect, it } from "vitest";
 import { getAddress, type Address } from "viem";
 import { admitWithdrawal, allowedOf, parseFraction, type WithdrawalAuthorization } from "../src/invest/gate.js";
 import { BNB_USDT, BNB_USDT_ASSET_ID, assetIdOf, tokenOf } from "../src/invest/chain.js";
+import { INVEST } from "../src/config/invest.js";
 
 const OWNER = getAddress("0x1111111111111111111111111111111111111111");
 const SMART = getAddress("0x2222222222222222222222222222222222222222");
@@ -145,6 +146,9 @@ describe("admitWithdrawal", () => {
     ["an extra type", (a) => (a.types["Extra"] = [{ name: "x", type: "string" }]), /not in the form/],
     ["a domain type without the account", (a) => (a.types["EIP712Domain"] = [{ name: "name", type: "string" }, { name: "version", type: "string" }, { name: "chainId", type: "uint256" }]), /not in the form/],
     ["a malformed nonce", (a) => (a.message["nonce"] = "0x01"), /not in the form/],
+    ["an unsigned key on an asset", (a) => ((a.message["assets"] as Record<string, string>[])[0]!["note"] = "x"), /not in the form/],
+    ["an asset missing a field", (a) => delete (a.message["assets"] as Record<string, string>[])[0]!["amountRaw"], /whole number|not in the form/],
+    ["an expiry past the ceiling", (a) => (a.message["expiresAt"] = Math.floor(NOW / 1000) + INVEST.maxAuthorizationLifetimeSeconds + 1), /stays valid for more than/],
   ])("refuses %s", (_why, f, msg) => {
     expect(alter(f)).toThrow(msg);
   });
