@@ -45333,7 +45333,7 @@ function formatAmount(raw, decimals) {
 }
 
 // package.json
-var package_default = { version: "0.1.4" };
+var package_default = { version: "0.1.5" };
 
 // src/version.ts
 var PACKAGE_VERSION = package_default.version;
