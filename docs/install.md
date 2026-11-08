@@ -7,14 +7,14 @@ front of an agent.
 ## Claude Code — the plugin
 
 ```bash
-claude plugin marketplace add TemporaLabs/treasury@v0.1.3
+claude plugin marketplace add TemporaLabs/treasury@v0.1.4
 claude plugin install treasury@treasury
 ```
 
 `@<ref>` pins the marketplace to a tag or a branch, and is recorded with the marketplace entry, so
 `claude plugin marketplace update` refreshes *that* ref rather than moving the install onto another
 branch; `#<ref>` is equivalent. Prefer a tag — it is immutable. Before a release is tagged, pin its
-release branch instead (`TemporaLabs/treasury@release/v0.1.3`); dropping the suffix entirely tracks
+release branch instead (`TemporaLabs/treasury@release/v0.1.4`); dropping the suffix entirely tracks
 this repository's default branch.
 
 The plugin is the [`plugin/`](../plugin/) folder of this repository: its manifests, the `earn` skill,
@@ -46,7 +46,7 @@ marketplace also uninstalls the plugin, so upgrade in three steps:
 
 ```bash
 claude plugin marketplace remove treasury
-claude plugin marketplace add TemporaLabs/treasury@v0.1.3
+claude plugin marketplace add TemporaLabs/treasury@v0.1.4
 claude plugin install treasury@treasury
 ```
 
@@ -92,7 +92,7 @@ version — a published version is immutable, and `--save-exact` keeps a later `
 to another one:
 
 ```bash
-npm install --save-exact @temporalabs/treasury@0.1.3
+npm install --save-exact @temporalabs/treasury@0.1.4
 npx --no-install treasury earn --help     # every command and flag, as JSON
 npx --no-install treasury earn vaults     # or: node <project>/node_modules/@temporalabs/treasury/dist/treasury.mjs earn vaults
 ```
@@ -102,7 +102,7 @@ Claude Code plugin carries; [`runbooks/verify_the_bundle.md`](runbooks/verify_th
 to check it from the tarball. A checkout of the repository at the tag, or the plugin cache after a
 Claude Code install, holds the same file if you would rather not install from npm.
 
-The CLI carries exactly the eight `earn` commands and five `connect` commands in [`tools.md`](tools.md),
+The CLI carries exactly the eight `earn` commands and six `connect` commands in [`tools.md`](tools.md),
 each printing one JSON document; a refusal exits 1 with `{ "error": … }` on stderr. No command signs:
 the `connect` commands hand calls to your own wallet for approval, and your runtime's own signer
 takes the calls `earn prepare_deposit` and `earn prepare_withdraw` return. The `earn` skill ships with
@@ -127,7 +127,7 @@ Wallet entry (the Coinbase SDK, for its mobile app or a smart wallet) is unteste
 ([#88](https://github.com/TemporaLabs/treasury/issues/88)). It is separate from the Coinbase Wallet
 browser extension, which, like any installed wallet, is listed on the first screen. Signing in costs
 nothing. After that, `treasury connect deposit` and `treasury connect withdraw` first return an
-acknowledgement for the operator to answer, and on their yes open a confirm page for each transaction. See [`tools.md`](tools.md#the-connect-commands--treasury-connect-command).
+acknowledgement for the operator to answer, and on their yes open a confirm page for each deposit or withdrawal, or one page for a whole plan. See [`tools.md`](tools.md#the-connect-commands--treasury-connect-command).
 `treasury connect wallet --chain solana` connects a Solana wallet instead (Phantom, Solflare, Backpack, or a
 Privy wallet from an email or social login), for the vault on Solana; the two connections are kept apart.
 
@@ -143,7 +143,7 @@ Privy wallet from an email or social login), for the vault on Solana; the two co
 
 ## As a library
 
-`@temporalabs/treasury` — the same package, `npm install @temporalabs/treasury@0.1.3` — also exports
+`@temporalabs/treasury` — the same package, `npm install @temporalabs/treasury@0.1.4` — also exports
 the builders, the pre-flight, the position scan and the registry as plain functions, for the EVM chains
 only: the Solana vault's reads and builders are not exported, so reach it through the CLI. ⚠️ The library returns bare `UnsignedCall[]` arrays; the
 `{ requires_signature: true, status: "unsigned", calls }` envelope is a property of the command

@@ -1,3 +1,5 @@
+import { isSolanaError, SOLANA_ERROR__RPC__TRANSPORT_HTTP_ERROR } from "@solana/kit";
+
 /**
  * Describe an error for a tool result WITHOUT leaking the RPC endpoint.
  *
@@ -15,7 +17,11 @@
 export function describeError(e: unknown, max = 200): string {
   const anyE = e as { shortMessage?: unknown; details?: unknown; message?: unknown; name?: unknown } | null;
   let s: string;
-  if (anyE && typeof anyE.shortMessage === "string" && anyE.shortMessage.length > 0) {
+  if (isSolanaError(e, SOLANA_ERROR__RPC__TRANSPORT_HTTP_ERROR)) {
+    // Under NODE_ENV=production the Solana client's message is only a code ("Solana error #8100002; Decode
+    // this error by running …"). Write the sentence from the error's own context, which is there either way.
+    s = `HTTP error (${e.context.statusCode}): ${e.context.message}`;
+  } else if (anyE && typeof anyE.shortMessage === "string" && anyE.shortMessage.length > 0) {
     s = anyE.shortMessage;
     if (typeof anyE.details === "string" && anyE.details.length > 0 && !s.includes(anyE.details)) s = `${s} ${anyE.details}`;
   } else if (anyE && typeof anyE.message === "string" && anyE.message.length > 0) s = anyE.message;

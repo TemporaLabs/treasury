@@ -191,7 +191,6 @@ export async function withdrawInstructions(v: VaultRead, user: string, shares: b
     left -= take;
     idle = 0n;
   }
-  if (left > 0n) legs.push({ reserve: order[0]!, shares: left });
   // The account's own USDC account must exist for the program to pay into; create it if it does not
   // (idempotent: nothing happens when it exists, which is the usual case for an account that deposited).
   const ixs: Instruction[] = [

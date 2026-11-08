@@ -67,6 +67,8 @@ describe("a reverted withdraw quote reports the chain's reason on the chassis it
     expect(q.note).not.toMatch(/liquid against/);
     expect(q.note).not.toMatch(/pays withdrawals from its own balance/);
     expect(q.note).toMatch(/smaller amount/);
+    // The amount is the operator's: the note asks for one rather than suggesting one.
+    expect(q.note).toMatch(/quote only an amount the operator names/);
   });
 
   it("Morpho V2: a transfer-exceeds-balance revert is still not explained as the vault's idle balance", async () => {
@@ -92,6 +94,8 @@ describe("a reverted withdraw quote reports the chain's reason on the chassis it
     });
     expect(q.note).toMatch(/0\.8 USDC liquid against 10 requested/);
     expect(q.note).toContain("transfer amount exceeds balance");
+    // Says what can come out now and leaves the amount to the operator.
+    expect(q.note).toMatch(/ask the operator whether to withdraw that, another amount, or wait/);
   });
 
   it("Fusion: a revert that is not a balance shortfall, with enough idle balance, is not given the liquidity note", async () => {

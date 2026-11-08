@@ -44,7 +44,7 @@ Earn currently supports **USDC in, USDC out** through Tempora Labs' ERC-4626 vau
 Arbitrum One, Ethereum and Monad, through a Kamino vault on Solana, and **USDG in, USDG out** on Robinhood Chain. Base is the default chain, and Test 2B its
 default vault; the agent asks which chain when you have not said, and the funds have to be on that
 chain already. See [Vaults](#vaults).
-See the [command reference](docs/tools.md), the eight `earn` commands and the five `connect` commands, for inputs, outputs, and limits.
+See the [command reference](docs/tools.md), the eight `earn` commands and the six `connect` commands, for inputs, outputs, and limits.
 
 ## Quick start
 
@@ -59,11 +59,11 @@ export TREASURY_RPC_ROBINHOOD=https://... # only if you will use a vault on Robi
 export TREASURY_RPC_ETHEREUM=https://...  # only if you will use a vault on Ethereum
 export TREASURY_RPC_MONAD=https://...     # only if you will use a vault on Monad
 export TREASURY_RPC_SOLANA=https://...    # only if you will use the vault on Solana
-claude plugin marketplace add TemporaLabs/treasury@v0.1.3
+claude plugin marketplace add TemporaLabs/treasury@v0.1.4
 claude plugin install treasury@treasury
 ```
 
-Start a new Claude Code session after installing so the Earn skill loads. Keep the `TemporaLabs/treasury@v0.1.3` ref
+Start a new Claude Code session after installing so the Earn skill loads. Keep the `TemporaLabs/treasury@v0.1.4` ref
 explicit so the install stays on a release rather than tracking the default branch. Upgrading an
 earlier install? Run `claude plugin marketplace remove treasury` first, then the two `claude plugin` lines above
 ([details](docs/install.md#upgrading-an-earlier-install)).
@@ -75,7 +75,7 @@ command at a time; nothing stays running.
 ### Any agent with a shell
 
 ```bash
-npm install --save-exact @temporalabs/treasury@0.1.3
+npm install --save-exact @temporalabs/treasury@0.1.4
 npx --no-install treasury earn --help     # every command and flag, as JSON
 ```
 

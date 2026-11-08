@@ -42,6 +42,9 @@ export const DISCLOSURES = {
       "You can withdraw, but in stressed markets part of your money may not come out right away.",
       "Tempora Labs runs this vault and can charge fees on it. It is offered because it is a Tempora Labs vault, not because it pays the most. Its holdings and fees are public on-chain.",
     ],
+    /** The last `deposit` sentence, for an acknowledgement that names more than one vault (`connect plan`). */
+    feesSeveral:
+      "Tempora Labs runs these vaults and can charge fees on them. They are offered because they are Tempora Labs vaults, not because they pay the most. Their holdings and fees are public on-chain.",
     /** Added before a deposit into a vault whose registry row is not open to every account. */
     gatedDeposit: "This vault only accepts deposits from accounts Tempora Labs has admitted. If yours is not one, the deposit will fail.",
     always: [

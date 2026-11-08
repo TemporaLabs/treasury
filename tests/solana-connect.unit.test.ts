@@ -66,9 +66,18 @@ function rpc(
     }),
   } as never;
 }
-type Bal = { owner: string; mint: string; uiTokenAmount: { amount: string } };
+type Bal = { accountIndex: number; owner: string; mint: string; uiTokenAmount: { amount: string } };
 const ACCOUNT = "9xQeWvG816bUx9EPjHmaT23yvVM2ZWbrrpZb9PusVFin";
-const bal = (mint: string, amount: string): Bal => ({ owner: ACCOUNT, mint, uiTokenAmount: { amount } });
+/** The vault's side of a withdrawal (its token vault, or a reserve's supply), and an owner the vault does not pay. */
+const VAULT_SIDE = "D6hDbSjoZ7mJ4u2UtsD5X1h9WyTWsZbqdMahLkcmGpmn";
+const STRANGER = "8r3bmH59Lp2r5AhfMgKSkXoBf4JFbiwkxa6Uw2ZrxGRp";
+/** One token account per owner and mint, so its records before and after the transaction share an index. */
+const indexes = new Map<string, number>();
+const bal = (mint: string, amount: string, owner = ACCOUNT): Bal => {
+  const key = `${owner}:${mint}`;
+  if (!indexes.has(key)) indexes.set(key, indexes.size + 2);
+  return { accountIndex: indexes.get(key)!, owner, mint, uiTokenAmount: { amount } };
+};
 const SIG = getBase58Decoder().decode(new Uint8Array(64).fill(7));
 const deposit: SolanaIntent = { kind: "deposit", vault, raw: 2_000_000n };
 const withdraw: SolanaIntent = { kind: "withdraw", vault, raw: 1_000_000n };
@@ -91,12 +100,12 @@ describe("whether a Solana transaction landed as acknowledged", () => {
   });
 
   it("a withdrawal that burned a different number of shares: mismatch", async () => {
-    const v = await verifySolanaLanded(rpc({ confirmationStatus: "confirmed" }, { pre: [bal(vault.sharesMint, "3000000")], post: [bal(vault.sharesMint, "1000000"), bal(vault.asset.address, "1998000")] }), SIG, withdraw, ACCOUNT, opts);
+    const v = await verifySolanaLanded(rpc({ confirmationStatus: "confirmed" }, { pre: [bal(vault.sharesMint, "3000000"), bal(vault.asset.address, "5000000", VAULT_SIDE)], post: [bal(vault.sharesMint, "1000000"), bal(vault.asset.address, "1998000"), bal(vault.asset.address, "3002000", VAULT_SIDE)] }), SIG, withdraw, ACCOUNT, opts);
     expect(v.verified).toBe("mismatch");
   });
 
   it("a withdrawal that burned exactly the shares and paid the asset: matched", async () => {
-    const v = await verifySolanaLanded(rpc({ confirmationStatus: "confirmed" }, { pre: [bal(vault.sharesMint, "3000000")], post: [bal(vault.sharesMint, "2000000"), bal(vault.asset.address, "999000")] }), SIG, withdraw, ACCOUNT, opts);
+    const v = await verifySolanaLanded(rpc({ confirmationStatus: "confirmed" }, { pre: [bal(vault.sharesMint, "3000000"), bal(vault.asset.address, "5000000", VAULT_SIDE)], post: [bal(vault.sharesMint, "2000000"), bal(vault.asset.address, "999000"), bal(vault.asset.address, "4001000", VAULT_SIDE)] }), SIG, withdraw, ACCOUNT, opts);
     expect(v.verified).toBe("matched");
   });
 
@@ -120,7 +129,7 @@ describe("whether a Solana transaction landed as acknowledged", () => {
 
   it("a withdrawal short by up to one share unit per withdraw instruction is rounding: matched; by more, or with no withdraw instruction, mismatch", async () => {
     const landed = (burnedTo: string, withdrawLegs: number) =>
-      verifySolanaLanded(rpc({ confirmationStatus: "confirmed" }, { pre: [bal(vault.sharesMint, "3000000")], post: [bal(vault.sharesMint, burnedTo), bal(vault.asset.address, "999000")], withdrawLegs }), SIG, withdraw, ACCOUNT, opts);
+      verifySolanaLanded(rpc({ confirmationStatus: "confirmed" }, { pre: [bal(vault.sharesMint, "3000000"), bal(vault.asset.address, "5000000", VAULT_SIDE)], post: [bal(vault.sharesMint, burnedTo), bal(vault.asset.address, "999000"), bal(vault.asset.address, "4001000", VAULT_SIDE)], withdrawLegs }), SIG, withdraw, ACCOUNT, opts);
     expect((await landed("2000001", 1)).verified).toBe("matched");
     expect((await landed("2000002", 2)).verified).toBe("matched");
     expect((await landed("2000002", 1)).verified).toBe("mismatch");
@@ -150,7 +159,7 @@ describe("whether a Solana transaction landed as acknowledged", () => {
   });
 
   it("a withdrawal this page did not build: mismatch, even with the exact burn", async () => {
-    const v = await verifySolanaLanded(rpc({ confirmationStatus: "confirmed" }, { pre: [bal(vault.sharesMint, "3000000")], post: [bal(vault.sharesMint, "2000000"), bal(vault.asset.address, "999000")], blockhash: OTHER_BLOCKHASH }), SIG, withdraw, ACCOUNT, opts);
+    const v = await verifySolanaLanded(rpc({ confirmationStatus: "confirmed" }, { pre: [bal(vault.sharesMint, "3000000"), bal(vault.asset.address, "5000000", VAULT_SIDE)], post: [bal(vault.sharesMint, "2000000"), bal(vault.asset.address, "999000"), bal(vault.asset.address, "4001000", VAULT_SIDE)], blockhash: OTHER_BLOCKHASH }), SIG, withdraw, ACCOUNT, opts);
     expect(v.verified).toBe("mismatch");
   });
 
@@ -159,6 +168,93 @@ describe("whether a Solana transaction landed as acknowledged", () => {
     const v = await verifySolanaLanded(rpc(null), SIG, deposit, ACCOUNT, opts);
     expect(v.verified).toBe("unverified");
     expect(v.detail).toMatch(/look the signature up/);
+  });
+
+  describe("what a landed withdrawal paid, from every account of the asset", () => {
+    /** A one-leg withdrawal of 1,000,000 shares: the vault's side falls by `paid`, the account and anyone else rise. */
+    const landed = (o: { paid: string; own: string; others?: [string, string][]; vaultAfter?: string; intent?: SolanaIntent; simulated?: bigint }) => {
+      const vaultBefore = 5_000_000n;
+      const pre = [bal(vault.sharesMint, "3000000"), bal(vault.asset.address, "0"), bal(vault.asset.address, vaultBefore.toString(), VAULT_SIDE), ...(o.others ?? []).map(([owner]) => bal(vault.asset.address, "0", owner))];
+      const post = [
+        bal(vault.sharesMint, "2000000"),
+        bal(vault.asset.address, o.own),
+        bal(vault.asset.address, o.vaultAfter ?? (vaultBefore - BigInt(o.paid)).toString(), VAULT_SIDE),
+        ...(o.others ?? []).map(([owner, amount]) => bal(vault.asset.address, amount, owner)),
+      ];
+      return verifySolanaLanded(rpc({ confirmationStatus: "confirmed" }, { pre, post, withdrawLegs: 1 }), SIG, o.intent ?? withdraw, ACCOUNT, { ...opts, ...(o.simulated !== undefined ? { simulated: new Map([[BUILT, o.simulated]]) } : {}) });
+    };
+
+    it("all of it reaching the account: matched, and the detail names what it received", async () => {
+      const v = await landed({ paid: "999000", own: "999000" });
+      expect(v.verified, v.detail).toBe("matched");
+      expect(v.detail).toMatch(/received 0\.999 USDC/);
+      expect(v.detail).toMatch(/SOL the transaction moved is not checked/);
+    });
+
+    it("part of it sent on to another owner in the same transaction: extra_transfer, naming the owner and the amount", async () => {
+      const v = await landed({ paid: "999000", own: "994000", others: [[STRANGER, "5000"]] });
+      expect(v.verified).toBe("extra_transfer");
+      expect(v.alsoMoved).toEqual([{ to: STRANGER, amountRaw: "5000" }]);
+      expect(v.detail).toMatch(/paid 0\.999 USDC, and in the same transaction 0\.005 USDC of it went to another owner/);
+    });
+
+    it("balances that do not add up (the account rose by more than the vault's side fell): mismatch", async () => {
+      const v = await landed({ paid: "500000", own: "999000" });
+      expect(v.verified).toBe("mismatch");
+      expect(v.detail).toMatch(/do not add up: they rose by 0\.499 USDC in total/);
+    });
+
+    it("a withdrawal by amount paid less than acknowledged, beyond the 0.001 USDC Kamino keeps per instruction: mismatch; within it, or more: matched", async () => {
+      const byAmount: SolanaIntent = { ...withdraw, assets: 1_000_000n };
+      expect((await landed({ paid: "999000", own: "999000", intent: byAmount })).verified).toBe("matched");
+      expect((await landed({ paid: "1000700", own: "1000700", intent: byAmount })).verified).toBe("matched");
+      const short = await landed({ paid: "998999", own: "998999", intent: byAmount });
+      expect(short.verified).toBe("mismatch");
+      expect(short.detail).toMatch(/paid 0\.998999 USDC, less than the 1 USDC acknowledged/);
+      // What went on to another owner counts as paid: the shortfall is not hidden as a smaller withdrawal.
+      expect((await landed({ paid: "999000", own: "994000", others: [[STRANGER, "5000"]], intent: byAmount })).verified).toBe("extra_transfer");
+    });
+
+    it("paying less than the simulation of this same transaction, beyond rounding: mismatch; as much or more: matched", async () => {
+      expect((await landed({ paid: "999000", own: "999000", simulated: 999_001n })).verified).toBe("matched");
+      expect((await landed({ paid: "999100", own: "999100", simulated: 999_000n })).verified).toBe("matched");
+      const v = await landed({ paid: "999000", own: "999000", simulated: 999_002n });
+      expect(v.verified).toBe("mismatch");
+      expect(v.detail).toMatch(/less than the 0\.999002 USDC its simulation before sending paid/);
+    });
+
+    it("an account that held the asset before and has no record after: unverified, never a balance that fell to 0", async () => {
+      const pre = [bal(vault.sharesMint, "3000000"), bal(vault.asset.address, "0"), bal(vault.asset.address, "5000000", VAULT_SIDE), bal(vault.asset.address, "7000", STRANGER)];
+      const post = [bal(vault.sharesMint, "2000000"), bal(vault.asset.address, "999000"), bal(vault.asset.address, "4001000", VAULT_SIDE)];
+      const v = await verifySolanaLanded(rpc({ confirmationStatus: "confirmed" }, { pre, post, withdrawLegs: 1 }), SIG, withdraw, ACCOUNT, opts);
+      expect(v.verified).toBe("unverified");
+      expect(v.detail).toMatch(/no balance after it for an account of 8r3bmH59/);
+    });
+
+    it("an empty account closed in the transaction is not a payment: matched", async () => {
+      const pre = [bal(vault.sharesMint, "3000000"), bal(vault.asset.address, "0"), bal(vault.asset.address, "5000000", VAULT_SIDE), bal(vault.asset.address, "0", STRANGER)];
+      const post = [bal(vault.sharesMint, "2000000"), bal(vault.asset.address, "999000"), bal(vault.asset.address, "4001000", VAULT_SIDE)];
+      const v = await verifySolanaLanded(rpc({ confirmationStatus: "confirmed" }, { pre, post, withdrawLegs: 1 }), SIG, withdraw, ACCOUNT, opts);
+      expect(v.verified, v.detail).toBe("matched");
+    });
+
+    it("records with no owner, or none at all: unverified, never matched", async () => {
+      const noOwner = { ...bal(vault.asset.address, "4001000", VAULT_SIDE), owner: undefined as unknown as string };
+      const pre = [bal(vault.sharesMint, "3000000"), bal(vault.asset.address, "0"), bal(vault.asset.address, "5000000", VAULT_SIDE)];
+      const v = await verifySolanaLanded(rpc({ confirmationStatus: "confirmed" }, { pre: pre.slice(0, 2), post: [bal(vault.sharesMint, "2000000"), bal(vault.asset.address, "999000"), noOwner], withdrawLegs: 1 }), SIG, withdraw, ACCOUNT, opts);
+      expect(v.verified).toBe("unverified");
+      // A record that does not name its account cannot be paired with its other half: before or after.
+      const unindexed = ({ accountIndex: _i, ...rest }: Bal) => rest as Bal;
+      const post = [bal(vault.sharesMint, "2000000"), bal(vault.asset.address, "999000"), bal(vault.asset.address, "4001000", VAULT_SIDE)];
+      for (const [p, q] of [[pre.map((b, i) => (i === 2 ? unindexed(b) : b)), post], [pre, post.map((b, i) => (i === 2 ? unindexed(b) : b))]] as const) {
+        const u = await verifySolanaLanded(rpc({ confirmationStatus: "confirmed" }, { pre: [...p], post: [...q], withdrawLegs: 1 }), SIG, withdraw, ACCOUNT, opts);
+        expect(u.verified).toBe("unverified");
+        expect(u.detail).toMatch(/do not name their accounts/);
+      }
+      const none = await verifySolanaLanded(rpc({ confirmationStatus: "confirmed" }, { pre: undefined as never, post: undefined as never, withdrawLegs: 1 }), SIG, withdraw, ACCOUNT, opts);
+      expect(none.verified).toBe("unverified");
+      expect(none.detail).toMatch(/no token-balance records/);
+    });
   });
 });
 

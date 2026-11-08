@@ -183,3 +183,181 @@ export function acknowledgementText(s: AckSummary): string {
     `Do you acknowledge and want the signing page opened for exactly this ${s.action}? Reply yes or no.`,
   ].join("\n");
 }
+
+/**
+ * A plan: one acknowledgement for several deposits and withdrawals, across vaults and chains (`connect plan`).
+ *
+ * Each leg is bound to the same digest its own `--ack` would be (`callsDigest`, `solanaIntentDigest`), so a
+ * leg run rebuilds its calls exactly as a single acknowledgement does and is held to them. The plan's code
+ * is spent leg by leg, in order: a leg that does not complete ends the plan, and the legs after it never run.
+ */
+export const PLAN_TTL_MS = 60 * 60_000;
+/** Past this many legs, the operator is better served by more than one plan. */
+export const PLAN_MAX_LEGS = 8;
+
+export type PlanLegStatus = "pending" | "running" | "completed" | "stopped" | "not_reported";
+
+export interface PlanLeg {
+  leg: number;
+  action: "deposit" | "withdraw";
+  vault: string;
+  chain: string;
+  amount: string;
+  digest: string;
+  /** The exact command that runs this leg once the plan is acknowledged. */
+  command: string;
+  /** What that command builds the leg's calls from: how `connect plan --run` rebuilds them for its one page. */
+  args?: PlanLegArgs;
+  status: PlanLegStatus;
+  txs?: PlanTx[];
+  reason?: string;
+}
+
+/** A leg's transaction as the plan keeps it: its hash, its verdict, and anything else the wallet moved with it. */
+export interface PlanTx {
+  hash: string;
+  verified: string;
+  alsoMoved?: { to: string; amountRaw: string }[];
+}
+
+export interface PlanLegArgs {
+  vault: string;
+  receiver: string;
+  amount_usdc?: string;
+  all?: boolean;
+  shares_exact?: string;
+}
+
+export interface PendingPlan {
+  code: string;
+  issuedAtIso: string;
+  expiresAtIso: string;
+  acknowledged: boolean;
+  legs: PlanLeg[];
+  /**
+   * The one page `connect plan --run` serves for this plan: its secret and port, kept so a run that stops at the
+   * shell's time limit and the run after it serve the same page, and the operator's open tab carries on.
+   */
+  page?: { secret: string; port: number };
+}
+
+/** What a plan IS: its legs' digests, in order. Reordering, adding or dropping a leg changes it. */
+export function planDigest(digests: string[]): string {
+  return keccak256(stringToHex(JSON.stringify(["plan", digests])));
+}
+
+export function issuePlan(legs: Omit<PlanLeg, "status">[], now: Date): PendingPlan {
+  const a = issueAckForDigest(planDigest(legs.map((l) => l.digest)), now);
+  return {
+    code: a.code,
+    issuedAtIso: a.issuedAtIso,
+    expiresAtIso: new Date(now.getTime() + PLAN_TTL_MS).toISOString(),
+    acknowledged: false,
+    legs: legs.map((l) => ({ ...l, status: "pending" })),
+  };
+}
+
+export const planExpired = (p: PendingPlan, now: Date) => {
+  const expires = Date.parse(p.expiresAtIso);
+  // A missing or unreadable expiry counts as expired, never as no expiry.
+  return !Number.isFinite(expires) || now.getTime() > expires;
+};
+
+/** Throws unless `code` names the pending plan, it is unexpired and not yet acknowledged, and its legs are exactly `digests`. */
+export function checkPlanAck(code: string, plan: PendingPlan | undefined, digests: string[], now: Date): void {
+  const again = "run the same `connect plan` without --ack, post its `acknowledgement` to the operator, and wait for their yes";
+  if (!plan) throw new Error(`refused: no plan is pending; ${again}`);
+  if (code.trim().toLowerCase() !== plan.code) throw new Error(`refused: --ack ${code} is not the pending plan's code; ${again}`);
+  if (planExpired(plan, now)) throw new Error(`refused: the plan expired at ${plan.expiresAtIso}; ${again}`);
+  if (plan.acknowledged) throw new Error(`refused: this plan was already acknowledged; run its legs (\`connect plan --status\` lists them)`);
+  if (planDigest(digests) !== planDigest(plan.legs.map((l) => l.digest))) {
+    throw new Error(`refused: these legs are not the ones the operator acknowledged (a leg, its order, amount, vault, or a share balance changed); ${again}`);
+  }
+}
+
+/**
+ * Throws unless leg `leg` of the acknowledged plan `code` may run now, for exactly `digest`: the plan is
+ * acknowledged and unexpired, every earlier leg completed, and this leg has not run. Returns its index.
+ */
+export function checkPlanLeg(code: string, leg: number, plan: PendingPlan | undefined, digest: string, now: Date): number {
+  const again = "acknowledge a new plan with `connect plan`";
+  if (!plan) throw new Error(`refused: no plan is pending; ${again}`);
+  if (code.trim().toLowerCase() !== plan.code) throw new Error(`refused: --plan ${code} is not the pending plan's code; ${again}`);
+  if (!plan.acknowledged) throw new Error(`refused: plan ${plan.code} has not been acknowledged; post its acknowledgement and, on the operator's yes, run \`connect plan\` with --ack ${plan.code}`);
+  if (planExpired(plan, now)) throw new Error(`refused: the plan expired at ${plan.expiresAtIso}; legs that have not started do not run; ${again}`);
+  const i = plan.legs.findIndex((l) => l.leg === leg);
+  if (i < 0) throw new Error(`refused: plan ${plan.code} has no leg ${leg}; it has legs 1 to ${plan.legs.length}`);
+  const ended = plan.legs.find((l) => l.status !== "pending" && l.status !== "completed");
+  if (ended && ended.leg !== leg) {
+    throw new Error(
+      ended.status === "running"
+        ? `refused: leg ${ended.leg} is still running, or its run never finished; no later leg runs until it has completed`
+        : `refused: the plan ended at leg ${ended.leg} (${ended.status}), so no later leg runs; ${again}`,
+    );
+  }
+  if (plan.legs[i]!.status !== "pending") throw new Error(`refused: leg ${leg} has already run (${plan.legs[i]!.status})`);
+  const before = plan.legs.slice(0, i).find((l) => l.status !== "completed");
+  if (before) throw new Error(`refused: legs run in order, and leg ${before.leg} has not completed; run it first`);
+  if (digest !== plan.legs[i]!.digest) {
+    throw new Error(`refused: these calls are not leg ${leg} as the operator acknowledged it (the amount, vault, chain, receiver or connected account changed); ${again}`);
+  }
+  return i;
+}
+
+/** The text the operator reads for a plan: every leg, then each warning and the disclosures once. */
+export function planAcknowledgementText(legs: AckSummary[], totals: string[]): string {
+  const n = legs.length;
+  // One warning per text, naming every vault it covers. A withdrawal's warning is the deposit's without its advice on
+  // how much to deposit (`operatorWarning`), so the two are one warning, with that advice named for the deposits only.
+  const advice = (w: string) => w.match(/Deposit only .*?\.(?=\s|$)/g)?.join(" ") ?? "";
+  const warnings: { text: string; vaults: string[]; advice: string; depositVaults: string[] }[] = [];
+  for (const s of legs) {
+    const base = operatorWarning(s.warning, "withdraw");
+    const w = warnings.find((x) => x.text === base) ?? warnings[warnings.push({ text: base, vaults: [], advice: "", depositVaults: [] }) - 1]!;
+    if (!w.vaults.includes(s.vault.symbol)) w.vaults.push(s.vault.symbol);
+    if (s.action === "deposit" && advice(s.warning)) {
+      w.advice = advice(s.warning);
+      if (!w.depositVaults.includes(s.vault.symbol)) w.depositVaults.push(s.vault.symbol);
+    }
+  }
+  const several = new Set(legs.map((s) => s.vault.symbol)).size > 1;
+  const fees = DISCLOSURES.plain.deposit.find((d) => d.startsWith("Tempora Labs runs this vault"));
+  const disclosures = [...new Set(legs.flatMap((s) => s.disclosures))].map((d) => (several && d === fees ? DISCLOSURES.plain.feesSeveral : d));
+  const minutes = Math.round(PLAN_TTL_MS / 60_000);
+  const legLines = legs.flatMap((s, i) => {
+    const lands = s.action === "deposit" ? "Shares go to" : `${s.asset} goes to`;
+    const prompts =
+      s.prompts ??
+      (s.action === "deposit"
+        ? `Your wallet will ask you twice: first to approve ${s.amount} to the vault, then to make the deposit.`
+        : `Your wallet will ask you once, to make the withdrawal.`);
+    return [
+      `  ${i + 1}. ${s.action === "deposit" ? "Deposit" : "Withdraw"}: ${s.amount}`,
+      s.chainId === null ? `     Chain: ${s.chain} (mainnet-beta)` : `     Chain: ${s.chain} (chainId ${s.chainId})`,
+      `     Vault: ${s.vault.name} (${s.vault.symbol})`,
+      `            ${s.vault.explorer}`,
+      `     ${lands}: ${s.receiver} (the connected wallet)`,
+      `     ${prompts}`,
+      ``,
+    ];
+  });
+  return [
+    `Confirm before any signing page opens. Nothing has been sent.`,
+    ``,
+    `This plan has ${n} ${n === 1 ? "leg" : "legs"}, run in this order on one signing page, where your wallet asks you to confirm each transaction. If a leg does not complete, the legs after it do not run.`,
+    `The plan lasts ${minutes} minutes: a leg not started by then does not run, and connecting a wallet again cancels it. To stop partway, reject a transaction in your wallet, or stop the plan on the signing page; the legs after it then do not run.`,
+    ``,
+    ...legLines,
+    ...(totals.length ? [`In total: ${totals.join("; ")}.`, ``] : []),
+    ...warnings.flatMap((w) => [
+      `WARNING (${w.vaults.join(", ")}): ${w.text}`,
+      ...(w.advice ? [`  For the ${w.depositVaults.length === 1 ? "deposit" : "deposits"} (${w.depositVaults.join(", ")}): ${w.advice}`] : []),
+    ]),
+    ``,
+    `Before you agree:`,
+    ...disclosures.map((d) => `  - ${d}`),
+    `  ${DISCLOSURES.plain.fullTerms}`,
+    ``,
+    `Do you acknowledge and want the signing page opened for exactly these ${n} ${n === 1 ? "leg" : "legs"}, run one leg at a time? Reply yes or no.`,
+  ].join("\n");
+}

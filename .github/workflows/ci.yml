@@ -213,7 +213,7 @@ jobs:
           want="git+https://github.com/TemporaLabs/treasury.git"
           [ "$got" = "$want" ] || { echo "::error file=package.json::repository.url is '$got' but the public repository is TemporaLabs/treasury — an npm publish with provenance from anywhere else will be refused"; exit 1; }
           echo "repository.url names the public repository"
-      - name: bundled CLI opens exactly its two skills, the eight earn commands and the five connect commands, with no sign/send command
+      - name: bundled CLI opens exactly its two skills, the eight earn commands and the six connect commands, with no sign/send command
         if: steps.pk.outputs.present == 'yes'
         run: |
           python3 - <<'PY'
@@ -232,8 +232,9 @@ jobs:
               "connect_status": set(),
               "connect_wallet": {"chain"},
               "connect_disconnect": set(),
-              "connect_deposit": {"vault", "chain", "amount_usdc", "receiver", "ack"},
-              "connect_withdraw": {"vault", "chain", "receiver", "amount_usdc", "all", "shares_exact", "ack"},
+              "connect_deposit": {"vault", "chain", "amount_usdc", "receiver", "ack", "plan", "leg"},
+              "connect_withdraw": {"vault", "chain", "receiver", "amount_usdc", "all", "shares_exact", "ack", "plan", "leg"},
+              "connect_plan": {"legs", "ack", "status", "run"},
           }, cprops
           assert not any(k in n for n in cprops for k in ("sign","send","transfer")), "a signing command leaked in"
           out = subprocess.run(["node","dist/treasury.mjs","earn","--help"], capture_output=True, text=True, timeout=60)
@@ -378,9 +379,21 @@ jobs:
           npm pack --ignore-scripts --pack-destination "$RUNNER_TEMP"
           npm install --prefix "$RUNNER_TEMP/cur" --ignore-scripts --no-audit --no-fund "$RUNNER_TEMP"/temporalabs-treasury-*.tgz
           npm install --prefix "$RUNNER_TEMP/v012" --ignore-scripts --no-audit --no-fund @temporalabs/treasury@0.1.2
+      # The endpoint URLs are secrets; a pull request from a fork gets neither, and the script then
+      # uses the public endpoints. Each URL's token and the host's first label are masked on their own
+      # too, in case anything prints them without the rest of the URL (a DNS error names the host).
       - name: the built CLI exits 0 with a chain-read answer, and 1 on a refused argument
         shell: bash
-        run: CLI_EXIT_PREFIX="$RUNNER_TEMP/cur" node .github/scripts/cli-exit.mjs "--reference=v0.1.2=$RUNNER_TEMP/v012"
+        env:
+          CI_RPC_BASE: ${{ secrets.CI_RPC_BASE }}
+          CI_RPC_SOLANA: ${{ secrets.CI_RPC_SOLANA }}
+        run: |
+          for u in "$CI_RPC_BASE" "$CI_RPC_SOLANA"; do
+            [ -n "$u" ] || continue
+            t="${u%/}"; t="${t##*/}"; if [ -n "$t" ]; then echo "::add-mask::$t"; fi
+            h="${u#*://}"; h="${h%%/*}"; h="${h%%.*}"; if [ -n "$h" ]; then echo "::add-mask::$h"; fi
+          done
+          CLI_EXIT_PREFIX="$RUNNER_TEMP/cur" node .github/scripts/cli-exit.mjs "--reference=v0.1.2=$RUNNER_TEMP/v012"
 
   # ── Bundle provenance ──────────────────────────────────────────────────────────────────────────
   # This job attests the COMMITTED root dist/treasury.mjs. A marketplace install runs
