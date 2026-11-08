@@ -83,7 +83,7 @@ describe("tokenOf", () => {
 describe("admitWithdrawal", () => {
   it("admits a sale within the fraction, summed from the signed amounts, with a digest over the batches", () => {
     const a = admitWithdrawal([auth([{ token: STOCK, amount: 250n }])], QUARTER, expectFor());
-    expect(a.kind).toBe("sale");
+    expect(a.kinds).toEqual(["sale"]);
     expect(a.totals).toEqual([{ token: STOCK, amount: 250n, held: 1000n }]);
     expect(a.expiresAt.getTime()).toBe(EXPIRES * 1000);
     expect(a.digest).toMatch(/^0x[0-9a-f]{64}$/);
@@ -91,7 +91,7 @@ describe("admitWithdrawal", () => {
 
   it("admits `all` up to the full balance, and a USDT transfer", () => {
     expect(admitWithdrawal([auth([{ token: STOCK, amount: 1000n }])], ALL, expectFor()).totals[0]!.amount).toBe(1000n);
-    expect(admitWithdrawal([auth([{ token: BNB_USDT.address, amount: 500n }], { sale: false })], ALL, expectFor()).kind).toBe("transfer");
+    expect(admitWithdrawal([auth([{ token: BNB_USDT.address, amount: 500n }], { sale: false })], ALL, expectFor()).kinds).toEqual(["transfer"]);
   });
 
   // The acceptance test: a service that inflates both its plan and the authorizations is still refused,
@@ -153,10 +153,21 @@ describe("admitWithdrawal", () => {
     expect(alter(f)).toThrow(msg);
   });
 
-  it("refuses a transfer that moves anything but USDT, and batches mixing a sale and a transfer", () => {
+  it("refuses a transfer that moves anything but USDT", () => {
     expect(() => admitWithdrawal([auth([{ token: STOCK, amount: 1n }], { sale: false })], ALL, expectFor())).toThrow(/without selling/);
-    const mixed = [auth([{ token: STOCK, amount: 1n }]), auth([{ token: BNB_USDT.address, amount: 1n }], { sale: false, nonce: 1 })];
-    expect(() => admitWithdrawal(mixed, ALL, expectFor())).toThrow(/mix a sale/);
+  });
+
+  // The shape a real withdrawal takes: the idle USDT as a plain transfer (version "1"), then the holdings sold.
+  it("admits the idle USDT as a transfer and the holdings as a sale in one withdrawal, each bounded by its own balance", () => {
+    const both = [auth([{ token: BNB_USDT.address, amount: 125n }], { sale: false, nonce: 1 }), auth([{ token: STOCK, amount: 250n }], { nonce: 2 })];
+    const a = admitWithdrawal(both, QUARTER, expectFor());
+    expect(a.kinds).toEqual(["transfer", "sale"]);
+    expect(a.totals).toEqual([
+      { token: BNB_USDT.address, amount: 125n, held: 500n },
+      { token: STOCK, amount: 250n, held: 1000n },
+    ]);
+    const over = [auth([{ token: BNB_USDT.address, amount: 126n }], { sale: false, nonce: 1 }), auth([{ token: STOCK, amount: 250n }], { nonce: 2 })];
+    expect(() => admitWithdrawal(over, QUARTER, expectFor())).toThrow(/126 units.*125 of 500/);
   });
 
   it("refuses nothing to sign", () => {

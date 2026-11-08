@@ -9,7 +9,8 @@
  *     field list and types, no field shown that is not signed and none signed that is not read;
  *   - on BNB Chain (56), debiting the owner's own smart account (`verifyingContract`), paying the
  *     owner's own wallet (`recipientAccountId` = `eip155:56:<owner>`), for the named portfolio;
- *   - a sale settles in USDT; a transfer moves only USDT;
+ *   - a sale settles in USDT; a transfer moves only USDT. One withdrawal may hold both: the idle
+ *     USDT as a plain transfer, then the holdings as sales;
  *   - every amount is a whole number of units, each asset entry carries exactly its two signed
  *     fields, and no batch names an asset twice;
  *   - it expires in the future, and no later than `INVEST.maxAuthorizationLifetimeSeconds` from now;
@@ -53,7 +54,8 @@ export interface WithdrawExpect {
 }
 
 export interface AdmittedWithdrawal {
-  kind: "sale" | "transfer";
+  /** Each batch's kind, in order. One withdrawal sends idle USDT as a plain transfer and sells the rest. */
+  kinds: ("sale" | "transfer")[];
   /** Per asset, summed over every batch, from the signed amounts. */
   totals: { token: Address; amount: bigint; held: bigint }[];
   batches: number;
@@ -111,7 +113,7 @@ export function admitWithdrawal(batches: readonly WithdrawalAuthorization[], fra
   const smartAccount = getAddress(expect.smartAccount);
   const totals = new Map<Address, bigint>();
   const hashes: Hex[] = [];
-  let kind: "sale" | "transfer" | undefined;
+  const kinds: ("sale" | "transfer")[] = [];
   let earliest = Infinity;
 
   batches.forEach((a, i) => {
@@ -141,8 +143,7 @@ export function admitWithdrawal(batches: readonly WithdrawalAuthorization[], fra
     if (!assetFields || !sameSet(assetFields.map((f) => f.name), Object.keys(ASSET_TYPES)) || assetFields.some((f) => ASSET_TYPES[f.name] !== f.type)) notTheForm();
     if (!sameSet(Object.keys(m), FIELDS[shape])) notTheForm();
 
-    if (kind !== undefined && kind !== shape) refuse("the batches mix a sale and a plain transfer");
-    kind = shape;
+    kinds.push(shape);
 
     if (Number(domain["chainId"]) !== BNB_INFO.chainId || String(domain["chainId"]) !== String(BNB_INFO.chainId)) {
       refuse(`it is for chain ${String(domain["chainId"])}, not ${BNB_INFO.name}`);
@@ -200,7 +201,7 @@ export function admitWithdrawal(batches: readonly WithdrawalAuthorization[], fra
   }
 
   return {
-    kind: kind!,
+    kinds,
     totals: out,
     batches: batches.length,
     expiresAt: new Date(earliest * 1000),
