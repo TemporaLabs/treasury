@@ -23,6 +23,10 @@ import {
   type ConnectedStandardSolanaWallet,
 } from "@privy-io/react-auth/solana";
 import { arbitrum, base, mainnet, monad, robinhood } from "viem/chains";
+// viem's Robinhood Chain definition lists a third-party RPC beside the chain's own. The page's
+// Content-Security-Policy keeps the page itself off it, but a wallet asked to add the chain takes the
+// RPC list it is handed, so the wallet is given only the chain's own RPC (the CLI's public RPC for it).
+const robinhoodChain = { ...robinhood, rpcUrls: { default: { http: ["https://rpc.mainnet.chain.robinhood.com"] } } };
 import { CSS } from "./styles";
 import { secret, type WalletType, post, reject, errText, type Phase, rejected, fmt, base58, fromBase64, Page, Status, WalletMark, CheckMark, ButtonIcon } from "./shared";
 import { Plan, type PlanInfo } from "./plan";
@@ -804,7 +808,7 @@ async function main() {
     loginMethodsAndOrder: { primary: ["detected_ethereum_wallets", "email", "google"], overflow: ["apple", "twitter", "coinbase_wallet"] },
     externalWallets: { walletConnect: { enabled: false } },
     embeddedWallets: { ethereum: { createOnLogin: "users-without-wallets" }, showWalletUIs: true },
-    supportedChains: [base, arbitrum, robinhood, mainnet, monad],
+    supportedChains: [base, arbitrum, robinhoodChain, mainnet, monad],
     defaultChain: base,
   } satisfies PrivyClientConfig;
   root.render(
