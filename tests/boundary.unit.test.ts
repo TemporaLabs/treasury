@@ -102,6 +102,9 @@ const ENTRY_POINTS = ["src/index.ts", "src/cli.ts"];
 const ENV_READS_ALLOWED = [
   "ARBITRUM_RPC_URL",
   "BASE_RPC_URL",
+  // BNB Chain, for `invest` only (src/invest/chain.ts): the owner's holdings that bound a withdrawal.
+  "BNB_RPC_URL",
+  "TREASURY_RPC_BNB",
   "ETHEREUM_RPC_URL",
   "MONAD_RPC_URL",
   "ROBINHOOD_RPC_URL",
