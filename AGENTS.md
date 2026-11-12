@@ -4,6 +4,8 @@ Instructions for coding agents working in this repository. People should start w
 [`CONTRIBUTING.md`](CONTRIBUTING.md); it is the fuller guide for people, and wins if the two ever
 disagree.
 
+Before changing how the system works, read [`docs/guides/AGENTS.md`](docs/guides/AGENTS.md).
+
 Treasury is a depositor client for ERC-4626 vaults on Base, Arbitrum One, Robinhood Chain, Ethereum and Monad, and a Kamino vault on Solana: a vault registry, pre-flight checks, and
 builders for **unsigned** deposit and withdraw calls, served as a library and as a command-line program
 (`treasury earn <command>`, one JSON document per run).
