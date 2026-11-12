@@ -30,6 +30,13 @@ subject per file, facts stated with the block or date they were measured at.
 | [`release-process.md`](release-process.md) | how a release ships, why the npm publish happens on every one, and why the plugin needs no registry |
 | [`design-embed-registry-and-version.md`](design-embed-registry-and-version.md) | embed the registry and the version at build time so a re-bundled library does not read the consumer's files (implemented in v0.1.3) |
 
+## Developer guides
+
+[`guides/`](guides/README.md) walks a developer through the code: the architecture and one deposit
+traced end to end, the CLI, the registry, the EVM and Solana paths, the wallet connection, the
+portfolio-withdrawal checks, the test tiers, and the build. Coding agents start at
+[`guides/AGENTS.md`](guides/AGENTS.md).
+
 ## Contributing and project
 
 [`CONTRIBUTING.md`](https://github.com/TemporaLabs/treasury/blob/main/CONTRIBUTING.md) · [`SECURITY.md`](https://github.com/TemporaLabs/treasury/blob/main/SECURITY.md) ·
