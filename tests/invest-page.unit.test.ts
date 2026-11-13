@@ -68,7 +68,7 @@ describe("the invest page", () => {
     expect((await p.info()).step?.index).toBe(0);
     const mine = await owner.signMessage({ message: "hello" });
     expect((await p.result({ index: 0, value: mine })).status).toBe(200);
-    expect(await asked).toBe(mine);
+    expect(await asked).toEqual({ kind: "answered", value: mine });
     expect((await p.info()).step).toBeUndefined();
     p.page.finish({ ok: true, text: "done" });
     await p.page.done;
@@ -82,12 +82,12 @@ describe("the invest page", () => {
     expect((await p.result({ index: 0, value: await owner.signMessage({ message: bytes }) })).status).toBe(400);
     const raw = await owner.signMessage({ message: { raw: bytes } });
     expect((await p.result({ index: 0, value: raw })).status).toBe(200);
-    expect(await a).toBe(raw);
+    expect(await a).toEqual({ kind: "answered", value: raw });
     const t = p.page.ask(VIEW, { kind: "sign_typed", typedData: JSON.parse(JSON.stringify(TYPED, (_k, v) => (typeof v === "bigint" ? v.toString() : v))) });
     expect((await p.result({ index: 1, value: await stranger.signTypedData(TYPED) })).status).toBe(400);
     const sig = await owner.signTypedData(TYPED);
     expect((await p.result({ index: 1, value: sig })).status).toBe(200);
-    expect(await t).toBe(sig);
+    expect(await t).toEqual({ kind: "answered", value: sig });
     p.page.finish({ ok: true, text: "done" });
     await p.page.done;
   });
@@ -99,7 +99,7 @@ describe("the invest page", () => {
     expect((await p.result({ index: 0, value: "0x12" })).status).toBe(400);
     const hash = `0x${"2".repeat(64)}`;
     expect((await p.result({ index: 0, value: hash })).status).toBe(200);
-    expect(await s).toBe(hash);
+    expect(await s).toEqual({ kind: "answered", value: hash });
     p.page.finish({ ok: true, text: "done" });
     await p.page.done;
   });
@@ -110,6 +110,31 @@ describe("the invest page", () => {
     await p.result({ rejected: true, reason: "cancelled by the owner" });
     await a;
     expect(await p.page.done).toEqual({ ok: false, reason: "cancelled by the owner" });
+  });
+
+  it("a transaction the wallet sent but the page could not record comes back as sent, with its hash, never as a decline", async () => {
+    const p = await open();
+    const s = p.page.ask(VIEW, { kind: "send", to: "0x55d398326f99059fF775485246999027B3197955", data: "0xa9059cbb", value: "0" });
+    const hash = `0x${"3".repeat(64)}`;
+    await p.result({ rejected: true, reason: "the result could not be posted", hash, index: 0 });
+    expect(await s).toEqual({ kind: "sent_unrecorded", hash, reason: "the result could not be posted" });
+  });
+
+  it.each([
+    ["a signature step", { kind: "sign_text", message: "hello" }, `0x${"3".repeat(64)}`],
+    ["a send whose reported hash is malformed", { kind: "send", to: "0x55d398326f99059fF775485246999027B3197955", data: "0xa9059cbb", value: "0" }, "0x1234"],
+  ] as const)("a decline that reports a hash is still a decline for %s", async (_n, ask, hash) => {
+    const p = await open();
+    const a = expect(p.page.ask(VIEW, ask)).rejects.toThrow(/declined/);
+    await p.result({ rejected: true, reason: "declined", hash, index: 0 });
+    await a;
+  });
+
+  it("a report about another step than the waiting one does not answer the waiting one", async () => {
+    const p = await open();
+    const s = expect(p.page.ask(VIEW, { kind: "send", to: "0x55d398326f99059fF775485246999027B3197955", data: "0xa9059cbb", value: "0" })).rejects.toThrow(/another step/);
+    await p.result({ rejected: true, reason: "stale tab", hash: `0x${"4".repeat(64)}`, index: 7 });
+    await s;
   });
 
   it("tells the page how it ended before it closes", async () => {

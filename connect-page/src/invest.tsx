@@ -65,6 +65,8 @@ export function Invest({ info: first }: { info: InvestInfo }) {
         // Hex, so the wallet signs these exact bytes, never their text.
         value = (await provider.request({ method: "personal_sign", params: [ask.bytes, wallet.address] })) as string;
       } else if (ask.kind === "sign_typed") {
+        // A wallet signs typed data only for the chain it is on, and the authorization names BNB Chain.
+        await wallet.switchChain(info.chainId);
         value = (await provider.request({ method: "eth_signTypedData_v4", params: [wallet.address, JSON.stringify(ask.typedData)] })) as string;
       } else {
         await wallet.switchChain(info.chainId);

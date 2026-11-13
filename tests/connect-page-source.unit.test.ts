@@ -66,6 +66,13 @@ describe("the connect page's source", () => {
     expect(invest).toMatch(/method: "eth_signTypedData_v4"/);
   });
 
+  it("the invest view acts only through the owner's own wallet, and switches to BNB Chain before typed data or a send", () => {
+    // The wallet is chosen by the owner's address, never by position: a send's hash alone cannot say who sent it.
+    expect(invest).toMatch(/wallets\.find\(\(w\) => w\.address\.toLowerCase\(\) === info\.owner\.toLowerCase\(\)\)/);
+    expect(invest).not.toMatch(/wallets\s*\[/);
+    expect([...invest.matchAll(/await wallet\.switchChain\(info\.chainId\)/g)]).toHaveLength(2);
+  });
+
   it("never signs typed data outside the invest view, signs or sends raw transactions, or reaches for key material", () => {
     expect(rest).not.toMatch(/signTypedData/i);
     for (const banned of [
