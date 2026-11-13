@@ -25,7 +25,7 @@ export type Accepted<T> =
 export type Settled<T> = { ok: true; value: T } | { ok: false; reason: string };
 
 export interface Flow<T> {
-  mode: "connect" | "confirm" | "plan";
+  mode: "connect" | "confirm" | "plan" | "invest";
   /**
    * The page's secret, when it must outlive this server: `connect plan --run` serves one plan's page across
    * several runs, so the operator's open tab keeps working. A fresh random one otherwise.
@@ -61,6 +61,8 @@ export interface Handle<T> {
   port: number;
   done: Promise<Settled<T>>;
   close: () => void;
+  /** Ends the flow from this side with an outcome, for a flow whose last step is decided here rather than by the page. */
+  settle: (r: Settled<T>) => void;
 }
 
 const same = (a: string, b: string) => {
@@ -269,5 +271,5 @@ export async function serveOnce<T>(flow: Flow<T>): Promise<Handle<T>> {
   );
   timer.unref();
   void done.then(() => clearTimeout(timer));
-  return { url: `${origin}/${flow.mode}?s=${secret}`, port: Number(new URL(origin).port), done, close: () => finish({ ok: false, reason: "cancelled" }) };
+  return { url: `${origin}/${flow.mode}?s=${secret}`, port: Number(new URL(origin).port), done, close: () => finish({ ok: false, reason: "cancelled" }), settle: (r) => finish(r) };
 }

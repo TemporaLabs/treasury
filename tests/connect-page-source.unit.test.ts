@@ -4,6 +4,7 @@ import { join, relative } from "node:path";
 import ts from "typescript";
 import { PAGE_CSP } from "../src/connect/page.js";
 import { CHAIN_INFO } from "../src/client.js";
+import { BNB_INFO } from "../src/invest/chain.js";
 
 /**
  * The confirm page runs in the operator's browser next to their wallet. These checks read its source
@@ -21,6 +22,14 @@ const dir = join(import.meta.dirname, "..", "connect-page", "src");
 const walk = (d: string): string[] => readdirSync(d, { withFileTypes: true }).flatMap((e) => (e.isDirectory() ? walk(join(d, e.name)) : [join(d, e.name)]));
 const files = walk(dir).filter((f) => /\.(m|c)?[jt]sx?$/.test(f));
 const source = files.map((f) => readFileSync(f, "utf8")).join("\n");
+/**
+ * The invest view (Smart Growth) is the one file allowed more: it also signs a portfolio withdrawal's typed data and
+ * an enrolment's 32 bytes, each checked by the command before it reaches the page. Every other file is held to the
+ * earn and connect rules below, unchanged.
+ */
+const INVEST_FILE = join(dir, "invest.tsx");
+const rest = files.filter((f) => f !== INVEST_FILE).map((f) => readFileSync(f, "utf8")).join("\n");
+const invest = readFileSync(INVEST_FILE, "utf8");
 const main = readFileSync(join(dir, "main.tsx"), "utf8");
 // The same files with every comment removed by the TypeScript parser itself, so a `//` inside a string is not taken
 // for one: what a comment names is not held to the checks that read this.
@@ -34,22 +43,33 @@ describe("the connect page's source", () => {
     expect(main).toContain("eth_sendTransaction");
   });
 
-  it("asks a wallet only for a sign-in signature, a gas estimate, a transaction and a chain switch", () => {
-    const requests = [...source.matchAll(/\.request\s*\(/g)].length;
-    const methods = [...source.matchAll(/\.request\s*\(\s*\{\s*method:\s*"([^"]+)"/g)].map((m) => m[1]);
+  const requestsIn = (text: string) => {
+    const requests = [...text.matchAll(/\.request\s*\(/g)].length;
+    const methods = [...text.matchAll(/\.request\s*\(\s*\{\s*method:\s*"([^"]+)"/g)].map((m) => m[1]);
     // Every request names its method as a literal, so this list is complete.
     expect(methods).toHaveLength(requests);
-    expect(new Set(methods)).toEqual(new Set(["personal_sign", "eth_estimateGas", "eth_sendTransaction"]));
+    return new Set(methods);
+  };
+
+  it("asks a wallet only for a sign-in signature, a gas estimate, a transaction and a chain switch", () => {
+    expect(requestsIn(rest)).toEqual(new Set(["personal_sign", "eth_estimateGas", "eth_sendTransaction"]));
     // No request reached by a computed name, which the count above could not see.
     expect(source).not.toMatch(/\[\s*["'`]request["'`]\s*\]/);
     const walletCalls = new Set([...source.matchAll(/\bwallet\.(\w+)\s*\(/g)].map((m) => m[1]));
     expect(walletCalls).toEqual(new Set(["switchChain", "getEthereumProvider"]));
   });
 
-  it("never signs typed data, signs or sends raw transactions, or reaches for key material", () => {
+  it("the invest view also signs typed data (a checked portfolio withdrawal), and nothing else beyond the rest", () => {
+    expect(requestsIn(invest)).toEqual(new Set(["personal_sign", "eth_signTypedData_v4", "eth_estimateGas", "eth_sendTransaction"]));
+    // The one form of typed-data signing it may use: the wallet's own eth_signTypedData_v4, never a hook or eth_sign.
+    expect([...invest.matchAll(/signTypedData/gi)].map((m) => m[0])).toEqual(["signTypedData"]);
+    expect(invest).toMatch(/method: "eth_signTypedData_v4"/);
+  });
+
+  it("never signs typed data outside the invest view, signs or sends raw transactions, or reaches for key material", () => {
+    expect(rest).not.toMatch(/signTypedData/i);
     for (const banned of [
       /eth_sign"/,
-      /signTypedData/i,
       /eth_signTransaction|signTransaction/,
       /eth_sendRawTransaction/,
       /useSendTransaction|useSignTypedData|useSignTransaction/,
@@ -132,11 +152,15 @@ describe("the connect page's source", () => {
     expect(main).toMatch(/walletConnect:\s*\{\s*enabled:\s*false\s*\}/);
   });
 
-  it("gives the wallet only Robinhood Chain's own RPC, not viem's list", () => {
+  it("gives the wallet only Robinhood Chain's and BNB Chain's own RPCs, not viem's lists", () => {
     // viem's Robinhood definition lists a third-party RPC beside the chain's own. The page's policy keeps the page
     // itself off it, but a wallet asked to add the chain takes the RPC list it is handed.
     const chains = /supportedChains:\s*\[([^\]]*)\]/.exec(code)?.[1]?.split(",").map((s) => s.trim());
-    expect(chains).toEqual(["base", "arbitrum", "robinhoodChain", "mainnet", "monad"]);
+    expect(chains).toEqual(["base", "arbitrum", "robinhoodChain", "mainnet", "monad", "bnbChain"]);
+    // The same for BNB Chain (invest only): its own public RPC, the one src/invest/chain.ts names.
+    const bnb = /const bnbChain\b[^;]*;/.exec(code)?.[0] ?? "";
+    expect(bnb).toContain("...bsc");
+    expect([...bnb.matchAll(/"((?:https?|wss?):\/\/[^"]+)"/g)].map((m) => m[1])).toEqual([BNB_INFO.publicRpc]);
     const def = /const robinhoodChain\b[^;]*;/.exec(code)?.[0] ?? "";
     expect(def).toContain("...robinhood");
     const urls = [...def.matchAll(/"((?:https?|wss?):\/\/[^"]+)"/g)].map((m) => m[1]);
