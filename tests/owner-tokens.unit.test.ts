@@ -1,7 +1,7 @@
 /**
  * `src/connect/owner-tokens.ts`: the owner-token file. Offline; each test gets its own temporary directory.
  */
-import { mkdtempSync, readFileSync, readdirSync, rmSync, statSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
@@ -15,6 +15,7 @@ import {
   type TokenKey,
 } from "../src/connect/owner-tokens.js";
 import { sessionPath } from "../src/connect/session.js";
+import { buildConnectCommands } from "../src/connect/commands.js";
 
 const NOW = Date.parse("2026-11-14T00:00:00.000Z");
 const HOUR = 3_600_000;
@@ -81,5 +82,24 @@ describe("the owner-token file", () => {
       writeFileSync(ownerTokensPath(), body);
       expect(readOwnerToken(KEY, NOW)).toBeUndefined();
     }
+  });
+
+  it("leaves no copy of the tokens behind when the write fails", () => {
+    // A directory where the file should be: the rename into place fails.
+    mkdirSync(join(ownerTokensPath(), "x"), { recursive: true });
+    expect(() => writeOwnerToken(KEY, { token: "tok-1", expiresAtIso: later(HOUR) }, NOW)).toThrow();
+    expect(readdirSync(home)).toEqual(["owner-tokens.json"]);
+    expect(readdirSync(ownerTokensPath())).toEqual(["x"]);
+  });
+});
+
+describe("treasury connect disconnect", () => {
+  it("forgets the owner tokens too, and says so", async () => {
+    writeOwnerToken(KEY, { token: "tok-1", expiresAtIso: later(HOUR) }, NOW);
+    const out = JSON.parse(await buildConnectCommands()["connect_disconnect"]!.handler({} as never)) as { hadOwnerTokens: boolean };
+    expect(out.hadOwnerTokens).toBe(true);
+    expect(existsSync(ownerTokensPath())).toBe(false);
+    const again = JSON.parse(await buildConnectCommands()["connect_disconnect"]!.handler({} as never)) as { hadOwnerTokens: boolean };
+    expect(again.hadOwnerTokens).toBe(false);
   });
 });

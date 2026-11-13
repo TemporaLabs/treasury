@@ -594,7 +594,7 @@ Flags:
 
 ## treasury connect disconnect
 
-**Forget the connected wallet.** Deletes the local connection record, the EVM and the Solana one. It moves nothing and revokes nothing in the wallet itself.
+**Forget the connected wallet.** Deletes the local connection record, the EVM and the Solana one, and the API sign-in tokens `invest` kept. It moves nothing and revokes nothing in the wallet itself.
 
 No flags.
 

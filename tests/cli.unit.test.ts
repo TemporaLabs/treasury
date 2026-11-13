@@ -38,7 +38,7 @@ describe("help and version", () => {
   });
 });
 
-describe("the surface: two skills, a fixed set of commands, nothing that signs", () => {
+describe("the surface: three skills, a fixed set of commands, nothing that signs", () => {
   it("`treasury --help` lists exactly these skills — another is a reviewed change, not a quiet addition", async () => {
     const r = await run(["--help"]);
     expect(r.code).toBe(0);

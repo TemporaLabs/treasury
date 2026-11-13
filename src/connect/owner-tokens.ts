@@ -7,11 +7,14 @@
  * because every transfer and every withdrawal authorization is still signed by the owner's own wallet. It
  * expires on its own, and `invest` signs in again when the API refuses it.
  *
+ * Two commands writing at once each read the file and write it back whole, so the later write can drop the
+ * earlier one's token. That costs one more sign-in, never a wrong token.
+ *
  * Each token is kept under everything it is bound to: the API host it was issued by, the client it was issued
  * to, the owner, and the doors it is good on. A token is only ever read back under the same key, so a token for
  * one owner, host or door is never sent for another.
  */
-import { chmodSync, mkdirSync, readFileSync, renameSync, rmSync, writeFileSync } from "node:fs";
+import { chmodSync, existsSync, mkdirSync, readFileSync, renameSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { randomBytes } from "node:crypto";
 import { connectDir } from "./session.js";
@@ -69,9 +72,15 @@ function writeAll(all: Record<string, StoredToken>): void {
   const path = ownerTokensPath();
   // Written aside and renamed into place, so a reader never sees half a file.
   const aside = `${path}.${randomBytes(6).toString("hex")}.tmp`;
-  writeFileSync(aside, `${JSON.stringify(all, null, 2)}\n`, { mode: 0o600 });
-  chmodSync(aside, 0o600);
-  renameSync(aside, path);
+  try {
+    writeFileSync(aside, `${JSON.stringify(all, null, 2)}\n`, { mode: 0o600 });
+    chmodSync(aside, 0o600);
+    renameSync(aside, path);
+  } catch (e) {
+    // The aside file holds the tokens too: never leave a copy behind when the write fails.
+    rmSync(aside, { force: true });
+    throw e;
+  }
 }
 
 /** The token kept for this key, unless it has expired or is within the margin of expiring. */
@@ -97,7 +106,12 @@ export function clearOwnerToken(key: TokenKey): void {
   writeAll(all);
 }
 
-/** Forgets every token. Used when the connected account changes or is disconnected. */
-export function clearOwnerTokens(): void {
+/**
+ * Forgets every token, and says whether there was any file to forget. `connect disconnect` calls it, and so does
+ * `connect wallet` when it connects a different account.
+ */
+export function clearOwnerTokens(): boolean {
+  const had = existsSync(ownerTokensPath());
   rmSync(ownerTokensPath(), { force: true });
+  return had;
 }
