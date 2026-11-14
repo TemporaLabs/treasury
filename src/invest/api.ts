@@ -62,8 +62,10 @@ export async function asOwner<T>(
     return signIn(client, {
       owner,
       signMessage: (message: string) => signMessage(owner, message),
+      // The client goes on only when this returns true; `checkChallenge` throws on anything it refuses.
       check: (message: string) => {
         checkChallenge(message, { host, owner, now: now() });
+        return true;
       },
       audience: "http",
     });
