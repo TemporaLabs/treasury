@@ -46,8 +46,20 @@ function node(args: string[]): Promise<{ stdout: string; stderr: string; code: n
 }
 
 describe("the registry and the version are inside the bundle", () => {
-  /** What `earn vaults` prints from the committed bundle run in place: the baseline the copies are compared with. */
-  const reference = async (): Promise<string> => (await node([BUNDLE, "earn", "vaults"])).stdout;
+  /**
+   * What `earn --help` prints from the committed bundle run in place: the baseline the copies are compared with. Its
+   * `chain` flag lists the chains that have a vault in the registry, and falls back to the EVM chains alone when the
+   * registry does not load, so "solana" there means the embedded registry loaded. (`earn vaults` asks the Tempora
+   * API, which no unit test may reach.)
+   */
+  // The help also points at the guide, by a path that depends on where the bundle sits: compared without it.
+  const commandsOf = (stdout: string) => {
+    const help = JSON.parse(stdout) as Record<string, unknown>;
+    delete help["guide"];
+    return JSON.stringify(help);
+  };
+  const reference = async (): Promise<string> => commandsOf((await node([BUNDLE, "earn", "--help"])).stdout);
+  const listsTheShippedRegistry = (stdout: string) => expect(stdout).toMatch(/which chain: [^\n]*base[^\n]*solana/);
 
   it("the committed CLI embeds the version and nothing else from package.json", () => {
     // Anything else from the manifest would tie the committed bundle to edits that do not change the CLI: a
@@ -64,10 +76,10 @@ describe("the registry and the version are inside the bundle", () => {
     copyFileSync(BUNDLE, join(root, "treasury.mjs"));
     const v = await node([join(root, "treasury.mjs"), "--version"]);
     expect({ out: v.stdout.trim(), err: v.stderr, code: v.code }).toEqual({ out: VERSION, err: "", code: 0 });
-    const vaults = await node([join(root, "treasury.mjs"), "earn", "vaults"]);
-    expect(vaults.code, vaults.stderr).toBe(0);
-    expect((JSON.parse(vaults.stdout) as { vaults: unknown[] }).vaults.length).toBeGreaterThan(0);
-    expect(vaults.stdout).toBe(await reference());
+    const help = await node([join(root, "treasury.mjs"), "earn", "--help"]);
+    expect(help.code, help.stderr).toBe(0);
+    listsTheShippedRegistry(help.stdout);
+    expect(commandsOf(help.stdout)).toBe(await reference());
   });
 
   it("the same CLI ignores a registry and a package.json beside it (and beside its parent)", async () => {
@@ -81,10 +93,10 @@ describe("the registry and the version are inside the bundle", () => {
     }
     const v = await node([join(root, "dist/treasury.mjs"), "--version"]);
     expect(v.stdout.trim()).toBe(VERSION);
-    const vaults = await node([join(root, "dist/treasury.mjs"), "earn", "vaults"]);
-    expect(vaults.code, vaults.stderr).toBe(0);
-    expect((JSON.parse(vaults.stdout) as { vaults: unknown[] }).vaults.length).toBeGreaterThan(0);
-    expect(vaults.stdout).toBe(await reference());
+    const help = await node([join(root, "dist/treasury.mjs"), "earn", "--help"]);
+    expect(help.code, help.stderr).toBe(0);
+    listsTheShippedRegistry(help.stdout);
+    expect(commandsOf(help.stdout)).toBe(await reference());
   });
 
   it("a consumer's bundle of dist/index.js lists the shipped registry with no file beside it, and ignores a decoy", async () => {
