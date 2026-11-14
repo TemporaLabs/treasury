@@ -11,6 +11,9 @@ import { DISCLOSURES } from "../src/disclosures.js";
 import { defaultVault, listSolanaVaults, listVaults } from "../src/registry.js";
 import { getBase58Decoder } from "@solana/kit";
 import { associatedTokenAccount } from "../src/solana/kvault.js";
+import { writeOwnerToken } from "../src/connect/owner-tokens.js";
+import { tokenKeyFor } from "../src/invest/api.js";
+import { EXTRA_TO, keptTokenWallet, noHttp, standInApi, type StandIn } from "./fixtures/api.js";
 
 /**
  * `connect plan` (#155): one acknowledgement for several deposits and withdrawals, then each leg run in order
@@ -57,6 +60,8 @@ let shares: bigint;
 let solShares: bigint;
 /** Receipts by hash, for legs whose page the test plays to the end. */
 let receipts: Record<string, unknown>;
+/** The Tempora API, for the EVM legs: its products mirror the registry's EVM rows. */
+let api: StandIn;
 
 beforeEach(async () => {
   home = mkdtempSync(join(tmpdir(), "treasury-plan-"));
@@ -67,7 +72,9 @@ beforeEach(async () => {
   shares = 5n * 10n ** BigInt(other.shareDecimals);
   solShares = 3_000_000n;
   receipts = {};
+  api = standInApi({ owner: ACCOUNT, shares: () => shares });
   writeSession({ account: ACCOUNT, walletType: "external", connectedAtIso: "2026-10-13T11:59:00Z" });
+  writeOwnerToken(tokenKeyFor(ACCOUNT), { token: "tok", expiresAtIso: "2026-10-14T00:00:00Z" }, clock.getTime());
   writeFileSync(join(home, "connect-session-solana.json"), JSON.stringify({ account: SOL_ACCOUNT, walletType: "external", connectedAtIso: "2026-10-13T11:59:00Z" }));
 });
 afterEach(() => {
@@ -92,6 +99,11 @@ const deps = (over: Partial<ConnectDeps> = {}): ConnectDeps => ({
   balanceTimeoutMs: 20,
   verifyOpts: { attempts: 1, delayMs: 1 },
   now: () => clock,
+  mcp: api.mcp,
+  apiClient: noHttp,
+  wallet: () => keptTokenWallet(),
+  pollMs: 1,
+  sleep: async () => undefined,
   ...over,
 });
 const cmd = async (name: string, args: Record<string, unknown>, d: ConnectDeps = deps()) => {
@@ -99,6 +111,18 @@ const cmd = async (name: string, args: Record<string, unknown>, d: ConnectDeps =
   return JSON.parse(await c.handler(c.inputSchema.parse(args) as never)) as Record<string, unknown>;
 };
 const plan = (args: Record<string, unknown>, d?: ConnectDeps) => cmd("connect_plan", args, d);
+
+/** The stand-in API, with one tool held at a gate: how a test catches the flow mid-call. */
+const gatedApi = (hold: (name: string, input: any) => boolean, gate: Promise<void>, onHold?: () => void) =>
+  new Proxy(api.mcp, {
+    get: (t, name: string) => async (input: any, opts: any) => {
+      if (hold(name, input)) {
+        onHold?.();
+        await gate;
+      }
+      return (t as any)[name](input, opts);
+    },
+  });
 
 /** Runs a leg's command, as `connect plan` gave it, through the command it names. */
 const runLeg = async (command: string, d?: ConnectDeps) => {
@@ -133,7 +157,7 @@ describe("connect plan without --ack: one acknowledgement for every leg, and not
     expect(r["expiresAtIso"]).toBe(new Date(clock.getTime() + PLAN_TTL_MS).toISOString());
     const text = String(r["acknowledgement"]);
     const i1 = text.indexOf(`1. Deposit: 1 ${vault.asset.symbol}`);
-    const i2 = text.indexOf(`2. Withdraw: 5 ${other.symbol} shares`);
+    const i2 = text.indexOf(`2. Withdraw: your whole position in ${other.symbol}`);
     const i3 = text.indexOf(`3. Deposit: 2.5 ${sol.asset.symbol}`);
     expect(i1).toBeGreaterThan(-1);
     expect(i2).toBeGreaterThan(i1);
@@ -154,8 +178,9 @@ describe("connect plan without --ack: one acknowledgement for every leg, and not
     for (const d of [...DISCLOSURES.plain.deposit, ...DISCLOSURES.plain.always].filter((d) => d !== fees)) expect(text.split(d).length - 1).toBe(1);
     expect(text).toContain("If a leg does not complete, the legs after it do not run.");
     expect(text).toContain("The plan lasts 60 minutes: a leg not started by then does not run, and connecting a wallet again cancels it.");
-    // The withdraw-all leg says its balance was read, and not the single acknowledgement's "not checked here".
-    expect(text).toContain(`2. Withdraw: 5 ${other.symbol} shares (your whole position, read when this plan was made;`);
+    // An EVM withdraw-all leg is the whole position when it runs (the API reads it then), and never the single
+    // acknowledgement's "not checked here".
+    expect(text).toContain(`2. Withdraw: your whole position in ${other.symbol}, as it stands when the withdrawal runs`);
     expect(text).not.toContain("not checked here");
     // One warning for the family, naming all three vaults, with the deposit advice named for the deposits only.
     const warningLines = text.split("\n").filter((l) => l.startsWith("WARNING"));
@@ -171,8 +196,9 @@ describe("connect plan without --ack: one acknowledgement for every leg, and not
     expect(p.code).toBe(r["ack"]);
     expect(p.acknowledged).toBe(false);
     expect(p.legs.map((l) => [l.leg, l.action, l.vault, l.status])).toEqual([
-      [1, "deposit", vault.symbol, "pending"],
-      [2, "withdraw", other.symbol, "pending"],
+      // An EVM leg keeps the vault's contract address, which its own run picks the API's vault by again.
+      [1, "deposit", vault.address, "pending"],
+      [2, "withdraw", other.address, "pending"],
       [3, "deposit", sol.symbol, "pending"],
     ]);
     expect(JSON.parse(readFileSync(pendingAckPath(), "utf8")).code).toBe(single["ack"]);
@@ -196,9 +222,9 @@ describe("connect plan without --ack: one acknowledgement for every leg, and not
     expect(text).not.toContain(DISCLOSURES.plain.feesSeveral);
   });
 
-  it("withdraw … all binds the share balance read now", async () => {
+  it("withdraw … all: on an EVM chain the whole position when the leg runs (--all alone); on Solana the share balance read now", async () => {
     await plan({ legs: `withdraw ${other.symbol} all; withdraw ${sol.symbol} all` });
-    expect(readPlan()!.legs.map((l) => l.command)).toEqual([expect.stringContaining("--all --shares_exact 5 "), expect.stringContaining("--all --shares_exact 3 ")]);
+    expect(readPlan()!.legs.map((l) => l.command)).toEqual([expect.stringContaining("--all --receiver "), expect.stringContaining("--all --shares_exact 3 ")]);
   });
 
   const refused: [string, string, RegExp][] = [
@@ -207,7 +233,8 @@ describe("connect plan without --ack: one acknowledgement for every leg, and not
     ["a deposit of all", `deposit ${vault.symbol} all`, /a deposit takes an amount/],
     ["an amount that is not a plain decimal", `deposit ${vault.symbol} 1e3`, /not a plain decimal/],
     ["a leg with a missing amount", `deposit ${vault.symbol}`, /write each leg as/],
-    ["a vault that is not listed", `deposit tlNOPE 1`, /tlNOPE/],
+    ["a vault that is neither an address nor a ticker", `deposit tlNOPE 1`, /takes a vault's contract address \(0x…\) or its ticker, and the value given is neither/],
+    ["an address no listed vault has", `deposit 0x${"ab".repeat(20)} 1`, /no vault the Tempora API lists has the address/],
     ["a withdraw-all of a vault an earlier leg deposits into", `deposit ${vault.symbol} 1; withdraw ${vault.symbol} all`, /an earlier leg deposits into/],
     ["a withdraw-all of a vault an earlier leg withdraws from", `withdraw ${other.symbol} 1; withdraw ${other.symbol} all`, /an earlier leg withdraws from/],
     ["two withdraw-alls of one vault", `withdraw ${other.symbol} all; withdraw ${other.symbol} all`, /an earlier leg withdraws from/],
@@ -221,9 +248,9 @@ describe("connect plan without --ack: one acknowledgement for every leg, and not
     });
   }
 
-  it("refuses a withdraw-all of a position that holds no shares", async () => {
-    shares = 0n;
-    await expect(plan({ legs: `withdraw ${other.symbol} all` })).rejects.toThrow(/holds no shares/);
+  it("refuses a withdraw-all of a Solana position that holds no shares (an EVM one is the API's to read when it runs)", async () => {
+    solShares = 0n;
+    await expect(plan({ legs: `withdraw ${sol.symbol} all` })).rejects.toThrow(/holds no shares/);
   });
 
   it("refuses a leg on a chain family whose wallet is not connected", async () => {
@@ -240,8 +267,8 @@ describe("connect plan --ack: records the operator's yes, opens nothing", () => 
     expect(opened).toEqual([]);
     const legs = r["legs"] as { leg: number; command: string }[];
     expect(legs.map((l) => l.command)).toEqual([
-      `connect deposit --vault ${vault.symbol} --amount_usdc 1 --receiver ${ACCOUNT} --plan ${ack} --leg 1`,
-      `connect withdraw --vault ${other.symbol} --all --shares_exact 5 --receiver ${ACCOUNT} --plan ${ack} --leg 2`,
+      `connect deposit --vault ${vault.address} --amount_usdc 1 --receiver ${ACCOUNT} --plan ${ack} --leg 1`,
+      `connect withdraw --vault ${other.address} --all --receiver ${ACCOUNT} --plan ${ack} --leg 2`,
       `connect deposit --vault ${sol.symbol} --amount_usdc 2.5 --receiver ${SOL_ACCOUNT} --plan ${ack} --leg 3`,
     ]);
     expect(String(r["next_step"])).toContain("do not ask again between legs");
@@ -264,7 +291,6 @@ describe("connect plan --ack: records the operator's yes, opens nothing", () => 
     ["a code that is not the plan's", () => plan({ legs: LEGS, ack: "00000000" }), /not the pending plan's code/],
     ["different legs", (ack) => plan({ legs: LEGS.replace("2.5", "3"), ack }), /not the ones the operator acknowledged/],
     ["the same legs in another order", (ack) => plan({ legs: LEGS.split(";").reverse().join(";"), ack }), /not the ones the operator acknowledged/],
-    ["a share balance that moved", (ack) => ((shares = 6n * 10n ** BigInt(other.shareDecimals)), plan({ legs: LEGS, ack })), /not the ones the operator acknowledged/],
     ["an expired plan", (ack) => ((clock = new Date(clock.getTime() + PLAN_TTL_MS + 1)), plan({ legs: LEGS, ack })), /expired/],
   ];
   for (const [what, run, why] of cases) {
@@ -274,6 +300,14 @@ describe("connect plan --ack: records the operator's yes, opens nothing", () => 
       expect(readPlan()!.acknowledged).toBe(false);
     });
   }
+
+  it("refuses a Solana share balance that moved since the plan was made", async () => {
+    const legs = `withdraw ${sol.symbol} all`;
+    const { ack } = await plan({ legs });
+    solShares = 4_000_000n;
+    await expect(plan({ legs, ack })).rejects.toThrow(/not the ones the operator acknowledged/);
+    expect(readPlan()!.acknowledged).toBe(false);
+  });
 
   it("refuses a second --ack of the same plan", async () => {
     const { ack } = await plan({ legs: LEGS });
@@ -315,7 +349,7 @@ describe("a plan's legs: in order, each held to what was acknowledged, and a leg
   it("refuses a leg whose amount, vault or receiver is not the one acknowledged", async () => {
     const { commands } = await acknowledged();
     await expect(runLeg(commands[0]!.replace("--amount_usdc 1", "--amount_usdc 2"))).rejects.toThrow(/not leg 1 as the operator acknowledged it/);
-    await expect(runLeg(commands[0]!.replace(`--vault ${vault.symbol}`, `--vault ${listVaults().find((v) => v.chainId === vault.chainId && v.symbol !== vault.symbol && v.depositOpen.open)!.symbol}`))).rejects.toThrow(
+    await expect(runLeg(commands[0]!.replace(`--vault ${vault.address}`, `--vault ${listVaults().find((v) => v.chainId === vault.chainId && v.symbol !== vault.symbol && v.depositOpen.open)!.symbol}`))).rejects.toThrow(
       /not leg 1 as the operator acknowledged it/,
     );
     await expect(runLeg(commands[0]!.replace(`--receiver ${ACCOUNT}`, "--receiver 0x2222222222222222222222222222222222222222"))).rejects.toThrow(/not the connected account/);
@@ -433,7 +467,7 @@ describe("a plan's legs: in order, each held to what was acknowledged, and a leg
     const legs = `withdraw ${vault.symbol} 0.25; deposit ${vault.symbol} 0.6`;
     const { commands } = await acknowledged(legs);
     const h = `0x${"07".repeat(32)}` as Hex;
-    receipts = { [h]: { status: "reverted", logs: [] } };
+    api.landing[h] = "reverted";
     const leg1 = runLeg(commands[0]!, deps({ ttlMs: 5_000 }));
     await play([h]);
     const r1 = await leg1;
@@ -615,22 +649,13 @@ describe("connect plan --run: one page for every leg (#174)", () => {
     await acked();
     let release!: () => void;
     const gate = new Promise<void>((r) => (release = r));
-    const d = deps({
-      ttlMs: 10_000,
-      legMinMs: 0,
-      client: () => ({
-        getTransactionReceipt: async ({ hash }: { hash: Hex }) => {
-          if (hash === h2) await gate;
-          return (hash === h1 ? { status: "success", logs: [approvalLog(600_000n)] } : { status: "success", logs: [transferLog(600_000n), depositLog(600_000n)] }) as never;
-        },
-        readContract: async (q: { functionName: string }) => (q.functionName === "balanceOf" ? shares : q.functionName === "allowance" ? 10n ** 30n : 0n) as never,
-      }),
-    });
+    // The API is still recording h2 when the page stops the plan.
+    const d = deps({ ttlMs: 10_000, legMinMs: 0, mcp: gatedApi((n, i) => n === "submit" && i.body.txHash === h2, gate) });
     const run = plan({ run: true }, d);
     const { u, s } = await pageOf();
     await send(u, s, { start: 1 });
     await send(u, s, { index: 0, hash: h1 });
-    const inFlight = send(u, s, { index: 1, hash: h2 }); // the server is now reading h2's receipt
+    const inFlight = send(u, s, { index: 1, hash: h2 }); // the server is now handing h2 to the API
     await new Promise((r) => setTimeout(r, 100));
     // A second tab, or the first POST dropped: the page stops the plan with the hash it holds.
     await send(u, s, { rejected: true, reason: "the page lost its connection", hash: h2, index: 1 });
@@ -791,23 +816,12 @@ describe("connect plan --run: one page for every leg (#174)", () => {
     const inRead = new Promise<void>((r) => (reading = r));
     let release!: () => void;
     const gate = new Promise<void>((r) => (release = r));
-    const d = deps({
-      ttlMs: 10_000,
-      legMinMs: 0,
-      balanceTimeoutMs: 5000,
-      client: () => ({
-        getTransactionReceipt: async () => new Promise<never>(() => {}),
-        readContract: async (q: { functionName: string }) => {
-          reading();
-          await gate;
-          return (q.functionName === "balanceOf" ? shares : q.functionName === "allowance" ? 10n ** 30n : 0n) as never;
-        },
-      }),
-    });
+    // The leg's request is being started at the API when another command replaces the plan.
+    const d = deps({ ttlMs: 10_000, legMinMs: 0, mcp: gatedApi((n) => n === "deposit", gate, reading) });
     const run = plan({ run: true }, d);
     const { u, s } = await pageOf();
     const start = send(u, s, { start: 1 });
-    await inRead; // the start is past its first checks, inside the leg's chain reads
+    await inRead; // the start is past its first checks, inside the leg's start at the API
     const newer = await plan({ legs: `deposit ${vault.symbol} 0.9` });
     release();
     expect(await start).toMatchObject({ ok: false, reason: expect.stringMatching(/replaced/) });
@@ -815,6 +829,8 @@ describe("connect plan --run: one page for every leg (#174)", () => {
     await run;
     expect(readPlan()!.code).toBe(newer["ack"]);
     expect(readPlan()!.legs.map((l) => l.status)).toEqual(["pending"]);
+    // The request it started, with nothing sent for it, is withdrawn at the API.
+    expect(api.log).toContain("cancel");
   });
 
   it("an expired plan opens no page", async () => {
@@ -828,17 +844,8 @@ describe("connect plan --run: one page for every leg (#174)", () => {
     await acked();
     let release!: () => void;
     const gate = new Promise<void>((r) => (release = r));
-    const d = deps({
-      ttlMs: 1500,
-      legMinMs: 0,
-      client: () => ({
-        getTransactionReceipt: async ({ hash }: { hash: Hex }) => {
-          if (hash === h2) await gate;
-          return (hash === h1 ? { status: "success", logs: [approvalLog(600_000n)] } : { status: "success", logs: [transferLog(600_000n), depositLog(600_000n)] }) as never;
-        },
-        readContract: async (q: { functionName: string }) => (q.functionName === "balanceOf" ? shares : q.functionName === "allowance" ? 10n ** 30n : 0n) as never,
-      }),
-    });
+    // The API answers for h2 only after the page's time limit has ended the leg.
+    const d = deps({ ttlMs: 1500, legMinMs: 0, mcp: gatedApi((n, i) => n === "submit" && i.body.txHash === h2, gate) });
     const run = plan({ run: true }, d);
     const { u, s } = await pageOf();
     await send(u, s, { start: 1 });
@@ -881,9 +888,9 @@ describe("connect plan --run: one page for every leg (#174)", () => {
 
   it("keeps what else the wallet moved (`alsoMoved`) on a leg's transaction", async () => {
     await acked();
-    const stranger = getAddress("0x1111111111111111111111111111111111111111");
-    const extra = log(vault.asset.address, encodeEventTopics({ abi: [ev.transfer], eventName: "Transfer", args: { from: ACCOUNT, to: stranger } }) as Hex[], u256(5n));
-    receipts = { ...landedReceipts(), [h2]: { status: "success", logs: [transferLog(600_000n), depositLog(600_000n), extra] } };
+    const stranger = EXTRA_TO;
+    // The API read h2 as having also moved 5 units of the asset to a stranger.
+    api.landing[h2] = "extra";
     const run = plan({ run: true }, deps({ ttlMs: 10_000, legMinMs: 0 }));
     const { u, s } = await pageOf();
     await send(u, s, { start: 1 });
