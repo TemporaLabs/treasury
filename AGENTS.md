@@ -27,9 +27,9 @@ builders for **unsigned** deposit and withdraw calls, served as a library and as
    asked for: a deposit only to the pinned USDT contract, paying the owner's own smart account, and a
    withdrawal paid only to the connected wallet. CI runs the bundled CLI and fails if `earn --help`,
    `connect --help` or `invest --help` lists any command beyond its pinned set.
-2. **The client knows only the chain, except where it must not.** For a vault it has a vault address and
-   an RPC endpoint, nothing else. `treasury invest` also calls the Tempora API, which holds the portfolios,
-   and only through `@temporalabs/client` (`src/invest/api.ts`); nothing the API says about a step is
+2. **The client knows only the chain, except in `treasury invest`.** For a vault it has a vault address and
+   an RPC endpoint, nothing else. `treasury invest` also calls the Tempora API, which prepares each portfolio
+   deposit and withdrawal, and only through `@temporalabs/client` (`src/invest/api.ts`); nothing the API says about a step is
    trusted.
    `tests/boundary.unit.test.ts` parses every audited file and fails on any import, `require`, child
    process or path that reaches outside this repository's allowlist. Do not weaken that test to make

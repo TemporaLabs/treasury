@@ -66,9 +66,9 @@ Two rules decide most reviews. A change that breaks either is a design change, n
    variable, a local signer, a tool that signs, or a relay that accepts an arbitrary destination
    will not merge. `treasury invest` hands the connected wallet the steps the Tempora API prepares
    for a Smart Growth portfolio, each checked first against what the operator asked for.
-2. **The client knows only the chain, except where it must not.** For a vault it has a vault address
-   and an RPC endpoint. `treasury invest` also calls the Tempora API, the public service that holds the
-   portfolios, and only through `@temporalabs/client`. Code may not depend on any fund's internal source,
+2. **The client knows only the chain, except in `treasury invest`.** For a vault it has a vault address
+   and an RPC endpoint. `treasury invest` also calls the Tempora API, which prepares each portfolio
+   deposit and withdrawal, and only through `@temporalabs/client`. Code may not depend on any fund's internal source,
    deploy records, operators or private services. A vault's row
    in `registry/vaults.json` is a set of measurements that
    `scripts/registry-check.ts` reconciles against the chain.
