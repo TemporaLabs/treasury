@@ -20,7 +20,7 @@ describe("the sign-in challenge", () => {
   const NOW = Date.parse("2026-11-08T12:00:00Z");
   const good = (o: Partial<Record<"first" | "host" | "client" | "owner" | "nonce" | "times", string>> = {}) =>
     [
-      o.first ?? "Tempora gateway sign-in",
+      o.first ?? "Tempora sign-in",
       o.host ?? `Host: ${HOST}`,
       o.client ?? "Client: treasury-cli",
       o.owner ?? `Owner: ${OWNER}`,
@@ -43,6 +43,8 @@ describe("the sign-in challenge", () => {
     ["a trailing newline", `${good()}\n`, /six-line/],
     ["CRLF line ends", good().replace(/\n/g, "\r\n"), /six-line|sign-in line/],
     ["another first line", good({ first: "Sign in to example.com" }), /sign-in line/],
+    // The API's earlier first line: a message of the old form is refused too, never read as the same message.
+    ["the earlier first line", good({ first: "Tempora gateway sign-in" }), /sign-in line/],
     ["another host", good({ host: "Host: evil.example" }), /another host|host other/],
     ["another client", good({ client: "Client: browser" }), /another client/],
     ["another owner", good({ owner: "Owner: 0x2222222222222222222222222222222222222222" }), /connected wallet/],

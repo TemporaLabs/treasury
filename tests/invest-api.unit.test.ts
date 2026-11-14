@@ -17,7 +17,7 @@ const HOST = "api-test.temporalabs.com";
 const iso = (ms: number) => new Date(ms).toISOString();
 const message = (o: { host?: string; owner?: string; client?: string } = {}) =>
   [
-    "Tempora gateway sign-in",
+    "Tempora sign-in",
     `Host: ${o.host ?? HOST}`,
     `Client: ${o.client ?? "treasury-cli"}`,
     `Owner: ${o.owner ?? OWNER}`,

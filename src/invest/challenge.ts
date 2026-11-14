@@ -7,7 +7,7 @@
  * A server could hand over any text to be signed, including a message that is valid somewhere else.
  * So the page signs only a challenge of exactly this shape, every line checked:
  *
- *     Tempora gateway sign-in
+ *     Tempora sign-in
  *     Host: <the pinned host>
  *     Client: treasury-cli
  *     Owner: <the connected address, checksummed>
@@ -19,7 +19,7 @@
  */
 import { getAddress, type Address } from "viem";
 
-export const CHALLENGE_FIRST_LINE = "Tempora gateway sign-in";
+export const CHALLENGE_FIRST_LINE = "Tempora sign-in";
 export const CHALLENGE_CLIENT = "treasury-cli";
 /** The longest a challenge may stay valid. */
 export const CHALLENGE_MAX_LIFETIME_MS = 5 * 60_000;

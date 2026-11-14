@@ -481,7 +481,7 @@ describe("where the wallet is asked", () => {
       openPage: (async () => ({ url: "u", opened: true, done: Promise.resolve(), finish: () => undefined, ask: async (view: StepView, ask: WalletAsk) => (asks.push({ view, ask }), { kind: "answered", value: "0xsig" }) })) as never,
     });
     const msg = (owner: string) =>
-      ["Tempora gateway sign-in", `Host: ${HOST}`, "Client: treasury-cli", `Owner: ${owner}`, "Nonce: 0123456789abcdef0123456789abcdef", `Issued: ${new Date(NOW).toISOString()}   Expires: ${new Date(NOW + 300_000).toISOString()}`].join("\n");
+      ["Tempora sign-in", `Host: ${HOST}`, "Client: treasury-cli", `Owner: ${owner}`, "Nonce: 0123456789abcdef0123456789abcdef", `Issued: ${new Date(NOW).toISOString()}   Expires: ${new Date(NOW + 300_000).toISOString()}`].join("\n");
     expect(await w.signIn(OWNER, msg(OWNER))).toBe("0xsig");
     expect(asks[0]!.view.facts).toContainEqual({ label: "API", value: HOST });
     await expect(w.signIn(OWNER, msg(STRANGER))).rejects.toThrow(/refused/);
