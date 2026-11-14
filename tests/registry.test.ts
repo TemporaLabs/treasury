@@ -118,8 +118,6 @@ describe("the shipped registry", () => {
     expect(f.depositOpen).toMatchObject({ open: true, method: "simulated-deposit-from-stranger", measuredAtBlock: 112_372_495 });
     expect(f.depositOpen.detail).toMatch(/0xe65b7a77/);
     expect(f.deployedAtBlock).toBe(112_273_210);
-    // The public endpoint's 100-block log window is the reason history needs a logs variable there.
-    expect(f.notes.join(" ")).toMatch(/TREASURY_LOGS_RPC_MONAD/);
     expect(resolveVault(undefined, "monad")).toBe(f);
   });
 

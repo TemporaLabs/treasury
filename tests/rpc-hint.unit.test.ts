@@ -1,9 +1,7 @@
 /**
  * Unit — an unconfigured RPC failure must say what to DO, not just that it failed.
  *
- * 🔴 Measured through the installed plugin with no configuration: the deposit pre-flight returns
- * UNRESOLVED 3/3 on the public endpoint ("RPC Request failed") and NEEDS_APPROVAL 3/3 on a keyed
- * one. A stranger's first five minutes therefore end in a message that reads as "this product is
+ * A public endpoint rate-limits after a handful of calls, and the failure reads as "this product is
  * broken" rather than "you need a key". These assert the hint appears exactly when it should —
  * and, more importantly, NOT when a keyed RPC is configured, so a real chain fault is never
  * mislabelled as a setup problem.
@@ -22,7 +20,7 @@ afterEach(() => {
 describe("the public-endpoint hint", () => {
   // The hint's own condition, tested directly. The wiring cannot be exercised hermetically in the
   // positive direction: "unconfigured" means the real public endpoint, and a single getBlockNumber
-  // SUCCEEDS there — it is the heavier pre-flight that rate-limits. Forcing a failure requires
+  // SUCCEEDS there — it is heavier use that rate-limits. Forcing a failure requires
   // setting a variable, which by definition makes it configured. So the condition is unit-tested
   // and the end-to-end behaviour is measured through the installed plugin instead.
   it("is offered when nothing is configured, and withheld when something is", () => {

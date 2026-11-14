@@ -336,10 +336,10 @@ export function resolvedRpcSecrets(): string[] {
 /**
  * The one sentence a caller needs when the public endpoint is what broke them.
  *
- * 🔴 Measured 2026-09-12 through the installed plugin with no configuration: the deposit pre-flight
- * returns UNRESOLVED 3/3 on `mainnet.base.org` ("RPC Request failed") and NEEDS_APPROVAL 3/3 on a
- * keyed URL. So zero-config can browse vaults and read terms but CANNOT complete a deposit — and the
- * message it fails with reads as "this product is broken" rather than "you need a key". Returns
+ * A public endpoint rate-limits after a handful of calls, and the failure it causes reads as "this
+ * product is broken" rather than "you need a key". On the EVM chains the vault reads go through the
+ * Tempora API and need no RPC; what still reads a chain directly here (the smart-contract wallet check
+ * in `connect wallet`, `registry:check`) is what this sentence is for. Returns
  * undefined when a keyed RPC resolved, so a real chain fault is never mislabelled as a setup problem.
  */
 export function publicRpcHint(chainId: SupportedChainId): string | undefined {
@@ -349,7 +349,6 @@ export function publicRpcHint(chainId: SupportedChainId): string | undefined {
     `No RPC was configured for ${info.name}, so this used the public endpoint (${new URL(info.publicRpc).hostname}), which rate-limits ` +
     "after a handful of calls — that is the most likely cause of the failure above, not the vault. " +
     `Set ${info.rpcEnv[0]} to a keyed ${info.name} RPC URL (Alchemy, Infura, QuickNode or your own node) and ` +
-    "retry. Reads like the vault list and the disclosures work without one; quotes, pre-flight and " +
-    "position history generally do not."
+    "retry. The vault reads through the Tempora API need no RPC; reads straight from the chain generally do."
   );
 }
