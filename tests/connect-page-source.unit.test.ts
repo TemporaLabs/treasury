@@ -73,6 +73,15 @@ describe("the connect page's source", () => {
     expect([...invest.matchAll(/await wallet\.switchChain\(info\.chainId\)/g)]).toHaveLength(2);
   });
 
+  it("the invest view never says a transfer was not sent once the wallet was asked to send it", () => {
+    // `sending` is set on the line before the send, and an error after it, with no hash, is "not confirmed sent".
+    expect(invest).toMatch(/sending = true;\n\s*hash = \(await provider\.request\(\{ method: "eth_sendTransaction"/);
+    const caught = invest.slice(invest.indexOf("} catch (e) {"));
+    expect(caught.indexOf("if (sending)")).toBeGreaterThan(caught.indexOf("if (rejected(e))"));
+    expect(caught.indexOf("if (sending)")).toBeLessThan(caught.indexOf("Not done:"));
+    expect(caught).toMatch(/Not confirmed sent\. Check your wallet's activity/);
+  });
+
   it("never signs typed data outside the invest view, signs or sends raw transactions, or reaches for key material", () => {
     expect(rest).not.toMatch(/signTypedData/i);
     for (const banned of [

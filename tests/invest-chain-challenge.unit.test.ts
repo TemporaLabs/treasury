@@ -1,50 +1,17 @@
 /**
- * `src/invest/chain.ts` (BNB Chain holdings) and `src/invest/challenge.ts` (the sign-in challenge), offline.
+ * `src/invest/chain.ts` (BNB Chain's fixed facts) and `src/invest/challenge.ts` (the sign-in challenge), offline.
  */
-import { afterEach, describe, expect, it } from "vitest";
-import { getAddress, type Address } from "viem";
-import { BNB_INFO, BNB_USDT, bnbRpcUrlFromEnv, readHoldings, type BalanceReader } from "../src/invest/chain.js";
+import { describe, expect, it } from "vitest";
+import { getAddress } from "viem";
+import { assetIdOf, BNB_USDT, BNB_USDT_ASSET_ID } from "../src/invest/chain.js";
 import { checkChallenge } from "../src/invest/challenge.js";
 
 const OWNER = getAddress("0x52908400098527886e0f7030069857d2e4169ee7"); // mixed case once checksummed
-const STOCK = getAddress("0x3333333333333333333333333333333333333333");
 
-describe("BNB Chain holdings", () => {
-  afterEach(() => {
-    for (const k of BNB_INFO.rpcEnv) delete process.env[k];
-  });
-
-  it("reads each token's balance once, after the endpoint says it is chain 56", async () => {
-    const asked: Address[] = [];
-    const client: BalanceReader = {
-      getChainId: async () => 56,
-      readContract: async ({ address, args }) => {
-        asked.push(address);
-        expect(args[0]).toBe(OWNER);
-        return address === STOCK ? 7n : 3n;
-      },
-    };
-    const h = await readHoldings(client, OWNER, [STOCK, BNB_USDT.address, STOCK.toLowerCase() as Address]);
-    expect(asked).toEqual([STOCK, BNB_USDT.address]);
-    expect([...h]).toEqual([
-      [STOCK, 7n],
-      [BNB_USDT.address, 3n],
-    ]);
-  });
-
-  it("refuses an endpoint for another chain before reading any balance", async () => {
-    let reads = 0;
-    const client: BalanceReader = { getChainId: async () => 1, readContract: async () => (reads++, 0n) };
-    await expect(readHoldings(client, OWNER, [STOCK])).rejects.toThrow(/answered chain 1/);
-    expect(reads).toBe(0);
-  });
-
-  it("takes its own variables first, then the public endpoint", () => {
-    expect(bnbRpcUrlFromEnv()).toBe(BNB_INFO.publicRpc);
-    process.env["BNB_RPC_URL"] = "https://second.example";
-    expect(bnbRpcUrlFromEnv()).toBe("https://second.example");
-    process.env["TREASURY_RPC_BNB"] = "https://first.example";
-    expect(bnbRpcUrlFromEnv()).toBe("https://first.example");
+describe("BNB Chain's fixed facts", () => {
+  it("names USDT in the CAIP-19 form an authorization and the API use", () => {
+    expect(BNB_USDT_ASSET_ID).toBe("eip155:56/erc20:0x55d398326f99059fF775485246999027B3197955");
+    expect(assetIdOf(BNB_USDT.address.toLowerCase() as `0x${string}`)).toBe(BNB_USDT_ASSET_ID);
   });
 });
 

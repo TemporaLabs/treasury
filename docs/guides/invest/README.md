@@ -1,15 +1,12 @@
-# Portfolio withdrawals (`src/invest/`)
+# Smart Growth portfolios (`src/invest/`)
 
-Local checks for withdrawing from a portfolio held by an outside provider on BNB Chain: a gate over
-the withdrawal authorizations the owner would be asked to sign, a read of the owner's holdings on
-BNB Chain, and a strict check of the sign-in message the owner would sign.
-
-**Scope today:** these are library modules with unit tests. No `treasury` command imports them yet,
-so nothing in the CLI or the connect page reaches them. Their comments refer to `invest` calls;
-`invest` is not one of the skills `src/cli.ts` carries in this version.
+`treasury invest` deposits into and withdraws from Smart Growth portfolios through the Tempora API, with the
+`@temporalabs/client` package. The API prepares each request; the owner's own wallet signs or sends every step
+on a local page; nothing the API says about a step is trusted until the client's own check has read the step's
+bytes.
 
 | guide | read it when |
 |---|---|
-| [`01-withdrawal-gate.md`](01-withdrawal-gate.md) | you change `src/invest/gate.ts`, `src/invest/chain.ts`, `src/invest/challenge.ts` or `src/config/invest.ts` |
+| [`01-steps-and-checks.md`](01-steps-and-checks.md) | you change anything in `src/invest/`, `src/config/invest.ts` or `connect-page/src/invest.tsx` |
 
-New in v0.1.5: `src/invest/` and `src/config/invest.ts`.
+New in v0.1.5: `src/invest/`, `src/config/invest.ts` and `connect-page/src/invest.tsx`.

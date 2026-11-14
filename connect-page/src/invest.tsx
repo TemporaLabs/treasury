@@ -55,6 +55,8 @@ export function Invest({ info: first }: { info: InvestInfo }) {
     if (!wallet || !step) return;
     const { ask, index } = step;
     let hash: string | undefined;
+    // Set just before the wallet is asked to send: from then on, an error without a hash does not mean nothing was sent.
+    let sending = false;
     try {
       setPhase({ text: "Check your wallet.", busy: true });
       const provider = await wallet.getEthereumProvider();
@@ -72,6 +74,7 @@ export function Invest({ info: first }: { info: InvestInfo }) {
         await wallet.switchChain(info.chainId);
         const tx = { from: wallet.address, to: ask.to, data: ask.data, value: "0x0" };
         const est = BigInt((await provider.request({ method: "eth_estimateGas", params: [tx] })) as string);
+        sending = true;
         hash = (await provider.request({ method: "eth_sendTransaction", params: [{ ...tx, chainId: `0x${info.chainId.toString(16)}`, gas: `0x${((est * 3n) / 2n).toString(16)}` }] })) as string;
         value = hash;
       }
@@ -86,6 +89,12 @@ export function Invest({ info: first }: { info: InvestInfo }) {
         return void (await reject(text, { hash, index }));
       }
       if (rejected(e)) return setPhase({ text: "You declined it in your wallet. Nothing was signed or sent. Try again, or cancel.", tone: "bad" });
+      if (sending) {
+        // The wallet may have broadcast it before failing: never say it was not sent.
+        const why = `not confirmed sent: ${text}. Check your wallet's activity on ${info.chainName} before trying again`;
+        setPhase({ text: `Not confirmed sent. Check your wallet's activity on ${info.chainName} before trying again. (${text})`, tone: "bad", done: true });
+        return void (await reject(why, { index }));
+      }
       setPhase({ text: `Not done: ${text}`, tone: "bad", done: true });
       await reject(text);
     }

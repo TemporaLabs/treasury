@@ -102,9 +102,6 @@ const ENTRY_POINTS = ["src/index.ts", "src/cli.ts"];
 const ENV_READS_ALLOWED = [
   "ARBITRUM_RPC_URL",
   "BASE_RPC_URL",
-  // BNB Chain, for `invest` only (src/invest/chain.ts): the owner's holdings that bound a withdrawal.
-  "BNB_RPC_URL",
-  "TREASURY_RPC_BNB",
   "ETHEREUM_RPC_URL",
   "MONAD_RPC_URL",
   "ROBINHOOD_RPC_URL",
@@ -165,6 +162,7 @@ const BUILTINS_ALLOWED_PER_FILE: Record<string, string[]> = {
   "tests/owner-tokens.unit.test.ts": ["os"], //             a temporary directory for the owner-token file
   "tests/invest-api.unit.test.ts": ["os"], //               the same, for the invest sign-in
   "tests/invest-page.unit.test.ts": ["os", "net"], //       a temporary session directory; a free local port per test
+  "tests/invest-flow.unit.test.ts": ["os"], //               a temporary session directory per test
   "tests/fork.test.ts": ["child_process"], //              spawns anvil; anvil holds the keys, this repo never does
   "tests/fork-solana.test.ts": ["child_process", "os"], //  spawns surfpool in a temporary directory; the key is generated per run
   "tests/registry-check.chain.test.ts": ["child_process"], // runs scripts/registry-check.ts against a mock chain

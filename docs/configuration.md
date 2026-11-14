@@ -29,8 +29,6 @@ with "returned no data", which looks like a broken vault, not like a misconfigur
 | `MONAD_RPC_URL` | a conventional alias, used when `TREASURY_RPC_MONAD` is unset — through the plugin too | — |
 | `TREASURY_RPC_SOLANA` | the Solana RPC every tool reads through for the vault on Solana. An endpoint whose genesis hash is not mainnet-beta's is reported as `wrong_chain` | falls back to `SOLANA_RPC_URL`, then to Solana's public endpoint `https://api.mainnet-beta.solana.com`, which rate-limits after a handful of requests |
 | `SOLANA_RPC_URL` | a conventional alias, used when `TREASURY_RPC_SOLANA` is unset — through the plugin too | — |
-| `TREASURY_RPC_BNB` | the BNB Chain RPC that the portfolio-withdrawal checks in `src/invest/` read the owner's holdings through. An endpoint that does not answer chain 56 is refused before any balance is read. No command uses these checks yet | falls back to `BNB_RPC_URL`, then to BNB Chain's public endpoint `https://bsc-dataseed.bnbchain.org` |
-| `BNB_RPC_URL` | a conventional alias, used when `TREASURY_RPC_BNB` is unset | — |
 | `TREASURY_LOGS_FALLBACK` | where a scan goes when the configured RPC cannot cover the range: an `http(s)` URL for a Base endpoint, or anything that is not a URL (`off`, `disabled`, …) to forbid a fallback on every chain | the chain's own public endpoint |
 | `PRIVY_APP_ID` | the Privy app the `treasury connect` sign-in page uses. A Privy app ID is public — it ships in the page — so a fork can point at its own app | Tempora Labs' own app |
 | `TREASURY_CONNECT_PORT` | one local port for the connect page, in place of the default list. Privy accepts sign-in only from origins its dashboard lists exactly, so set it only to a port listed there | the first free of `53682` to `53686` |

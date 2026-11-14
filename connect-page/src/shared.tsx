@@ -14,7 +14,7 @@ export async function post(path: string, body: Record<string, unknown>): Promise
   return r.json();
 }
 
-export const reject = (reason: string, sent?: { hash: string; index: number }) => post("/result", { rejected: true, reason, ...sent }).catch(() => undefined);
+export const reject = (reason: string, sent?: { hash?: string; index: number }) => post("/result", { rejected: true, reason, ...sent }).catch(() => undefined);
 
 export const errText = (e: unknown) => (e instanceof Error ? e.message : typeof e === "object" && e && "message" in e ? String((e as { message: unknown }).message) : String(e));
 
