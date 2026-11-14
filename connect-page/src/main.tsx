@@ -40,9 +40,17 @@ type Call = {
   of: number;
   kind: "approve" | "deposit" | "withdraw" | "redeem";
   description: string;
-  to: `0x${string}`;
-  data: `0x${string}`;
+  /**
+   * What to send. For a step the Tempora API prepares, empty until the step is checked and ready (`state`): a deposit's
+   * second step only exists once the first is sent and recorded. The page sends only what the latest /info gives.
+   */
+  to: `0x${string}` | "";
+  data: `0x${string}` | "";
   value: string;
+  /** The call `data` encodes, decoded from the checked step (a step the Tempora API prepared). */
+  function?: string;
+  args?: Record<string, string>;
+  state?: string;
   vault: { symbol: string; name: string; address: string; asset: string; links: { explorer: string; app?: string } };
 };
 type SolanaConfirm = {
@@ -82,6 +90,8 @@ type Info =
       balances?: { asset: string; native?: string };
       /** Raw units of the asset the deposit pulls; absent for a withdrawal. */
       needs?: string;
+      /** The Tempora API request these steps belong to, for a vault on an EVM chain. */
+      requestId?: string;
       chain?: undefined;
     };
 
@@ -283,16 +293,18 @@ function Confirm({ info }: { info: Extract<Info, { mode: "confirm"; chain?: unde
   const { wallets } = useWallets();
   const { login } = useLogin();
   const [next, setNext] = useState(info.next);
+  // The steps as the process last gave them: a step the Tempora API prepares arrives once the one before it is recorded.
+  const [calls, setCalls] = useState<Call[]>(info.calls);
   const [phase, setPhase] = useState<Phase>({ text: "" });
   const wallet = wallets.find((w) => w.address.toLowerCase() === info.account.toLowerCase());
-  const call = info.calls[next];
-  const shown = call ?? info.calls[info.calls.length - 1]!;
+  const call = calls[next];
+  const shown = call ?? calls[calls.length - 1]!;
   const [sent, setSent] = useState<{ step: number; hash: string }[]>([]);
 
   // What the wallet held when the page opened, and what that means for the steps still to go.
   const held = info.balances ? BigInt(info.balances.asset) : undefined;
   const amount = (raw: string | bigint) => `${fmt(raw, info.asset.decimals)} ${info.asset.symbol}`;
-  const depositAhead = info.needs !== undefined && info.calls.slice(next).some((c) => c.kind === "deposit");
+  const depositAhead = info.needs !== undefined && calls.slice(next).some((c) => c.kind === "deposit");
   const shortfall =
     held === undefined
       ? undefined
@@ -311,16 +323,10 @@ function Confirm({ info }: { info: Extract<Info, { mode: "confirm"; chain?: unde
     let stage: "prepare" | "estimate" | "send" = "prepare";
     try {
       setPhase({ text: "Check your wallet and confirm.", busy: true });
-      await wallet.switchChain(info.chainId);
-      const provider = await wallet.getEthereumProvider();
-      const tx = { from: wallet.address, to: call.to, data: call.data, value: call.value };
-      // Gas: the estimate × 1.5. A Morpho Vault V2 call can run out of gas on an unbuffered estimate.
-      stage = "estimate";
-      const est = BigInt((await provider.request({ method: "eth_estimateGas", params: [tx] })) as string);
-      stage = "prepare";
-      // The page may have sat open past the flow's time limit; ask before the wallet is asked, and
-      // leave a minute for the wallet's own prompt.
-      const live = (await fetch(`/info?s=${secret}`).then((r) => (r.ok ? r.json() : undefined), () => undefined)) as { msLeft?: number; next?: number } | undefined;
+      // The step is read again from the process just before the wallet is asked: what is sent is exactly what the
+      // process holds now, checked, never a copy this tab kept. The page may also have sat open past the flow's time
+      // limit; ask before the wallet is asked, and leave a minute for the wallet's own prompt.
+      const live = (await fetch(`/info?s=${secret}`).then((r) => (r.ok ? r.json() : undefined), () => undefined)) as { msLeft?: number; next?: number; calls?: Call[] } | undefined;
       if (!live) throw new Error("this page has expired; run the command again");
       // Another tab of this page may have handled this step already: never send it twice. Only this
       // tab is stale, so it stops here without reporting a rejection, which would end the whole flow.
@@ -328,20 +334,34 @@ function Confirm({ info }: { info: Extract<Info, { mode: "confirm"; chain?: unde
         return setPhase({ text: "This step was already handled, perhaps in another tab. Close this tab and use the other one.", tone: "bad", done: true });
       }
       if ((live.msLeft ?? 0) < 60_000) throw new Error("less than a minute is left on this page; run the command again");
+      const now = live.calls?.[next];
+      if (live.calls) setCalls(live.calls);
+      if (!now || !now.to || !now.data) {
+        return setPhase({ text: "This step is not ready yet: the step before it is still being recorded. Wait a moment, then confirm again." });
+      }
+      await wallet.switchChain(info.chainId);
+      const provider = await wallet.getEthereumProvider();
+      const tx = { from: wallet.address, to: now.to, data: now.data, value: now.value };
+      // Gas: the estimate × 1.5. A Morpho Vault V2 call can run out of gas on an unbuffered estimate.
+      stage = "estimate";
+      const est = BigInt((await provider.request({ method: "eth_estimateGas", params: [tx] })) as string);
       stage = "send";
       hash = (await provider.request({ method: "eth_sendTransaction", params: [{ ...tx, chainId: `0x${info.chainId.toString(16)}`, gas: `0x${((est * 3n) / 2n).toString(16)}` }] })) as string;
       const sentHash = hash;
-      setSent((s) => [...s, { step: call.step, hash: sentHash }]);
+      setSent((s) => [...s, { step: now.step, hash: sentHash }]);
       setPhase({ text: "Sent. Waiting for it to land.", busy: true });
       const r = await post("/result", { index: next, hash });
       if (!r.ok) throw new Error(r.reason ?? "refused");
       const verdict = (r["verdict"] ?? {}) as { verified?: string; detail?: string };
       if (r["stop"]) return setPhase({ text: `Stopped: ${verdict.detail ?? String(r["reason"] ?? "the step did not land as confirmed")}`, tone: "bad", done: true });
       if (r["finished"]) {
-        setNext(info.calls.length);
+        setNext(calls.length);
         return setPhase({ text: verdict.verified === "extra_transfer" ? `Done, with a note: ${verdict.detail}` : "Done. You can close this tab and go back to your agent.", tone: "ok", done: true });
       }
       setNext(Number(r["next"]));
+      // The next step, as the process now holds it.
+      const after = (await fetch(`/info?s=${secret}`).then((x) => (x.ok ? x.json() : undefined), () => undefined)) as { calls?: Call[] } | undefined;
+      if (after?.calls) setCalls(after.calls);
       setPhase({ text: "Confirmed on chain. Review the next step." });
     } catch (e) {
       const text = errText(e);
@@ -358,13 +378,13 @@ function Confirm({ info }: { info: Extract<Info, { mode: "confirm"; chain?: unde
       }
       // The wallet was asked to send and failed without a hash: whether it went out is not known here.
       if (stage === "send") {
-        setPhase({ text: `Your wallet returned an error without a transaction hash, so this page cannot tell whether it was sent: ${text}. Check your wallet's activity before running the command again.`, tone: "bad", done: true });
-        return void (await reject(`the wallet returned an error without a transaction hash; it may or may not have been sent: ${text}`));
+        setPhase({ text: `Not confirmed sent: your wallet returned an error without a transaction hash, so this page cannot tell whether it was sent: ${text}. Check your wallet's activity on ${info.chainName} before running the command again.`, tone: "bad", done: true });
+        return void (await reject(`not confirmed sent: the wallet returned an error without a transaction hash; it may or may not have been sent: ${text}`));
       }
       setPhase({ text: `Not sent: ${text}`, tone: "bad", done: true });
       await reject(text);
     }
-  }, [wallet, call, info.chainId, info.calls.length, next, shortfall]);
+  }, [wallet, call, info.chainId, info.chainName, calls.length, next, shortfall]);
 
   const cancel = async () => {
     setPhase({ text: "Cancelled. Nothing more will be sent.", tone: "bad", done: true });
@@ -373,9 +393,9 @@ function Confirm({ info }: { info: Extract<Info, { mode: "confirm"; chain?: unde
 
   return (
     <Page mark={phase.tone === "ok" ? <CheckMark /> : <WalletMark />} title={actionName(shown)} lede={actionLede(shown)}>
-      {info.calls.length > 1 && (
+      {calls.length > 1 && (
         <ol className="oat-steps">
-          {info.calls.map((c, i) => (
+          {calls.map((c, i) => (
             <li key={c.step} data-state={i < next ? "done" : i === next ? "current" : "upcoming"}>
               <span className="oat-step-mark" aria-hidden="true">
                 {i < next ? "✓" : c.step}
@@ -411,7 +431,16 @@ function Confirm({ info }: { info: Extract<Info, { mode: "confirm"; chain?: unde
             </a>
           </dd>
           <dt>Contract called</dt>
-          <dd className="oat-mono">{shown.to}</dd>
+          <dd className="oat-mono">{shown.to || "prepared once the step before it is recorded"}</dd>
+          {shown.function && (
+            <>
+              <dt>Call</dt>
+              <dd className="oat-mono">
+                {shown.function}
+                {shown.args ? ` ${Object.entries(shown.args).map(([k, v]) => `${k}=${v}`).join(", ")}` : ""}
+              </dd>
+            </>
+          )}
           <dt>Network</dt>
           <dd>
             {info.chainName} (chain {info.chainId})
@@ -456,7 +485,7 @@ function Confirm({ info }: { info: Extract<Info, { mode: "confirm"; chain?: unde
         <ul className="oat-fine oat-sent" aria-label="Transactions sent">
           {sent.map((t) => (
             <li key={t.hash}>
-              {info.calls.length > 1 ? `Step ${t.step}: ` : "Transaction: "}
+              {calls.length > 1 ? `Step ${t.step}: ` : "Transaction: "}
               <a className="oat-mono" href={`${info.txBase}${t.hash}`} target="_blank" rel="noreferrer">
                 {t.hash}
               </a>

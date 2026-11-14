@@ -19,7 +19,7 @@ import { INVEST } from "../config/invest.js";
 import type { Command } from "../earn/commands.js";
 import { readSession } from "../connect/session.js";
 import { redactEndpoints } from "../redact.js";
-import { apiClient, apiUrl, asOwner, failure } from "./api.js";
+import { apiClient, apiUrl, asOwner, failure, notConnected } from "./api.js";
 import { BNB_USDT } from "./chain.js";
 import { checkDeposit, depositBody, INVEST_CHAIN_ID, parseUsdt, prepareDeposit } from "./deposit.js";
 import { drive, ownerWallet, summary, type DriveDeps, type OwnerWallet, type WalletDeps } from "./flow.js";
@@ -49,7 +49,6 @@ export interface InvestDeps {
   pollMs?: number;
 }
 
-const notConnected = () => new Error("no wallet is connected — run `treasury connect wallet` first, and let the operator sign in");
 const productArg = z.string().min(1).describe("the portfolio's `id`, as `invest products` lists them");
 
 export function buildInvestCommands(deps: InvestDeps = {}): Record<string, Command> {

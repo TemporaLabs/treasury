@@ -183,6 +183,16 @@ describe("the shipped registry", () => {
     expect(getVault(EARN.roundTripVault).symbol).toBe(EARN.roundTripVault);
   });
 
+  it("each chain's default vault ADDRESS (what the commands pick the API's vault by) is the registry's address for that chain's default ticker", () => {
+    expect(Object.keys(EARN.defaultVaultAddressByChain).sort()).toEqual(Object.keys(EARN.defaultVaultByChain).sort());
+    for (const key of Object.keys(EARN.defaultVaultByChain) as (keyof typeof EARN.defaultVaultByChain)[]) {
+      const v = getVault(EARN.defaultVaultByChain[key]);
+      expect(CHAIN_INFO[v.chainId].key, key).toBe(key);
+      // Exactly, checksum case included: the two maps are copies of one fact and must not drift.
+      expect(EARN.defaultVaultAddressByChain[key], key).toBe(v.address);
+    }
+  });
+
   it("`chain` and `vault` resolve to ONE vault, and a disagreement between them is refused", () => {
     const base = getVault("tlCashPlusUSDC2B");
     const arb = getVault("tlCashPlusUSDC2C");

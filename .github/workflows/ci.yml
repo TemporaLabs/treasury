@@ -213,7 +213,7 @@ jobs:
           want="git+https://github.com/TemporaLabs/treasury.git"
           [ "$got" = "$want" ] || { echo "::error file=package.json::repository.url is '$got' but the public repository is TemporaLabs/treasury — an npm publish with provenance from anywhere else will be refused"; exit 1; }
           echo "repository.url names the public repository"
-      - name: bundled CLI opens exactly its three skills, the eight earn commands, the six connect commands and the five invest commands, with no sign/send command
+      - name: bundled CLI opens exactly its three skills, the nine earn commands, the six connect commands and the five invest commands, with no sign/send command
         if: steps.pk.outputs.present == 'yes'
         run: |
           python3 - <<'PY'
@@ -255,8 +255,8 @@ jobs:
           commands = json.loads(out.stdout)["commands"]
           names = [c["tool"] for c in commands]
           print(names)
-          assert set(names) == {"earn_vaults","earn_terms","earn_quote","earn_status","earn_prepare_deposit","earn_prepare_withdraw","earn_balance","earn_claim"}, names
-          assert len(names) == 8, names
+          assert set(names) == {"earn_vaults","earn_terms","earn_quote","earn_status","earn_prepare_deposit","earn_prepare_withdraw","earn_balance","earn_submit","earn_request"}, names
+          assert len(names) == 9, names
           assert not any(k in n for n in names for k in ("sign","send","transfer")), "a signing command leaked in"
           # EXACT flag set per command, re-derived from the live bundle — not a superset or a
           # membership check (an earlier version would let a stray extra
@@ -264,13 +264,14 @@ jobs:
           props = {c["tool"]: {f["flag"].removeprefix("--") for f in c["flags"]} for c in commands}
           expected = {
               "earn_vaults": set(),
-              "earn_terms": set(),
+              "earn_terms": {"vault", "chain"},
               "earn_status": {"vault", "chain", "account", "amount_usdc"},
               "earn_quote": {"vault", "chain", "account", "amount_usdc", "direction"},
-              "earn_prepare_deposit": {"vault", "chain", "account", "amount_usdc", "receiver"},
+              "earn_prepare_deposit": {"vault", "chain", "account", "amount_usdc", "terms_sha256", "receiver"},
               "earn_prepare_withdraw": {"vault", "chain", "receiver", "account", "amount_usdc", "all", "shares_exact"},
-              "earn_balance": {"vault", "chain", "account", "lookback_blocks", "max_log_requests"},
-              "earn_claim": {"receipt_id"},
+              "earn_balance": {"vault", "chain", "account"},
+              "earn_submit": {"request_id", "step_id", "tx_hash", "nonce", "from", "block"},
+              "earn_request": {"request_id", "tx_hash", "cancel"},
           }
           assert props == expected, {k: (sorted(props.get(k, [])), sorted(v)) for k, v in expected.items() if props.get(k) != v}
           for old in ("depositor", "principal", "owner"):
@@ -395,7 +396,7 @@ jobs:
       # The endpoint URLs are secrets; a pull request from a fork gets neither, and the script then
       # uses the public endpoints. Each URL's token and the host's first label are masked on their own
       # too, in case anything prints them without the rest of the URL (a DNS error names the host).
-      - name: the built CLI exits 0 with a chain-read answer, and 1 on a refused argument
+      - name: the built CLI exits 0 with a network answer (the Tempora API, or Solana's chain), and 1 on a refused argument
         shell: bash
         env:
           CI_RPC_BASE: ${{ secrets.CI_RPC_BASE }}

@@ -82,12 +82,12 @@ describe("an owner call", () => {
   };
   const positions = (c: Client, t: string) => c.positions({}, { ownerToken: t });
 
-  it("signs in when no token is kept, asks for an HTTP token, keeps it, and reuses it next time", async () => {
+  it("signs in when no token is kept, asks for a token good on both doors, keeps it, and reuses it next time", async () => {
     const { client, calls } = stub();
     const signed: string[] = [];
     expect((await asOwner(OWNER, signer(signed), positions, { client, now: () => NOW })).ok).toBe(true);
     expect(signed).toHaveLength(1);
-    expect(calls.verifies).toEqual([{ audience: "http" }]);
+    expect(calls.verifies).toEqual([{ audience: "both" }]);
     expect(readOwnerToken(tokenKeyFor(OWNER), NOW)).toBe("tok-1");
     expect((await asOwner(OWNER, signer(signed), positions, { client, now: () => NOW })).ok).toBe(true);
     expect(signed).toHaveLength(1);

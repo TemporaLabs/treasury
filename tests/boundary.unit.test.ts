@@ -79,7 +79,6 @@ import ts from "typescript";
 import { rpcUrlFromEnv, solanaRpcUrlFromEnv } from "../src/client.js";
 import { loadRegistry, getVault, depositableVaults } from "../src/registry.js";
 import { buildDeposit, buildWithdraw } from "../src/build.js";
-import { buildCommands } from "../src/earn/commands.js";
 import { FIXTURE, fixtureVault, useFixtureRegistry, useShippedRegistry } from "./fixtures/registry.js";
 
 const here = dirname(fileURLToPath(import.meta.url));
@@ -141,8 +140,8 @@ const MAY_COMPUTE_ENV_KEY = ["src/client.ts", "tests/client.unit.test.ts"];
 
 /**
  * The only files that may reach `node:child_process`, and the only programs they may start.
- * Exact membership, like the dependency assertion. A flat ban would be wrong — `roundtrip.ts`
- * legitimately spawns the CLI, once per step — and a flat allow is the hole.
+ * Exact membership, like the dependency assertion. A flat ban would be wrong — the fork tier
+ * legitimately spawns a fork node, and the entrypoint tests the committed bundle — and a flat allow is the hole.
  */
 /**
  * 🔴 BUILTINS ARE ALLOWLISTED, NOT DENIED. Normalised, so `x` and `node:x` are one entry. Anything
@@ -152,18 +151,21 @@ const MAY_COMPUTE_ENV_KEY = ["src/client.ts", "tests/client.unit.test.ts"];
  */
 const BUILTINS_ALLOWED = ["fs", "path", "url", "http", "util"];
 const BUILTINS_ALLOWED_PER_FILE: Record<string, string[]> = {
-  "scripts/roundtrip.ts": ["child_process"], //            spawns the CLI under test, once per step
   "src/connect/http.ts": ["crypto"], //                    the one-shot page server's random secret and constant-time compare
   "src/connect/open.ts": ["child_process"], //             opens the operator's browser at the local page
   "src/connect/session.ts": ["os"], //                     the session file lives under the home directory
   "src/connect/owner-tokens.ts": ["crypto"], //            a random name for the file written aside before it is renamed into place
+  "src/earn/api.ts": ["crypto"], //                         the SHA-256 of a vault's terms text, checked against the one the API sent
   "tests/connect.unit.test.ts": ["os", "net"], //           a temporary session directory; a free local port per test
   "tests/third-party-notices.unit.test.ts": ["os"], //      a temporary package directory per test
   "tests/connect-plan.unit.test.ts": ["os", "net"], //      the same, for `connect plan`
+  "tests/connect-api.unit.test.ts": ["os", "net"], //       the same, for a vault request through the Tempora API
   "tests/owner-tokens.unit.test.ts": ["os"], //             a temporary directory for the owner-token file
   "tests/invest-api.unit.test.ts": ["os"], //               the same, for the invest sign-in
   "tests/invest-page.unit.test.ts": ["os", "net"], //       a temporary session directory; a free local port per test
   "tests/invest-flow.unit.test.ts": ["os"], //               a temporary session directory per test
+  "tests/earn-api.unit.test.ts": ["os"], //                  a temporary session directory per test
+  "tests/setup/offline.ts": ["os"], //                       an empty connect directory for every test
   "tests/fork.test.ts": ["child_process"], //              spawns anvil; anvil holds the keys, this repo never does
   "tests/fork-solana.test.ts": ["child_process", "os"], //  spawns surfpool in a temporary directory; the key is generated per run
   "tests/registry-check.chain.test.ts": ["child_process"], // runs scripts/registry-check.ts against a mock chain
@@ -175,7 +177,6 @@ const BUILTINS_ALLOWED_PER_FILE: Record<string, string[]> = {
 };
 
 const MAY_SPAWN: Record<string, string[]> = {
-  "scripts/roundtrip.ts": ["node", "npx"],
   "src/connect/open.ts": ["open", "cmd", "xdg-open"], //    the platform's own "open this URL" command, nothing else
   "tests/fork.test.ts": ["anvil"],
   "tests/fork-solana.test.ts": ["surfpool"],
@@ -595,12 +596,8 @@ describe("D. Enzyme stays refused at BUILD — the boundary, not a note in a doc
     expect(() => buildWithdraw(enzyme(), { assetsHuman: "1", receiver: ADDR, owner: ADDR })).toThrow(/no ERC-4626 deposit\/redeem path/);
   });
 
-  it("the refusal survives the command boundary — no calls array reaches a caller", async () => {
-    const tools = buildCommands() as unknown as Record<string, { handler: (a: unknown, b: unknown) => Promise<unknown> }>;
-    await expect(
-      tools["earn_prepare_deposit"]!.handler({ vault: FIXTURE.enzyme, account: ADDR, receiver: ADDR, amount_usdc: "1" }, {}),
-    ).rejects.toThrow(/no ERC-4626 deposit\/redeem path/);
-  });
+  // The earn commands no longer build an EVM call themselves: the Tempora API prepares it, and `checkSteps` holds it to
+  // an ERC-4626 vault. `buildDeposit`/`buildWithdraw`, which `treasury connect` still builds through, refuse it above.
 
   it("and it is not in the depositable set", () => {
     expect(depositableVaults().map((v) => v.symbol)).not.toContain(FIXTURE.enzyme);

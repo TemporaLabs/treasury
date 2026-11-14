@@ -56,12 +56,14 @@ All in `src/earn/commands.ts`:
 
 | helper | what it guarantees |
 |---|---|
-| `guarded` | wraps every handler: anything thrown is re-thrown with RPC endpoints masked (`redactEndpoints`, `src/redact.ts`), plus a setup hint when the failure looks like a transport failure on an unconfigured public endpoint |
-| `text` | serialises a result; when the body shows a transport failure and no RPC is configured, adds a `setup_required` field naming the variable to set |
-| `onItsChain` | runs the reads while checking the endpoint answers for the vault's chain, and reports a wrong-chain endpoint instead of the confusing "not a contract" errors it causes |
-| `commitsMoney` | the one place the vault's `warning` is attached; deposits use it, withdrawals deliberately do not. `tests/commands.unit.test.ts` fails if any other line writes a `warning` field |
-| `unsigned` | the PREPARE envelope: `requires_signature: true`, `status: "unsigned"`, the chain first, the warning, `next_step`, `signer_rules` and the calls |
-| `SIGNER_RULES` | what a signer must do for the calls to land exactly once; stated with every build because nothing here signs |
+| `guarded` | wraps every handler: anything thrown is re-thrown with RPC endpoints masked (`redactEndpoints`, `src/redact.ts`), plus a setup hint when the failure looks like a transport failure on an unconfigured public endpoint (on Solana only: a command through the Tempora API reads no RPC) |
+| `text` | serialises a Solana result; when the body shows a transport failure and no RPC is configured, adds a `setup_required` field naming the variable to set |
+| `json` | serialises a result read from the Tempora API, with no RPC setup sentence |
+| `solanaTarget` | whether a call names the Solana vault (its ticker, or `chain: "solana"`), which keeps its local path; every other call goes to the API |
+| `connectedOwner` | the connected wallet, the only owner an EVM owner call acts for; an `--account` other than it is refused before anything is asked |
+| `commitsMoney` | the one place a vault's warning is attached (`warnings` from the API, `warning` from the Solana row); deposits use it, withdrawals deliberately do not. `tests/commands.unit.test.ts` fails if any other line writes a `warning` or `warnings` field |
+| `envelope` | the PREPARE envelope on the EVM chains: `requires_signature: true`, `status: "unsigned"`, the chain first, the warnings, the request, its checked steps, `next_step` and `signer_rules` |
+| `SIGNER_RULES` | (in `src/earn/request.ts`) what a signer must do for each step to land exactly once; stated with every build because nothing here signs |
 
 Secrets: before any handler runs, `registerSecretSource(resolvedRpcSecrets)` tells the redactor which
 URL values are secret, so a keyed URL is masked even inside a provider's own error body. `run` in

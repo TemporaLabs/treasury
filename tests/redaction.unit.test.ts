@@ -139,24 +139,25 @@ describe("no tool output carries the RPC key when the RPC fails", () => {
   });
 
   it("an unwrapped throw crossing a tool handler is redacted by guarded()", async () => {
+    // On an EVM chain the earn reads go through the Tempora API's client, so the throw here is that client's: one whose
+    // message carries the keyed endpoint, which nothing in the handler itself redacts.
     process.env["TREASURY_RPC_BASE"] = FAKE_URL;
-    process.env["TREASURY_LOGS_RPC_BASE"] = FAKE_URL;
     try {
+      const throwing = new Proxy({}, { get: () => async () => { throw new Error(`HTTP request failed.\n\nURL: ${FAKE_URL}\nDetails: fetch failed`); } });
       // Reach the registered handler directly, the way `src/cli.ts` does after parsing flags.
-      const tools = buildCommands() as unknown as Record<string, { handler: (a: unknown, extra: unknown) => Promise<unknown> }>;
-      expect(Object.keys(tools)).toContain("earn_balance");
+      const tools = buildCommands({ mcp: throwing as never }) as unknown as Record<string, { handler: (a: unknown, extra: unknown) => Promise<unknown> }>;
       let thrown: unknown;
       try {
-        await tools["earn_balance"]!.handler({ account: STRANGER, vault: FIXTURE.morphoOpen, max_log_requests: 1 }, {});
+        await tools["earn_vaults"]!.handler({}, {});
       } catch (e) {
         thrown = e;
       }
       expect(thrown).toBeInstanceOf(Error);
+      expect((thrown as Error).message).toMatch(/HTTP request failed/); // premise: it is that throw
       expect((thrown as Error).message).not.toContain(FAKE);
       expect((thrown as Error).message).not.toMatch(/https?:\/\//);
     } finally {
       delete process.env["TREASURY_RPC_BASE"];
-      delete process.env["TREASURY_LOGS_RPC_BASE"];
     }
   });
 });

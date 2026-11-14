@@ -24,8 +24,11 @@ export const apiHost = (): string => new URL(apiUrl()).host;
 /** A client for the API, with no client key. Throws a TypeError for a URL the client refuses. */
 export const apiClient = (): Client => createClient({ baseUrl: apiUrl(), timeoutMs: INVEST.apiTimeoutMs });
 
-/** The key an owner's token is kept under: this host, no client key, this owner, the HTTP door. */
-export const tokenKeyFor = (owner: Address): TokenKey => ({ host: apiHost(), clientId: CHALLENGE_CLIENT, owner, audience: "http" });
+/**
+ * The key an owner's token is kept under: this host, no client key, this owner, and both of the API's doors. One sign-in
+ * serves `invest` (the HTTP routes) and `earn` (the MCP endpoint).
+ */
+export const tokenKeyFor = (owner: Address): TokenKey => ({ host: apiHost(), clientId: CHALLENGE_CLIENT, owner, audience: "both" });
 
 /** Why a call to the API did not answer as asked, as one line for the operator. Never contains a token. */
 export function failure(what: string, r: Extract<Result<unknown>, { ok: false }>): Error {
@@ -34,6 +37,9 @@ export function failure(what: string, r: Extract<Result<unknown>, { ok: false }>
   const trace = r.traceId ? ` (trace ${r.traceId})` : "";
   return new Error(`${what}: ${e.code}: ${e.message}${retry}${trace}`);
 }
+
+/** The refusal for an owner call with no wallet connected: the connected wallet is the only owner either command acts for. */
+export const notConnected = (): Error => new Error("no wallet is connected — run `treasury connect wallet` first, and let the operator sign in");
 
 /** Has the owner's wallet sign a message, and returns the signature. The connect page provides it. */
 export type MessageSigner = (owner: Address, message: string) => Promise<string>;
@@ -48,6 +54,20 @@ export async function asOwner<T>(
   ownerInput: string,
   signMessage: MessageSigner,
   call: (client: Client, token: string) => Promise<Result<T>>,
+  deps: { client?: Client; now?: () => number } = {},
+): Promise<Result<T>> {
+  const client = deps.client ?? apiClient();
+  return withOwner(ownerInput, signMessage, (token) => call(client, token), { ...deps, client });
+}
+
+/**
+ * `asOwner` for a call made through any of the API's clients (the MCP one, for `earn`): `call` gets the owner's token.
+ * The sign-in itself always goes through the HTTP client, `deps.client`, since it is not an MCP tool.
+ */
+export async function withOwner<T>(
+  ownerInput: string,
+  signMessage: MessageSigner,
+  call: (token: string) => Promise<Result<T>>,
   deps: { client?: Client; now?: () => number } = {},
 ): Promise<Result<T>> {
   const owner = getAddress(ownerInput);
@@ -67,7 +87,7 @@ export async function asOwner<T>(
         checkChallenge(message, { host, owner, now: now() });
         return true;
       },
-      audience: "http",
+      audience: "both",
     });
   };
   return withOwnerRetry(
@@ -76,6 +96,6 @@ export async function asOwner<T>(
       signIn: fresh,
       onSignIn: (s) => writeOwnerToken(key, { token: s.token, expiresAtIso: s.expiresAt }, now()),
     },
-    (token) => call(client, token),
+    call,
   );
 }

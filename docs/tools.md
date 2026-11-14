@@ -1,46 +1,77 @@
 # The commands
 
-Eight `earn` commands, each named here by its tool name, `earn_`-prefixed: `earn_quote` runs as
-`treasury earn quote`, and its arguments are its flags (`--direction deposit --account 0x…
---amount_usdc <amount>`, where the amount is always the operator's own). Each prints one JSON document; a refusal exits 1 with `{ "error": … }` on stderr.
+Nine `earn` commands, each named here by its tool name, `earn_`-prefixed: `earn_quote` runs as
+`treasury earn quote`, and its arguments are its flags (`--direction deposit --amount_usdc <amount>`,
+where the amount is always the operator's own). Each prints one JSON document; a refusal exits 1 with `{ "error": … }` on stderr.
 `treasury earn --help` lists every command and flag, `treasury earn <command> --help` one command's
 (put `--help` right after the command), `treasury --help` the skills, and `treasury --version` the
 bare version. A flag's `_` may be typed as `-` (`--amount-usdc`), and so may a command's
-(`prepare-deposit`). Two kinds: **READ** commands query the chain and
-return facts; **PREPARE** commands return unsigned calls for your signer. Nothing signs, sends or
-transfers, and CI asserts the command list exactly — a ninth command, or a `sign`, fails the build.
-The six `connect` commands [further down](#the-connect-commands--treasury-connect-command) are a third
-kind: they hand calls to the operator's own wallet for approval. Their list is pinned by CI the same way. The five
+(`prepare-deposit`). Three kinds: **READ** commands return facts; **PREPARE** commands start a
+deposit or withdrawal and return its unsigned steps for your signer; **REQUEST** commands
+(`earn_submit`, `earn_request`) hand back the hash of a step your signer sent, and read or cancel a
+request. Nothing signs or sends a transaction, and CI asserts the command list exactly — a tenth
+command, or a `sign`, fails the build.
+The six `connect` commands [further down](#the-connect-commands--treasury-connect-command) are a fourth
+kind: they hand each step to the operator's own wallet for approval. Their list is pinned by CI the same way. The five
 `invest` commands [after them](#the-invest-commands--treasury-invest-command) do the same for Smart Growth
 portfolios, through the Tempora API, and are pinned the same way.
 
-Every tool that takes a vault takes it as `vault`, the vault's ticker (e.g. `tlCashPlusUSDC2`: its ERC-20 ticker on the EVM chains, one the registry assigns on Solana), and uses the default when it is
-omitted. Every tool that takes an address takes it as `account` — whose shares these are.
-Both prepare commands also take `receiver`, which is a different thing: where the shares land on a
-deposit, where the asset (USDC; USDG on Robinhood Chain) lands on a withdrawal.
+**Where the answers come from.** On the EVM chains (Base, Arbitrum One, Robinhood Chain, Ethereum and
+Monad), `earn` reads and acts through the Tempora API and nothing else: `https://api.temporalabs.com`
+by default, or the deployment `TREASURY_API_URL` names (https only, except for an address on this
+machine). No RPC endpoint is read on those chains. Treasury names a vault there by its contract
+address, which only picks the vault among those the API lists: its asset, decimals, status, terms and
+warnings are the API's, read when the command runs. The API prepares each step of a deposit or withdrawal, and Treasury
+checks every step against the API's own record of the vault (with `checkSteps` from
+`@temporalabs/client`) before handing it out. That check catches a wrong step; it cannot catch a
+wrong record. On Solana nothing changed: the commands read the chain directly and take the vault from
+the registry (see [On Solana](#on-solana)).
+
+Every tool that takes a vault takes it as `vault`, and uses the default when it is omitted. On an EVM
+chain `vault` is the vault's contract address (`0x…`, in any case), as `earn_vaults` lists it under
+`vault`, or its ticker (e.g. `tlCashPlusUSDC2B`), which the registry turns into that address. The
+address picks the vault the API lists at it: an address no listed vault has, or more than one has, is
+refused, and so is a value that is neither an address nor a known ticker. On Solana `vault` is the
+vault's ticker, which the registry assigns. Each EVM chain's default is a contract address, that of
+`tlCashPlusUSDC2B` on Base, `tlCashPlusUSDC2C` on Arbitrum One, `tlCashPlusUSDG2D` on Robinhood Chain,
+`tlCashPlusUSDC2E` on Ethereum and `tlCashPlusUSDC2F` on Monad. A default the API does not list now is
+refused, never replaced by another vault.
+
+Every response names a vault on an EVM chain by `vault` (its contract address), `ticker` (the
+registry's ticker for that address, or `null`) and `name` (the API's).
+
+Every tool that takes an address takes it as `account` — whose shares these are. On an EVM chain the
+owner calls (`earn_status` with `account`, `earn_quote`, `earn_balance`, both prepare commands,
+`earn_submit` and `earn_request`) act for the **connected wallet** only (`treasury connect wallet`):
+`account` may be left out, and any other account is refused. When the API needs the wallet to sign
+in, a local page opens for it to sign a free sign-in message (no gas, nothing moves); otherwise no
+page opens. One sign-in serves `invest` and `earn`. On Solana `account` is required. The prepare
+commands take `receiver` on Solana only, where it must be the account itself; on an EVM chain the
+shares and the asset (USDC; USDG on Robinhood Chain) always go to the connected wallet, and
+`receiver` is refused.
 
 ## `chain` — which chain a call is for
 
 A vault is on one chain. Every tool that takes `vault` also takes `chain`: `"base"`, `"arbitrum"`, `"robinhood"`, `"ethereum"`, `"monad"` or `"solana"`
-— the chains with a vault in the registry, as `earn_vaults` lists them under `chains`.
+— as `earn_vaults` lists them under `chains`.
 
 | `vault` | `chain` | resolves to |
 |---|---|---|
-| omitted | omitted | the default chain's default vault (Base) |
-| omitted | given | that chain's default vault |
+| omitted | omitted | the default chain's default vault (Base) — refused if the API does not list it |
+| omitted | given | that chain's default vault — refused if the API does not list it |
 | given | omitted | that vault, on the chain it is on |
 | given | given | that vault — **refused** if it is on a different chain; the error names the chain the vault is on and the vaults on the chain that was asked for |
 
-An unknown chain name is refused, with the list of chains that have a vault. Names are exact:
-`"Arbitrum"` and `"42161"` are refused. An empty string counts as omitted, for `chain` as for
-`vault`. Nothing is resolved by guessing: the two readings of a mismatch are different contracts on
-different chains.
+An unknown chain name is refused, with the list of chains that have a vault, before anything is
+asked of the API. Names are exact: `"Arbitrum"` and `"42161"` are refused. An empty string counts as
+omitted, for `chain` as for `vault`. Nothing is resolved by guessing: the two readings of a mismatch
+are different contracts on different chains.
 
 Every result that names a vault carries `chain` and `chainId`. On a prepared envelope they come
-before the calls, and every call inside carries the same `chainId`: a call is correct on that chain
-only. Sent on another chain, a transaction to an address with no contract there is mined and does
-nothing. On Solana `chainId` is `null`, the envelope carries one `transaction` instead of calls, and
-`cluster` and `genesisHash` name the chain (see [On Solana](#on-solana)).
+first: its steps are correct on that chain only. Sent on another chain, a transaction to an address
+with no contract there is mined and does nothing. On Solana `chainId` is `null`, the envelope carries
+one `transaction` instead of steps, and `cluster` and `genesisHash` name the chain (see
+[On Solana](#on-solana)).
 
 **The agent asks, the tool does not choose.** When the operator has not said which chain to deposit
 on, the skill has the agent show `earn_vaults` → `chains` and ask. Withdrawals, quotes and balances
@@ -54,181 +85,215 @@ More fractional digits than the asset has (6 for both) are refused, never trunca
 
 ## `earn_vaults` — READ
 
-No inputs. Every vault in the registry, on every chain, with its chassis, decimals and **measured** deposit-open
-status (the block and method it was measured at). Each row carries the vault's public identity:
+No inputs. Every vault the Tempora API lists now, on every EVM chain, and the vault on Solana this
+client reads from its own chain. Each EVM row carries:
 
-- `symbol` — the vault's own ERC-20 ticker, e.g. `tlCashPlusUSDC2`, as `symbol()` reports it; on
-  Solana, the ticker the registry assigns;
-- `name` — the vault's `name()`; on Solana, the name the registry records;
-- `chain` and `chainId` — the chain the vault is on, e.g. `"arbitrum"` and `42161`;
-- `address` — the contract itself, on that chain;
-- `links` — `explorer` always (the chain's own: BaseScan, Arbiscan, Robinhood Chain's Blockscout, Etherscan, MonadScan, or Solscan on Solana), and `app` where the chassis has a front end whose page for this vault exists. **These need no
-  RPC endpoint.** They are how an operator verifies, without this client's help, that the address
-  about to be used is the vault it claims to be;
-- `warning` — what to show before preparing a deposit into this vault. Show it; do not summarise it.
-  It is repeated on every response that commits money — see `earn_prepare_deposit` below — so a
-  caller who never lists still receives it.
+- `vault` — the vault's contract address, the value every other tool takes as `vault`; `ticker` — the
+  registry's ticker for it, taken as `vault` too, or `null` when it has none; and `name`;
+- `status` — the API's: `live` takes deposits and withdrawals, `paused` takes withdrawals only, and
+  anything else takes no deposit. `depositsOpen` is true only for `live`;
+- `isDefault` — whether it is its chain's default;
+- `chain`, `chainId` and `caip2` — the chain the vault is on, e.g. `"arbitrum"`, `42161` and
+  `"eip155:42161"`;
+- `standard`, `vaultAddress`, `assetAddress`, `assetDecimals` and `shareDecimals` — the vault's
+  contract and asset, as the API records them;
+- `termsVersion` — the version of the vault's terms ([`earn_terms`](#earn_terms--read) shows the
+  text); and `fees`;
+- `links` — openable without any endpoint. They are how an operator verifies, without this client's
+  help, that the address about to be used is the vault it claims to be;
+- `warnings` — what to show before preparing a deposit into this vault. Show them; do not summarise
+  them. They are repeated on every response that commits money — see `earn_prepare_deposit` below —
+  so a caller who never lists still receives them.
+
+A Solana row is as before — `symbol`, `name`, `address`, `chassis`, `asset`, `sharesMint`,
+`shareDecimals`, `depositOpen`, `warning` (one string) and a Solscan `links.explorer` — plus `vault`
+and `ticker`, both its ticker, the value the tools take as `vault` on Solana.
 
 And, once per response:
 
+- `api` — the API address the list was read from;
 - `chains` — the chains a deposit can go to, the default chain first. Each entry is
-  `{ chain, chainId, name, default, defaultAccess, depositable }`: that chain's default vault, its
-  access, and the vaults on that chain any account can deposit into. This is what an agent shows an
-  operator who has not chosen a chain;
+  `{ chain, chainId, name, default, depositable }`: that chain's default vault (`{ vault, ticker, name }`,
+  present only when the API lists it, otherwise `null`) and the vaults on that chain taking deposits
+  now, each `{ vault, ticker, name }`. An EVM
+  chain appears only when the API lists a vault on it. This is what an agent shows an operator who
+  has not chosen a chain;
 - `defaultChain` — the chain used when a tool is called with neither `vault` nor `chain`;
-- `default` — the vault used in that case: the default chain's default;
-- `defaultAccess` — `"open"` if the default takes deposits from any account, `"whitelist"` if only
-  admitted ones;
-- `depositable` — those any account can put money into today, across all chains: an ERC-4626 chassis (or the Kamino vault on Solana) and measured open.
-  **May be empty.** An empty set is a state of the offering, not a fault.
+- `default` — the vault used in that case: the default chain's default, or `null` when the API does
+  not list it;
+- `depositable` — the vaults taking deposits now, across all chains, each `{ vault, ticker, name }`: `live` on an EVM chain, measured
+  open on Solana. **May be empty.** An empty set is a state of the offering, not a fault.
+
+Whether one account may deposit is decided by the API's per-account gates: run `earn_status` with
+the account before a deposit.
 
 ## `earn_terms` — READ
 
-No inputs. The pre-deposit disclosures, verbatim. The skill shows them to the operator and records
-an acknowledgement before building a first deposit.
+| input | |
+|---|---|
+| `vault` | optional; see above |
+| `chain` | optional; see [`chain`](#chain--which-chain-a-call-is-for) |
+
+The vault's terms as the Tempora API publishes them, `terms: { text, version, sha256 }`, with the
+pre-deposit `disclosures` and a `next_step`. The text is hashed here (SHA-256 of its UTF-8 bytes, as
+`0x` and lowercase hex) and refused when it does not match the `sha256` the API sent with it. The
+skill shows `terms.text` and the disclosures to the operator in full and records an acknowledgement
+before building a first deposit: a deposit is made against this exact version and sha256. On Solana,
+the disclosures alone.
 
 ## `earn_status` — READ
 
 | input | |
 |---|---|
-| `vault` | optional ticker |
+| `vault` | optional; see above |
 | `chain` | optional; see [`chain`](#chain--which-chain-a-call-is-for) |
-| `account` | optional address |
-| `amount_usdc` | optional; the amount the simulated deposit uses |
+| `account` | optional; on an EVM chain, the connected wallet |
+| `amount_usdc` | optional; the deposit amount to check |
 
-With **no `account`**, a health check: chain, chain id, latest block, registry version, and *which
-environment variable* supplied the RPC — never the URL. Returns a verdict when the RPC is
-unreachable; it does not throw. Each chain has its own RPC, so pass `chain` to check the one you are
-about to use. Its `server: "treasury"` field keeps the name it had when this ran as a server, so the
-result stays the same JSON; it names the program, not a running process. `rpc` is one of:
+With **no `account`**, a health check: `mode: "health"`, `version`, `api` (the API address), and
+`apiStatus`, `ok` or `unreachable` (with `reason`). When the API answered, the result also carries
+`vaultsListed` and the vault the call resolves to (`vault`, `ticker`, `name`, `status`, `depositsOpen`, `chain`,
+`chainId`). It returns a verdict when the API cannot be reached; it does not throw. Its
+`server: "treasury"` field keeps the name it had when this ran as a server, so the result stays the
+same JSON; it names the program, not a running process. A call that names a `vault` but no `account`
+is answered as a health check too, and says so with `requested: "preflight"` and
+`missing: ["account"]`: it is not a pass.
 
-| `rpc` | meaning |
-|---|---|
-| `ok` | the endpoint answered. For a configured endpoint, `chainVerified` says whether it also said it is this chain: `false` means it answered a block number and would not say which chain it is |
-| `unreachable` | the endpoint did not answer; `reason` says why, without the URL |
-| `wrong_chain` | the configured endpoint answers for a different chain (`rpcChainId`). Reads through it fail with "returned no data", because the vault has no contract there. Point the variable `reason` names at an endpoint for this chain |
+With `account`, the API's view of the connected wallet on the vault, `mode: "preflight"`:
 
-When a separate logs endpoint is configured (`TREASURY_LOGS_RPC_BASE`, `TREASURY_LOGS_RPC_ARBITRUM`,
-`TREASURY_LOGS_RPC_ROBINHOOD`, `TREASURY_LOGS_RPC_ETHEREUM`, `TREASURY_LOGS_RPC_MONAD`),
-the result also carries `logsRpc` (`ok`, `wrong_chain` or `unreachable`) and `logsRpcSource`: that is
-the endpoint `earn_balance` reads through, and it can be wrong on its own.
+- `standing` — the API's summary of the account on this vault;
+- `gates` — every gate, each with its `status` and the vault's own `reason`. Show the reason
+  verbatim;
+- `wallet` — the wallet's balance of the vault's asset and its allowance to the vault, in raw units
+  with `decimals`; `null` when it could not be read, never `0`;
+- `alerts` and `warnings` — the API's alerts for the account, and the vault's warnings;
+- with `amount_usdc`, `deposit: { amount, check, block, asOf }` — whether the vault would take that
+  deposit: `check.state` is `open`, `holdings`, `not_admitted`, `refused`, `unsupported` or
+  `unknown`, with the vault's `reason`.
 
-The same check runs inside every tool that reads the chain. With `account`, `earn_status` — like
-`earn_quote` and `earn_balance` — refuses with *"the endpoint in `<variable>` answers for chain N,
-not …"* instead of returning a verdict read from the wrong chain.
-
-With `account`, the access verdict for that account from a **simulated `deposit()`**:
-
-| status | meaning | next step |
-|---|---|---|
-| `OPEN_READY` | the deposit would succeed as-is; allowance already covers it | build |
-| `NEEDS_APPROVAL` | the deposit reached the token pull; access is open, the allowance is not set | build — the first call is the approve |
-| `WHITELIST_GATED` | the vault admits only whitelisted accounts, and this is not one | stop; admission is a fund-side action, not a retry |
-| `REVERTED_OTHER` | it reverted for a reason the client could not classify; `findings` lists candidates | stop and show the findings |
-| `REFUSED_BY_CLIENT` | the registry row and the chain disagree (e.g. decimals) | stop; a client defect or a stale registry |
-| `UNRESOLVED` | the RPC failed | stop; not a verdict about the vault |
-
-The `mode` field says which of the two answers you got. `advisory.maxDepositRaw` is reported but
-never trusted: `maxDeposit()` says "unlimited" behind a whitelist on one chassis and `0` on an open
-vault on another.
+The `mode` field says which of the two answers you got.
 
 ## `earn_quote` — READ
 
 | input | |
 |---|---|
-| `vault` | optional ticker |
+| `vault` | optional; see above |
 | `chain` | optional; see [`chain`](#chain--which-chain-a-call-is-for) |
-| `account` | required |
-| `amount_usdc` | required |
+| `account` | on an EVM chain the connected wallet, and may be left out; required on Solana |
+| `amount_usdc` | required for a deposit; on an EVM chain optional for a withdrawal |
 | `direction` | required, `"deposit"` or `"withdraw"`; echoed back on the result |
 
-**`deposit`:** expected shares (`previewDeposit`), share price, and the same pre-flight verdict as
-`earn_status`. No rate is quoted: an ERC-4626 vault exposes none, and this client calls no yield
-API. What a position has actually earned comes from `earn_balance`, from the vault's own events. On the EVM chains, `canProceed` is false unless the verdict allows it; a Solana quote has no `canProceed`, so read `preflight.status`.
+A pre-trade quote from the Tempora API for the connected wallet, read and simulated at one `block`
+(with `asOf`). Advice only: the request decides.
 
-**`withdraw`:** shares that would burn (`previewWithdraw`), shares held, a **simulated `withdraw()`**
-verdict (`OK`, or `REVERTED` with the chain's revert reason; on a Fusion vault, which pays only from its
-own balance, also in liquidity terms), the vault's `instantLiquidity`, and
-`maxWithdraw` as an advisory only. On Solana the quote reports `canWithdraw` and a `note` instead of
-`simulated` and `canProceed` (see [On Solana](#on-solana)).
+**`deposit`:** `expectedShares` and `sharePrice` (raw, with decimals), and whether the vault would
+take it (`check.state`: `open`, `holdings`, `not_admitted`, `refused`, `unsupported` or `unknown`,
+with the vault's own `reason`), plus the vault's `warnings`. No rate is quoted: this client calls no
+yield API.
+
+**`withdraw`:** the wallet's `position` (its shares, and their value in the asset), and how much of
+it can be withdrawn now, found by simulating withdrawals: `withdrawable.state` is `all`, `partial`,
+`refused` or `unknown`, with `assets`, `within` and `reason`. No warnings on this side. On Solana the
+quote is read from the chain (see [On Solana](#on-solana)).
 
 ## `earn_balance` — READ
 
 | input | |
 |---|---|
-| `vault` | optional ticker |
+| `vault` | optional; see above |
 | `chain` | optional; see [`chain`](#chain--which-chain-a-call-is-for) |
-| `account` | required |
-| `lookback_blocks` | optional; default is from the vault's deployment block, i.e. the whole history |
-| `max_log_requests` | optional; cap on `eth_getLogs` calls per event per scan, default 100 |
+| `account` | on an EVM chain the connected wallet, and may be left out; required on Solana |
 
 A position is in one vault, on that vault's chain. An account's positions on different chains are
 separate calls, and an empty result on one chain says nothing about another.
 
-Returns: `chain` and `chainId`, `sharesExact` (the string to hand back for a full withdrawal), `shares` (display),
-`usdcValue`, `sharePriceInAssets`, `entryBasisUsdc`, `accruedYieldUsdc`, and two
-objects worth reading carefully:
+Returns, from the Tempora API: `chain` and `chainId`, `stage` (the API's), `shares` (the exact share
+balance, `{ raw, decimals }`), `sharesExact` (the same number as a decimal string, never rounded: the
+string to hand back for a withdrawal by shares), `value` (`{ usd, state, asOf }`: what it is worth,
+and how that was read), and:
 
-- **`exit`** — `exitableNow` is what a withdrawal of the whole position would actually return at
-  this block, measured by simulating it; `measuredAs` says how; `instantLiquidity` is the vault's
-  liquid balance; `maxWithdrawSays` is the advisory figure the vault reports, which can be far larger.
-- **`scan`** — where the history was read from and how much of it. 🔴 **Read `scan.wholeHistory`,
-  not `scan.complete`.** `complete` only says shares in − shares out reconciles, which an empty
-  window does vacuously; `wholeHistory` says the scan reached the deployment block and was not cut
-  short. Only then are `entryBasisUsdc` and `accruedYieldUsdc` numbers; otherwise they read
-  `unknown`. `scan.source` says `"fallback"` when the configured RPC could not cover the range and the
-  public fallback did — see [`configuration.md`](configuration.md).
-- **`scan.depositTxs` / `scan.withdrawTxs`** — the transactions behind those events, oldest first:
-  `txHash`, `blockNumber`, `amountUsdc`. Paste `txHash` after the explorer's `/tx/` to show an
-  operator what landed; `earn_vaults` gives the vault's own `links.explorer`. These come from the
-  logs the basis scan already fetched, so they cost no extra request — and they carry the same
-  caveat as the basis: they are the events **inside the scanned window**, which is the whole history
-  only when `wholeHistory` is true. Each list holds at most 100 entries, the most recent; `deposits`
-  and `withdrawals` remain the totals, so a truncated list is visible by comparing the two.
+- **`withdrawable`** — what can actually be withdrawn now, found by simulating withdrawals at
+  `withdrawable.block`: `withdrawable.withdrawable.state` is `all`, `partial`, `refused` or `unknown`,
+  with `assets` and `reason`. `basis: "floor"` means the figure is a lower bound. It can be less than
+  the position's value. `"unknown"` when the API sent none.
+- A `stage` of `unknown` means the share balance could not be read: `shares` and `sharesExact` then
+  read `"unknown"`, never `0`.
+- `basis` and `yield` read `"not available"`: entry basis and accrued yield are not available
+  through the API.
+
+`position: "none"` means the API lists no position for this wallet in this vault.
 
 ## On Solana
 
-The vault on Solana is a Kamino vault, and the same commands answer for it with these differences:
+The vault on Solana is a Kamino vault, read from its own chain through `TREASURY_RPC_SOLANA` (or the
+public endpoint; see [`configuration.md`](configuration.md)), and the same commands answer for it
+with these differences:
 
 - Every result carries `chain: "solana"`, `chainId: null`, `cluster: "mainnet-beta"` and the cluster's
-  `genesisHash`; an endpoint whose genesis hash differs is reported as `wrong_chain`.
-- `account` and `receiver` are Solana addresses, and `receiver` must equal `account`.
-- `earn_prepare_deposit` and `earn_prepare_withdraw` return ONE unsigned transaction, not a list of calls:
+  `genesisHash`.
+- `account` and `receiver` are Solana addresses, and `receiver` must equal `account`. No sign-in is
+  involved.
+- `earn_status` with no `account` is a health check of the endpoint: `rpc` is `ok` (with
+  `chainVerified`), `unreachable` (`reason` says why, without the URL) or `wrong_chain` (an endpoint
+  whose genesis hash differs), with `rpcSource` naming *which environment variable* supplied the
+  endpoint — never the URL — and `latestSlot`. It returns a verdict when the endpoint is down; it does
+  not throw.
+- `earn_status` with `account` simulates the deposit and returns `OPEN_READY`, `NEEDS_FUNDS` (no USDC,
+  or no SOL for the fee), `REVERTED_OTHER` (including a vault that requires a co-signer) or
+  `UNRESOLVED` (the endpoint failed: not a verdict about the vault). With no SOL, `canDeposit` is
+  false: the simulation stopped before the vault and says nothing about it. A deposit over the vault's
+  cap is not `canDeposit` either.
+- `earn_quote --direction deposit` reports `expectedShares`, `sharePriceInAssets` and the same
+  `preflight` verdict; read `preflight.status`. `--direction withdraw` reports `sharesToBurn`,
+  `sharesHeld`, `instantLiquidity`, `canWithdraw` with a `note`, and `receives`, the USDC the
+  account's balance would rise by: each withdraw instruction keeps up to 0.001 USDC in the vault
+  (Kamino's charge, which it can change).
+- `earn_balance` reports `sharesExact`, `shares`, `usdcValue`, `sharePriceInAssets` and `exit`: a
+  simulated full withdrawal, or, when Kamino would cap it, `measuredAs` `a simulated partial
+  withdrawal` (what a withdrawal of just the shares that burned pays) or `a capped withdrawal` with
+  `exitableNow: unknown`. `entryBasisUsdc`, `accruedYieldUsdc` and `scan.wholeHistory` say the history
+  was not read.
+- `earn_prepare_deposit` and `earn_prepare_withdraw` return ONE unsigned transaction, not a list of steps:
   `transaction` carries `wire` (base64, every signature slot empty), `feePayer`, `blockhash`,
   `preparedAtBlockHeight` and `expiresAfterBlockHeight`. It is simulated before it is returned, and a
   transaction the program would refuse is not returned at all. Neither is a withdrawal whose simulation burns
   fewer shares than asked, beyond one share unit of rounding per withdraw instruction: the program would pay
   what a reserve can and leave the rest of the shares, so the quote reports `canWithdraw: false` with a `note`
-  and the prepare refuses. `expected` and `simulated` say what the simulation minted or paid.
-- `earn_quote --direction withdraw` reports `receives`, the USDC the account's balance would rise by: each
-  withdraw instruction keeps up to 0.001 USDC in the vault (Kamino's charge, which it can change).
-- `earn_balance` reports shares, `usdcValue` and `exit`: a simulated full withdrawal, or, when Kamino would cap
-  it, `measuredAs` `a simulated partial withdrawal` (what a withdrawal of just the shares that burned pays) or
-  `a capped withdrawal` with `exitableNow: unknown`; `entryBasisUsdc`,
-  `accruedYieldUsdc` and `scan.wholeHistory` say the history was not read.
-- `earn_status` with `account` returns `OPEN_READY`, `NEEDS_FUNDS` (no USDC, or no SOL for the fee),
-  `REVERTED_OTHER` (including a vault that requires a co-signer) or `UNRESOLVED`. With no SOL, `canDeposit` is
-  false: the simulation stopped before the vault and says nothing about it. A deposit over the vault's cap is not
-  `canDeposit` either.
+  and the prepare refuses. `expected` and `simulated` say what the simulation minted or paid. A
+  withdrawal of everything is `--all` with `--shares_exact`. There is nothing to `earn_submit`: the
+  operator's own Solana wallet sends the transaction.
+- The vault's warning is one string, `warning`, on the same responses that carry `warnings` on an EVM
+  chain.
 
 ## `earn_prepare_deposit` — PREPARE
 
 | input | |
 |---|---|
-| `vault` | optional ticker |
+| `vault` | optional; see above |
 | `chain` | optional; see [`chain`](#chain--which-chain-a-call-is-for) |
-| `account` | required; the depositing account, which signs both calls |
+| `account` | the depositing account; on an EVM chain the connected wallet, which sends both steps, and may be left out; required on Solana |
 | `amount_usdc` | required |
-| `receiver` | required; where the **shares** land — usually the account, not necessarily |
+| `terms_sha256` | required on an EVM chain: the `terms.sha256` from `earn_terms` for the terms the operator was shown and accepted |
+| `receiver` | Solana only, where the shares land: the account itself. Refused on an EVM chain |
 
-Returns `{ requires_signature: true, status: "unsigned", chain, chainId, warning, next_step, signer_rules, calls: [approve, deposit] }`. Each call is
-`{ chainId, to, data, function, args, value, description, gasAdvice, precondition? }`. Hand them to your signer
-**in order**, on the chain `chainId` names; the deposit's precondition names the allowance the approve must have set. Nothing has
-happened until the signer's transactions confirm.
+On an EVM chain this starts a deposit at the Tempora API, with the vault's current terms version and
+that sha256, and returns its steps unsigned. Terms that changed since the operator read them are
+refused: show them again with `earn_terms`. Every step is checked before it is returned: the approval
+only to the vault's asset, for exactly the amount, with the vault as spender; the deposit only into
+the vault, for exactly the amount, paying the shares to the connected wallet. A request that fails
+the check hands nothing out, and the refusal names it so it can be cancelled with `earn_request`.
 
-The approve is on the vault's own asset on that chain (USDC, or USDG on Robinhood Chain) and names that
-chain's vault as the spender. An asset on one chain cannot be deposited into a vault on another;
-Treasury does not bridge.
+Returns `{ requires_signature: true, status: "unsigned", chain, chainId, warnings, vault, account, requestId, state, expiresAt, steps: [approve, deposit], next_step, signer_rules }`. Each step is
+`{ stepId, state, after?, purpose?, to, data, value, function, args, description }`. Only a step whose
+`state` is `ready` has something to send. A `waiting` step (the deposit, until the approval is
+submitted) has no `to` or `data` yet: its `after` names the step it waits for, and its
+`description` says to read it again with `earn_request`. Nothing has happened until the wallet's
+transactions confirm.
+
+The flow: prepare → send step 1 from the connected wallet → `earn_submit` its hash → `earn_request`
+until step 2 is `ready` → send it → `earn_submit` its hash. The approve is on the vault's own asset on
+that chain (USDC, or USDG on Robinhood Chain) and names that chain's vault as the spender. An asset on
+one chain cannot be deposited into a vault on another; Treasury does not bridge.
 
 `function` and `args` are the same call `data` encodes, in the form a block explorer's **Write
 Contract** tab asks for — for an operator with no CLI signer, that is often the friendliest way to
@@ -243,84 +308,128 @@ Three things to know about them:
 
 - **`args` values are RAW contract units**, exactly what the form takes — `1000000`, not `1 USDC`.
   `description` is the human sentence; `args` is what you paste.
-- **They cannot disagree with `data`.** Both are produced at one call site from one argument tuple,
-  and the parameter names are read off the same ABI entry that encodes the bytes. There is no
-  decode step to drift (see `encodeCall` in `src/build.ts`).
+- **They cannot disagree with `data`.** `function`, `args` and `description` are all decoded from
+  the step's own `data`, never taken from the API's words.
 - **The parameter NAMES are this client's; the bytes are the contract's.** An explorer labels its
   form from the verified contract's own ABI, which may name a parameter differently. The values,
   their order and their types are what bind — if a label differs, fill by position.
 
-`warning` is the vault's own disclosure, repeated here rather than left at discovery — **show it
-before the signer sees the calls, verbatim**. Every response that commits money carries it:
-`earn_status`'s pre-flight verdict, `earn_quote` on the deposit side, and this one. Withdrawals
-deliberately do not: the risk it describes is committing funds, not retrieving them, and a
-disclosure repeated where it does not apply is what teaches a reader to skip it.
+`signer_rules` says what a signer must do for each step to land exactly once: send on the chain
+`chainId` names and no other; send only a `ready` step, one at a time, in order, from the connected
+wallet; set the nonce from the pending count immediately before each send; wait for each receipt
+before the next step; and never send again when the nonce moved after a failed send or receipt poll —
+submit the hash you have with `earn_submit` instead.
+
+`warnings` are the vault's own disclosures, repeated here rather than left at discovery — **show them
+before the signer sees the steps, verbatim**. Every response that commits money carries them:
+`earn_status`'s preflight, `earn_quote` on the deposit side, this one, and `earn_submit` or
+`earn_request` when a deposit step is ready to send. Withdrawals deliberately do not: the risk they
+describe is committing funds, not retrieving them, and a disclosure repeated where it does not apply
+is what teaches a reader to skip it.
 
 ## `earn_prepare_withdraw` — PREPARE
 
 | input | |
 |---|---|
-| `vault` | optional ticker |
+| `vault` | optional; see above |
 | `chain` | optional; see [`chain`](#chain--which-chain-a-call-is-for). A position is withdrawn on the chain it is on: name the vault |
-| `account` | required; whose shares are burnt |
-| `receiver` | required; where the **asset** (USDC; USDG on Robinhood Chain) lands — not necessarily the account |
-| `amount_usdc` | the amount of the vault's asset to withdraw (`withdraw(assets, receiver, owner)`) |
-| `all` + `shares_exact` | instead of an amount: empty the account by `redeem` of the exact share string from `earn_balance.sharesExact`, verbatim |
+| `account` | whose shares are burnt; on an EVM chain the connected wallet, and may be left out; required on Solana |
+| `amount_usdc` | an amount of the vault's asset to withdraw |
+| `all` | a switch: everything, as a redeem of every share |
+| `shares_exact` | a number of shares, copied verbatim from `earn_balance.sharesExact`; never a rounded number |
+| `receiver` | Solana only, where the asset lands: the account itself. Refused on an EVM chain |
 
-Same envelope, without `warning`. Quote first: the simulated verdict is what tells you whether the vault can pay this
-out now, and the agent must be told before signing.
+On an EVM chain give exactly one of `amount_usdc`, `all` or `shares_exact`. The withdrawal is
+started at the Tempora API, and its step — a `withdraw` for an amount, a `redeem` for shares or
+everything — is checked before it is returned: only from the vault, paid to and owned by the
+connected wallet, for exactly the amount asked. Same envelope, without `warnings`; send the step, then
+`earn_submit` its hash. Quote first: `earn_quote`'s `withdrawable` is what tells you whether the vault
+can pay this out now, and the agent must be told before signing. On Solana, `all` goes with
+`shares_exact`.
 
-## `earn_claim` — READ
+## `earn_submit` — REQUEST
 
 | input | |
 |---|---|
-| `receipt_id` | required |
+| `request_id` | required; `requestId` in the envelope |
+| `step_id` | required; the step the transaction was sent for, `stepId` in the envelope |
+| `tx_hash` | required; the transaction hash the wallet returned |
+| `nonce` + `from` | optional, together: the transaction's nonce and the address that sent it, which must be the connected wallet |
+| `block` | optional, with `nonce` and `from`: the block it was mined in, when known |
 
-Finalizes a queued withdrawal on chassis that settle asynchronously. No vault offered today queues —
-they settle in the withdraw transaction — so this reports that nothing is claimable. It exists so a
-consumer can code against the full contract before an asynchronous chassis is added.
+Hands the hash of a step the connected wallet sent to the Tempora API, which reads the chain itself
+at that hash. Answers with the request: `requestId`, `action`, `state`, `expiresAt`, each step's state
+and the API's `verification` of a sent one, `checked`, and, when a later step is now `ready`, that
+step checked as the prepare command checks it, with `next_step` and `signer_rules`. A refusal names
+the API's code: **never send the transaction again because of one** — read the request with
+`earn_request`. A hash the API recorded is said to be recorded even when what follows it is refused.
+
+## `earn_request` — REQUEST
+
+| input | |
+|---|---|
+| `request_id` | the request's id |
+| `tx_hash` | instead of `request_id`: the hash of a transaction sent for it |
+| `cancel` | optional, with `request_id`: cancels a request still waiting on the owner (nothing has moved for it) |
+
+Give exactly one of `request_id` or `tx_hash`. Reads one of the connected wallet's vault requests
+again, or cancels it, and answers in the same shape as `earn_submit`. A step that is now `ready` is
+shown with what to send only after the same check against the request's own amount, the vault the
+API lists and the connected wallet. A request for anything other than a listed vault is shown with
+its states only (`checked: false`, with a `note`), never with anything to send; a portfolio's request
+is read with `invest request`.
 
 ---
 
 ## The connect commands — `treasury connect <command>`
 
-These hand calls to the operator's own wallet instead of returning them: a browser wallet (MetaMask,
+These hand each step to the operator's own wallet instead of returning it: a browser wallet (MetaMask,
 Rabby, Coinbase Wallet), or a Privy embedded wallet opened with an email, Google, Apple or X login.
 Coinbase Wallet's own entry in the sign-in window (the Coinbase SDK, for its mobile app or a smart
 wallet) is untested in this release ([#88](https://github.com/TemporaLabs/treasury/issues/88)). That
 entry is separate from the Coinbase Wallet browser extension, which, like any wallet installed in the
 browser, is listed on the window's first screen.
 A page opens on the operator's machine, at a one-time URL on `http://localhost:53682` (or the next free port up to 53686) that the command
-also prints on stderr; they read each call there and
-confirm it in the wallet. Nothing here signs. See [`security-model.md`](security-model.md#the-wallet-connection-treasury-connect).
+also prints on stderr; they read each step there and
+confirm it in the wallet. Nothing here signs. On an EVM chain the vault is one the Tempora API lists,
+named by its contract address or its ticker, and the deposit or withdrawal is a request of the API, exactly as in `earn`: when
+the API needs a sign-in, a page of its own asks the wallet for one first. See [`security-model.md`](security-model.md#the-wallet-connection-treasury-connect).
 
 | command | flags | does |
 |---|---|---|
 | `connect status` | — | the connected account and how it signed in (`external` / `embedded`), or `disconnected`, with the connected Solana account under `solana`; reads a local file only |
 | `connect wallet` | `--chain` (optional; `solana` connects a Solana wallet: Phantom, Solflare, Backpack, or a Privy wallet) | opens the sign-in page: one Connect button, then Privy's window. The wallet signs a free sign-in message; waits up to 9 minutes and returns `{ status: "connected", account, walletType, connectedAtIso, opened }`. If the sign-in does not finish, it exits 1 with `not connected: <reason>` |
-| `connect deposit` | `--amount_usdc`, `--receiver`, optional `--vault`, `--chain`, then `--ack`, or `--plan` with `--leg` | builds approve + deposit for the connected account and checks them against the registry. Without `--ack`, opens nothing and returns the operator's acknowledgement; with its code, hands each call to the wallet in turn |
-| `connect withdraw` | `--receiver`, then `--amount_usdc` or `--all --shares_exact`, optional `--vault`, `--chain`, then `--ack`, or `--plan` with `--leg` | the same for a withdrawal |
+| `connect deposit` | `--amount_usdc`, `--receiver`, optional `--vault`, `--chain`, then `--ack`, or `--plan` with `--leg` | a deposit from the connected account. Without `--ack`, opens nothing and returns the operator's acknowledgement; with its code, starts the request at the API (on Solana, builds the transaction), checks it, and hands each step to the wallet in turn |
+| `connect withdraw` | `--receiver`, then `--amount_usdc` or `--all` (on an EVM chain alone, or with `--shares_exact`; on Solana with `--shares_exact`), optional `--vault`, `--chain`, then `--ack`, or `--plan` with `--leg` | the same for a withdrawal. On an EVM chain `--all` alone is the whole position as it stands when the withdrawal runs; with `--shares_exact`, exactly those shares |
 | `connect plan` | `--legs`, then `--ack`; then `--run`; or `--status` alone | one acknowledgement for several deposits and withdrawals, across vaults and chains. `--legs` and `--ack` open nothing; `--run` opens one signing page for every leg, EVM and Solana; each leg's command also runs alone with `--plan` and `--leg`. See [below](#a-plan-one-acknowledgement-for-several-legs) |
-| `connect disconnect` | — | forgets the connected accounts, EVM and Solana; moves nothing |
+| `connect disconnect` | — | forgets the connected accounts, EVM and Solana, and the API sign-in kept for them; moves nothing |
 
 `--receiver` must be the connected account: this page pays no one else. It comes from the operator's
-own message, never from the agent. To pay a different address, use `earn prepare_deposit` /
-`earn prepare_withdraw` with the operator's own signer.
+own message, never from the agent. Nothing in Treasury pays another address: `earn prepare_deposit`
+and `earn prepare_withdraw` also pay only the connected wallet on an EVM chain, and only the account
+itself on Solana.
 
 ### The acknowledgement before the page opens
 
-`connect deposit` and `connect withdraw` open nothing on their first run. They build and gate-check
-the calls, then return
+`connect deposit` and `connect withdraw` open nothing on their first run. They work out what the
+operator asked for — on an EVM chain from the vault the Tempora API lists, with its terms checked
+against their own sha256; nothing is started at the API yet — then return
 
-`{ status: "needs_acknowledgement", opened: false, action, amount, chain, chainId, vault, account, receiver, acknowledgement, ack, expiresAtIso, next_step }`
+`{ status: "needs_acknowledgement", opened: false, action, amount, chain, chainId, vault, account, receiver, terms?, acknowledgement, ack, expiresAtIso, next_step }`
+
+`vault` is `{ symbol, name, address, explorer }`. On an EVM chain `symbol` is the vault's ticker, or
+its contract address shortened when it has none.
+`terms` (an EVM deposit only) is `{ version, sha256 }`: the terms the deposit sends.
 
 `acknowledgement` is one fixed text, written by the CLI and not by the agent: the action and amount,
-the chain, the vault's name, symbol and explorer link, the receiver, how many wallet prompts to
-expect (a deposit asks twice, approve then deposit; a withdrawal once), the vault's warning, and the
-disclosures in plain words: a short form of [`earn terms`](#earn_terms--read) before a deposit, and
-before a withdrawal only the two points that hold for every action. It says the full terms can be
-asked for; `earn terms` returns them, and the skill still shows them in full before a first deposit.
-It ends by asking for a yes or a no. The agent posts it to the operator word for word.
+the chain, the vault's name, ticker and explorer link, the receiver, for an EVM deposit the terms version
+and sha256, how many wallet prompts to expect (a deposit asks twice, approve then deposit; a
+withdrawal once), the vault's warning, and the disclosures in plain words: a short form of
+[`earn terms`](#earn_terms--read) before a deposit, with the sentence that only admitted accounts can
+deposit when the API gates the vault by an allowlist, and before a withdrawal only the two points
+that hold for every action. It says the full terms can be asked for; `earn terms` returns them, and
+the skill still shows them in full before a first deposit. It ends by asking for a yes or a no. The
+agent posts it to the operator word for word.
 
 On the operator's yes, the same command run again with `--ack <ack>` opens the page. The code is
 refused, and nothing opens, when:
@@ -328,49 +437,60 @@ refused, and nothing opens, when:
 - it is not the pending acknowledgement's code (each first run replaces the one before);
 - it was already used: each acknowledgement opens one page;
 - it is more than 15 minutes old;
-- the calls differ from the ones acknowledged (another amount, vault, chain, receiver, direction or
-  connected account).
+- what it would send differs from what was acknowledged (another amount, vault, chain, receiver,
+  direction or connected account, or, for an EVM deposit, other terms).
 
 A `connect wallet` that completes a sign-in, or a `connect disconnect`, clears any pending
 acknowledgement; a sign-in that does not finish leaves it as it was. The pending one
-sits beside the session file (`connect-ack.json`, owner-readable only) and holds a digest of the calls,
-not the calls. While a page is open, `connect-page.lock` beside them names its process and port, and a second
+sits beside the session file (`connect-ack.json`, owner-readable only) and holds a digest of what was
+acknowledged, not the steps. While a page is open, `connect-page.lock` beside them names its process and port, and a second
 sign-in or confirmation is refused until the page closes. The page's process touches the file every 5 seconds; a
 lock left by a run that crashed (its process gone, its page expired, or the file untouched for 30 seconds and still
 untouched a few seconds later) is replaced.
 
 ### What the confirm flow returns
 
+On an EVM chain, the `--ack` run starts the request at the Tempora API and checks every step, as
+`earn prepare_deposit` and `earn prepare_withdraw` do, before the page opens; a request that fails the
+check is cancelled, and nothing opens. The page is handed only a checked step that is `ready`, and
+sends exactly its `to`, `data` and `value`. Each hash goes to the API (`submit`), which reads the
+chain and says how the step landed; the request is then read again until the next step is ready or
+the request settles. A step is never put to the wallet twice: a step the API asks for again after it
+was sent is refused. A hash the page could not hand over is still submitted, by that hash, once. A
+wallet error after the send was asked for is reported as not confirmed sent, never as declined. A
+request nothing was sent for is cancelled.
+
 With `--ack`, `connect deposit` and `connect withdraw` return
-`{ status, chain, chainId, account, opened, reason?, calls_total, txs, next_step }`; `opened` says
+`{ status, chain, chainId, account, opened, reason?, calls_total, txs, requestId, next_step }`
+(`requestId` on an EVM chain; `earn request` reads it again); `opened` says
 whether a browser was opened or only the URL printed. `txs` has one entry per transaction,
-`{ step, description, hash, verified, detail?, alsoMoved? }`, with `step` the call's position in the
+`{ step, stepId?, description, hash, verified, detail?, alsoMoved? }`, with `step` the step's position in the
 flow. An entry with `step: 0` is a transaction the page reported but could not tie to a step of this
-flow; it is always `unverified`, so look its hash up before retrying anything. `verified` is read from
-the receipt:
+flow; it is always `unverified`, so look its hash up before retrying anything. On an EVM chain
+`verified` is the API's reading of the step; on Solana it is read from the transaction itself:
 
 | `verified` | meaning |
 |---|---|
-| `matched` | the vault's (or token's) own event for the connected account and the exact amount is there, and no other transfer of the vault's asset left the account |
+| `matched` | the step landed as asked: on an EVM chain the API reads it as landed; on Solana the vault's own effect for the connected account and the exact amount is there, and no other transfer of the vault's asset left the account |
 | `extra_transfer` | as `matched`, but the account ALSO sent the asset elsewhere in the same transaction (`alsoMoved`) — often a wallet's fee for paying gas in tokens. Tell the operator |
-| `mismatch` | the transaction succeeded without the expected event, or was mined before this flow started (an older transaction, not this one). On Solana also: a transaction the page did not build (another blockhash), one paid for by another account, a deposit short by more than rounding, or a partial withdrawal. Stop |
+| `mismatch` | the transaction did not do what the step asked: on an EVM chain the API reads it as a mismatch or as replaced. On Solana: a transaction the page did not build (another blockhash), one paid for by another account, a deposit short by more than rounding, or a partial withdrawal. Stop |
 | `reverted` | it failed on chain; nothing it was meant to do happened |
-| `unverified` | no receipt in time; look the hash up before retrying anything |
+| `unverified` | not yet read as landed when the flow ended; look the hash up (on an EVM chain, read the request with `earn request`) before retrying anything |
 
 The flow stops at the first transaction that is not `matched` or `extra_transfer`, and sends nothing
-after it. A call declined in the wallet sent nothing, so the page stays open to confirm it again or
-cancel. Before the first call the page shows the wallet's balances, read once, and warns when a deposit
-needs more than the wallet holds or there is nothing for the network fee; the warnings never block the
-button. Each sent transaction is linked on the chain's explorer. The result's `status` says how the whole flow ended:
+after it. A step declined in the wallet sent nothing, so the page stays open to confirm it again or
+cancel. On Solana, before the first call the page shows the wallet's balances, read once, and warns
+when a deposit needs more than the wallet holds or there is nothing for the network fee; the warnings
+never block the button. Each sent transaction is linked on the chain's explorer. The result's `status` says how the whole flow ended:
 
 | `status` | meaning |
 |---|---|
-| `completed` | every call of the flow landed (`txs` has `calls_total` entries, each `matched` or `extra_transfer`) |
-| `stopped` | the flow ended before every call landed; `reason` says why, and the last entry's `verified` and `detail` give the transaction's own verdict. An approval whose allowance does not show on the RPC within about a minute stops here, with the deposit not sent |
-| `not_reported` | the page reported no transaction (cancelled, or nine minutes passed). This is not proof that none was sent: if the wallet showed a confirmation, check `earn balance` before any retry |
+| `completed` | every step of the flow landed (`txs` has `calls_total` entries, each `matched` or `extra_transfer`) |
+| `stopped` | the flow ended before every step landed; `reason` says why, and the last entry's `verified` and `detail` give the transaction's own verdict. On an EVM chain this includes a request the API ended other than `completed`, and a hash the API did not record: do not send it again |
+| `not_reported` | the page reported no transaction (cancelled, or nine minutes passed). This is not proof that none was sent: if the wallet showed a confirmation, check `earn balance` (and, on an EVM chain, `earn request`) before any retry |
 
-Each command returns within nine minutes, however slow the RPC is; a transaction still being
-checked then is listed as `unverified`. A cancel waits up to 30 seconds for a check already in
+Each command returns within nine minutes, however slow the chain or the API is; a transaction still
+being checked then is listed as `unverified`. A cancel waits up to 30 seconds for a check already in
 progress, so it can report that transaction's verdict. The confirm page will not start a step with
 less than a minute left, and a transaction hash is accepted only once per flow.
 
@@ -381,23 +501,30 @@ withdrawals, on one chain or several. Instead of one acknowledgement per vault, 
 one for the whole plan. It never opens a page itself.
 
 `--legs` lists the legs in order, separated by `;`: each `deposit <vault> <amount>` or
-`withdraw <vault> <amount|all>`, with the vault's ticker as `earn vaults` lists it and the amount as a
-plain decimal. A plan holds at most 8 legs. `all` reads the account's share balance when the plan is
-made and binds that exact amount, so a withdrawal of `all` must be the first leg on its vault and the
-last: one after an earlier deposit into or withdrawal from the same vault is refused, and so is any leg
-on a vault after its withdrawal of `all`. Each leg's receiver is the connected account of its family (EVM or Solana), so a plan with
-legs in both needs both wallets connected. Every leg is built and gate-checked as its own
-`connect deposit` or `connect withdraw` would be.
+`withdraw <vault> <amount|all>`, with the vault as `earn vaults` lists it (on an EVM chain its contract
+address or its ticker, on Solana its ticker) and the amount as a plain decimal. A plan holds at most 8 legs. On an EVM chain each
+leg is one request of the Tempora API, and `all` is the whole position as it stands when the leg
+runs: no balance is read when the plan is made. On Solana, `all` reads the account's share balance
+when the plan is made and binds that exact amount. Either way a withdrawal of `all` must be the first
+leg on its vault and the last: one after an earlier deposit into or withdrawal from the same vault is
+refused, and so is any leg on a vault after its withdrawal of `all`. Each leg's receiver is the
+connected account of its family (EVM or Solana), so a plan with legs in both needs both wallets
+connected. Every leg is described as its own `connect deposit` or `connect withdraw` would be.
 
 Without `--ack` it returns
 
 `{ status: "needs_acknowledgement", opened: false, legs: [{ leg, action, vault, chain, amount, receiver }], acknowledgement, ack, expiresAtIso, next_step }`
 
+Each leg's `vault` is the vault's contract address on an EVM chain (the value its own command takes as
+`--vault`), and its ticker on Solana.
+
 `acknowledgement` is one fixed text: every leg in order (action, amount, chain, the vault's name,
-symbol and explorer link, the receiver and the wallet prompts to expect), how long the plan lasts, that its legs run in order on one signing page,
+ticker and explorer link, the receiver, for an EVM deposit the terms version and sha256, and the wallet
+prompts to expect), how long the plan lasts, that its legs run in order on one signing page,
 how to stop it partway, the totals, each warning once with the vaults it covers, and the disclosures
-once. A withdrawal of `all` is named as the whole position read when the plan was made. It ends by
-asking for a yes or a no to exactly those legs.
+once. A withdrawal of `all` is named as the whole position as it stands when the leg runs on an EVM
+chain, and as the share balance read when the plan was made on Solana. It ends by asking for a yes or
+a no to exactly those legs.
 The agent posts it to the operator word for word. `expiresAtIso` is 60 minutes after this run.
 
 On the operator's yes, the same `--legs` with `--ack <ack>` records the yes, opens nothing, and returns
@@ -405,16 +532,18 @@ On the operator's yes, the same `--legs` with `--ack <ack>` records the yes, ope
 `{ status: "acknowledged", opened: false, code, expiresAtIso, legs: [{ leg, action, vault, chain, amount, command }], next_step }`
 
 The code is refused if it is not the pending plan's, the plan has expired or was already
-acknowledged, or the legs are not the ones acknowledged (a leg, its order or amount, a vault, or a
-share balance changed).
+acknowledged, or the legs are not the ones acknowledged (a leg, its order or amount, a vault, a
+vault's terms, or, on Solana, a share balance changed).
 
 **One page for the whole plan: `connect plan --run`** (#174), alone, after the `--ack` run. It opens one
 signing page that lists every leg (what it does, on which chain, the vault's contract address, where the money
 goes, and its state) and walks them in order: the page switches the wallet to each leg's chain, and the wallet
-asks for each transaction as it always does (a deposit: approve, then deposit). Each leg is still rebuilt, held
-to the digest it was acknowledged as, admitted by the same gate and checked from its receipts, and a leg that
-does not complete ends the plan. Only the wallet's own answer or a receipt moves a leg: a "no" in the wallet
-sends nothing, and the operator can ask the wallet again or stop the plan there. It returns
+asks for each transaction as it always does (a deposit: approve, then deposit). Each leg is still described
+again and held to the digest it was acknowledged as when it starts. An EVM leg's request is then started at the
+API and checked, and each of its hashes is handed to the API, as in a single `connect deposit|withdraw`; a
+Solana leg is gate-checked and checked from what landed. A leg that does not complete ends the plan. Only the
+wallet's own answer or a recorded transaction moves a leg: a "no" in the wallet sends nothing, and the operator
+can ask the wallet again or stop the plan there. It returns
 
 `{ status, code, expiresAtIso, opened, reason?, legs: [{ leg, action, vault, chain, amount, status, reason?, txs: [{ hash, verified, alsoMoved? }] }], next_step }`
 
@@ -423,8 +552,9 @@ with `status` `completed`, `stopped`, `not_reported` (a leg may have been sent; 
 `not_reported`. No leg starts with less than 5 minutes of the run's 9 left: the run then returns
 `in_progress`, and the agent runs `connect plan --run` again at once. The page keeps its secret and port in the
 plan file, so that run serves the same page and the operator's open tab carries on. It refuses a plan not yet
-acknowledged, a plan with a leg on a chain family whose wallet is not connected, and a leg that no longer rebuilds
-to what was acknowledged (another connected account, amount or share balance). A run records
+acknowledged, a plan with a leg on a chain family whose wallet is not connected, and a leg that no longer
+describes to what was acknowledged (another connected account, amount, vault's terms or, on Solana, share
+balance). A run records
 only on its own plan: if another command replaces or clears the plan while the page is open (`connect plan
 --legs`, `connect wallet`, `connect disconnect`), or the plan expires, no further leg starts, the run ends at once,
 and it still reports every transaction that landed.
@@ -441,7 +571,7 @@ that cannot (none of that name, another account, or no Solana support, as with R
 wallet that replaced the transaction's compute limit) is `stopped` with its signature `reverted`, and ends the plan.
 
 Each leg can also run alone, exactly as its `command` gives it:
-`connect deposit|withdraw --vault <vault> (--amount_usdc <n> | --all --shares_exact <s>) --receiver <r> --plan <code> --leg <n>`.
+`connect deposit|withdraw --vault <vault> (--amount_usdc <n> | --all [--shares_exact <s>]) --receiver <r> --plan <code> --leg <n>`.
 `--plan` and `--leg` take the place of `--ack` and cannot be combined with it. The leg opens its own
 signing page and returns the result [above](#what-the-confirm-flow-returns), plus
 `plan: { code, leg, of }`; its `next_step` names the next leg's command, or says the plan is done or
@@ -451,12 +581,14 @@ A leg is refused, and nothing opens, when:
 - the plan has not been acknowledged, or the code is not the pending plan's;
 - the plan has expired: a leg must start before `expiresAtIso`;
 - an earlier leg has not completed, or this leg already ran or is running;
-- its calls differ from the acknowledged leg (another amount, vault, chain, receiver or connected account).
+- what it would send differs from the acknowledged leg (another amount, vault, chain, receiver,
+  vault's terms or connected account).
 
 A leg whose flow does not end `completed` (`stopped`, `not_reported`, or an error once its page has
 opened) ends the plan: no later leg runs, and what is left needs a new plan and a new yes. A leg that
-fails before its page opens (another page is open, a port is taken, a read fails) sent nothing: it
-stays pending, and the same command can run it again.
+fails before its page opens (another page is open, a port is taken, a read fails, or the API does not
+start its request or the request fails the check) sent nothing: it stays pending, and the same
+command can run it again.
 
 `connect plan --status`, alone, reads a local file only. It returns `{ status: "none" }`, or
 `{ status, code, expiresAtIso, legs: [{ leg, action, vault, chain, amount, digest, command, args, status, txs?, reason? }] }`
@@ -489,6 +621,9 @@ with `invest request` before doing anything else, and never send it again.
 ## Failure paths, in general
 
 - A keyed RPC URL never appears in any output, on any path, including thrown errors.
-- The health path returns a verdict when the RPC is down; it does not throw.
-- A scan that could not finish says so in `scan` rather than returning a partial sum as a number.
+- The health path returns a verdict when the Tempora API (on Solana, the RPC) cannot be reached; it
+  does not throw.
+- A balance, allowance or share count that could not be read says `unknown` or `null`, never `0`.
+- A step that fails the check is never handed out, and a hash the API did not record is never a reason
+  to send the transaction again.
 - Every refusal names its reason and the next step.

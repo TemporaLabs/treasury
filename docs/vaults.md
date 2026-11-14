@@ -1,7 +1,10 @@
 # Vaults
 
-Treasury offers Tempora Labs' own vaults, and only those. Every row in the registry
-(`registry/vaults.json`) is a claim about a contract at an address, and every claim
+Treasury offers Tempora Labs' own vaults, and only those. On the EVM chains the vaults on offer are the ones the
+Tempora API lists, and the commands take each by its contract address or its ticker (`earn vaults` lists them; Base's
+default is `tlCashPlusUSDC2B`, at `0x91BcEbA5feCB9E92d80F1845B55cC56621E9352F`): the address picks the vault the API
+lists at it. The table below is what it lists today. Every row
+in the registry (`registry/vaults.json`) is a claim about a contract at an address, and every claim
 carries the block it was measured at. `scripts/registry-check.ts` reconciles each row against the
 chain — `symbol()`, `decimals()`, `asset()`, and the first block with code — and a disagreement means
 the row is wrong, never the chain.

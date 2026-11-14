@@ -6,43 +6,47 @@ for the chains, four optional ones for `treasury connect`, and one optional one 
 browser launcher checks to see whether there is a browser to open (`DISPLAY`, `WAYLAND_DISPLAY`,
 `SSH_CONNECTION`, `SSH_TTY`) — so a variable read anywhere else in the package fails the build.
 
+**On the EVM chains, `treasury earn` and `treasury connect` read no RPC variable.** They call the Tempora API
+(`TREASURY_API_URL`, below), and nothing else, except that `connect wallet` checks a smart-contract wallet's sign-in
+through `TREASURY_RPC_BASE`. The EVM chains' RPC variables are otherwise read by the library (`buildDeposit`,
+`preflightDeposit`, `getPosition` and the rest, for a direct consumer) and by the live and fork test tiers. On Solana
+every command still reads its own chain, through `TREASURY_RPC_SOLANA`.
+
 **Each chain has its own variables, and a chain reads only its own.** An Arbitrum, Robinhood Chain, Ethereum, Monad or Solana
 call never falls back to a Base endpoint: a vault's address has no contract on the other chain, so reads there fail
 with "returned no data", which looks like a broken vault, not like a misconfiguration.
 
 | variable | purpose | unset |
 |---|---|---|
-| `TREASURY_RPC_BASE` | the Base RPC every tool reads through for a vault on Base | falls back to `BASE_RPC_URL`, then to Base's public endpoint `https://mainnet.base.org`, which rate-limits after a handful of calls. `connect wallet` also checks a smart-contract wallet's sign-in through it, whatever chain the vault is on |
-| `TREASURY_LOGS_RPC_BASE` | the RPC `earn_balance` scans `Deposit`/`Withdraw` events through on Base — a provider with a wide `eth_getLogs` window | uses `TREASURY_RPC_BASE` |
+| `TREASURY_RPC_BASE` | the Base RPC the library and the test tiers read through for a vault on Base | falls back to `BASE_RPC_URL`, then to Base's public endpoint `https://mainnet.base.org`, which rate-limits after a handful of calls. `connect wallet` also checks a smart-contract wallet's sign-in through it, whatever chain the vault is on |
+| `TREASURY_LOGS_RPC_BASE` | the RPC the library's position read (`getPosition`) scans `Deposit`/`Withdraw` events through on Base — a provider with a wide `eth_getLogs` window | uses `TREASURY_RPC_BASE` |
 | `BASE_RPC_URL` | a conventional alias, used when `TREASURY_RPC_BASE` is unset — through the plugin too | — |
-| `TREASURY_RPC_ARBITRUM` | the Arbitrum One RPC every tool reads through for a vault on Arbitrum One | falls back to `ARBITRUM_RPC_URL`, then to Arbitrum's public endpoint `https://arb1.arbitrum.io/rpc`, which also rate-limits |
-| `TREASURY_LOGS_RPC_ARBITRUM` | the RPC `earn_balance` scans events through on Arbitrum One | uses `TREASURY_RPC_ARBITRUM` |
+| `TREASURY_RPC_ARBITRUM` | the Arbitrum One RPC the library and the test tiers read through for a vault on Arbitrum One | falls back to `ARBITRUM_RPC_URL`, then to Arbitrum's public endpoint `https://arb1.arbitrum.io/rpc`, which also rate-limits |
+| `TREASURY_LOGS_RPC_ARBITRUM` | the RPC the library's position read scans events through on Arbitrum One | uses `TREASURY_RPC_ARBITRUM` |
 | `ARBITRUM_RPC_URL` | a conventional alias, used when `TREASURY_RPC_ARBITRUM` is unset — through the plugin too | — |
-| `TREASURY_RPC_ROBINHOOD` | the Robinhood Chain RPC every tool reads through for a vault on Robinhood Chain | falls back to `ROBINHOOD_RPC_URL`, then to Robinhood Chain's public endpoint `https://rpc.mainnet.chain.robinhood.com` |
-| `TREASURY_LOGS_RPC_ROBINHOOD` | the RPC `earn_balance` scans events through on Robinhood Chain | uses `TREASURY_RPC_ROBINHOOD` |
+| `TREASURY_RPC_ROBINHOOD` | the Robinhood Chain RPC the library and the test tiers read through for a vault on Robinhood Chain | falls back to `ROBINHOOD_RPC_URL`, then to Robinhood Chain's public endpoint `https://rpc.mainnet.chain.robinhood.com` |
+| `TREASURY_LOGS_RPC_ROBINHOOD` | the RPC the library's position read scans events through on Robinhood Chain | uses `TREASURY_RPC_ROBINHOOD` |
 | `ROBINHOOD_RPC_URL` | a conventional alias, used when `TREASURY_RPC_ROBINHOOD` is unset — through the plugin too | — |
-| `TREASURY_RPC_ETHEREUM` | the Ethereum RPC every tool reads through for a vault on Ethereum | falls back to `ETHEREUM_RPC_URL`, then to the public endpoint `https://ethereum.reth.rs/rpc` |
-| `TREASURY_LOGS_RPC_ETHEREUM` | the RPC `earn_balance` scans events through on Ethereum | uses `TREASURY_RPC_ETHEREUM` |
+| `TREASURY_RPC_ETHEREUM` | the Ethereum RPC the library and the test tiers read through for a vault on Ethereum | falls back to `ETHEREUM_RPC_URL`, then to the public endpoint `https://ethereum.reth.rs/rpc` |
+| `TREASURY_LOGS_RPC_ETHEREUM` | the RPC the library's position read scans events through on Ethereum | uses `TREASURY_RPC_ETHEREUM` |
 | `ETHEREUM_RPC_URL` | a conventional alias, used when `TREASURY_RPC_ETHEREUM` is unset — through the plugin too | — |
-| `TREASURY_RPC_MONAD` | the Monad RPC every tool reads through for a vault on Monad | falls back to `MONAD_RPC_URL`, then to Monad's public endpoint `https://rpc.monad.xyz` |
-| `TREASURY_LOGS_RPC_MONAD` | the RPC `earn_balance` scans events through on Monad. **Set it for any history on Monad**: the public endpoint's window is 100 blocks (below) | uses `TREASURY_RPC_MONAD` |
+| `TREASURY_RPC_MONAD` | the Monad RPC the library and the test tiers read through for a vault on Monad | falls back to `MONAD_RPC_URL`, then to Monad's public endpoint `https://rpc.monad.xyz` |
+| `TREASURY_LOGS_RPC_MONAD` | the RPC the library's position read scans events through on Monad. **Set it for any history on Monad**: the public endpoint's window is 100 blocks (below) | uses `TREASURY_RPC_MONAD` |
 | `MONAD_RPC_URL` | a conventional alias, used when `TREASURY_RPC_MONAD` is unset — through the plugin too | — |
 | `TREASURY_RPC_SOLANA` | the Solana RPC every tool reads through for the vault on Solana. An endpoint whose genesis hash is not mainnet-beta's is reported as `wrong_chain` | falls back to `SOLANA_RPC_URL`, then to Solana's public endpoint `https://api.mainnet-beta.solana.com`, which rate-limits after a handful of requests |
 | `SOLANA_RPC_URL` | a conventional alias, used when `TREASURY_RPC_SOLANA` is unset — through the plugin too | — |
-| `TREASURY_API_URL` | the Tempora API `treasury invest` calls, in place of the one this release pins. It must be `https` (plain `http` only for this machine). **It also decides which host a sign-in is given for:** the wallet signs the API's sign-in message only when it names this URL's host, so point it only at a deployment you trust with your wallet's sign-in | `https://api.temporalabs.com` |
+| `TREASURY_API_URL` | the Tempora API `treasury earn` and `treasury connect` call on the EVM chains, and `treasury invest` calls, in place of the one this release pins. It must be `https` (plain `http` only for this machine). **It also decides which host a sign-in is given for:** the wallet signs the API's sign-in message only when it names this URL's host, so point it only at a deployment you trust with your wallet's sign-in | `https://api.temporalabs.com` |
 | `TREASURY_LOGS_FALLBACK` | where a scan goes when the configured RPC cannot cover the range: an `http(s)` URL for a Base endpoint, or anything that is not a URL (`off`, `disabled`, …) to forbid a fallback on every chain | the chain's own public endpoint |
 | `PRIVY_APP_ID` | the Privy app the `treasury connect` sign-in page uses. A Privy app ID is public — it ships in the page — so a fork can point at its own app | Tempora Labs' own app |
 | `TREASURY_CONNECT_PORT` | one local port for the connect page, in place of the default list. Privy accepts sign-in only from origins its dashboard lists exactly, so set it only to a port listed there | the first free of `53682` to `53686` |
 | `TREASURY_CONNECT_HOME` | the directory holding the connect session file (an address, how it signed in, when; no credential), the pending acknowledgement and the open page's lock | `~/.config/treasury` |
 | `TREASURY_CONNECT_NO_OPEN` | set to anything to stop `treasury connect` opening a browser itself; it prints the page's URL instead | the browser opens |
 
-**Check a chain's RPC with `earn_status` and `chain`.** It reports which variable supplied the
-endpoint, and `rpc: "wrong_chain"` when that endpoint answers for a different chain — the likeliest
-mistake once there are two variables. A separate logs endpoint is reported beside it as `logsRpc`.
-The tools that read the chain make the same check on every call: a pre-flight, a quote or a balance
-through an endpoint for the wrong chain is refused, and the refusal names the variable that holds
-it. An endpoint is asked which chain it is once per command run, with a three-second limit; one that
-does not say is reported as `chainVerified: false`, not as a match.
+**Check the Tempora API with `earn_status`.** With no account it reports `apiStatus: "ok"` or `"unreachable"` (with
+the reason) and the vault a call resolves to. **Check Solana's RPC with `earn_status --chain solana`**: it reports
+which variable supplied the endpoint, and `rpc: "wrong_chain"` when that endpoint is not Solana mainnet-beta. The
+Solana commands that read the chain make the same check on every call, and the refusal names the variable that holds
+it.
 
 **A keyed RPC URL is a secret.** Treasury treats it as one: no tool output, no error, no health check
 ever repeats it. `earn_status` reports *which variable* supplied the RPC, never its value.
@@ -63,9 +67,12 @@ Code was started in. Export them before you start it. Treasury treats an empty v
 
 ## `eth_getLogs` windows — why each chain has two RPC variables
 
+This is about the library's position read (`getPosition`) on the EVM chains, which a direct consumer of the library
+calls. `earn_balance` on the EVM chains reports the Tempora API's reading instead, and scans nothing.
+
 Providers cap the block range a single `eth_getLogs` may cover: some free tiers at **10 blocks**,
 Base's public endpoint at **2,000**, Infura on Arbitrum One at **10,000**, paid plans far wider.
-`earn_balance` scans from the vault's deployment block, so on a narrow window a whole-history scan
+`getPosition` scans from the vault's deployment block, so on a narrow window a whole-history scan
 can need thousands of requests.
 
 Arbitrum One produces a block about every quarter of a second, so its ranges are roughly eight
@@ -113,11 +120,13 @@ history there, set that chain's logs variable (`TREASURY_LOGS_RPC_ARBITRUM`, `TR
 
 ## What Treasury never does with the network
 
-No telemetry or analytics from Treasury itself. The `earn` and `connect` commands call no host but the RPC
-endpoints above — there is no yield API, no vendor endpoint, and no code path that could add one without a code
-change. `treasury invest` is the exception by design: it calls the Tempora API (`TREASURY_API_URL`, above), and
-only that, through `@temporalabs/client`; see
-[security-model.md](security-model.md#smart-growth-portfolios-treasury-invest). The other exception is the
+No telemetry or analytics from Treasury itself. On the EVM chains, the `earn`, `connect` and `invest` commands call
+the Tempora API (`TREASURY_API_URL`, above) and no other host, only through `@temporalabs/client`: its MCP endpoint
+for earn's reads and requests, its HTTP routes for the owner's sign-in and for invest; see
+[security-model.md](security-model.md#the-vaults-on-the-evm-chains-treasury-earn-and-treasury-connect). The one RPC
+read left there is `connect wallet`'s check of a smart-contract wallet's sign-in, through `TREASURY_RPC_BASE`. On
+Solana the commands call no host but Solana's RPC endpoints above. There is no yield API, no vendor endpoint, and no
+code path that could add one without a code change. The other exception is the
 `treasury connect` page in your browser, which loads Privy's sign-in
 (auth.privy.io and Privy's RPC) and Cloudflare's bot check, and Privy's script sends its own
 analytics; see [security-model.md](security-model.md#the-wallet-connection-treasury-connect). The

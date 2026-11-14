@@ -26,7 +26,8 @@ third party. Review every transaction your signer is asked to sign.
   a vault holds is in [`vaults.md`](vaults.md); read the markets behind them on-chain before a first deposit.
 - **Liquidity.** A withdrawal is served from the vault's liquid balance and then by unwinding its
   positions. Under stress, part of a position may not be withdrawable immediately. `earn_balance`
-  reports `exit.exitableNow`, measured by simulating the withdrawal — trust that, not `maxWithdraw()`.
+  reports what can be withdrawn now, measured by simulating withdrawals (on the EVM chains the Tempora API's
+  `withdrawable`, a floor; on Solana `exit.exitableNow`) — trust that, not `maxWithdraw()`.
 - **Access.** A whitelist-gated vault admits deposits only from accounts the fund has admitted.
   Withdrawals are public. Admission can be granted and, in principle, revoked, by the fund.
 - **Fees.** A vault's curator can set a management fee and a performance fee; both are readable
@@ -41,10 +42,8 @@ third party. Review every transaction your signer is asked to sign.
 - **It prepares; it does not sign.** Nothing has happened until your signer's or your wallet's
   transactions confirm. If a tool result and the chain disagree, the chain is right.
 - **A quote is a simulation at one block.** State can change between the quote and the signed
-  transaction. The builders carry a gas buffer for exactly this; the `precondition` on a call says what
-  must still be true when it is sent.
-- **A call is for one chain.** Every prepared call carries a `chainId`, and the envelope names the
-  chain. Send it on that chain only, with the vault's asset (USDC; USDG on Robinhood Chain) already
+  transaction. The request decides; send a step only when it is `ready`.
+- **A step is for one chain.** The envelope names the chain and its `chainId`. Send it on that chain only, with the vault's asset (USDC; USDG on Robinhood Chain) already
   there: Treasury does not bridge. A transaction sent on a different chain, to an address with no
   contract there, is mined and does nothing — the deposit did not happen and the gas is spent. Check your signer's network first.
 - **On Solana, a prepared transaction expires** about a minute after it was built (it names a recent
@@ -63,11 +62,15 @@ third party. Review every transaction your signer is asked to sign.
 - **Gas on Ethereum is far higher than on the other chains.** The approve, the deposit and the later
   withdrawal each pay Ethereum gas in ETH, which can be a large share of a small deposit. The other
   chains here cost a small fraction of that per transaction.
-- **Two addresses, two meanings.** `account` is whose shares; `receiver` is where the money lands.
-  They are usually the same. The tool will not assume it, and neither should you — a transposed
-  receiver sends the funds to the wrong place, irreversibly.
-- **Your RPC is part of the trust chain.** Treasury believes what the RPC returns. Use a provider you
-  trust, and prefer one whose `eth_getLogs` window lets `earn_balance` read the whole history.
+- **On the EVM chains, money goes only to the connected wallet.** Every step is checked to pay the shares, or the
+  withdrawn asset, to the connected account and no other. A receiver of your choosing is not offered there; on Solana
+  the receiver must be the account itself.
+- **On the EVM chains, the Tempora API is part of the trust chain.** It lists the vaults, and a deposit reaches the
+  vault it lists: Treasury holds no contract address for these vaults. Treasury checks every step against the API's
+  own record of the vault, which catches a wrong step but not a wrong record. Positions, quotes, gates and how a step
+  landed are the API's reading. Earnings since your first deposit (basis and yield) are not available through it.
+- **On Solana, your RPC is part of the trust chain.** Treasury believes what the RPC returns. Use a provider you
+  trust.
 - **An email or social login gives a Privy embedded wallet.** `treasury connect` offers it beside
   browser wallets. Its keys are managed by Privy for that Privy app, not by you or by Treasury, and a
   different `PRIVY_APP_ID` gives a different wallet for the same login. Anyone who controls that email
@@ -81,7 +84,7 @@ third party. Review every transaction your signer is asked to sign.
 
 ## Smart Growth portfolios (`treasury invest`)
 
-- **A Tempora Labs service is in the path.** The Tempora API prepares every deposit and withdrawal and records
+- **A Tempora Labs service is in the path**, as for the vaults on the EVM chains. The Tempora API prepares every deposit and withdrawal and records
   each step. Treasury checks every step before your wallet sees it, but the positions, balances and request states
   it shows are the API's reading.
 - **An outside provider holds the portfolio.** Your USDT goes to a smart account the provider opens for you; the
@@ -90,11 +93,12 @@ third party. Review every transaction your signer is asked to sign.
 - **The enrolment signature cannot be read.** It is a 32-byte code from the provider. Sign it only for a deposit
   you started just now, in your own terminal.
 - **A transfer sent once is never sent again by Treasury.** If a command stops after a transfer was sent, read the
-  request (`invest request`) before anything else.
+  request (`invest request`) before anything else. The same holds for a vault step on an EVM chain: read it with
+  `earn request`.
 
 ## What Treasury will not do
 
 It will not sign, hold a key, hold funds, send anything you have not approved in your own wallet,
-route to a vault outside its registry, retry a gated deposit, or present a partial history as a
-measurement. If a build of "Treasury" does any of
+route to a vault outside the Tempora API's listing (on Solana, outside its registry), send a step the API put up again
+after it was sent, retry a gated deposit, or present a partial history as a measurement. If a build of "Treasury" does any of
 these, it is not the official distribution.

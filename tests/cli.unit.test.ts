@@ -1,13 +1,12 @@
 import { describe, it, expect, afterEach, vi } from "vitest";
-import { getAddress } from "viem";
 import { run } from "../src/cli.js";
 import { buildCommands } from "../src/earn/commands.js";
 
 /**
  * The command line is the only way the plugin reaches the earn commands, so its parsing is part of
  * the contract: a flag it drops, renames or coerces wrongly reaches a handler as a different call.
- * Every case here is offline: `earn vaults`, `earn terms` and `earn prepare_*` read only the
- * registry, and every refusal is decided before any RPC is touched.
+ * Every case here is offline: `earn terms --chain solana` reads only the registry, and every refusal
+ * is decided before any RPC or API is touched (and the test setup points the API at a closed local port).
  */
 
 const ACCOUNT = "0x1111111111111111111111111111111111111111";
@@ -32,7 +31,7 @@ describe("help and version", () => {
     expect(quote.flags.find((f) => f.flag === "--direction")).toMatchObject({ required: true, type: "string" });
     expect(quote.flags.find((f) => f.flag === "--vault")).toMatchObject({ required: false });
     const balance = help.commands.find((c) => c.tool === "earn_balance")!;
-    expect(balance.flags.find((f) => f.flag === "--lookback_blocks")).toMatchObject({ type: "number" });
+    expect(balance.flags.find((f) => f.flag === "--account")).toMatchObject({ required: false, type: "string" });
     const withdraw = help.commands.find((c) => c.tool === "earn_prepare_withdraw")!;
     expect(withdraw.flags.find((f) => f.flag === "--all")).toMatchObject({ type: "boolean" });
   });
@@ -51,7 +50,8 @@ describe("the surface: three skills, a fixed set of commands, nothing that signs
     expect(flag("earn_status", "--account")["description"]).toMatch(/whose shares these are/);
     expect(flag("earn_quote", "--direction")["enum"]).toEqual(["deposit", "withdraw"]);
     expect(flag("earn_quote", "--amount_usdc")["pattern"]).toBeDefined();
-    expect(flag("earn_balance", "--max_log_requests")["maximum"]).toBe(400);
+    const connect = JSON.parse((await run(["connect", "--help"])).stdout!) as { commands: { tool: string; flags: Record<string, unknown>[] }[] };
+    expect(connect.commands.find((c) => c.tool === "connect_deposit")!.flags.find((x) => x["flag"] === "--leg")!["exclusiveMinimum"]).toBe(0);
     expect(flag("earn_prepare_withdraw", "--all")).toMatchObject({ type: "boolean", takesValue: false });
   });
 });
@@ -77,9 +77,9 @@ describe("refusals are errors with exit 1, never results", () => {
   });
 
   it("a missing required flag names it", async () => {
-    const r = await run(["earn", "prepare_deposit", "--account", ACCOUNT, "--amount_usdc", "1"]);
+    const r = await run(["earn", "submit", "--request_id", "req_1", "--step_id", "s1"]);
     expect(r.code).toBe(1);
-    expect(error(r)).toMatch(/--receiver/);
+    expect(error(r)).toMatch(/--tx_hash/);
   });
 
   it("a flag given twice is refused rather than silently taking one — in the SAME spelling and across spellings", async () => {
@@ -107,17 +107,17 @@ describe("refusals are errors with exit 1, never results", () => {
   });
 
   it("a number flag that is not a whole number", async () => {
-    const r = await run(["earn", "balance", "--account", ACCOUNT, "--lookback_blocks", "1e9"]);
+    const r = await run(["connect", "deposit", "--amount_usdc", "1", "--receiver", ACCOUNT, "--leg", "1e9"]);
     expect(r.code).toBe(1);
-    expect(error(r)).toMatch(/--lookback_blocks takes a whole number/);
+    expect(error(r)).toMatch(/--leg takes a whole number/);
   });
 
   it("a number flag reaches the schema AS A NUMBER: an out-of-range value is refused for its range, not its type", async () => {
-    // `max_log_requests` is capped at 400. Refused for being too big proves "401" became 401; refused
-    // as "expected number, received string" would mean the coercion was skipped. Decided before any RPC.
-    const r = await run(["earn", "balance", "--account", ACCOUNT, "--max_log_requests", "401"]);
+    // `leg` is above zero. Refused for being too small proves "0" became 0; refused as "expected number,
+    // received string" would mean the coercion was skipped. Decided before anything is opened or read.
+    const r = await run(["connect", "deposit", "--amount_usdc", "1", "--receiver", ACCOUNT, "--leg", "0"]);
     expect(r.code).toBe(1);
-    expect(error(r)).toMatch(/--max_log_requests: Too big/);
+    expect(error(r)).toMatch(/--leg: Too small/);
     expect(error(r)).not.toMatch(/received string/);
   });
 
@@ -129,12 +129,12 @@ describe("refusals are errors with exit 1, never results", () => {
   });
 
   it("a withdrawal given both an amount and --all, or --shares_exact without --all, is refused rather than half-read", async () => {
-    const both = await run(["earn", "prepare_withdraw", "--account", ACCOUNT, "--receiver", ACCOUNT, "--all", "--shares_exact", "5", "--amount_usdc", "1"]);
+    const both = await run(["earn", "prepare_withdraw", "--account", ACCOUNT, "--all", "--shares_exact", "5", "--amount_usdc", "1"]);
     expect(both.code).toBe(1);
-    expect(error(both)).toMatch(/not both/);
-    const stray = await run(["earn", "prepare_withdraw", "--account", ACCOUNT, "--receiver", ACCOUNT, "--amount_usdc", "1", "--shares_exact", "3"]);
+    expect(error(both)).toMatch(/give exactly one of --amount_usdc, --all or --shares_exact, not --amount_usdc and --all and --shares_exact/);
+    const stray = await run(["earn", "prepare_withdraw", "--account", ACCOUNT, "--amount_usdc", "1", "--shares_exact", "3"]);
     expect(stray.code).toBe(1);
-    expect(error(stray)).toMatch(/--shares_exact goes with --all/);
+    expect(error(stray)).toMatch(/not --amount_usdc and --shares_exact/);
   });
 
   it("`--help` after the flags is refused, and the error says where help goes", async () => {
@@ -149,42 +149,37 @@ describe("refusals are errors with exit 1, never results", () => {
     expect(r.stdout).toBeUndefined();
   });
 
-  it("a handler's refusal (a vault on another chain) reaches stderr with exit 1", async () => {
-    const r = await run(["earn", "prepare_deposit", "--vault", "tlCashPlusUSDC2", "--chain", "arbitrum", "--account", ACCOUNT, "--receiver", ACCOUNT, "--amount_usdc", "1"]);
+  it("a handler's refusal (a chain it does not know) reaches stderr with exit 1", async () => {
+    const r = await run(["earn", "prepare_deposit", "--chain", "optimism", "--account", ACCOUNT, "--amount_usdc", "1"]);
     expect(r.code).toBe(1);
     expect(r.stdout).toBeUndefined();
-    expect(error(r)).toMatch(/is on base, not arbitrum/);
+    expect(error(r)).toMatch(/unknown chain "optimism"/);
   });
 });
 
 describe("a valid call reaches the handler as the same call", () => {
-  it("both spellings of a command and a flag build the same envelope, with the address checksummed", async () => {
-    // An address with letters, so the lowercase and checksummed forms differ: the schema's transform
-    // (`getAddress`) must reach the handler, as it did when a host validated the call before it.
-    const lower = "0xabcdefabcdefabcdefabcdefabcdefabcdefabcd";
-    expect(getAddress(lower)).not.toBe(lower);
-    const a = await run(["earn", "prepare_deposit", "--account", lower, "--receiver", lower, "--amount_usdc", "1"]);
-    const b = await run(["earn", "prepare-deposit", "--account", lower, "--receiver", lower, "--amount-usdc", "1"]);
-    expect(a.code).toBe(0);
-    expect(b.stdout).toBe(a.stdout);
-    const env = JSON.parse(a.stdout!) as { requires_signature: boolean; status: string; calls: { description: string }[] };
-    expect(env.requires_signature).toBe(true);
-    expect(env.status).toBe("unsigned");
-    expect(env.calls).toHaveLength(2);
-    expect(env.calls[1]!.description).toContain(getAddress(lower));
-    expect(a.stdout).not.toContain(lower);
+  it("both spellings of a command and a flag reach the handler as the same call", async () => {
+    // Offline: with no wallet connected, the handler answers both with the same refusal, after the schema took every
+    // flag in both spellings. (The envelope a prepare command returns is the Tempora API's request, asserted against a
+    // stand-in in tests/earn-api.unit.test.ts.)
+    const sha = `0x${"ab".repeat(32)}`;
+    const a = await run(["earn", "prepare_deposit", "--account", ACCOUNT, "--amount_usdc", "1", "--terms_sha256", sha]);
+    const b = await run(["earn", "prepare-deposit", "--account", ACCOUNT, "--amount-usdc", "1", "--terms-sha256", sha]);
+    expect(a.code).toBe(1);
+    expect(error(a)).toMatch(/no wallet is connected/);
+    expect(b).toEqual(a);
   });
 
-  it("a boolean flag takes no value: `--all` with `--shares_exact` empties the account", async () => {
-    const r = await run(["earn", "prepare_withdraw", "--account", ACCOUNT, "--receiver", ACCOUNT, "--all", "--shares_exact", "5"]);
-    expect(r.code).toBe(0);
-    const env = JSON.parse(r.stdout!) as { calls: { function?: string }[] };
-    expect(env.calls[0]!.function).toMatch(/^redeem\(/);
+  it("a boolean flag takes no value: `--all` reaches the handler as true", async () => {
+    // Read as true, it is a second withdrawal form beside --shares_exact, and the handler names both.
+    const r = await run(["earn", "prepare_withdraw", "--account", ACCOUNT, "--all", "--shares_exact", "5"]);
+    expect(r.code).toBe(1);
+    expect(error(r)).toMatch(/not --all and --shares_exact/);
   });
 
   it("the CLI prints exactly what the command returns — no wrapper around the JSON", async () => {
-    const viaCli = await run(["earn", "terms"]);
-    const direct = await (buildCommands()["earn_terms"]!.handler as (a: object) => Promise<string>)({});
+    const viaCli = await run(["earn", "terms", "--chain", "solana"]);
+    const direct = await (buildCommands()["earn_terms"]!.handler as (a: object) => Promise<string>)({ chain: "solana" });
     expect(viaCli.stdout).toBe(direct);
   });
 });
@@ -202,10 +197,10 @@ describe("nothing this file prints carries a keyed RPC URL — usage errors incl
       [URL_WITH_KEY], // as the skill
       ["earn", URL_WITH_KEY], // as the command
       ["earn", "balance", "--account", ACCOUNT, `--${URL_WITH_KEY}`], // as an unknown flag
-      ["earn", "balance", "--account", ACCOUNT, "--lookback_blocks", URL_WITH_KEY], // as a number flag's value
+      ["connect", "deposit", "--leg", URL_WITH_KEY], // as a number flag's value
       // The bare key, with no URL around it for a shape rule to match: only the configured value,
       // registered before anything prints, can mask this one.
-      ["earn", "balance", "--account", ACCOUNT, "--lookback_blocks", KEY],
+      ["connect", "deposit", "--leg", KEY],
       [KEY],
     ];
     for (const argv of cases) {

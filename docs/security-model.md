@@ -5,17 +5,18 @@ how that sentence is made true in code rather than in a promise.
 
 ## The boundary
 
-Treasury has four kinds of command. READ commands query the chain and return facts. PREPARE commands
-return unsigned calls. CONNECT commands hand calls that passed a gate to the operator's own wallet,
-which asks for approval each time, and report what landed
-([below](#the-wallet-connection-treasury-connect)). INVEST commands do the same for the steps the Tempora
+Treasury has four kinds of command. READ commands return facts about a vault and a position: on the EVM chains as
+the Tempora API reads them, on Solana from the chain. PREPARE commands return unsigned steps (on the EVM chains, the
+steps of a Tempora API request, each checked first; [below](#the-vaults-on-the-evm-chains-treasury-earn-and-treasury-connect)).
+CONNECT commands hand steps that passed a check to the operator's own wallet, which asks for approval each time, and
+report what landed ([below](#the-wallet-connection-treasury-connect)). INVEST commands do the same for the steps the Tempora
 API prepares for a Smart Growth portfolio, each checked before the wallet sees it
 ([below](#smart-growth-portfolios-treasury-invest)). Nothing in the package signs or holds a key, and
 a command that did would be a design change the project refuses.
 
 ```
-   agent ──▶ Treasury ──▶ { requires_signature: true, status: "unsigned", calls: [...] }
-                          (on Solana, one transaction: {...} in place of calls)
+   agent ──▶ Treasury ──▶ { requires_signature: true, status: "unsigned", steps: [...] }
+                          (on Solana, one transaction: {...} in place of steps)
                                               │
                           your signer — a wallet, a policy engine, a token-bound account
                                               │
@@ -25,8 +26,8 @@ a command that did would be a design change the project refuses.
 The envelope is the point: an unsigned build is **structurally distinguishable** from anything that
 has happened. A consumer, a test, or a policy engine can assert on `requires_signature` and
 `status: "unsigned"` rather than parsing prose. (The library functions `buildDeposit` /
-`buildWithdraw` return bare arrays; the envelope belongs to the command boundary. If you consume the
-library directly, you are the boundary.)
+`buildWithdraw` return bare arrays, and the commands no longer use them on the EVM chains; the envelope belongs to
+the command boundary. If you consume the library directly, you are the boundary.)
 
 ## What enforces it
 
@@ -35,11 +36,11 @@ compiler and fails the build if any file:
 
 - imports, requires or dynamically loads anything outside the package and its four declared
   dependencies (`viem`, `zod`, `@solana/kit`, and `@temporalabs/client`, the Tempora API's own client,
-  which only `treasury invest` uses);
+  through which `treasury earn`, `treasury connect` and `treasury invest` reach the API);
 - reads an environment variable that is not on the allowlist
   ([`configuration.md`](configuration.md)), or reads one with a computed key;
 - starts a process, except the named files — the test tiers that spawn the reconciliation script, a
-  fork node and the committed bundle, the round-trip harness under `scripts/`, and
+  fork node and the committed bundle, and
   `src/connect/open.ts`, which may start only the platform's own "open this URL" command
   (`open`, `cmd /c start`, `xdg-open`);
 - reaches a private test seam from shipped code.
@@ -81,10 +82,14 @@ The parts of a vault's interface that lie are not trusted:
 - an event scan that did not reach the deployment block is not a history — so basis and yield read
   `unknown` unless `scan.wholeHistory` is true.
 
+These are the library's own readings, and on Solana the commands'. On the EVM chains the commands report the Tempora
+API's readings instead (its simulated deposit check, its simulated withdrawable floor), as the API's: a share balance
+it could not read is `unknown`, never 0, and basis and yield are reported as not available.
+
 ## What this model does not cover
 
-The vault contracts and the protocols they hold, the RPC provider's honesty, for `treasury invest` the
-Tempora API and the portfolio provider behind it (below), the agent runtime
+The vault contracts and the protocols they hold, the RPC provider's honesty, the Tempora API's record of the vaults on
+the EVM chains (below), for `treasury invest` the Tempora API and the portfolio provider behind it (below), the agent runtime
 that hosts the plugin, and, for `treasury connect`, Privy's service and the keys it manages for an
 embedded wallet, and the browser and wallet extension the operator confirms in. Treasury believes the RPC; it cannot verify the chain. And Treasury cannot
 stop a model from *reporting* that something was deposited — nothing at a command boundary can. What it
@@ -103,10 +108,15 @@ open for nothing but the calls that text described.
 - **The account is proven, not claimed.** Both sign-in paths — a browser wallet, or a Privy embedded
   wallet from an email or social login — sign a free sign-in message whose nonce is the flow's
   secret. An ordinary wallet's signature is checked offline; a smart-contract wallet's is checked by
-  asking its contract through your Base RPC. A Solana wallet's signature (ed25519) is checked offline. The session file records only the address, how the page
+  asking its contract through your Base RPC (the one RPC read `treasury connect` still makes on the EVM chains). A Solana wallet's signature (ed25519) is checked offline. The session file records only the address, how the page
   said it signed in, and when; it is created owner-readable only and holds no credential.
-- **A gate before any page opens** (`src/connect/gate.ts`). Calls are built by the same builders as the
-  prepare commands, then re-checked from the calldata alone: an `approve` only on a listed vault's
+- **On the EVM chains, every step is checked before the page may send it**: the Tempora API prepares it, and
+  `@temporalabs/client`'s own `checkSteps` holds the whole request to what was acknowledged, before the page opens and
+  again after every step ([below](#the-vaults-on-the-evm-chains-treasury-earn-and-treasury-connect)). The page is
+  handed only a checked step that is ready, reads it again from this process just before the wallet is asked, and
+  sends exactly its destination, data and value.
+- **The local gate** (`src/connect/gate.ts`), which the commands no longer call on the EVM chains and the library
+  keeps. Calls are built by the same builders as the prepare commands, then re-checked from the calldata alone: an `approve` only on a listed vault's
   asset, only to that vault, for exactly the deposit that follows, never unlimited; a `deposit`,
   `withdraw` or `redeem` only on a listed vault, paying and burning only for the connected account;
   no attached value. A batch is one operation on one vault and one chain — `approve` + `deposit`,
@@ -125,8 +135,10 @@ open for nothing but the calls that text described.
 - **The operator acknowledges before any page opens.** `connect deposit` and `connect withdraw` first
   return a fixed text, written by the CLI, naming the amount, chain, vault and explorer link, receiver,
   the vault's warning and the disclosures, and open nothing. The page opens only on a second run that
-  carries that acknowledgement's code: single-use, valid for 15 minutes, and bound to a digest of the
-  exact calls and connected account (on Solana, of the intent: account, vault, action and amount, since
+  carries that acknowledgement's code: single-use, valid for 15 minutes, and bound to a digest of what
+  will be asked of the wallet: on the EVM chains the connected account, the vault the API lists (its product id,
+  chain, vault and asset address), the action, the amount and, for a deposit, the terms version and sha256 the text
+  names and the deposit sends (on Solana, of the intent: account, vault, action and amount, since
   the transaction is built when the operator confirms and the Solana gate holds it to that intent). The code binds the page to the text the CLI issued: one page, for
   exactly those calls. It does not prove the operator read the text or said yes, because the agent
   that receives the code can pass it back; asking is the agent's conduct, which the skill requires,
@@ -140,12 +152,16 @@ open for nothing but the calls that text described.
   secret and port are kept in the owner-readable `connect-plan.json` for the plan's life, so a later run
   serves the same tab; a secret is only ever served on the port it was minted for. A run records only
   on its own plan, and a completed sign-in or a disconnect deletes the plan.
-- **The operator confirms every call twice:** on the page, which shows the builder's description of the call
-  (amount, vault, receiver), the vault, its address and explorer link; and in the wallet's own prompt
+- **The operator confirms every call twice:** on the page, which shows the call's description (on the EVM chains,
+  read from the checked step's own calldata, with the decoded call; amount, vault, receiver), the vault, its address
+  and explorer link; and in the wallet's own prompt
   (the extension, or Privy's dialog, which the page always asks Privy to show). On a plan's page every
   leg is listed this way before the operator starts it; the page then asks the wallet for each call in
   turn, and the wallet's prompt is that call's confirmation.
-- **What landed is read from the receipt.** A smart-account wallet relays a call inside a batch, so the
+- **What landed.** On the EVM chains each hash goes to the Tempora API, which reads the chain at it and says how the
+  step landed; that reading is the `verified` reported, and the next step is offered only once the API has recorded
+  this one and the whole request passes the check again. Locally, in the library and on Solana, what landed is read
+  from the receipt. A smart-account wallet relays a call inside a batch, so the
   transaction's own `from`/`to` name a relayer. The check is the vault's or token's own event for the
   connected account and the exact amount; any other movement of the asset out of the account in the
   same transaction is reported as `extra_transfer`, never folded into a match. On Solana the landed
@@ -181,10 +197,47 @@ open for nothing but the calls that text described.
   Privy library is not scanned, and the policy admits images from any HTTPS host, so it limits
   scripts, frames and connections but is not an exfiltration boundary.
 
+## The vaults on the EVM chains (`treasury earn` and `treasury connect`)
+
+On Base, Arbitrum One, Robinhood Chain, Ethereum and Monad, `treasury earn` and `treasury connect` reach the Tempora
+API and nothing else: its MCP endpoint for every read and request, its HTTP routes for the owner's sign-in. **A Tempora
+Labs service is in the request path**: the API lists the vaults, reads positions and quotes, prepares every deposit
+and withdrawal, and records each step. Treasury names these vaults only by their contract addresses, and keeps only
+each chain's default vault address (`src/config/earn.ts`): the address picks the vault the API lists, and a deposit
+reaches that vault. Nothing the API says about a step is
+trusted. What protects this path:
+
+- **The terms are the API's, checked here.** A vault's terms text is hashed locally (SHA-256 of its UTF-8 bytes) and
+  refused when it does not match the sha256 the API sent with it. A deposit is prepared only for the sha256 the
+  operator was shown, and sends that sha256 with the terms version; terms that changed since are refused.
+- **Every step is checked before the wallet sees it, and the whole request again before each step.** The check is
+  `@temporalabs/client`'s own `checkSteps`, which reads each step's calldata, not what the API says about it, against
+  the vault the API lists and the amount the operator asked for: an approval only to the vault's asset, for exactly
+  the deposit's amount, with the vault as spender and never unlimited; a deposit only into that vault, paying the shares
+  to the connected account; a withdrawal or redeem only from it, paid to and owned by the connected account, for
+  exactly the amount; no attached value; each on the vault's chain. A request that fails it when it starts is
+  cancelled and nothing is asked of the wallet; one that fails it later stops, and nothing more is sent.
+- **A sent step is never sent again.** A step the API puts up again after it was sent is refused. A hash the page could
+  not hand over is still handed to the API, by that hash, once. A hash the API refuses to record stops the flow with
+  the hash and says not to send it again. A wallet error after the wallet was asked to send, with no hash, is "not
+  confirmed sent", and the result names the request to read with `earn request`.
+- **The owner signs in to the API with their own wallet**, as for `treasury invest` (below): the message is checked
+  line by line first, and one token serves both of the API's doors. The sign-in page opens only when the API needs a
+  sign-in, before the signing page; a sign-in the API asks for while the signing page is open stops the flow instead.
+- **Owner calls act for the connected wallet only.** An `--account` other than it is refused before anything is asked.
+
+**What this cannot check:**
+
+- **The API's record of the vault.** Which contract is the vault, which is its asset, its decimals and its chain are
+  the API's word. The check catches a step that does not match that record; it cannot catch a record that is wrong. A
+  record naming the wrong vault would have a deposit reach that vault.
+- **The API's word on state.** Positions, quotes, gates, a step's landing and a request's state are the API's reading.
+- **What the vault does.** As everywhere, the vault contract and the protocols it holds are not Treasury's to check.
+
 ## Smart Growth portfolios (`treasury invest`)
 
 `treasury invest` deposits into and withdraws from Smart Growth portfolios, which an outside provider holds on
-BNB Chain, through the Tempora API. Unlike `earn` and `connect`, **a Tempora Labs service is in the request path**:
+BNB Chain, through the Tempora API. As for the vaults on the EVM chains, **a Tempora Labs service is in the request path**:
 the API lists the portfolios, prepares every request and records each step. Nothing it says about a step is
 trusted. What protects this path:
 

@@ -1,6 +1,10 @@
 // Runs the BUILT CLI the way callers do and checks how it exits: the exit code, how long the call took,
-// and that the answer came from the chain. Issue #122: on Windows with Node 24 the health check printed
-// a correct answer and still exited non-zero.
+// and that the answer came over the network (the Tempora API's health on the EVM chains, Solana's own chain).
+// Issue #122: on Windows with Node 24 the health check printed a correct answer and still exited non-zero.
+//
+// On the EVM chains the earn commands call the Tempora API, and every read but the health check acts for a
+// connected wallet, which CI has none of: the EVM cases are the health check and a refused argument. The reads
+// that touch a chain run on Solana, which still reads its chain directly.
 //
 // Subjects: this tree's bundle, and optionally the published v0.1.2 package (where the failure was
 // first seen), given as `--subject name=<install prefix>` (or `--subject=name=<install prefix>`). Each is run directly (`node dist/treasury.mjs`)
@@ -8,7 +12,6 @@
 // Every call is reported before the verdict, so a red run shows each one's real exit code (with its hex
 // form, which names a Windows crash), duration and output instead of stopping at the first mismatch.
 import { spawn } from "node:child_process";
-import { createServer } from "node:http";
 import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -16,22 +19,13 @@ import { fileURLToPath } from "node:url";
 const WIN = process.platform === "win32";
 const ROOT = fileURLToPath(new URL("../..", import.meta.url));
 const MAX_MS = Number(process.env.CLI_EXIT_MAX_MS ?? 20000);
-// The job's own endpoints when the repository provides them (CI_RPC_BASE, CI_RPC_SOLANA), so six
-// matrix legs do not share the public endpoints' rate limits; the public endpoints otherwise, which is
-// what a fork's pull request gets, since it is not given the repository's secrets.
-const BASE_RPC = process.env.CI_RPC_BASE || "https://mainnet.base.org";
+// The job's own Solana endpoint when the repository provides it (CI_RPC_SOLANA), so six matrix legs do not
+// share the public endpoint's rate limits; the public endpoint otherwise, which is what a fork's pull request gets,
+// since it is not given the repository's secrets.
 const RPC_ENV = {
-  ...(process.env.CI_RPC_BASE ? { TREASURY_RPC_BASE: process.env.CI_RPC_BASE } : {}),
   ...(process.env.CI_RPC_SOLANA ? { TREASURY_RPC_SOLANA: process.env.CI_RPC_SOLANA } : {}),
 };
-const EVM_ACCOUNT = "0xBBBBBbbBBb9cC5e90e3b3Af64bdAF62C37EEFFCb"; // a Base address that holds USDC; read only
 const SOLANA_ACCOUNT = "4Nd1mBQtrMJVYVfKf2PJy9NZUZdTAsp7D4xWLs4gDB4T"; // an unfunded Solana address; read only
-const VAULT_2B = "0x91BcEbA5feCB9E92d80F1845B55cC56621E9352F";
-const SLOW_MS = 15000;
-// The slow case's own ceiling. A CLI that waits for the held request instead of ending gives up on it
-// only when viem's 10 s request timeout fires; with Windows's 2 s exit backstop it ends in about 5 s.
-// Below 10 s, this ceiling fails a fix that waits for open handles, which MAX_MS alone does not.
-const SLOW_CASE_MAX_MS = 9000;
 // "0.1.10" sorts before "0.1.3" as a string; compare the numbers.
 const versionAtLeast = (v, min) => {
   const [a, b] = [v, min].map((x) => x.split(".").map(Number));
@@ -39,40 +33,21 @@ const versionAtLeast = (v, min) => {
   return true;
 };
 
-async function rpc(method, params) {
-  const r = await fetch(BASE_RPC, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ jsonrpc: "2.0", id: 1, method, params }) });
-  return (await r.json()).result;
-}
-
-// An account with real history on the default vault: whoever the chain says owns it (it deposited).
-const owner = `0x${(await rpc("eth_call", [{ to: VAULT_2B, data: "0x8da5cb5b" }, "latest"])).slice(-40)}`;
-
-// A Base endpoint that forwards every request but holds `eth_chainId` back for SLOW_MS: the health
-// check answers without it, so the CLI exits while a request to this endpoint is still open. That is
-// the case its immediate exit exists for, and the one most likely to trip an exit-time defect.
-const slow = createServer((req, res) => {
-  let body = "";
-  req.on("data", (c) => (body += c));
-  req.on("end", async () => {
-    try {
-      if (/"eth_chainId"/.test(body)) await new Promise((r) => setTimeout(r, SLOW_MS));
-      const up = await fetch(BASE_RPC, { method: "POST", headers: { "content-type": "application/json" }, body });
-      res.writeHead(up.status, { "content-type": "application/json" }).end(await up.text());
-    } catch {
-      res.destroy();
-    }
-  });
-});
-await new Promise((r) => slow.listen(0, "127.0.0.1", r));
-const SLOW_URL = `http://127.0.0.1:${slow.address().port}`;
-
 const cases = [
-  { name: "health check", args: ["earn", "status"], code: 0, proof: (o) => o.rpc === "ok" && /^\d+$/.test(o.latestBlock ?? "") },
   {
-    name: "deposit quote",
-    args: ["earn", "quote", "--direction", "deposit", "--account", EVM_ACCOUNT, "--amount_usdc", "1"],
+    name: "health check",
+    args: ["earn", "status"],
     code: 0,
-    proof: (o) => /USDC per share$/.test(o.sharePriceInAssets ?? "") && o.preflight !== undefined,
+    since: "0.1.5",
+    // A verdict either way: the API answered, or the check says it could not be reached. Both exit 0.
+    proof: (o) => o.mode === "health" && (o.apiStatus === "ok" || o.apiStatus === "unreachable"),
+  },
+  {
+    name: "Solana health",
+    args: ["earn", "status", "--chain", "solana"],
+    code: 0,
+    since: "0.1.3",
+    proof: (o) => o.mode === "health" && o.rpc === "ok" && /^\d+$/.test(String(o.latestSlot ?? "")),
   },
   {
     name: "Solana quote",
@@ -82,20 +57,11 @@ const cases = [
     proof: (o) => o.chain === "solana" && JSON.stringify(o).includes("slot"),
   },
   {
-    name: "balance with history",
-    args: ["earn", "balance", "--account", owner],
+    name: "Solana balance",
+    args: ["earn", "balance", "--chain", "solana", "--account", SOLANA_ACCOUNT],
     code: 0,
-    // The event-log scan: many requests, and it may stop at its time budget on a public endpoint.
-    // A failed or partial scan on the public endpoint is fine: the point is that it ran and the CLI exited.
-    proof: (o) => o.scan !== undefined && /^\d+(\.\d+)?$/.test(o.sharesExact ?? "") && Number.isInteger(o.measuredAtBlock),
-  },
-  {
-    name: "health, slow endpoint",
-    args: ["earn", "status"],
-    env: { TREASURY_RPC_BASE: SLOW_URL },
-    code: 0,
-    maxMs: SLOW_CASE_MAX_MS,
-    proof: (o) => o.rpc === "ok" && /^\d+$/.test(o.latestBlock ?? ""),
+    since: "0.1.3",
+    proof: (o) => o.chain === "solana" && /^\d+(\.\d+)?$/.test(o.sharesExact ?? ""),
   },
   { name: "refused argument", args: ["earn", "quote", "--direction", "sideways"], code: 1, proof: (_o, err) => typeof JSON.parse(err).error === "string" },
 ];
@@ -185,8 +151,6 @@ for (const s of subjects) {
     }
   }
 }
-slow.close();
-slow.closeAllConnections?.();
 console.log(`\n${process.platform} ${process.arch} ${process.version}`);
 console.table(rows);
 const differs = rows.filter((r) => !r.ok && !r.gates);
@@ -196,4 +160,4 @@ if (bad.length) {
   console.log(`FAILED: ${bad.map((r) => `${r.subject} | ${r.launch} | ${r.case}`).join("; ")}`);
   process.exit(1);
 }
-console.log("every call exited as expected, in time, with an answer read from the chain");
+console.log("every call exited as expected, in time, with an answer read over the network");

@@ -1,5 +1,10 @@
 # 04: What landed: receipt verification
 
+> **Scope.** On the EVM chains, `connect` no longer reads receipts itself: each hash goes to the Tempora API, whose
+> reading of how the step landed is the verdict reported
+> ([`../earn-api/01-the-api-path.md`](../earn-api/01-the-api-path.md)). The EVM receipt check described here
+> (`src/connect/verify.ts`) remains in the library; the Solana check is what `connect` uses on Solana.
+
 After the wallet sends a transaction, the page posts its hash (EVM) or signature (Solana) to the local
 process, which decides whether it did what the operator confirmed. That verdict, not the wallet's
 word, decides whether the next call is offered and what the command reports.
