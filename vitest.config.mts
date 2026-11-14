@@ -8,5 +8,7 @@ export default defineConfig({
     // dropped under `.cache/` ran as part of `npm test`.
     exclude: ["**/node_modules/**", "**/dist/**", "**/.cache/**", "**/site/**"],
     testTimeout: 20_000,
+    // No test acts for a wallet connected on this machine, or reaches a real Tempora API, unless it says so.
+    setupFiles: ["tests/setup/offline.ts"],
   },
 });

@@ -21,6 +21,9 @@ const BUNDLE = resolve(__dirname, "../dist/treasury.mjs");
 const VERSION = (JSON.parse(readFileSync(resolve(__dirname, "../package.json"), "utf8")) as { version: string }).version;
 
 /** Run `node [...flags] <entry> [...args]` to completion and return what came back. */
+/** A command that reads only the embedded registry: no RPC, no API. */
+const REGISTRY_READ = ["earn", "terms", "--chain", "solana"];
+
 function run(entry: string, args: string[] = [], flags: string[] = []): Promise<{ stdout: string; stderr: string; code: number | null }> {
   return new Promise((resolvePromise) => {
     const p = spawn("node", [...flags, entry, ...args], { stdio: ["ignore", "pipe", "pipe"] });
@@ -72,11 +75,13 @@ describe("the bundle runs the CLI only when it is the entry file", () => {
     const version = await run(bin, ["--version"], ["--preserve-symlinks-main"]);
     expect(version.stderr).toBe("");
     expect(version.stdout.trim()).toBe(VERSION);
-    // `earn vaults` reads the registry: exit 0 with a vault list means the embedded registry loaded
-    const vaults = await run(bin, ["earn", "vaults"], ["--preserve-symlinks-main"]);
-    expect(vaults.stderr).toBe("");
-    expect(vaults.code).toBe(0);
-    expect((JSON.parse(vaults.stdout) as { vaults: unknown[] }).vaults.length).toBeGreaterThan(0);
+    // `--chain` lists the chains that have a vault in the registry, and falls back to the EVM chains alone when the
+    // registry does not load: "solana" in it means the embedded registry loaded. (`earn vaults` asks the Tempora API,
+    // which no unit test may reach.)
+    const help = await run(bin, ["earn", "--help"], ["--preserve-symlinks-main"]);
+    expect(help.stderr).toBe("");
+    expect(help.code).toBe(0);
+    expect(help.stdout).toMatch(/which chain: [^\n]*base[^\n]*solana/);
   });
 
   it("imported by an unrelated script, it does NOT run: no output, clean exit", async () => {
@@ -132,19 +137,21 @@ describe("a registry that does not parse is reported by the commands, not by the
     for (const r of roots) rmSync(r, { recursive: true, force: true });
   });
 
-  it("control: the same build with the SHIPPED registry lists the vaults", async () => {
-    const r = await run(await bundleWith(shipped()), ["earn", "vaults"]);
+  // Each case runs `earn terms --chain solana`, which reads the registry and nothing else: `earn vaults` asks the
+  // Tempora API, which no unit test may reach.
+  it("control: the same build with the SHIPPED registry answers from it", async () => {
+    const r = await run(await bundleWith(shipped()), REGISTRY_READ);
     expect(r.stderr).toBe("");
     expect(r.code).toBe(0);
   }, 60_000);
 
   it("no vault on the default chain: the schema alone accepts it, so the LOAD refuses it and names the cause", async () => {
     // One default per chain that HAS a vault is all the schema can hold. An Arbitrum-only registry
-    // passes it — and then the discovery call would fail with an error about a chain nobody asked for.
+    // passes it — and then a call would fail with an error about a chain nobody asked for.
     const arbOnly = shipped();
     arbOnly.vaults = arbOnly.vaults.filter((v) => v.chainId === 42161);
     expect(arbOnly.vaults.length, "premise: the shipped registry has a vault on a second chain").toBeGreaterThan(0);
-    const r = await run(await bundleWith(arbOnly), ["earn", "vaults"]);
+    const r = await run(await bundleWith(arbOnly), REGISTRY_READ);
     expect(r.code).toBe(1);
     expect(r.stdout).toBe("");
     expect((JSON.parse(r.stderr) as { error: string }).error).toMatch(/the registry has no vault on Base, which config\/earn\.ts names as the default chain/);
@@ -156,8 +163,8 @@ describe("a registry that does not parse is reported by the commands, not by the
     const cli = await bundleWith(bad);
     const help = await run(cli, ["earn", "--help"]);
     expect(help.code, `the CLI did not answer --help: ${help.stderr}`).toBe(0);
-    expect((JSON.parse(help.stdout) as { commands: unknown[] }).commands).toHaveLength(8);
-    const r = await run(cli, ["earn", "vaults"]);
+    expect((JSON.parse(help.stdout) as { commands: unknown[] }).commands).toHaveLength(9);
+    const r = await run(cli, REGISTRY_READ);
     expect(r.code).toBe(1);
     expect((JSON.parse(r.stderr) as { error: string }).error).toMatch(/exactly one vault per chain must be isDefault; chain 8453 has [23]/);
   }, 60_000);
