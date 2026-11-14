@@ -4125,16 +4125,16 @@ ${prettyStateOverride(stateOverride)}`;
         let cause;
         let decodedData;
         let metaMessages;
-        let reason;
+        let reason2;
         if (data && data !== "0x") {
           try {
             decodedData = decodeErrorResult({ abi: abi2, data, cause: error62 });
             const { abiItem, errorName, args: errorArgs } = decodedData;
             if (errorName === "Error") {
-              reason = errorArgs[0];
+              reason2 = errorArgs[0];
             } else if (errorName === "Panic") {
               const [firstArg] = errorArgs;
-              reason = panicReasons[firstArg];
+              reason2 = panicReasons[firstArg];
             } else {
               const errorWithParams = abiItem ? formatAbiItem2(abiItem, { includeName: true }) : void 0;
               const formattedArgs = abiItem && errorArgs ? formatAbiItemWithArgs({
@@ -4152,7 +4152,7 @@ ${prettyStateOverride(stateOverride)}`;
             cause = err;
           }
         } else if (message)
-          reason = message;
+          reason2 = message;
         let signature;
         if (cause instanceof AbiErrorSignatureNotFoundError) {
           signature = cause.signature;
@@ -4162,9 +4162,9 @@ ${prettyStateOverride(stateOverride)}`;
             `You can look up the decoded signature here: https://4byte.sourcify.dev/?q=${signature}.`
           ];
         }
-        super(reason && reason !== "execution reverted" || signature ? [
+        super(reason2 && reason2 !== "execution reverted" || signature ? [
           `The contract function "${functionName}" reverted with the following ${signature ? "signature" : "reason"}:`,
-          reason || signature
+          reason2 || signature
         ].join("\n") : `The contract function "${functionName}" reverted.`, {
           cause: cause ?? error62,
           metaMessages,
@@ -4196,7 +4196,7 @@ ${prettyStateOverride(stateOverride)}`;
         });
         this.data = decodedData;
         this.raw = data;
-        this.reason = reason;
+        this.reason = reason2;
         this.signature = signature;
       }
     };
@@ -5414,7 +5414,7 @@ function createHmacDrbg(hashLen, qByteLen, hmacFn) {
   };
   return genUntil;
 }
-function validateObject(object2, validators, optValidators = {}) {
+function validateObject(object2, validators2, optValidators = {}) {
   const checkField = (fieldName, type, isOptional2) => {
     const checkVal = validatorFns[type];
     if (typeof checkVal !== "function")
@@ -5426,7 +5426,7 @@ function validateObject(object2, validators, optValidators = {}) {
       throw new Error("param " + String(fieldName) + " is invalid. Expected " + type + ", got " + val);
     }
   };
-  for (const [fieldName, type] of Object.entries(validators))
+  for (const [fieldName, type] of Object.entries(validators2))
     checkField(fieldName, type, false);
   for (const [fieldName, type] of Object.entries(optValidators))
     checkField(fieldName, type, true);
@@ -6660,7 +6660,7 @@ function weierstrass(curveDef) {
   function prepSig(msgHash, privateKey, opts = defaultSigOpts) {
     if (["recovered", "canonical"].some((k) => k in opts))
       throw new Error("sign() legacy options not supported");
-    const { hash: hash4, randomBytes: randomBytes3 } = CURVE;
+    const { hash: hash4, randomBytes: randomBytes4 } = CURVE;
     let { lowS, prehash, extraEntropy: ent } = opts;
     if (lowS == null)
       lowS = true;
@@ -6672,7 +6672,7 @@ function weierstrass(curveDef) {
     const d = normPrivateKeyToScalar(privateKey);
     const seedArgs = [int2octets(d), int2octets(h1int)];
     if (ent != null && ent !== false) {
-      const e4 = ent === true ? randomBytes3(Fp.BYTES) : ent;
+      const e4 = ent === true ? randomBytes4(Fp.BYTES) : ent;
       seedArgs.push(ensureBytes("extraEntropy", e4));
     }
     const seed = concatBytes3(...seedArgs);
@@ -7649,8 +7649,8 @@ var init_node = __esm({
     init_base();
     ExecutionRevertedError = class extends BaseError2 {
       constructor({ cause, message } = {}) {
-        const reason = message?.replace("execution reverted: ", "")?.replace("execution reverted", "");
-        super(`Execution reverted ${reason ? `with reason: ${reason}` : "for an unknown reason"}.`, {
+        const reason2 = message?.replace("execution reverted: ", "")?.replace("execution reverted", "");
+        super(`Execution reverted ${reason2 ? `with reason: ${reason2}` : "for an unknown reason"}.`, {
           cause,
           name: "ExecutionRevertedError"
         });
@@ -8919,12 +8919,12 @@ async function fillTransaction(client, parameters) {
     value
   }, "fillTransaction");
   try {
-    const response = await client.request({
+    const response2 = await client.request({
       method: "eth_fillTransaction",
       params: [request]
     });
     const format3 = chain?.formatters?.transaction?.format || formatTransaction;
-    const transaction = format3(response.tx);
+    const transaction = format3(response2.tx);
     delete transaction.blockHash;
     delete transaction.blockNumber;
     delete transaction.r;
@@ -8977,12 +8977,12 @@ async function fillTransaction(client, parameters) {
         transaction.gasPrice = multiplyFee(transaction.gasPrice);
     }
     return {
-      raw: response.raw,
+      raw: response2.raw,
       transaction: {
         from: request.from,
         ...transaction
       },
-      ...response.capabilities ? { capabilities: response.capabilities } : {}
+      ...response2.capabilities ? { capabilities: response2.capabilities } : {}
     };
   } catch (err) {
     throw getTransactionError(err, {
@@ -11621,22 +11621,22 @@ function anySignal(signals) {
   }
   return { signal: controller.signal, cleanup };
 }
-async function readResponseBody(response, { maxResponseBodySize }) {
+async function readResponseBody(response2, { maxResponseBodySize }) {
   if (maxResponseBodySize === false)
-    return response.text();
-  const contentLength = response.headers.get("Content-Length");
+    return response2.text();
+  const contentLength = response2.headers.get("Content-Length");
   if (contentLength) {
     const size6 = Number(contentLength);
     if (size6 > maxResponseBodySize) {
-      await response.body?.cancel();
+      await response2.body?.cancel();
       throw new ResponseBodyTooLargeError({
         maxSize: maxResponseBodySize,
         size: size6
       });
     }
   }
-  if (!response.body) {
-    const body2 = await response.text();
+  if (!response2.body) {
+    const body2 = await response2.text();
     const size6 = new TextEncoder().encode(body2).length;
     if (size6 > maxResponseBodySize)
       throw new ResponseBodyTooLargeError({
@@ -11645,7 +11645,7 @@ async function readResponseBody(response, { maxResponseBodySize }) {
       });
     return body2;
   }
-  const reader = response.body.getReader();
+  const reader = response2.body.getReader();
   const decoder3 = new TextDecoder();
   let body = "";
   let size5 = 0;
@@ -11818,22 +11818,22 @@ async function ccipRequest({ data, requestOptions, sender, timeout = ccipTimeout
     const headers = method === "POST" ? { "Content-Type": "application/json" } : {};
     try {
       assertCcipUrl(requestUrl);
-      const { response, responseBody } = await withTimeout(async ({ signal: timeoutSignal }) => {
+      const { response: response2, responseBody } = await withTimeout(async ({ signal: timeoutSignal }) => {
         const { signal, cleanup } = anySignal([
           requestOptions?.signal,
           timeout > 0 ? timeoutSignal : null
         ]);
         try {
-          const response2 = await fetch(requestUrl, {
+          const response3 = await fetch(requestUrl, {
             body: JSON.stringify(body),
             headers,
             method,
             ...signal ? { signal } : {}
           });
-          const responseBody2 = await readResponseBody(response2, {
+          const responseBody2 = await readResponseBody(response3, {
             maxResponseBodySize: maxCcipResponseBytes
           });
-          return { response: response2, responseBody: responseBody2 };
+          return { response: response3, responseBody: responseBody2 };
         } finally {
           cleanup();
         }
@@ -11846,17 +11846,17 @@ async function ccipRequest({ data, requestOptions, sender, timeout = ccipTimeout
         timeout
       });
       let result;
-      if (response.headers.get("Content-Type")?.startsWith("application/json")) {
+      if (response2.headers.get("Content-Type")?.startsWith("application/json")) {
         result = JSON.parse(responseBody).data;
       } else {
         result = responseBody;
       }
-      if (!response.ok) {
+      if (!response2.ok) {
         error62 = new HttpRequestError({
           body,
-          details: result?.error ? stringify2(result.error) : response.statusText,
-          headers: response.headers,
-          status: response.status,
+          details: result?.error ? stringify2(result.error) : response2.statusText,
+          headers: response2.headers,
+          status: response2.status,
           url: url2
         });
         continue;
@@ -12052,13 +12052,13 @@ async function call(client, args) {
         return [...base2, {}, rpcBlockOverrides];
       return base2;
     })();
-    const response = await client.request({
+    const response2 = await client.request({
       method: "eth_call",
       params
     }, requestOptions);
-    if (response === "0x")
+    if (response2 === "0x")
       return { data: void 0 };
-    return { data: response };
+    return { data: response2 };
   } catch (err) {
     if (requestOptions?.signal?.aborted)
       throw getAbortError(requestOptions.signal);
@@ -12450,23 +12450,23 @@ function getCache(cacheKey2) {
     set: (data) => cache.set(cacheKey3, data)
   });
   const promise2 = buildCache(cacheKey2, promiseCache);
-  const response = buildCache(cacheKey2, responseCache);
+  const response2 = buildCache(cacheKey2, responseCache);
   return {
     clear: () => {
       promise2.clear();
-      response.clear();
+      response2.clear();
     },
     promise: promise2,
-    response
+    response: response2
   };
 }
 async function withCache(fn, { cacheKey: cacheKey2, cacheTime = Number.POSITIVE_INFINITY }) {
   const cache = getCache(cacheKey2);
-  const response = cache.response.get();
-  if (response && cacheTime > 0) {
-    const age = Date.now() - response.created.getTime();
+  const response2 = cache.response.get();
+  if (response2 && cacheTime > 0) {
+    const age = Date.now() - response2.created.getTime();
     if (age < cacheTime)
-      return response.data;
+      return response2.data;
   }
   let promise2 = cache.promise.get();
   if (!promise2) {
@@ -13629,7 +13629,7 @@ function getHttpRpcClient(url_, options = {}) {
       };
       const { headers, method, signal: signal_ } = fetchOptions;
       try {
-        const { response, responseBody } = await withTimeout(async ({ signal: timeoutSignal }) => {
+        const { response: response2, responseBody } = await withTimeout(async ({ signal: timeoutSignal }) => {
           const { signal, cleanup } = anySignal([
             signal_,
             timeout > 0 ? timeoutSignal : null
@@ -13658,13 +13658,13 @@ function getHttpRpcClient(url_, options = {}) {
               ...init,
               url: url2
             };
-            const response2 = await fetchFn(args.url ?? url2, args);
+            const response3 = await fetchFn(args.url ?? url2, args);
             if (onResponse)
-              await onResponse(response2);
-            const responseBody2 = await readResponseBody(response2, {
+              await onResponse(response3);
+            const responseBody2 = await readResponseBody(response3, {
               maxResponseBodySize
             });
-            return { response: response2, responseBody: responseBody2 };
+            return { response: response3, responseBody: responseBody2 };
           } finally {
             cleanup();
           }
@@ -13674,33 +13674,33 @@ function getHttpRpcClient(url_, options = {}) {
           signal: true
         });
         let data;
-        if (response.headers.get("Content-Type")?.startsWith("application/json"))
+        if (response2.headers.get("Content-Type")?.startsWith("application/json"))
           data = JSON.parse(responseBody);
         else {
           data = responseBody;
           try {
             data = JSON.parse(data || "{}");
           } catch (err) {
-            if (response.ok)
+            if (response2.ok)
               throw err;
             data = { error: data };
           }
         }
         const error62 = Array.isArray(body) && Array.isArray(data) && data.length === 1 ? data[0] : data;
-        if (!response.ok) {
+        if (!response2.ok) {
           if (isRpcError(error62))
             throw new RpcRequestError({
               body,
               error: error62.error,
-              headers: response.headers,
-              status: response.status,
+              headers: response2.headers,
+              status: response2.status,
               url: url2
             });
           throw new HttpRequestError({
             body,
-            details: stringify2(data.error) || response.statusText,
-            headers: response.headers,
-            status: response.status,
+            details: stringify2(data.error) || response2.statusText,
+            headers: response2.headers,
+            status: response2.status,
             url: url2
           });
         }
@@ -15839,6 +15839,27 @@ var init_recoverMessageAddress = __esm({
   }
 });
 
+// node_modules/viem/_esm/utils/signature/recoverTypedDataAddress.js
+async function recoverTypedDataAddress(parameters) {
+  const { domain: domain2, message, primaryType, signature, types } = parameters;
+  return recoverAddress({
+    hash: hashTypedData({
+      domain: domain2,
+      message,
+      primaryType,
+      types
+    }),
+    signature
+  });
+}
+var init_recoverTypedDataAddress = __esm({
+  "node_modules/viem/_esm/utils/signature/recoverTypedDataAddress.js"() {
+    "use strict";
+    init_hashTypedData();
+    init_recoverAddress();
+  }
+});
+
 // node_modules/viem/_esm/utils/signature/verifyMessage.js
 async function verifyMessage({ address: address3, message, signature }) {
   return isAddressEqual(getAddress(address3), await recoverMessageAddress({ message, signature }));
@@ -15849,6 +15870,26 @@ var init_verifyMessage = __esm({
     init_getAddress();
     init_isAddressEqual();
     init_recoverMessageAddress();
+  }
+});
+
+// node_modules/viem/_esm/utils/signature/verifyTypedData.js
+async function verifyTypedData(parameters) {
+  const { address: address3, domain: domain2, message, primaryType, signature, types } = parameters;
+  return isAddressEqual(getAddress(address3), await recoverTypedDataAddress({
+    domain: domain2,
+    message,
+    primaryType,
+    signature,
+    types
+  }));
+}
+var init_verifyTypedData = __esm({
+  "node_modules/viem/_esm/utils/signature/verifyTypedData.js"() {
+    "use strict";
+    init_getAddress();
+    init_isAddressEqual();
+    init_recoverTypedDataAddress();
   }
 });
 
@@ -16017,7 +16058,7 @@ async function multicall(client, parameters) {
     }
   }
   const batching = Boolean(client.batch?.multicall);
-  const batches = batching ? chunkedCalls.flatMap((calls) => calls.map((call2) => [call2])) : chunkedCalls;
+  const batches = batching ? chunkedCalls.flatMap((calls) => calls.map((call3) => [call3])) : chunkedCalls;
   const aggregate3Results = await Promise.allSettled(batches.map((calls) => {
     if (batching)
       return scheduleMulticall2(client, {
@@ -16099,7 +16140,7 @@ async function multicall(client, parameters) {
   return results;
 }
 async function scheduleMulticall2(client, parameters) {
-  const { batchSize, call: call2, multicallAddress, ...rest } = parameters;
+  const { batchSize, call: call3, multicallAddress, ...rest } = parameters;
   const { wait: wait2 = 0 } = typeof client.batch?.multicall === "object" ? client.batch.multicall : {};
   const { schedule } = createBatchScheduler({
     id: stringify2(["multicall", client.uid, batchSize, multicallAddress, rest]),
@@ -16118,7 +16159,7 @@ async function scheduleMulticall2(client, parameters) {
       functionName: "aggregate3"
     })
   });
-  const [result] = await schedule(call2);
+  const [result] = await schedule(call3);
   return result;
 }
 var init_multicall = __esm({
@@ -16887,11 +16928,11 @@ async function resolveTokenWithDecimals(client, parameters) {
     })
   };
 }
-function defineCall(call2) {
+function defineCall(call3) {
   return {
-    ...call2,
-    data: encodeFunctionData(call2),
-    to: call2.address
+    ...call3,
+    data: encodeFunctionData(call3),
+    to: call3.address
   };
 }
 var init_internal = __esm({
@@ -18757,11 +18798,11 @@ var safeParseAsync = /* @__PURE__ */ _safeParseAsync($ZodRealError);
 var COMPILE_INVALID = /* @__PURE__ */ Symbol.for("zod.compile.invalid");
 var COMPILE_FALLBACK = /* @__PURE__ */ Symbol.for("zod.compile.fallback");
 var validate = ((schema, value, _ctx) => {
-  const validator = schema._zod.bag.validator;
-  if (validator !== void 0) {
-    if (validator(value) !== COMPILE_INVALID)
+  const validator2 = schema._zod.bag.validator;
+  if (validator2 !== void 0) {
+    if (validator2(value) !== COMPILE_INVALID)
       return true;
-    if (validator.definite === true && _ctx === void 0)
+    if (validator2.definite === true && _ctx === void 0)
       return false;
   }
   return validateFallback(schema, value, _ctx);
@@ -22006,7 +22047,7 @@ function isRecursive(inst, stack, resolve2) {
     return PROVEN;
   stack.add(inst);
   let result = NONE;
-  const check2 = (child) => {
+  const check3 = (child) => {
     if (result !== PROVEN && child?._zod) {
       const answer = isRecursive(child, stack, resolve2);
       if (answer > result)
@@ -22035,32 +22076,32 @@ function isRecursive(inst, stack, resolve2) {
     case "object": {
       const raw = rawShape(def);
       merge2(raw ? shape(raw, true) : ASSUMED);
-      check2(def.catchall);
+      check3(def.catchall);
       break;
     }
     case "array":
-      check2(def.element);
+      check3(def.element);
       break;
     case "tuple":
       for (const el of def.items)
-        check2(el);
-      check2(def.rest);
+        check3(el);
+      check3(def.rest);
       break;
     case "record":
     case "map":
-      check2(def.keyType);
-      check2(def.valueType);
+      check3(def.keyType);
+      check3(def.valueType);
       break;
     case "set":
-      check2(def.valueType);
+      check3(def.valueType);
       break;
     case "union":
       for (const el of def.options)
-        check2(el);
+        check3(el);
       break;
     case "intersection":
-      check2(def.left);
-      check2(def.right);
+      check3(def.left);
+      check3(def.right);
       break;
     case "optional":
     case "nullable":
@@ -22071,15 +22112,15 @@ function isRecursive(inst, stack, resolve2) {
     case "nonoptional":
     case "promise":
     case "success":
-      check2(def.innerType);
+      check3(def.innerType);
       break;
     case "pipe":
-      check2(def.in);
-      check2(def.out);
+      check3(def.in);
+      check3(def.out);
       break;
     case "function":
-      check2(def.input);
-      check2(def.output);
+      check3(def.input);
+      check3(def.output);
       break;
     // `$ZodLazy` caches its inner on the def, so a resolved edge is followed exactly
     case "lazy": {
@@ -22120,10 +22161,10 @@ function isRecursive(inst, stack, resolve2) {
         if (!value || typeof value !== "object")
           continue;
         if (value._zod)
-          check2(value);
+          check3(value);
         else if (Array.isArray(value))
           for (const el of value)
-            check2(el);
+            check3(el);
       }
     }
   }
@@ -26281,8 +26322,8 @@ function ko_default() {
 }
 
 // node_modules/zod/v4/locales/lt.js
-var capitalizeFirstCharacter = (text2) => {
-  return text2.charAt(0).toUpperCase() + text2.slice(1);
+var capitalizeFirstCharacter = (text3) => {
+  return text3.charAt(0).toUpperCase() + text3.slice(1);
 };
 function getUnitTypeFromNumber(number4) {
   const abs = Math.abs(number4);
@@ -30069,8 +30110,8 @@ function generateChecks(doc, ctx, schema, accessor) {
   if (!schemaChecks || schemaChecks.length === 0)
     return accessor;
   let currentAccessor = accessor;
-  for (const check2 of schemaChecks) {
-    const def = check2._zod.def;
+  for (const check3 of schemaChecks) {
+    const def = check3._zod.def;
     if (def.when && !WHEN_DEFAULTED_CHECKS.has(def.check)) {
       throw new ZodCompileUnsupportedError(`check with a custom "when" condition`);
     }
@@ -30118,7 +30159,7 @@ function generateChecks(doc, ctx, schema, accessor) {
         currentAccessor = generateStringFormatCheck(doc, ctx, def, currentAccessor);
         break;
       case "custom":
-        currentAccessor = generateCustomRefineCheck(doc, ctx, check2, currentAccessor);
+        currentAccessor = generateCustomRefineCheck(doc, ctx, check3, currentAccessor);
         break;
       case "bigint_format":
         generateBigIntFormatCheck(doc, def, currentAccessor);
@@ -30134,7 +30175,7 @@ function generateChecks(doc, ctx, schema, accessor) {
         break;
       case "overwrite": {
         const newAccessor = newVar(ctx);
-        generateOverwriteCheck(doc, ctx, check2, currentAccessor, newAccessor);
+        generateOverwriteCheck(doc, ctx, check3, currentAccessor, newAccessor);
         currentAccessor = newAccessor;
         break;
       }
@@ -30257,8 +30298,8 @@ function generatePropertyCheck(doc, ctx, def, accessor) {
   const propAccessor = `${accessor}[${JSON.stringify(def.property)}]`;
   generateCheck(doc, ctx, def.schema, propAccessor);
 }
-function generateOverwriteCheck(doc, ctx, check2, currentAccessor, newAccessor) {
-  const tx = check2._zod.def.tx;
+function generateOverwriteCheck(doc, ctx, check3, currentAccessor, newAccessor) {
+  const tx = check3._zod.def.tx;
   if (!tx) {
     throw new ZodCompileUnsupportedError("overwrite check without a transform function");
   }
@@ -30274,8 +30315,8 @@ function throwAsync() {
 function pushIssue(issue2) {
   this.issues.push(issue2);
 }
-function generateCustomRefineCheck(doc, ctx, check2, accessor) {
-  const def = check2._zod.def;
+function generateCustomRefineCheck(doc, ctx, check3, accessor) {
+  const def = check3._zod.def;
   if (def.fn) {
     if (isAsyncFunction(def.fn)) {
       throw new ZodCompileAsyncError("z.compile: async .refine() predicates are not supported");
@@ -30288,11 +30329,11 @@ function generateCustomRefineCheck(doc, ctx, check2, accessor) {
     doc.write(`if (!${resVar}) return INVALID;`);
     return accessor;
   }
-  if (check2._zod.check) {
-    if (isAsyncFunction(check2._zod.check)) {
+  if (check3._zod.check) {
+    if (isAsyncFunction(check3._zod.check)) {
       throw new ZodCompileAsyncError("z.compile: async .superRefine() / check functions are not supported");
     }
-    const checkFn = check2._zod.check;
+    const checkFn = check3._zod.check;
     const helperFn = (value) => {
       const fakePayload = { value, issues: [], addIssue: pushIssue };
       const result = checkFn(fakePayload);
@@ -30337,39 +30378,39 @@ var PATTERN_IS_COMPLETE = /* @__PURE__ */ new Set([
 function generateStringFormatCheck(doc, ctx, def, accessor, needsValue = true) {
   const fmt = def.format;
   if (fmt === "base64") {
-    const validator = addConstant(ctx, isValidBase64);
-    doc.write(`if (!${validator}(${accessor})) return INVALID;`);
+    const validator2 = addConstant(ctx, isValidBase64);
+    doc.write(`if (!${validator2}(${accessor})) return INVALID;`);
     return accessor;
   }
   if (fmt === "base64url") {
-    const validator = addConstant(ctx, isValidBase64URL);
-    doc.write(`if (!${validator}(${accessor})) return INVALID;`);
+    const validator2 = addConstant(ctx, isValidBase64URL);
+    doc.write(`if (!${validator2}(${accessor})) return INVALID;`);
     return accessor;
   }
   if (fmt === "jwt") {
-    const validator = addConstant(ctx, isValidJWT);
+    const validator2 = addConstant(ctx, isValidJWT);
     const alg = addConstant(ctx, def.alg ?? null);
-    doc.write(`if (!${validator}(${accessor}, ${alg})) return INVALID;`);
+    doc.write(`if (!${validator2}(${accessor}, ${alg})) return INVALID;`);
     return accessor;
   }
   if (fmt === "ipv6") {
-    const validator = addConstant(ctx, isValidIPv6);
-    doc.write(`if (!${validator}(${accessor})) return INVALID;`);
+    const validator2 = addConstant(ctx, isValidIPv6);
+    doc.write(`if (!${validator2}(${accessor})) return INVALID;`);
     return accessor;
   }
   if (fmt === "cidrv6") {
-    const validator = addConstant(ctx, isValidCIDRv6);
-    doc.write(`if (!${validator}(${accessor})) return INVALID;`);
+    const validator2 = addConstant(ctx, isValidCIDRv6);
+    doc.write(`if (!${validator2}(${accessor})) return INVALID;`);
     return accessor;
   }
   if (fmt === "credit_card") {
-    const validator = addConstant(ctx, isValidCreditCard);
-    doc.write(`if (!${validator}(${accessor})) return INVALID;`);
+    const validator2 = addConstant(ctx, isValidCreditCard);
+    doc.write(`if (!${validator2}(${accessor})) return INVALID;`);
     return accessor;
   }
   if (fmt === "iban") {
-    const validator = addConstant(ctx, isValidIBAN);
-    doc.write(`if (!${validator}(${accessor})) return INVALID;`);
+    const validator2 = addConstant(ctx, isValidIBAN);
+    doc.write(`if (!${validator2}(${accessor})) return INVALID;`);
     return accessor;
   }
   const formatDef = def;
@@ -30914,8 +30955,8 @@ function generateNullableCheck(doc, ctx, schema, accessor, buildsValue = true) {
   return outputVar;
 }
 function generateSizeGate(doc, schema, size5) {
-  for (const [max, check2] of sizeCaps(schema._zod.def.checks)) {
-    doc.write(`if (${size5} > ${numericOperand(max, check2._zod.def.check)}) return INVALID;`);
+  for (const [max, check3] of sizeCaps(schema._zod.def.checks)) {
+    doc.write(`if (${size5} > ${numericOperand(max, check3._zod.def.check)}) return INVALID;`);
   }
 }
 function generateArrayCheck(doc, ctx, schema, accessor, buildsValue = true) {
@@ -34215,8 +34256,8 @@ var ZodType = /* @__PURE__ */ $constructor("ZodType", (inst, def) => {
     reg.add(this, meta3);
     return this;
   },
-  refine(check2, params) {
-    return this.check(refine(check2, params));
+  refine(check3, params) {
+    return this.check(refine(check3, params));
   },
   superRefine(refinement, params) {
     return this.check(superRefine(refinement, params));
@@ -40931,11 +40972,11 @@ function createJsonRpcApi(config2) {
         return Object.freeze({
           execute: async ({ signal, transport }) => {
             const payload = createRpcMessage(request);
-            const response = await transport({ payload, signal });
+            const response2 = await transport({ payload, signal });
             if (!config2?.responseTransformer) {
-              return response;
+              return response2;
             }
-            return config2.responseTransformer(response, request);
+            return config2.responseTransformer(response2, request);
           }
         });
       };
@@ -41254,11 +41295,11 @@ function getThrowSolanaErrorResponseTransformer() {
   };
 }
 function getDefaultResponseTransformerForSolanaRpc(config2) {
-  return (response, request) => {
+  return (response2, request) => {
     const methodName = request.methodName;
     const keyPaths = config2?.allowedNumericKeyPaths && methodName ? config2.allowedNumericKeyPaths[methodName] : void 0;
     return pipe2(
-      response,
+      response2,
       (r) => getThrowSolanaErrorResponseTransformer()(r, request),
       (r) => getResultResponseTransformer()(r, request),
       (r) => getBigIntUpcastResponseTransformer(keyPaths ?? [])(r, request)
@@ -41469,18 +41510,18 @@ function createHttpTransport(config2) {
       method: "POST",
       signal
     };
-    const response = await fetch(url2, requestInfo);
-    if (!response.ok) {
+    const response2 = await fetch(url2, requestInfo);
+    if (!response2.ok) {
       throw new SolanaError(SOLANA_ERROR__RPC__TRANSPORT_HTTP_ERROR, {
-        headers: response.headers,
-        message: response.statusText,
-        statusCode: response.status
+        headers: response2.headers,
+        message: response2.statusText,
+        statusCode: response2.status
       });
     }
     if (fromJson) {
-      return fromJson(await response.text(), payload);
+      return fromJson(await response2.text(), payload);
     }
-    return await response.json();
+    return await response2.json();
   };
 }
 var SOLANA_RPC_METHODS = [
@@ -42169,8 +42210,8 @@ var EnsAvatarInvalidMetadataError = class extends BaseError2 {
   }
 };
 var EnsAvatarInvalidNftUriError = class extends BaseError2 {
-  constructor({ reason }) {
-    super(`ENS NFT avatar URI is invalid. ${reason}`, {
+  constructor({ reason: reason2 }) {
+    super(`ENS NFT avatar URI is invalid. ${reason2}`, {
       name: "EnsAvatarInvalidNftUriError"
     });
   }
@@ -42597,15 +42638,15 @@ async function createAccessList(client, args) {
       to,
       value
     }, "createAccessList");
-    const response = await client.request({
+    const response2 = await client.request({
       method: "eth_createAccessList",
       params: [request, block]
     });
-    if (response.error)
-      throw new BaseError2(response.error, { details: response.error });
+    if (response2.error)
+      throw new BaseError2(response2.error, { details: response2.error });
     return {
-      accessList: response.accessList,
-      gasUsed: BigInt(response.gasUsed)
+      accessList: response2.accessList,
+      gasUsed: BigInt(response2.gasUsed)
     };
   } catch (err) {
     throw getCallError(err, {
@@ -43078,14 +43119,14 @@ async function simulateBlocks(client, parameters) {
     for (const block2 of blocks) {
       const blockOverrides = block2.blockOverrides ? toRpc2(block2.blockOverrides) : void 0;
       const calls = block2.calls.map((call_) => {
-        const call2 = call_;
-        const account = call2.account ? parseAccount(call2.account) : void 0;
-        const data = call2.abi ? encodeFunctionData(call2) : call2.data;
+        const call3 = call_;
+        const account = call3.account ? parseAccount(call3.account) : void 0;
+        const data = call3.abi ? encodeFunctionData(call3) : call3.data;
         const request = {
-          ...call2,
+          ...call3,
           account,
-          data: call2.dataSuffix ? concat([data || "0x", call2.dataSuffix]) : data,
-          from: call2.from ?? account?.address
+          data: call3.dataSuffix ? concat([data || "0x", call3.dataSuffix]) : data,
+          from: call3.from ?? account?.address
         };
         assertRequest(request);
         return formatTransactionRequest(request);
@@ -43108,13 +43149,13 @@ async function simulateBlocks(client, parameters) {
     });
     return result.map((block2, i) => ({
       ...formatBlock(block2),
-      calls: block2.calls.map((call2, j) => {
+      calls: block2.calls.map((call3, j) => {
         const { abi: abi2, args, functionName, to } = blocks[i].calls[j];
-        const data = call2.error?.data ?? call2.returnData;
-        const gasUsed = BigInt(call2.gasUsed);
-        const maxUsedGas = call2.maxUsedGas === void 0 ? void 0 : BigInt(call2.maxUsedGas);
-        const logs = call2.logs?.map((log) => formatLog(log));
-        const status = call2.status === "0x1" ? "success" : "failure";
+        const data = call3.error?.data ?? call3.returnData;
+        const gasUsed = BigInt(call3.gasUsed);
+        const maxUsedGas = call3.maxUsedGas === void 0 ? void 0 : BigInt(call3.maxUsedGas);
+        const logs = call3.logs?.map((log) => formatLog(log));
+        const status = call3.status === "0x1" ? "success" : "failure";
         const result2 = abi2 && status === "success" && data !== "0x" ? decodeFunctionResult({
           abi: abi2,
           data,
@@ -43293,8 +43334,8 @@ async function simulateCalls(client, parameters) {
     ...block_,
     blocks: [
       {
-        calls: calls.map((call2) => ({
-          ...call2,
+        calls: calls.map((call3) => ({
+          ...call3,
           from: account.address
         })),
         stateOverrides
@@ -43305,11 +43346,11 @@ async function simulateCalls(client, parameters) {
   }) : void 0;
   const assetAddresses = discovery ? [
     .../* @__PURE__ */ new Set([
-      ...tokensFromLogs(discovery[0].calls.flatMap((call2) => call2.logs ?? []), account.address),
+      ...tokensFromLogs(discovery[0].calls.flatMap((call3) => call3.logs ?? []), account.address),
       // Included even for calls without data: contracts that mint on receiving
       // native value (WETH) emit `Deposit`, not a `Transfer` the logs would catch.
       // Candidates without code fall out at `isBalance`.
-      ...parameters.calls.map((call2) => call2.to?.toLowerCase())
+      ...parameters.calls.map((call3) => call3.to?.toLowerCase())
     ])
   ].filter((address3) => Boolean(address3) && address3 !== ethAddress && address3 !== zeroAddress) : [];
   const staticCallAddress = getStaticCallAddress([
@@ -43343,8 +43384,8 @@ async function simulateCalls(client, parameters) {
       ...block_,
       blocks: [
         {
-          calls: [...calls, { to: zeroAddress }].map((call2) => ({
-            ...call2,
+          calls: [...calls, { to: zeroAddress }].map((call3) => ({
+            ...call3,
             from: account?.address
           })),
           stateOverrides
@@ -43402,14 +43443,14 @@ async function simulateCalls(client, parameters) {
   const [block_ethPost, block_assetsPost, block_decimals, block_tokenURI, block_symbols] = traceAssetChanges ? blocks.slice(1) : [];
   const { calls: block_calls, ...block } = block_results;
   const results = block_calls.slice(0, -1);
-  const balancesPre = balanceCallsPre.map((call2) => isBalance(call2) ? hexToBigInt(call2.data) : null);
+  const balancesPre = balanceCallsPre.map((call3) => isBalance(call3) ? hexToBigInt(call3.data) : null);
   const ethPost = block_ethPost?.calls ?? [];
   const assetsPost = block_assetsPost?.calls ?? [];
   const balanceCallsPost = [...ethPost, ...assetsPost];
-  const balancesPost = balanceCallsPost.map((call2) => isBalance(call2) ? hexToBigInt(call2.data) : null);
-  const decimals = (block_decimals?.calls ?? []).map((call2) => decodeAssetResult(call2, decimalsFunction));
-  const symbols = (block_symbols?.calls ?? []).map((call2) => decodeAssetResult(call2, symbolFunction));
-  const tokenURI = (block_tokenURI?.calls ?? []).map((call2) => decodeAssetResult(call2, tokenUriFunction));
+  const balancesPost = balanceCallsPost.map((call3) => isBalance(call3) ? hexToBigInt(call3.data) : null);
+  const decimals = (block_decimals?.calls ?? []).map((call3) => decodeAssetResult(call3, decimalsFunction));
+  const symbols = (block_symbols?.calls ?? []).map((call3) => decodeAssetResult(call3, symbolFunction));
+  const tokenURI = (block_tokenURI?.calls ?? []).map((call3) => decodeAssetResult(call3, tokenUriFunction));
   const changes = [];
   for (const [i, balancePost] of balancesPost.entries()) {
     const balancePre_ = balancesPre[i];
@@ -43463,14 +43504,14 @@ function tokensFromLogs(logs, account) {
     return log.topics[1]?.toLowerCase() === account_ || log.topics[2]?.toLowerCase() === account_;
   }).map((log) => log.address.toLowerCase());
 }
-function isBalance(call2) {
-  return call2.status === "success" && /^0x[\da-f]{64}$/i.test(call2.data);
+function isBalance(call3) {
+  return call3.status === "success" && /^0x[\da-f]{64}$/i.test(call3.data);
 }
-function decodeAssetResult(call2, abiFunction) {
-  if (call2.status === "failure" || call2.data === "0x")
+function decodeAssetResult(call3, abiFunction) {
+  if (call3.status === "failure" || call3.data === "0x")
     return null;
   try {
-    return decodeResult(abiFunction, call2.data);
+    return decodeResult(abiFunction, call3.data);
   } catch {
     return null;
   }
@@ -43839,7 +43880,7 @@ async function verifyMessage2(client, { address: address3, message, factory, fac
 // node_modules/viem/_esm/actions/public/verifyTypedData.js
 init_getAction();
 init_hashTypedData();
-async function verifyTypedData(client, parameters) {
+async function verifyTypedData2(client, parameters) {
   const { address: address3, factory, factoryData, signature, message, primaryType, types, domain: domain2, ...callRequest } = parameters;
   const hash4 = hashTypedData({ message, primaryType, types, domain: domain2 });
   return getAction(client, verifyHash, "verifyHash")({
@@ -44462,7 +44503,7 @@ async function getAllowance(client, parameters) {
   return toAmount(amount, resolved);
 }
 (function(getAllowance2) {
-  function call2(client, args) {
+  function call3(client, args) {
     return defineCall({
       address: resolveToken(client, args).address,
       abi: erc20Abi,
@@ -44470,7 +44511,7 @@ async function getAllowance(client, parameters) {
       args: [args.account, args.spender]
     });
   }
-  Object.defineProperty(getAllowance2, "call", { configurable: true, enumerable: true, value: call2, writable: true });
+  Object.defineProperty(getAllowance2, "call", { configurable: true, enumerable: true, value: call3, writable: true });
 })(getAllowance || (getAllowance = {}));
 
 // node_modules/viem/_esm/actions/token/getBalance.js
@@ -44497,7 +44538,7 @@ async function getBalance2(client, parameters) {
   return toAmount(amount, resolved);
 }
 (function(getBalance3) {
-  function call2(client, args) {
+  function call3(client, args) {
     const account_ = args.account ?? client.account;
     if (!account_)
       throw new AccountNotFoundError();
@@ -44509,7 +44550,7 @@ async function getBalance2(client, parameters) {
       args: [account]
     });
   }
-  Object.defineProperty(getBalance3, "call", { configurable: true, enumerable: true, value: call2, writable: true });
+  Object.defineProperty(getBalance3, "call", { configurable: true, enumerable: true, value: call3, writable: true });
 })(getBalance2 || (getBalance2 = {}));
 
 // node_modules/viem/_esm/actions/token/getMetadata.js
@@ -44566,7 +44607,7 @@ async function getTotalSupply(client, parameters) {
   return toAmount(amount, resolved);
 }
 (function(getTotalSupply2) {
-  function call2(client, args) {
+  function call3(client, args) {
     return defineCall({
       address: resolveToken(client, args).address,
       abi: erc20Abi,
@@ -44574,7 +44615,7 @@ async function getTotalSupply(client, parameters) {
       functionName: "totalSupply"
     });
   }
-  Object.defineProperty(getTotalSupply2, "call", { configurable: true, enumerable: true, value: call2, writable: true });
+  Object.defineProperty(getTotalSupply2, "call", { configurable: true, enumerable: true, value: call3, writable: true });
 })(getTotalSupply || (getTotalSupply = {}));
 
 // node_modules/viem/_esm/clients/decorators/public.js
@@ -44636,7 +44677,7 @@ function publicActions(client) {
     verifyHash: (args) => verifyHash(client, args),
     verifyMessage: (args) => verifyMessage2(client, args),
     verifySiweMessage: (args) => verifySiweMessage(client, args),
-    verifyTypedData: (args) => verifyTypedData(client, args),
+    verifyTypedData: (args) => verifyTypedData2(client, args),
     uninstallFilter: (args) => uninstallFilter(client, args),
     waitForTransactionReceipt: (args) => waitForTransactionReceipt(client, args),
     watchBlockHeaders: (args) => watchBlockHeaders(client, args),
@@ -44799,6 +44840,7 @@ init_isAddress();
 init_toHex();
 init_keccak256();
 init_verifyMessage();
+init_verifyTypedData();
 init_formatUnits();
 init_parseUnits();
 
@@ -46519,14 +46561,14 @@ async function preflightDepositSolana(rpc, entry, account, amountHuman) {
     return { ...base2, status: "OPEN_READY", canDeposit: true, expectedSharesRaw: minted, findings };
   }
   const why = describeSimulation(sim);
-  const text2 = `${why} ${sim.logs.join(" ")}`;
-  if (NO_FEE_ACCOUNT.test(text2)) {
+  const text3 = `${why} ${sim.logs.join(" ")}`;
+  if (NO_FEE_ACCOUNT.test(text3)) {
     findings.push(
       `the account cannot pay a transaction fee: it holds no SOL (${why}). It needs SOL for the fee and for its share account's rent, about 0.003 SOL in all. The simulation stopped there, before the vault, so whether the vault takes this deposit was not checked`
     );
     return { ...base2, status: "NEEDS_FUNDS", canDeposit: false, findings };
   }
-  if (NO_TOKENS.test(text2)) {
+  if (NO_TOKENS.test(text3)) {
     findings.push(
       overCap ? `the deposit stopped at the account's own ${entry.asset.symbol} (${why}), and it is over the vault's deposit cap, so the vault would refuse it once funded` : `the deposit stopped at the account's own ${entry.asset.symbol} (${why}): the vault did not refuse the account; it needs ${entry.asset.symbol} on Solana`
     );
@@ -47105,8 +47147,8 @@ var withdrawEvent = parseAbiItem(
 var UNKNOWN_AFTER_SCAN_FAILURE = "unknown \u2014 event scan failed; see scan.note";
 var UNKNOWN_INCOMPLETE_SCAN = "unknown \u2014 the scan did not cover this position's history; see scan.note";
 function rangeLimitFromError(e4) {
-  const text2 = String(e4).replace(/,/g, "");
-  const m = text2.match(/(?:limited to a|up to a)\s+(\d+)\s*(?:block)?\s*range/i) ?? text2.match(/range\s+\d+\s+exceeds limit of\s+(\d+)/i) ?? text2.match(/exceeds max block range\s+(\d+)/i);
+  const text3 = String(e4).replace(/,/g, "");
+  const m = text3.match(/(?:limited to a|up to a)\s+(\d+)\s*(?:block)?\s*range/i) ?? text3.match(/range\s+\d+\s+exceeds limit of\s+(\d+)/i) ?? text3.match(/exceeds max block range\s+(\d+)/i);
   return m ? BigInt(m[1]) : void 0;
 }
 async function scanLogs(client, address3, event, owner, from16, to, maxRequests, refuseIfCapped, deadline, now) {
@@ -47390,11 +47432,11 @@ async function quoteWithdraw(args) {
     const obs = extractRevert(e4);
     if (obs) {
       simulated = "REVERTED";
-      const reason = obs.reason ?? "";
-      const said = reason || obs.selector || "no reason returned";
+      const reason2 = obs.reason ?? "";
+      const said = reason2 || obs.selector || "no reason returned";
       if (toBurn !== void 0 && held < toBurn) {
         note = `withdraw() reverted: the owner holds ${formatAmount(held, vault.shareDecimals)} ${vault.symbol} against ${formatAmount(toBurn, vault.shareDecimals)} needed \u2014 insufficient shares. (${said})`;
-      } else if (vault.chassis === "fusion" && (/transfer amount exceeds balance|ERC20InsufficientBalance/i.test(reason) || liquid < assets2)) {
+      } else if (vault.chassis === "fusion" && (/transfer amount exceeds balance|ERC20InsufficientBalance/i.test(reason2) || liquid < assets2)) {
         note = `withdraw() reverted ("${said}"): the vault holds ${formatAmount(liquid, vault.asset.decimals)} ${vault.asset.symbol} liquid against ${formatAmount(assets2, vault.asset.decimals)} requested \u2014 this chassis pays withdrawals from its own balance in the same block; the rest is deployed and needs the fund to unwind first. Up to the liquid amount can come out now: ask the operator whether to withdraw that, another amount, or wait. maxWithdraw() (${maxW === void 0 ? "reverted" : formatAmount(maxW, vault.asset.decimals)}) does not know this.`;
       } else if (vault.chassis === "morpho-v2") {
         const shares = toBurn === void 0 ? "previewWithdraw reverted, so the shares needed are unknown" : `the owner holds enough shares (${formatAmount(held, vault.shareDecimals)} against ${formatAmount(toBurn, vault.shareDecimals)} needed)`;
@@ -47600,14 +47642,14 @@ async function wrongChainReason(vault, endpoints) {
   return `the endpoint in ${wrong.source} answers for chain ${wrong.answersFor}, not ${info.name} (${vault.chainId}). It must be an endpoint for ${info.name}; until it is, no read for this chain can be trusted.`;
 }
 async function onItsChain(vault, endpoints, work) {
-  const [reason, settled] = await Promise.all([
+  const [reason2, settled] = await Promise.all([
     wrongChainReason(vault, endpoints),
     work().then(
       (value) => ({ ok: true, value }),
       (error62) => ({ ok: false, error: error62 })
     )
   ]);
-  if (reason !== void 0) throw new Error(reason);
+  if (reason2 !== void 0) throw new Error(reason2);
   if (!settled.ok) throw settled.error;
   return settled.value;
 }
@@ -47816,8 +47858,8 @@ function buildCommands() {
         const verified = src.configured ? { chainVerified: said === vault.chainId } : {};
         return text({ ...base2, rpc: "ok", ...verified, latestBlock: latest.toString(), ...logs }, vault.chainId);
       } catch (e4) {
-        const reason = redactEndpoints(e4 instanceof Error ? e4.message : String(e4));
-        return text({ ...base2, rpc: "unreachable", latestBlock: null, reason }, vault.chainId);
+        const reason2 = redactEndpoints(e4 instanceof Error ? e4.message : String(e4));
+        return text({ ...base2, rpc: "unreachable", latestBlock: null, reason: reason2 }, vault.chainId);
       }
     })
   );
@@ -48087,7 +48129,8 @@ var connectHome = () => {
 var noOpen = () => (process.env["TREASURY_CONNECT_NO_OPEN"] ?? "").trim().length > 0;
 
 // src/connect/session.ts
-var dir = () => connectHome() ?? join(homedir(), ".config", "treasury");
+var connectDir = () => connectHome() ?? join(homedir(), ".config", "treasury");
+var dir = connectDir;
 var sessionPath = () => join(dir(), "connect-session.json");
 function readSession() {
   let raw;
@@ -48397,9 +48440,9 @@ async function serveOnce(flow) {
             return json2(res, 200, { ok: true, message });
           }
           if (body["rejected"] === true) {
-            const reason = typeof body["reason"] === "string" ? body["reason"].slice(0, 300) : "declined in the browser";
+            const reason2 = typeof body["reason"] === "string" ? body["reason"].slice(0, 300) : "declined in the browser";
             flow.onReject?.(body);
-            finishWhenIdle({ ok: false, reason });
+            finishWhenIdle({ ok: false, reason: reason2 });
             return json2(res, 200, { ok: true });
           }
           if (busy) return json2(res, 409, { ok: false, reason: "already in progress" });
@@ -48487,7 +48530,7 @@ async function serveOnce(flow) {
   );
   timer.unref();
   void done.then(() => clearTimeout(timer));
-  return { url: `${origin}/${flow.mode}?s=${secret}`, port: Number(new URL(origin).port), done, close: () => finish({ ok: false, reason: "cancelled" }) };
+  return { url: `${origin}/${flow.mode}?s=${secret}`, port: Number(new URL(origin).port), done, close: () => finish({ ok: false, reason: "cancelled" }), settle: (r) => finish(r) };
 }
 
 // src/connect/solana.ts
@@ -48820,10 +48863,10 @@ function summarize(action, calls, admitted, receiver) {
     disclosures: action === "deposit" ? [...DISCLOSURES.plain.deposit, ...v.depositOpen.open ? [] : [DISCLOSURES.plain.gatedDeposit], ...DISCLOSURES.plain.always] : [...DISCLOSURES.plain.always]
   };
 }
-function summarizeSolana(action, v, amountText, account) {
+function summarizeSolana(action, v, amountText2, account) {
   return {
     action,
-    amount: amountText,
+    amount: amountText2,
     asset: v.asset.symbol,
     chain: "Solana",
     chainId: null,
@@ -49023,6 +49066,72 @@ function admit(calls, account) {
   return out;
 }
 
+// src/connect/owner-tokens.ts
+import { chmodSync as chmodSync2, existsSync, mkdirSync as mkdirSync2, readFileSync as readFileSync2, renameSync as renameSync2, rmSync as rmSync2, writeFileSync as writeFileSync2 } from "fs";
+import { join as join2 } from "path";
+import { randomBytes as randomBytes3 } from "crypto";
+var TOKEN_EXPIRY_MARGIN_MS = 6e4;
+var ownerTokensPath = () => join2(connectDir(), "owner-tokens.json");
+var keyOf = (k) => [k.host.toLowerCase(), k.clientId, k.owner.toLowerCase(), k.audience].join("|");
+function readAll() {
+  let raw;
+  try {
+    raw = readFileSync2(ownerTokensPath(), "utf8");
+  } catch {
+    return {};
+  }
+  try {
+    const v = JSON.parse(raw);
+    if (v === null || typeof v !== "object" || Array.isArray(v)) return {};
+    const out = {};
+    for (const [k, e4] of Object.entries(v)) {
+      const t = e4;
+      if (t && typeof t.token === "string" && t.token.length > 0 && typeof t.expiresAtIso === "string" && Number.isFinite(Date.parse(t.expiresAtIso))) {
+        out[k] = { token: t.token, expiresAtIso: t.expiresAtIso };
+      }
+    }
+    return out;
+  } catch {
+    return {};
+  }
+}
+function writeAll(all) {
+  mkdirSync2(connectDir(), { recursive: true, mode: 448 });
+  const path = ownerTokensPath();
+  const aside = `${path}.${randomBytes3(6).toString("hex")}.tmp`;
+  try {
+    writeFileSync2(aside, `${JSON.stringify(all, null, 2)}
+`, { mode: 384 });
+    chmodSync2(aside, 384);
+    renameSync2(aside, path);
+  } catch (e4) {
+    rmSync2(aside, { force: true });
+    throw e4;
+  }
+}
+function readOwnerToken(key, now = Date.now()) {
+  const t = readAll()[keyOf(key)];
+  if (!t) return void 0;
+  return Date.parse(t.expiresAtIso) - TOKEN_EXPIRY_MARGIN_MS > now ? t.token : void 0;
+}
+function writeOwnerToken(key, t, now = Date.now()) {
+  const all = readAll();
+  for (const [k, e4] of Object.entries(all)) if (Date.parse(e4.expiresAtIso) <= now) delete all[k];
+  all[keyOf(key)] = { token: t.token, expiresAtIso: t.expiresAtIso };
+  writeAll(all);
+}
+function clearOwnerToken(key) {
+  const all = readAll();
+  if (!(keyOf(key) in all)) return;
+  delete all[keyOf(key)];
+  writeAll(all);
+}
+function clearOwnerTokens() {
+  const had = existsSync(ownerTokensPath());
+  rmSync2(ownerTokensPath(), { force: true });
+  return had;
+}
+
 // src/connect/open.ts
 import { spawn } from "child_process";
 function canOpenBrowser() {
@@ -49045,7 +49154,7 @@ function openBrowser(url2) {
 }
 
 // src/connect/page.ts
-import { readFileSync as readFileSync2, realpathSync } from "fs";
+import { readFileSync as readFileSync3, realpathSync } from "fs";
 import { fileURLToPath, pathToFileURL } from "url";
 var PAGE_CSP = [
   "default-src 'self'",
@@ -49067,7 +49176,7 @@ var here = pathToFileURL(realpathSync(fileURLToPath(import.meta.url)));
 function readPageBundle() {
   for (const rel of ["./connect-page.js", "../../dist/connect-page.js"]) {
     try {
-      return readFileSync2(new URL(rel, here));
+      return readFileSync3(new URL(rel, here));
     } catch {
     }
   }
@@ -49106,7 +49215,7 @@ var transferEvent = parseAbiItem("event Transfer(address indexed from, address i
 var depositEvent2 = parseAbiItem("event Deposit(address indexed sender, address indexed owner, uint256 assets, uint256 shares)");
 var withdrawEvent2 = parseAbiItem("event Withdraw(address indexed sender, address indexed receiver, address indexed owner, uint256 assets, uint256 shares)");
 var same4 = (a, b) => getAddress(a) === getAddress(b);
-async function verifyLanded(client, hash4, call2, account, opts = {}) {
+async function verifyLanded(client, hash4, call3, account, opts = {}) {
   const attempts = opts.attempts ?? 30;
   const delayMs = opts.delayMs ?? 2e3;
   let receipt;
@@ -49122,24 +49231,24 @@ async function verifyLanded(client, hash4, call2, account, opts = {}) {
   if (opts.notBefore !== void 0 && receipt.blockNumber <= opts.notBefore) {
     return { verified: "mismatch", detail: `${hash4} was mined in block ${receipt.blockNumber}, which already existed when this confirm flow started (at block ${opts.notBefore}); it is not a transaction from this flow` };
   }
-  const vault = call2.vault.address;
-  const asset = call2.vault.asset.address;
+  const vault = call3.vault.address;
+  const asset = call3.vault.asset.address;
   const logs = receipt.logs;
   const fromAsset = logs.filter((l) => same4(l.address, asset));
   const fromVault = logs.filter((l) => same4(l.address, vault));
   let found = false;
-  if (call2.kind === "approve") {
+  if (call3.kind === "approve") {
     found = parseEventLogs({ abi: [approvalEvent], logs: fromAsset }).some(
-      (e4) => same4(e4.args.owner, account) && same4(e4.args.spender, vault) && e4.args.value === call2.amount
+      (e4) => same4(e4.args.owner, account) && same4(e4.args.spender, vault) && e4.args.value === call3.amount
     );
-  } else if (call2.kind === "deposit") {
-    found = parseEventLogs({ abi: [depositEvent2], logs: fromVault }).some((e4) => same4(e4.args.owner, account) && e4.args.assets === call2.amount);
+  } else if (call3.kind === "deposit") {
+    found = parseEventLogs({ abi: [depositEvent2], logs: fromVault }).some((e4) => same4(e4.args.owner, account) && e4.args.assets === call3.amount);
   } else {
     found = parseEventLogs({ abi: [withdrawEvent2], logs: fromVault }).some(
-      (e4) => same4(e4.args.owner, account) && same4(e4.args.receiver, account) && (call2.kind === "withdraw" ? e4.args.assets === call2.amount : e4.args.shares === call2.amount)
+      (e4) => same4(e4.args.owner, account) && same4(e4.args.receiver, account) && (call3.kind === "withdraw" ? e4.args.assets === call3.amount : e4.args.shares === call3.amount)
     );
   }
-  const expectedPull = call2.kind === "deposit" ? call2.amount : 0n;
+  const expectedPull = call3.kind === "deposit" ? call3.amount : 0n;
   let pullSeen = false;
   const alsoMoved = [];
   for (const t of parseEventLogs({ abi: [transferEvent], logs: fromAsset })) {
@@ -49150,18 +49259,18 @@ async function verifyLanded(client, hash4, call2, account, opts = {}) {
     }
     alsoMoved.push({ to: getAddress(t.args.to), amountRaw: t.args.value.toString() });
   }
-  const what = `${call2.kind} ${call2.amount} raw units on ${call2.vault.symbol}`;
+  const what = `${call3.kind} ${call3.amount} raw units on ${call3.vault.symbol}`;
   if (!found) {
     return {
       verified: "mismatch",
-      detail: `${hash4} succeeded, but carries no ${call2.kind === "approve" ? "Approval" : call2.kind === "deposit" ? "Deposit" : "Withdraw"} event for ${account} matching ${what}. Stop: what landed is not what was confirmed.`,
+      detail: `${hash4} succeeded, but carries no ${call3.kind === "approve" ? "Approval" : call3.kind === "deposit" ? "Deposit" : "Withdraw"} event for ${account} matching ${what}. Stop: what landed is not what was confirmed.`,
       ...alsoMoved.length ? { alsoMoved } : {}
     };
   }
   if (alsoMoved.length) {
     return {
       verified: "extra_transfer",
-      detail: `${what} landed as confirmed, and in the same transaction the account also sent ${call2.vault.asset.symbol} elsewhere (alsoMoved). That was not part of the call \u2014 often a wallet's own fee for paying gas in tokens. Tell the operator.`,
+      detail: `${what} landed as confirmed, and in the same transaction the account also sent ${call3.vault.asset.symbol} elsewhere (alsoMoved). That was not part of the call \u2014 often a wallet's own fee for paying gas in tokens. Tell the operator.`,
       alsoMoved
     };
   }
@@ -49306,10 +49415,10 @@ async function prepareConfirm(calls, session, deps, deadline) {
       const hash4 = body["hash"];
       if (!wellFormedHash(hash4) || known(hash4)) return;
       const i = body["index"];
-      const call2 = typeof i === "number" && Number.isInteger(i) && i >= 0 && i < calls.length ? calls[i] : void 0;
+      const call3 = typeof i === "number" && Number.isInteger(i) && i >= 0 && i < calls.length ? calls[i] : void 0;
       done.push({
-        step: call2?.step ?? 0,
-        description: call2?.description ?? "a transaction the page reported for no known step",
+        step: call3?.step ?? 0,
+        description: call3?.description ?? "a transaction the page reported for no known step",
         hash: hash4,
         verified: "unverified",
         detail: "the page reported this transaction but could not hand it over for checking; look it up before retrying anything"
@@ -49318,9 +49427,9 @@ async function prepareConfirm(calls, session, deps, deadline) {
     accept: async (index2, hash4) => {
       if (index2 !== done.length) return { ok: false, reason: `expected step ${done.length + 1}` };
       if (!wellFormedHash(hash4)) return { ok: false, reason: "malformed transaction hash" };
-      const call2 = calls[index2];
+      const call3 = calls[index2];
       if (known(hash4)) return { ok: false, reason: "this transaction hash was already reported for an earlier step" };
-      const entry = { step: call2.step, description: call2.description, hash: hash4, verified: "unverified", detail: "the flow ended while this transaction was still being checked" };
+      const entry = { step: call3.step, description: call3.description, hash: hash4, verified: "unverified", detail: "the flow ended while this transaction was still being checked" };
       done.push(entry);
       let verdict;
       try {
@@ -49331,7 +49440,7 @@ async function prepareConfirm(calls, session, deps, deadline) {
       delete entry.detail;
       Object.assign(entry, verdict);
       if (verdict.verified !== "matched" && verdict.verified !== "extra_transfer") {
-        stopReason = `step ${call2.step} (${call2.description}) is ${verdict.verified}: ${verdict.detail ?? "it did not land as confirmed"}`;
+        stopReason = `step ${call3.step} (${call3.description}) is ${verdict.verified}: ${verdict.detail ?? "it did not land as confirmed"}`;
         return { ok: true, kind: "stop", reply: { stop: true, verdict } };
       }
       if (index2 + 1 === calls.length) return { ok: true, kind: "finished", reply: { finished: true, verdict } };
@@ -49374,7 +49483,7 @@ function outcome(chainId, account, r) {
   const txs = r.result.ok ? r.result.value : r.done;
   const all = txs.length === r.total && txs.every((t) => t.verified === "matched" || t.verified === "extra_transfer");
   const status = r.result.ok ? all ? "completed" : "stopped" : txs.length ? "stopped" : "not_reported";
-  const reason = (r.result.ok ? r.stopReason : r.result.reason) ?? (status === "stopped" ? `the flow ended after ${txs.length} of ${r.total} transactions` : void 0);
+  const reason2 = (r.result.ok ? r.stopReason : r.result.reason) ?? (status === "stopped" ? `the flow ended after ${txs.length} of ${r.total} transactions` : void 0);
   return JSON.stringify(
     {
       status,
@@ -49382,7 +49491,7 @@ function outcome(chainId, account, r) {
       chainId,
       account,
       opened: r.opened,
-      ...reason ? { reason } : {},
+      ...reason2 ? { reason: reason2 } : {},
       calls_total: r.total,
       txs,
       next_step: status === "completed" ? "Every call landed as confirmed. Report each hash to the operator; any `extra_transfer` is money the wallet moved besides the call \u2014 say so." : status === "stopped" ? "Stopped before every call landed. Do not retry blindly: read `reason` and the last transaction's `verified` and `detail`, check the account with `earn balance`, and tell the operator." : "No transaction was reported to this command. That is not proof that none was sent: if the wallet showed a confirmation, check the account with `earn balance` before any retry. Tell the operator why (reason)."
@@ -49441,8 +49550,10 @@ function buildConnectCommands(deps = {}) {
         writeSolanaSession(r2.result.value);
         return JSON.stringify({ status: "connected", chain: "solana", ...r2.result.value, opened: r2.opened }, null, 2);
       }
+      const before = readSession()?.account;
       const r = await runConnect(deps);
       if (!r.result.ok) return Promise.reject(new Error(`not connected: ${r.result.reason}`));
+      if (before !== void 0 && before !== r.result.value.account) clearOwnerTokens();
       return JSON.stringify({ status: "connected", ...r.result.value, opened: r.opened }, null, 2);
     }
   );
@@ -49450,10 +49561,10 @@ function buildConnectCommands(deps = {}) {
     "connect_disconnect",
     {
       title: "Forget the connected wallet",
-      description: "Deletes the local connection record, the EVM and the Solana one. It moves nothing and revokes nothing in the wallet itself.",
+      description: "Deletes the local connection record, the EVM and the Solana one, and the API sign-in tokens `invest` kept. It moves nothing and revokes nothing in the wallet itself.",
       inputSchema: {}
     },
-    async () => JSON.stringify({ status: "disconnected", hadConnection: clearSession(), hadSolanaConnection: clearSolanaSession() }, null, 2)
+    async () => JSON.stringify({ status: "disconnected", hadConnection: clearSession(), hadSolanaConnection: clearSolanaSession(), hadOwnerTokens: clearOwnerTokens() }, null, 2)
   );
   const now = deps.now ?? (() => /* @__PURE__ */ new Date());
   const solanaDeps = () => ({
@@ -49480,9 +49591,9 @@ function buildConnectCommands(deps = {}) {
     markLeg(plan.code, index2, { status: "running" });
     let opened = false;
     const open2 = (url2) => (opened = true, (deps.open ?? announce)(url2));
-    let text2;
+    let text3;
     try {
-      text2 = await run2(open2);
+      text3 = await run2(open2);
     } catch (e4) {
       const message = redactEndpoints(e4 instanceof Error ? e4.message : String(e4));
       if (!opened) {
@@ -49492,7 +49603,7 @@ function buildConnectCommands(deps = {}) {
       markLeg(plan.code, index2, { status: "not_reported", reason: message });
       throw e4;
     }
-    const r = JSON.parse(text2);
+    const r = JSON.parse(text3);
     const status = r.status === "completed" ? "completed" : r.status === "stopped" ? "stopped" : "not_reported";
     markLeg(plan.code, index2, { status, txs: (r.txs ?? []).map(planTx), ...r.reason ? { reason: r.reason } : {} });
     const leg = plan.legs[index2];
@@ -49504,7 +49615,7 @@ function buildConnectCommands(deps = {}) {
     const txs = r.result.ok ? r.result.value : r.done;
     const all = txs.length === r.total && txs.every((t) => t.verified === "matched" || t.verified === "extra_transfer");
     const status = r.result.ok ? all ? "completed" : "stopped" : txs.length ? "stopped" : "not_reported";
-    const reason = (r.result.ok ? r.stopReason : r.result.reason) ?? (status === "stopped" ? "the flow ended before the transaction was confirmed" : void 0);
+    const reason2 = (r.result.ok ? r.stopReason : r.result.reason) ?? (status === "stopped" ? "the flow ended before the transaction was confirmed" : void 0);
     return JSON.stringify(
       {
         status,
@@ -49512,7 +49623,7 @@ function buildConnectCommands(deps = {}) {
         chainId: null,
         account: session.account,
         opened: r.opened,
-        ...reason ? { reason } : {},
+        ...reason2 ? { reason: reason2 } : {},
         calls_total: r.total,
         txs,
         next_step: status === "completed" ? "The transaction landed as confirmed. Report its signature to the operator; any `extra_transfer` is money the wallet moved besides the call \u2014 say so." : status === "stopped" ? "Stopped before the transaction landed as confirmed. Do not retry blindly: read `reason` and the transaction's `verified` and `detail`, check the account with `earn balance --chain solana`, and tell the operator." : "No transaction was reported to this command. That is not proof that none was sent: if the wallet showed a confirmation, check the account with `earn balance --chain solana` before any retry. Tell the operator why (reason)."
@@ -49521,12 +49632,12 @@ function buildConnectCommands(deps = {}) {
       2
     );
   };
-  const confirmSolana = async (acked, amountText, session, mode, intent) => {
+  const confirmSolana = async (acked, amountText2, session, mode, intent) => {
     const digest = solanaIntentDigest(session.account, acked.vault.address, acked.kind, acked.raw);
     if (mode.kind === "describe" || mode.kind === "ack" && mode.ack === void 0) {
       await intent();
-      const summary = summarizeSolana(acked.kind === "deposit" ? "deposit" : "withdraw", acked.vault, amountText, session.account);
-      if (mode.kind === "describe") return { digest, summary };
+      const summary2 = summarizeSolana(acked.kind === "deposit" ? "deposit" : "withdraw", acked.vault, amountText2, session.account);
+      if (mode.kind === "describe") return { digest, summary: summary2 };
       const pending = issueAckForDigest(digest, now());
       writePendingAck(pending);
       return JSON.stringify(
@@ -49534,13 +49645,13 @@ function buildConnectCommands(deps = {}) {
           status: "needs_acknowledgement",
           opened: false,
           action: acked.kind === "deposit" ? "deposit" : "withdraw",
-          amount: summary.amount,
+          amount: summary2.amount,
           chain: "solana",
           chainId: null,
-          vault: summary.vault,
+          vault: summary2.vault,
           account: session.account,
           receiver: session.account,
-          acknowledgement: acknowledgementText(summary),
+          acknowledgement: acknowledgementText(summary2),
           ack: pending.code,
           expiresAtIso: pending.expiresAtIso,
           next_step: `Post \`acknowledgement\` to the operator word for word, as it is, and wait for their reply. Only an explicit yes they give after reading it is an acknowledgement: not a "go" from before they saw it, and not your own reading of the conversation. On yes, run this same command again with --ack ${pending.code} added, and the signing page opens. On anything else, stop. The code works once, for exactly this ${acked.kind === "deposit" ? "deposit" : "withdrawal"}, until ${pending.expiresAtIso}.`
@@ -49598,7 +49709,7 @@ function buildConnectCommands(deps = {}) {
     }
     const ack = mode.ack;
     if (ack === void 0) {
-      const summary = summarize(action, calls, admit(calls, account), receiver);
+      const summary2 = summarize(action, calls, admit(calls, account), receiver);
       const pending = issueAck(calls, account, now());
       writePendingAck(pending);
       return JSON.stringify(
@@ -49606,13 +49717,13 @@ function buildConnectCommands(deps = {}) {
           status: "needs_acknowledgement",
           opened: false,
           action,
-          amount: summary.amount,
-          chain: CHAIN_INFO[summary.chainId].key,
-          chainId: summary.chainId,
-          vault: summary.vault,
+          amount: summary2.amount,
+          chain: CHAIN_INFO[summary2.chainId].key,
+          chainId: summary2.chainId,
+          vault: summary2.vault,
           account,
           receiver,
-          acknowledgement: acknowledgementText(summary),
+          acknowledgement: acknowledgementText(summary2),
           ack: pending.code,
           expiresAtIso: pending.expiresAtIso,
           next_step: `Post \`acknowledgement\` to the operator word for word, as it is, and wait for their reply. Only an explicit yes they give after reading it is an acknowledgement: not a "go" from before they saw it, and not your own reading of the conversation. On yes, run this same command again with --ack ${pending.code} added, and the signing page opens. On anything else, stop. The code works once, for exactly these calls, until ${pending.expiresAtIso}.`
@@ -49713,8 +49824,8 @@ function buildConnectCommands(deps = {}) {
     },
     async (args) => asText(await withdrawLeg(args, modeOf(args)))
   );
-  const parseLegs = (text2) => {
-    const parts = text2.split(/[;\n]/).map((p) => p.trim()).filter(Boolean);
+  const parseLegs = (text3) => {
+    const parts = text3.split(/[;\n]/).map((p) => p.trim()).filter(Boolean);
     if (parts.length === 0) throw new Error('--legs names no leg; give e.g. "deposit tlCashPlusUSDC2B 1; withdraw tlCashPlusUSDC2C all"');
     if (parts.length > PLAN_MAX_LEGS) throw new Error(`a plan holds at most ${PLAN_MAX_LEGS} legs, and --legs names ${parts.length}; split it into more than one plan`);
     return parts.map((p, i) => {
@@ -49740,8 +49851,8 @@ function buildConnectCommands(deps = {}) {
     const shares = await client.readContract({ address: v.address, abi: erc4626Abi, functionName: "balanceOf", args: [account] });
     return formatAmount(shares, v.shareDecimals);
   };
-  const describeLegs = async (text2) => {
-    const parsed = parseLegs(text2);
+  const describeLegs = async (text3) => {
+    const parsed = parseLegs(text3);
     const out = [];
     for (const [i, l] of parsed.entries()) {
       const target = resolveAnyVault(l.vault);
@@ -49891,7 +50002,7 @@ function buildConnectCommands(deps = {}) {
       if (next >= 0) mine.legs[next] = { ...mine.legs[next], status: "stopped", reason: "the plan was replaced or cleared by another command while its page was open" };
     };
     const reused = plan.page;
-    const legStatusOf = (status, txs, reason) => ({ status, txs: txs.map(planTx), ...reason ? { reason } : {} });
+    const legStatusOf = (status, txs, reason2) => ({ status, txs: txs.map(planTx), ...reason2 ? { reason: reason2 } : {} });
     const pendingLeft = () => mine.legs.some((l) => l.status === "pending");
     const serve = (secret2, ports) => serveOnce({
       mode: "plan",
@@ -49920,18 +50031,18 @@ function buildConnectCommands(deps = {}) {
       // The operator stopped the plan on the page: after the wallet declined (nothing sent), or between legs. A hash
       // the page could not hand over is put on record first, and its leg is then "may have been sent".
       onReject: (body) => {
-        const reason = typeof body["reason"] === "string" ? body["reason"].slice(0, 300) : "stopped on the page";
+        const reason2 = typeof body["reason"] === "string" ? body["reason"].slice(0, 300) : "stopped on the page";
         if (current) {
           current.core.onReject(body);
           const out = current.core.done;
           const unverified = out.some((t) => t.verified === "unverified");
-          record2(current.index, unverified ? legStatusOf("not_reported", out, `may have been sent: ${reason}`) : legStatusOf(body["declined"] === true ? "stopped" : "not_reported", out, reason));
+          record2(current.index, unverified ? legStatusOf("not_reported", out, `may have been sent: ${reason2}`) : legStatusOf(body["declined"] === true ? "stopped" : "not_reported", out, reason2));
           current = void 0;
           return;
         }
         const next = mine.legs.findIndex((l) => l.status === "pending");
         if (next < 0) return;
-        const stop = { status: "stopped", reason: body["unprepared"] === true ? `not prepared: ${reason}` : `the operator stopped the plan before this leg: ${reason}` };
+        const stop = { status: "stopped", reason: body["unprepared"] === true ? `not prepared: ${reason2}` : `the operator stopped the plan before this leg: ${reason2}` };
         if (startable(next)) record2(next, stop);
         else mine.legs[next] = { ...mine.legs[next], ...stop };
       },
@@ -50118,8 +50229,1235 @@ function buildConnectCommands(deps = {}) {
   return commands;
 }
 
+// src/config/invest.ts
+var INVEST = {
+  /**
+   * The latest an authorization may expire, counted from now. An authorization is a signature that
+   * moves funds; one that stays valid for days is a standing permission, not a withdrawal the owner
+   * is making now. The provider issues them for minutes.
+   */
+  maxAuthorizationLifetimeSeconds: 60 * 60,
+  /**
+   * The Tempora API every `invest` call goes to. Pinned here: the sign-in message must name this host, so a
+   * message for any other is refused before it is signed. `TREASURY_API_URL` points `invest` at another deployment.
+   */
+  apiUrl: "https://api.temporalabs.com",
+  /** How long one API call may take before it is reported as unanswered. */
+  apiTimeoutMs: 3e4,
+  /** How long the signing page stays open for one command: a sign-in, an enrolment and a transfer, with time to read each. */
+  pageTtlMs: 20 * 6e4,
+  /**
+   * How long a command keeps reading a request after the owner's last step, waiting for it to settle (a transfer to
+   * land, a withdrawal to run). Past it the command reports the request as still running; `invest request` reads it later.
+   */
+  watchMs: 5 * 6e4,
+  /** How often a request is read while it settles. */
+  pollMs: 5e3,
+  /** The most steps one command will put to the wallet; a request asking for more is refused, never followed. */
+  maxSteps: 12
+};
+
+// node_modules/@temporalabs/client/build/index.js
+var CLIENT_KEY_HEADER = "Tempora-Client-Key";
+var DEFS = { "ApiErrorSchema": { "type": "object", "properties": { "code": { "anyOf": [{ "type": "string", "enum": ["invalid_input", "invalid_wallet_view", "invalid_nonce", "unauthenticated", "wallet_proof_required", "challenge_invalid", "challenge_other_site", "signed_by_other_wallet", "signature_not_owner", "unknown_origin", "not_permitted", "gate_failed", "not_invited", "unknown_product", "not_found", "no_account", "already_enrolled", "account_updating", "transfer_claimed", "upstream_refused", "authorization_rejected", "authorization_other_account", "pays_someone_else", "transfer_mismatch", "nothing_to_withdraw", "request_expired", "rate_limited", "enrolment_check_failed", "internal_error", "upstream_in_progress", "upstream_unavailable", "upstream_unreadable", "unexpected_answer", "unknown_agent", "live_key_missing", "upstream_not_sent", "reasoning_unreadable", "upstream_timeout"] }, { "type": "string", "minLength": 1 }] }, "message": { "type": "string", "minLength": 1 }, "outcome": { "$ref": "#/$defs/OutcomeSchema" }, "traceId": { "type": "string", "minLength": 1 }, "gates": { "type": "array", "items": { "type": "object", "properties": { "id": { "$ref": "#/$defs/GateId" }, "code": { "type": "string" }, "reason": { "type": "string" }, "satisfy": { "$ref": "#/$defs/Satisfy" } }, "required": ["id"] } }, "submissionId": { "type": "string" }, "requestId": { "type": "string" } }, "required": ["code", "message", "outcome"] }, "OutcomeSchema": { "type": "string", "enum": ["refused", "unknown", "failed"] }, "GateId": { "anyOf": [{ "type": "string", "enum": ["allowlist", "wallet-check", "minimum", "product-status", "token", "chain", "enrolled", "market-hours", "stand-aside", "holdings", "sizing", "vault-live", "vault-terms", "allowance", "rate-limit"] }, { "type": "string", "minLength": 1 }] }, "Satisfy": { "anyOf": [{ "type": "object", "properties": { "kind": { "type": "string", "enum": ["handoff"] }, "url": { "type": "string", "format": "uri" } }, "required": ["kind", "url"] }, { "type": "object", "properties": { "kind": { "type": "string", "enum": ["wait"] }, "until": { "$ref": "#/$defs/Time" } }, "required": ["kind"] }, { "type": "object", "properties": { "kind": { "type": "string", "enum": ["adjust"] }, "field": { "type": "string" }, "min": { "type": "string" }, "max": { "type": "string" } }, "required": ["kind", "field"] }, { "type": "object", "properties": { "kind": { "type": "string", "minLength": 1 } }, "required": ["kind"], "additionalProperties": {} }] }, "Time": { "type": "string", "format": "date-time" }, "Account": { "type": "object", "properties": { "product": { "$ref": "#/$defs/ProductId" }, "owner": { "$ref": "#/$defs/Address" }, "standing": { "$ref": "#/$defs/Standing" }, "gates": { "type": "array", "items": { "$ref": "#/$defs/Gate" } }, "account": { "type": "object", "properties": { "enrolled": { "type": ["boolean", "null"], "description": "Whether this owner is enrolled on the product; null when the portfolio could not be read (the enrolled gate then says cannot_check). Always false for a vault, which has no enrolment." }, "smartAccount": { "$ref": "#/$defs/Address" }, "wallet": { "$ref": "#/$defs/WalletReading" } }, "required": ["enrolled"] }, "alerts": { "type": "array", "items": { "$ref": "#/$defs/Alert" } } }, "required": ["product", "owner", "standing", "gates", "account", "alerts"] }, "ProductId": { "type": "string", "pattern": "^(?:[a-z0-9][a-z0-9-]{0,3}|[a-z0-9][a-z0-9-]{5,63}|[a-qs-z0-9][a-z0-9-]{4}|r[a-np-z0-9-][a-z0-9-]{3}|ro[a-tv-z0-9-][a-z0-9-]{2}|rou[a-su-z0-9-][a-z0-9-]|rout[a-df-z0-9-])$" }, "Address": { "type": "string", "pattern": "^0x[0-9a-fA-F]{40}$" }, "Standing": { "type": "object", "properties": { "state": { "anyOf": [{ "type": "string", "enum": ["unregistered", "registered", "onboarding_requested", "reviewed", "declined", "admitted", "enrolled", "funded", "suspended", "revoked", "blocked"] }, { "type": "string", "minLength": 1 }] }, "code": { "type": "string" }, "reason": { "type": "string" } }, "required": ["state", "code", "reason"] }, "Gate": { "type": "object", "properties": { "id": { "$ref": "#/$defs/GateId" }, "status": { "anyOf": [{ "type": "string", "enum": ["pass", "fail", "pending"] }, { "type": "string", "minLength": 1 }] }, "code": { "type": "string" }, "reason": { "type": "string" }, "satisfy": { "$ref": "#/$defs/Satisfy" } }, "required": ["id", "status"], "description": "A market-hours gate that does not pass carries satisfy: { kind: wait, until }. Checked at runtime; JSON Schema cannot express it." }, "WalletReading": { "type": "object", "properties": { "assetId": { "$ref": "#/$defs/Caip19" }, "decimals": { "type": "integer", "minimum": 0, "maximum": 36 }, "block": { "$ref": "#/$defs/Raw" }, "balance": { "type": ["string", "null"], "pattern": "^(0|[1-9]\\d{0,77})$", "description": "The owner's balance of the deposit token, raw. Null when it could not be read: never 0." }, "allowance": { "type": ["string", "null"], "pattern": "^(0|[1-9]\\d{0,77})$", "description": "What the owner has let the vault (the spender) pull of the deposit token, raw. Null when it could not be read: never 0." }, "asOf": { "$ref": "#/$defs/Time" } }, "required": ["assetId", "decimals", "block", "balance", "allowance", "asOf"] }, "Caip19": { "type": "string", "pattern": "^[-a-z0-9]{3,8}:[-_a-zA-Z0-9]{1,32}\\/[-a-z0-9]{3,8}:[-.%a-zA-Z0-9]{1,128}$" }, "Raw": { "type": "string", "pattern": "^(0|[1-9]\\d{0,77})$" }, "Alert": { "type": "object", "properties": { "code": { "type": "string" }, "message": { "type": "string" } }, "required": ["code", "message"] }, "Performance": { "type": ["object", "null"], "properties": { "method": { "type": "string" }, "asOf": { "type": ["string", "null"], "format": "date-time", "description": "When the history was computed, as the portfolio provider sent it; null when it sent none." }, "days": { "type": "array", "items": { "type": "object", "properties": { "date": { "type": "string", "format": "date" }, "valueUsd": { "type": "number" }, "cashFlowUsd": { "type": "number" }, "returnPct": { "type": ["number", "null"] }, "live": { "type": "boolean" } }, "required": ["date", "valueUsd", "cashFlowUsd", "returnPct", "live"] } } }, "required": ["method", "asOf", "days"] }, "Request": { "type": "object", "properties": { "requestId": { "$ref": "#/$defs/RequestId" }, "action": { "anyOf": [{ "type": "string", "enum": ["deposit", "withdraw"] }, { "type": "string", "minLength": 1 }] }, "state": { "anyOf": [{ "type": "string", "enum": ["requires_action", "processing", "held", "completed", "partial", "failed", "cancelled"] }, { "type": "string", "minLength": 1 }] }, "chose": { "type": "object", "properties": { "product": { "$ref": "#/$defs/ProductId" }, "chain": { "$ref": "#/$defs/Caip2" }, "token": { "$ref": "#/$defs/TokenSymbol" }, "amount": { "$ref": "#/$defs/Amount" }, "vaultTerms": { "type": "object", "properties": { "version": { "type": "string", "minLength": 1 }, "sha256": { "$ref": "#/$defs/Hex32" } }, "required": ["version", "sha256"], "description": "A vault deposit only: the terms the depositor accepted, as recorded when the request was made. Read-only." } }, "required": ["product"] }, "quote": { "type": "object", "properties": { "raw": { "$ref": "#/$defs/Raw" }, "source": { "type": "string" }, "at": { "$ref": "#/$defs/Time" } }, "required": ["raw", "source", "at"] }, "expiresAt": { "$ref": "#/$defs/Time" }, "steps": { "type": "array", "items": { "$ref": "#/$defs/Step" } }, "warning": { "type": ["string", "null"] }, "split": { "$ref": "#/$defs/Split" }, "leftBehind": { "type": ["array", "null"], "items": { "type": "object", "properties": { "assetId": { "$ref": "#/$defs/Caip19" }, "raw": { "$ref": "#/$defs/Raw" }, "valueUsd": { "type": ["number", "null"] }, "reason": { "type": "string" } }, "required": ["assetId", "raw", "valueUsd", "reason"] } }, "smartAccount": { "$ref": "#/$defs/Address" }, "operation": { "type": "object", "properties": { "id": { "type": "string", "minLength": 1 }, "state": { "anyOf": [{ "type": "string", "enum": ["running", "completed", "failed", "cancelled"] }, { "type": "string", "minLength": 1 }] } }, "required": ["id", "state"], "description": "Only on a withdrawal request found by its operationId when the API holds no request for that operation: the request is answered from the operation at the portfolio provider, and carries that operation and its state, with no steps. Its expiresAt is the time of that answer and bounds nothing, because nothing is left to sign." } }, "required": ["requestId", "action", "state", "chose", "expiresAt", "steps"] }, "RequestId": { "type": "string", "pattern": "^req_[0-9A-Za-z]{10,40}$" }, "Caip2": { "type": "string", "pattern": "^[-a-z0-9]{3,8}:[-_a-zA-Z0-9]{1,32}$" }, "TokenSymbol": { "type": "string", "pattern": "^[A-Z][A-Z0-9]{1,11}$" }, "Amount": { "oneOf": [{ "type": "object", "properties": { "kind": { "type": "string", "enum": ["assets"] }, "assetId": { "$ref": "#/$defs/Caip19" }, "raw": { "$ref": "#/$defs/PositiveRaw" } }, "required": ["kind", "assetId", "raw"] }, { "type": "object", "properties": { "kind": { "type": "string", "enum": ["shares"] }, "raw": { "$ref": "#/$defs/PositiveRaw" } }, "required": ["kind", "raw"] }, { "type": "object", "properties": { "kind": { "type": "string", "enum": ["all"] } }, "required": ["kind"] }, { "type": "object", "properties": { "kind": { "type": "string", "enum": ["fraction"] }, "value": { "$ref": "#/$defs/Fraction" } }, "required": ["kind", "value"] }, { "type": "object", "properties": { "kind": { "type": "string", "enum": ["usd"] }, "value": { "$ref": "#/$defs/PositiveUsd" } }, "required": ["kind", "value"] }] }, "PositiveRaw": { "type": "string", "pattern": "^[1-9]\\d{0,77}$" }, "Fraction": { "type": "string", "pattern": "^(?:1(?:\\.0{1,18})?|0\\.(?:0{0}[1-9]\\d{5,17}|0{1}[1-9]\\d{4,16}|0{2}[1-9]\\d{3,15}|0{3}[1-9]\\d{2,14}|0{4}[1-9]\\d{1,13}|0{5}[1-9]\\d{0,12}|0{6}[1-9]\\d{0,11}|0{7}[1-9]\\d{0,10}|0{8}[1-9]\\d{0,9}|0{9}[1-9]\\d{0,8}|0{10}[1-9]\\d{0,7}|0{11}[1-9]\\d{0,6}|0{12}[1-9]\\d{0,5}|0{13}[1-9]\\d{0,4}|0{14}[1-9]\\d{0,3}|0{15}[1-9]\\d{0,2}|0{16}[1-9]\\d{0,1}|0{17}[1-9]\\d{0,0}))$" }, "PositiveUsd": { "type": "string", "pattern": "^(?:[1-9]\\d*(?:\\.\\d{1,2})?|0\\.(?:[1-9]\\d?|0[1-9]))$" }, "Hex32": { "type": "string", "pattern": "^0x[0-9a-fA-F]{64}$" }, "Step": { "anyOf": [{ "type": "object", "properties": { "stepId": { "$ref": "#/$defs/StepId" }, "chainId": { "$ref": "#/$defs/Caip2" }, "state": { "anyOf": [{ "type": "string", "enum": ["waiting", "ready", "sending", "confirming", "queued", "landed", "replaced", "reverted", "mismatch", "running", "completed", "failed", "cancelled"] }, { "type": "string", "minLength": 1 }] }, "after": { "$ref": "#/$defs/StepId" }, "checks": { "type": "array", "items": { "$ref": "#/$defs/Check" } }, "handoff": { "type": "string", "format": "uri" }, "kind": { "type": "string", "enum": ["sign_message"] }, "purpose": { "type": "string", "minLength": 1 }, "payload": { "type": "object", "properties": { "generation": { "type": "integer", "minimum": 1 }, "expiresAt": { "$ref": "#/$defs/Time" }, "bytes": { "type": "string", "pattern": "^0x([0-9a-fA-F]{2})*$", "description": "The bytes to sign, as raw bytes: personal_sign of these bytes (viem signMessage({ message: { raw: bytes } })), never of their text." } }, "required": ["generation", "expiresAt", "bytes"] } }, "required": ["stepId", "chainId", "state", "checks", "kind", "purpose"] }, { "type": "object", "properties": { "stepId": { "$ref": "#/$defs/StepId" }, "chainId": { "$ref": "#/$defs/Caip2" }, "state": { "anyOf": [{ "type": "string", "enum": ["waiting", "ready", "sending", "confirming", "queued", "landed", "replaced", "reverted", "mismatch", "running", "completed", "failed", "cancelled"] }, { "type": "string", "minLength": 1 }] }, "after": { "$ref": "#/$defs/StepId" }, "checks": { "type": "array", "items": { "$ref": "#/$defs/Check" } }, "handoff": { "type": "string", "format": "uri" }, "kind": { "type": "string", "enum": ["sign_typed_data"] }, "manifest": { "type": "object", "properties": { "index": { "type": "integer", "minimum": 0 }, "of": { "type": "integer", "minimum": 1 } }, "required": ["index", "of"] }, "plan": { "$ref": "#/$defs/BatchPlan" }, "operationId": { "type": "string" }, "payload": { "type": "object", "properties": { "generation": { "type": "integer", "minimum": 1 }, "expiresAt": { "$ref": "#/$defs/Time" }, "typedData": { "type": "object", "properties": { "domain": { "type": "object", "properties": { "chainId": { "type": "integer" } }, "required": ["chainId"], "additionalProperties": {} }, "types": { "type": "object", "additionalProperties": { "type": "array", "items": { "type": "object", "properties": { "name": { "type": "string" }, "type": { "type": "string" } }, "required": ["name", "type"] } } }, "primaryType": { "type": "string" }, "message": { "type": "object", "properties": {}, "additionalProperties": {} } }, "required": ["domain", "types", "primaryType", "message"], "additionalProperties": {} } }, "required": ["generation", "expiresAt", "typedData"] } }, "required": ["stepId", "chainId", "state", "checks", "kind", "manifest", "plan"] }, { "type": "object", "properties": { "stepId": { "$ref": "#/$defs/StepId" }, "chainId": { "$ref": "#/$defs/Caip2" }, "state": { "anyOf": [{ "type": "string", "enum": ["waiting", "ready", "sending", "confirming", "queued", "landed", "replaced", "reverted", "mismatch", "running", "completed", "failed", "cancelled"] }, { "type": "string", "minLength": 1 }] }, "after": { "$ref": "#/$defs/StepId" }, "checks": { "type": "array", "items": { "$ref": "#/$defs/Check" } }, "handoff": { "type": "string", "format": "uri" }, "kind": { "type": "string", "enum": ["send_transaction"] }, "purpose": { "anyOf": [{ "type": "string", "enum": ["approve", "deposit", "withdraw", "redeem"] }, { "type": "string", "minLength": 1 }] }, "attemptId": { "type": "string" }, "verification": { "type": "object", "properties": { "hash": { "$ref": "#/$defs/Hex32" }, "alsoMoved": { "type": "array", "items": { "type": "object", "properties": { "to": { "$ref": "#/$defs/Address" }, "amountRaw": { "$ref": "#/$defs/Raw" } }, "required": ["to", "amountRaw"] } }, "nonce": { "type": "integer", "minimum": 0 }, "head": { "$ref": "#/$defs/Raw" }, "message": { "type": "string" }, "lastLook": { "anyOf": [{ "type": "string", "enum": ["unreadable"] }, { "type": "string", "minLength": 1 }] } } }, "payload": { "type": "object", "properties": { "generation": { "type": "integer", "minimum": 1 }, "expiresAt": { "$ref": "#/$defs/Time" }, "to": { "$ref": "#/$defs/Address" }, "data": { "type": "string", "pattern": "^0x([0-9a-fA-F]{2})*$" }, "value": { "$ref": "#/$defs/Raw" } }, "required": ["generation", "expiresAt", "to", "data", "value"] } }, "required": ["stepId", "chainId", "state", "checks", "kind"] }, { "type": "object", "properties": { "stepId": { "$ref": "#/$defs/StepId" }, "chainId": { "$ref": "#/$defs/Caip2" }, "state": { "anyOf": [{ "type": "string", "enum": ["waiting", "ready", "sending", "confirming", "queued", "landed", "replaced", "reverted", "mismatch", "running", "completed", "failed", "cancelled"] }, { "type": "string", "minLength": 1 }] }, "after": { "$ref": "#/$defs/StepId" }, "checks": { "type": "array", "items": { "$ref": "#/$defs/Check" } }, "handoff": { "type": "string", "format": "uri" }, "kind": { "type": "string", "enum": ["send_solana_transaction"] }, "attemptId": { "type": "string" }, "payload": { "type": "object", "properties": { "generation": { "type": "integer", "minimum": 1 }, "expiresAt": { "$ref": "#/$defs/Time" }, "transaction": { "$ref": "#/$defs/Base64" } }, "required": ["generation", "expiresAt", "transaction"] } }, "required": ["stepId", "chainId", "state", "checks", "kind"] }, { "type": "object", "properties": { "stepId": { "$ref": "#/$defs/StepId" }, "kind": { "type": "string", "pattern": "^(?:$|[^s][\\s\\S]*|s$|s[^ie][\\s\\S]*|si$|si[^g][\\s\\S]*|sig$|sig[^n][\\s\\S]*|sign$|sign[^_][\\s\\S]*|sign_$|sign_[^mt][\\s\\S]*|sign_m$|sign_m[^e][\\s\\S]*|sign_me$|sign_me[^s][\\s\\S]*|sign_mes$|sign_mes[^s][\\s\\S]*|sign_mess$|sign_mess[^a][\\s\\S]*|sign_messa$|sign_messa[^g][\\s\\S]*|sign_messag$|sign_messag[^e][\\s\\S]*|sign_message[\\s\\S]+|sign_t$|sign_t[^y][\\s\\S]*|sign_ty$|sign_ty[^p][\\s\\S]*|sign_typ$|sign_typ[^e][\\s\\S]*|sign_type$|sign_type[^d][\\s\\S]*|sign_typed$|sign_typed[^_][\\s\\S]*|sign_typed_$|sign_typed_[^d][\\s\\S]*|sign_typed_d$|sign_typed_d[^a][\\s\\S]*|sign_typed_da$|sign_typed_da[^t][\\s\\S]*|sign_typed_dat$|sign_typed_dat[^a][\\s\\S]*|sign_typed_data[\\s\\S]+|se$|se[^n][\\s\\S]*|sen$|sen[^d][\\s\\S]*|send$|send[^_][\\s\\S]*|send_$|send_[^ts][\\s\\S]*|send_t$|send_t[^r][\\s\\S]*|send_tr$|send_tr[^a][\\s\\S]*|send_tra$|send_tra[^n][\\s\\S]*|send_tran$|send_tran[^s][\\s\\S]*|send_trans$|send_trans[^a][\\s\\S]*|send_transa$|send_transa[^c][\\s\\S]*|send_transac$|send_transac[^t][\\s\\S]*|send_transact$|send_transact[^i][\\s\\S]*|send_transacti$|send_transacti[^o][\\s\\S]*|send_transactio$|send_transactio[^n][\\s\\S]*|send_transaction[\\s\\S]+|send_s$|send_s[^o][\\s\\S]*|send_so$|send_so[^l][\\s\\S]*|send_sol$|send_sol[^a][\\s\\S]*|send_sola$|send_sola[^n][\\s\\S]*|send_solan$|send_solan[^a][\\s\\S]*|send_solana$|send_solana[^_][\\s\\S]*|send_solana_$|send_solana_[^t][\\s\\S]*|send_solana_t$|send_solana_t[^r][\\s\\S]*|send_solana_tr$|send_solana_tr[^a][\\s\\S]*|send_solana_tra$|send_solana_tra[^n][\\s\\S]*|send_solana_tran$|send_solana_tran[^s][\\s\\S]*|send_solana_trans$|send_solana_trans[^a][\\s\\S]*|send_solana_transa$|send_solana_transa[^c][\\s\\S]*|send_solana_transac$|send_solana_transac[^t][\\s\\S]*|send_solana_transact$|send_solana_transact[^i][\\s\\S]*|send_solana_transacti$|send_solana_transacti[^o][\\s\\S]*|send_solana_transactio$|send_solana_transactio[^n][\\s\\S]*|send_solana_transaction[\\s\\S]+)$" }, "state": { "type": "string" } }, "required": ["stepId", "kind", "state"], "additionalProperties": {} }] }, "StepId": { "type": "string", "pattern": "^s\\d{1,3}$" }, "Check": { "type": "object", "properties": { "what": { "type": "string", "minLength": 1 }, "equals": { "type": "string" }, "note": { "type": "string" } }, "required": ["what"] }, "BatchPlan": { "type": "object", "properties": { "liquidate": { "type": "boolean" }, "assets": { "type": "array", "items": { "type": "object", "properties": { "assetId": { "$ref": "#/$defs/Caip19" }, "amountRaw": { "$ref": "#/$defs/Raw" } }, "required": ["assetId", "amountRaw"] } } }, "required": ["liquidate", "assets"] }, "Base64": { "type": "string", "pattern": "^(?:[0-9a-zA-Z+/]{4})*(?:[0-9a-zA-Z+/]{2}==|[0-9a-zA-Z+/]{3}=)?$" }, "Split": { "type": ["object", "null"], "properties": { "fromIdleUsd": { "type": "number" }, "fromSaleUsd": { "type": "number" }, "remainingInvestedUsd": { "type": "number" } }, "required": ["fromIdleUsd", "fromSaleUsd", "remainingInvestedUsd"] }, "DepositBody": { "type": "object", "properties": { "product": { "$ref": "#/$defs/ProductId" }, "amount": { "$ref": "#/$defs/Amount" }, "chain": { "$ref": "#/$defs/Caip2" }, "token": { "$ref": "#/$defs/TokenSymbol" }, "sent": { "$ref": "#/$defs/Sent" }, "vaultTerms": { "type": "object", "properties": { "version": { "type": "string", "minLength": 1 }, "sha256": { "$ref": "#/$defs/Hex32" } }, "required": ["version", "sha256"], "additionalProperties": false, "description": "A vault deposit only, and required there: the `vaultTerms.version` and `vaultTerms.sha256` of the terms the depositor was shown and accepted. Any other is refused at the vault-terms gate; the request records it as `chose.vaultTerms`." } }, "required": ["product"] }, "Sent": { "type": "object", "properties": { "txHash": { "$ref": "#/$defs/Hex32" }, "to": { "$ref": "#/$defs/Address" }, "amount": { "$ref": "#/$defs/TokenAmount" }, "notBefore": { "$ref": "#/$defs/Raw" }, "nonce": { "$ref": "#/$defs/Raw" }, "wallet": { "type": ["object", "null"], "properties": { "nonce": { "$ref": "#/$defs/Raw" }, "from": { "$ref": "#/$defs/Address" }, "blockNumber": { "anyOf": [{ "$ref": "#/$defs/Raw" }, { "type": "null" }] } }, "required": ["nonce", "from", "blockNumber"] } }, "required": ["txHash", "to", "amount", "notBefore"] }, "TokenAmount": { "type": "string", "pattern": "^(?:[1-9]\\d*(?:\\.\\d{1,18})?|0\\.(?:0{0}[1-9]\\d{0,17}|0{1}[1-9]\\d{0,16}|0{2}[1-9]\\d{0,15}|0{3}[1-9]\\d{0,14}|0{4}[1-9]\\d{0,13}|0{5}[1-9]\\d{0,12}|0{6}[1-9]\\d{0,11}|0{7}[1-9]\\d{0,10}|0{8}[1-9]\\d{0,9}|0{9}[1-9]\\d{0,8}|0{10}[1-9]\\d{0,7}|0{11}[1-9]\\d{0,6}|0{12}[1-9]\\d{0,5}|0{13}[1-9]\\d{0,4}|0{14}[1-9]\\d{0,3}|0{15}[1-9]\\d{0,2}|0{16}[1-9]\\d{0,1}|0{17}[1-9]\\d{0,0}))$" }, "Positions": { "type": "object", "properties": { "positions": { "type": "array", "items": { "$ref": "#/$defs/Position" } } }, "required": ["positions"] }, "Position": { "type": "object", "properties": { "product": { "$ref": "#/$defs/ProductId" }, "kind": { "anyOf": [{ "type": "string", "enum": ["portfolio", "vault"] }, { "type": "string", "minLength": 1 }] }, "stage": { "anyOf": [{ "type": "string", "enum": ["not_enrolled", "enrolled", "awaiting_first_rebalance", "below_minimum", "invested", "unknown"] }, { "type": "string", "minLength": 1 }], "description": 'unknown: a vault whose share balance could not be read. It is listed so a fault is not read as "holds nothing", but no holding is claimed (heldCount and assetCount are 0).' }, "smartAccount": { "anyOf": [{ "$ref": "#/$defs/Address" }, { "type": "null" }] }, "value": { "type": "object", "properties": { "usd": { "type": ["number", "null"], "description": "Null when the value is unreadable: never an estimate." }, "state": { "anyOf": [{ "type": "string", "enum": ["read", "partial", "unreadable", "from_list"] }, { "type": "string", "minLength": 1 }], "description": "partial: a lower bound, because something was left out of the total. unreadable: no figure." }, "asOf": { "type": ["string", "null"], "format": "date-time", "description": "When the value was observed by its source: the portfolio provider's own time for an invested account, the time of our own read for the others. Null when unreadable." } }, "required": ["usd", "state", "asOf"] }, "balances": { "type": "array", "items": { "type": "object", "properties": { "assetId": { "$ref": "#/$defs/Caip19" }, "raw": { "$ref": "#/$defs/Raw" }, "decimals": { "type": "integer", "minimum": 0 } }, "required": ["assetId", "raw", "decimals"] }, "description": "The assets held, non-zero, each with its own raw amount and decimals (read decimals per row; never assume 18). Filled for an invested portfolio, where the idle USDT is one of the rows. Empty before the first rebalance, when the idle USDT is only in `idleUsd`, and empty when the value is unreadable." }, "idleUsd": { "type": ["number", "null"], "description": "Uninvested USDT in the account, in USD (1 USDT is taken as 1 USD). Null when it could not be read." }, "pnlUsd": { "type": ["number", "null"], "description": "Null for a vault: earnings cannot be read over public RPCs in v0.1.2." }, "driftPct": { "type": ["number", "null"] }, "driftTicker": { "type": ["string", "null"] }, "heldCount": { "type": "integer" }, "assetCount": { "type": "integer" }, "holdings": { "type": "array", "items": { "$ref": "#/$defs/Holding" } }, "targetsFrom": { "type": ["object", "null"], "properties": { "source": { "type": "string" }, "version": { "type": ["integer", "null"] }, "matchesRecord": { "type": "boolean" } }, "required": ["source", "version", "matchesRecord"] }, "allocation": { "type": "object", "properties": { "state": { "anyOf": [{ "type": "string", "enum": ["awaiting_first_rebalance", "below_minimum", "market_closed", "processing", "invested", "unknown"] }, { "type": "string", "minLength": 1 }], "description": "invested: a fresh market status says a trading session is open and no unresolved submission is known to this service (the processing state is not reported yet). market_closed: only when the market itself reports no open session. unknown: a market fact is missing, stale or not believable; never read it as closed." } }, "required": ["state"] }, "subscribedAt": { "anyOf": [{ "$ref": "#/$defs/Time" }, { "type": "null" }] }, "lastRebalanceAt": { "anyOf": [{ "$ref": "#/$defs/Time" }, { "type": "null" }] }, "nextRebalanceAt": { "anyOf": [{ "$ref": "#/$defs/Time" }, { "type": "null" }] }, "shares": { "type": "object", "properties": { "raw": { "$ref": "#/$defs/Raw" }, "decimals": { "type": "integer", "minimum": 0 } }, "required": ["raw", "decimals"] }, "withdrawable": { "$ref": "#/$defs/VaultWithdrawable" } }, "required": ["product", "kind", "stage", "smartAccount", "value", "balances", "idleUsd", "pnlUsd", "driftPct", "driftTicker", "heldCount", "assetCount", "holdings", "targetsFrom", "allocation", "subscribedAt", "lastRebalanceAt", "nextRebalanceAt"] }, "Holding": { "type": "object", "properties": { "ticker": { "type": ["string", "null"] }, "symbol": { "type": "string" }, "address": { "anyOf": [{ "$ref": "#/$defs/Address" }, { "$ref": "#/$defs/Caip19" }], "description": "The token contract address, or the CAIP-19 asset id of an asset with no token contract (such as native BNB)." }, "balance": { "type": "number" }, "valueUsd": { "type": "number" }, "weightPct": { "type": "number" }, "targetPct": { "type": ["number", "null"] }, "gapPp": { "type": ["number", "null"] } }, "required": ["ticker", "symbol", "address", "balance", "valueUsd", "weightPct", "targetPct", "gapPp"] }, "VaultWithdrawable": { "type": "object", "properties": { "block": { "$ref": "#/$defs/Raw" }, "basis": { "anyOf": [{ "type": "string", "enum": ["floor"] }, { "type": "string", "minLength": 1 }], "description": "floor: two probes at the block, no search. At least `withdrawable.assets` can be withdrawn now; the quote searches for the amount." }, "withdrawable": { "$ref": "#/$defs/Withdrawable" } }, "required": ["block", "basis", "withdrawable"] }, "Withdrawable": { "type": "object", "properties": { "state": { "anyOf": [{ "type": "string", "enum": ["all", "partial", "refused", "unknown"] }, { "type": "string", "minLength": 1 }] }, "assets": { "anyOf": [{ "$ref": "#/$defs/Raw" }, { "type": "null" }] }, "within": { "anyOf": [{ "$ref": "#/$defs/Raw" }, { "type": "null" }] }, "reason": { "type": ["string", "null"], "description": "Refused only: why the vault refused, as it said. Null otherwise." } }, "required": ["state", "assets", "within", "reason"] }, "ProductList": { "type": "object", "properties": { "products": { "type": "array", "items": { "$ref": "#/$defs/Product" } } }, "required": ["products"] }, "Product": { "type": "object", "properties": { "id": { "$ref": "#/$defs/ProductId" }, "kind": { "anyOf": [{ "type": "string", "enum": ["portfolio", "vault"] }, { "type": "string", "minLength": 1 }] }, "name": { "type": "string" }, "status": { "anyOf": [{ "type": "string", "enum": ["live", "invite-only", "preview", "coming-soon", "paused", "closed"] }, { "type": "string", "minLength": 1 }] }, "featured": { "type": "boolean" }, "thesis": { "type": "string" }, "risk": { "anyOf": [{ "type": "string", "enum": ["conservative", "moderate", "growth"] }, { "type": "string", "minLength": 1 }] }, "previousIds": { "type": "array", "items": { "$ref": "#/$defs/ProductId" } }, "chains": { "type": "array", "items": { "$ref": "#/$defs/Caip2" } }, "tokens": { "type": "array", "items": { "$ref": "#/$defs/TokenSymbol" } }, "defaults": { "type": "object", "properties": { "chain": { "$ref": "#/$defs/Caip2" }, "token": { "$ref": "#/$defs/TokenSymbol" } }, "required": ["chain", "token"] }, "minimum": { "type": ["object", "null"], "properties": { "firstDepositUsd": { "$ref": "#/$defs/Usd" }, "topUpUsd": { "$ref": "#/$defs/Usd" } }, "required": ["firstDepositUsd"] }, "gates": { "type": "array", "items": { "$ref": "#/$defs/GateId" } }, "steps": { "type": "object", "properties": { "deposit": { "type": "array", "items": { "type": "string" } }, "withdraw": { "type": "array", "items": { "type": "string" } } }, "required": ["deposit", "withdraw"] }, "amountForms": { "type": "object", "properties": { "deposit": { "type": "array", "items": { "anyOf": [{ "type": "string", "enum": ["assets", "shares", "all", "fraction", "usd"] }, { "type": "string", "minLength": 1 }] } }, "withdraw": { "type": "array", "items": { "anyOf": [{ "type": "string", "enum": ["assets", "shares", "all", "fraction", "usd"] }, { "type": "string", "minLength": 1 }] } } }, "required": ["deposit", "withdraw"] }, "rebalance": { "type": ["object", "null"], "properties": { "cadence": { "type": "string" } }, "required": ["cadence"] }, "terms": { "type": "object", "properties": { "swapFeePct": { "type": ["number", "null"] }, "platformFeeConfirmed": { "type": "boolean" }, "text": { "type": "string" } }, "required": ["swapFeePct", "platformFeeConfirmed"] }, "limits": { "type": ["object", "null"], "additionalProperties": { "type": "number" } }, "sizing": { "type": ["object", "null"], "additionalProperties": { "type": "number" } }, "members": { "type": "array", "items": { "$ref": "#/$defs/Member" } }, "sectorWeights": { "type": ["object", "null"], "additionalProperties": { "type": "number" } }, "methodology": { "type": "object", "properties": { "version": { "type": ["string", "null"] }, "month": { "type": ["string", "null"] } }, "required": ["version", "month"] }, "stats": { "type": "object", "properties": { "netApy30d": { "type": ["number", "null"] }, "tvlUsd": { "type": ["number", "null"] }, "subscribers": { "type": ["integer", "null"] }, "inception": { "type": ["string", "null"] } }, "required": ["netApy30d", "tvlUsd", "subscribers", "inception"] }, "vault": { "$ref": "#/$defs/VaultIdentity" }, "vaultFees": { "$ref": "#/$defs/VaultFees" }, "vaultTerms": { "$ref": "#/$defs/VaultTerms" }, "vaultLinks": { "$ref": "#/$defs/VaultLinks" }, "warnings": { "type": "array", "items": { "type": "string" } }, "recordVersion": { "type": "integer", "minimum": 0 } }, "required": ["id", "kind", "name", "status", "featured", "thesis", "risk", "previousIds", "chains", "tokens", "defaults", "minimum", "gates", "steps", "amountForms", "rebalance", "terms", "limits", "sizing", "members", "sectorWeights", "methodology", "stats", "warnings", "recordVersion"] }, "Usd": { "type": "string", "pattern": "^(0|[1-9]\\d*)(\\.\\d{1,2})?$" }, "Member": { "type": "object", "properties": { "ticker": { "type": "string" }, "company": { "type": "string" }, "weightPpm": { "type": "integer", "minimum": 0, "maximum": 1e6 }, "industry": { "type": "string" }, "weightPct": { "type": "number" }, "assetId": { "$ref": "#/$defs/Caip19" }, "split": { "type": "object", "additionalProperties": { "type": "number" } } }, "required": ["ticker", "company", "weightPpm", "industry", "weightPct", "assetId"] }, "VaultIdentity": { "type": "object", "properties": { "standard": { "anyOf": [{ "type": "string", "enum": ["erc4626"] }, { "type": "string", "minLength": 1 }] }, "chain": { "$ref": "#/$defs/Caip2" }, "vaultAddress": { "$ref": "#/$defs/Address" }, "assetAddress": { "$ref": "#/$defs/Address" }, "assetDecimals": { "type": "integer", "minimum": 0, "maximum": 36 }, "shareDecimals": { "type": "integer", "minimum": 0, "maximum": 36 } }, "required": ["standard", "chain", "vaultAddress", "assetAddress", "assetDecimals", "shareDecimals"] }, "VaultFees": { "type": "object", "properties": { "performance": { "type": ["string", "null"], "pattern": "^(0|1|0\\.\\d{1,18})$" }, "management": { "type": ["string", "null"], "pattern": "^(0|1|0\\.\\d{1,18})$" }, "asOf": { "anyOf": [{ "$ref": "#/$defs/Time" }, { "type": "null" }] }, "block": { "anyOf": [{ "$ref": "#/$defs/Raw" }, { "type": "null" }] } }, "required": ["performance", "management", "asOf", "block"] }, "VaultTerms": { "type": "object", "properties": { "text": { "type": "string", "minLength": 1, "maxLength": 1e4, "pattern": "^[^\\u0000-\\u0008\\u000B-\\u001F\\u007F]+$", "description": "Plain text, at most 10000 characters, rendered as text: never markup, and no control character but a newline or a tab." }, "version": { "type": "string", "minLength": 1 }, "sha256": { "$ref": "#/$defs/Hex32" } }, "required": ["text", "version", "sha256"] }, "VaultLinks": { "type": "object", "properties": { "explorer": { "type": "string", "format": "uri" }, "venue": { "type": ["string", "null"], "format": "uri" } }, "required": ["explorer", "venue"] }, "Route": { "type": "object", "properties": { "productId": { "anyOf": [{ "$ref": "#/$defs/ProductId" }, { "type": "null" }] }, "reason": { "type": "string" } }, "required": ["productId"] }, "Tvl": { "type": "object", "properties": { "usd": { "type": ["number", "null"] }, "asOf": { "anyOf": [{ "$ref": "#/$defs/Time" }, { "type": "null" }] }, "stale": { "type": "boolean" } }, "required": ["usd", "asOf", "stale"] }, "Market": { "type": "object", "properties": { "open": { "type": "boolean" }, "session": { "type": ["string", "null"] }, "allHoldings": { "type": "boolean" }, "nextOpen": { "anyOf": [{ "$ref": "#/$defs/Time" }, { "type": "null" }] } }, "required": ["open", "session", "allHoldings"] }, "Tickers": { "type": "object", "properties": { "asOf": { "$ref": "#/$defs/Time" }, "stale": { "type": "boolean" }, "items": { "type": "array", "items": { "$ref": "#/$defs/TickerItem" } } }, "required": ["asOf", "stale", "items"] }, "TickerItem": { "type": "object", "properties": { "assetId": { "$ref": "#/$defs/Caip19" }, "price": { "type": ["number", "null"] }, "change24h": { "type": ["number", "null"] } }, "required": ["assetId", "price", "change24h"], "additionalProperties": {} }, "Reasoning": { "type": "object", "properties": { "runs": { "type": "array", "items": { "$ref": "#/$defs/ReasoningRun" } }, "stale": { "type": "boolean" }, "mock": { "type": "boolean" } }, "required": ["runs"] }, "ReasoningRun": { "type": "object", "properties": { "runId": { "type": "string" }, "at": { "$ref": "#/$defs/Time" }, "kind": { "type": "string" }, "outcome": { "type": "string" }, "accountsChecked": { "type": "integer" }, "accountsTraded": { "type": "integer" }, "gapBeforePp": { "type": ["number", "null"] }, "gapAfterPp": { "type": ["number", "null"] }, "alert": { "type": ["string", "null"] }, "methodologyVersion": { "type": ["string", "null"] } }, "required": ["runId", "at", "kind", "outcome", "accountsChecked", "accountsTraded", "gapBeforePp", "gapAfterPp", "alert", "methodologyVersion"] }, "Nav": { "type": "object", "properties": { "navUsd": { "type": ["number", "null"] }, "nav": { "type": ["object", "null"], "properties": { "raw": { "$ref": "#/$defs/Raw" }, "decimals": { "type": "integer", "minimum": 0, "maximum": 36 }, "assetId": { "$ref": "#/$defs/Caip19" } }, "required": ["raw", "decimals", "assetId"] }, "asOf": { "anyOf": [{ "$ref": "#/$defs/Time" }, { "type": "null" }] }, "history": { "type": "array", "items": { "type": "object", "properties": { "at": { "$ref": "#/$defs/Time" }, "navUsd": { "type": "number" } }, "required": ["at", "navUsd"] } } }, "required": ["navUsd", "asOf", "history"] }, "Quote": { "type": "object", "properties": { "product": { "$ref": "#/$defs/ProductId" }, "action": { "anyOf": [{ "type": "string", "enum": ["withdraw", "deposit"] }, { "type": "string", "minLength": 1 }] }, "chain": { "$ref": "#/$defs/Caip2" }, "block": { "$ref": "#/$defs/Raw" }, "asOf": { "$ref": "#/$defs/Time" }, "assetId": { "$ref": "#/$defs/Caip19" }, "withdraw": { "type": "object", "properties": { "position": { "type": "object", "properties": { "shares": { "type": "object", "properties": { "raw": { "$ref": "#/$defs/Raw" }, "decimals": { "type": "integer", "minimum": 0, "maximum": 36 } }, "required": ["raw", "decimals"] }, "assets": { "type": ["object", "null"], "properties": { "raw": { "$ref": "#/$defs/Raw" }, "decimals": { "type": "integer", "minimum": 0, "maximum": 36 } }, "required": ["raw", "decimals"] } }, "required": ["shares", "assets"] }, "withdrawable": { "$ref": "#/$defs/Withdrawable" } }, "required": ["position", "withdrawable"] }, "deposit": { "type": "object", "properties": { "amount": { "$ref": "#/$defs/Amount" }, "expectedShares": { "type": ["object", "null"], "properties": { "raw": { "$ref": "#/$defs/Raw" }, "decimals": { "type": "integer", "minimum": 0, "maximum": 36 } }, "required": ["raw", "decimals"] }, "sharePrice": { "type": ["object", "null"], "properties": { "shares": { "type": "object", "properties": { "raw": { "$ref": "#/$defs/Raw" }, "decimals": { "type": "integer", "minimum": 0, "maximum": 36 } }, "required": ["raw", "decimals"] }, "assets": { "$ref": "#/$defs/Raw" } }, "required": ["shares", "assets"] }, "check": { "type": "object", "properties": { "state": { "anyOf": [{ "type": "string", "enum": ["open", "holdings", "not_admitted", "refused", "unsupported", "unknown"] }, { "type": "string", "minLength": 1 }] }, "reason": { "type": ["string", "null"], "description": "not_admitted and refused only: why, as the vault said it. Null otherwise." } }, "required": ["state", "reason"] } }, "required": ["amount", "expectedShares", "sharePrice", "check"] } }, "required": ["product", "action", "chain", "block", "asOf", "assetId"] }, "QuoteBody": { "type": "object", "properties": { "product": { "$ref": "#/$defs/ProductId" }, "action": { "type": "string", "enum": ["withdraw", "deposit"] }, "amount": { "$ref": "#/$defs/Amount" } }, "required": ["product", "action"] }, "SubmitBody": { "oneOf": [{ "type": "object", "properties": { "kind": { "type": "string", "enum": ["signature"] }, "signature": { "$ref": "#/$defs/Signature" } }, "required": ["kind", "signature"], "additionalProperties": false }, { "type": "object", "properties": { "kind": { "type": "string", "enum": ["transaction"] }, "txHash": { "$ref": "#/$defs/Hex32" }, "wallet": { "type": ["object", "null"], "properties": { "nonce": { "$ref": "#/$defs/Raw" }, "from": { "$ref": "#/$defs/Address" }, "blockNumber": { "anyOf": [{ "$ref": "#/$defs/Raw" }, { "type": "null" }] } }, "required": ["nonce", "from", "blockNumber"] } }, "required": ["kind", "txHash", "wallet"], "additionalProperties": false }, { "type": "object", "properties": { "kind": { "type": "string", "enum": ["attempt"] }, "attemptId": { "type": "string" }, "broadcast": { "type": "string", "enum": ["unknown", "declined"] } }, "required": ["kind", "attemptId", "broadcast"], "additionalProperties": false }, { "type": "object", "properties": { "kind": { "type": "string", "enum": ["refresh"] }, "expectedGeneration": { "type": "integer", "minimum": 1 } }, "required": ["kind", "expectedGeneration"], "additionalProperties": false }] }, "Signature": { "type": "string", "pattern": "^0x([0-9a-fA-F]{2}){65,}$" }, "Challenge": { "type": "object", "properties": { "message": { "type": "string" }, "nonce": { "type": "string" }, "expiresAt": { "$ref": "#/$defs/Time" } }, "required": ["message", "nonce", "expiresAt"] }, "ChallengeBody": { "type": "object", "properties": { "owner": { "$ref": "#/$defs/Address" }, "origin": { "type": "string", "format": "uri" } }, "required": ["owner"] }, "Revoked": { "type": "object", "properties": { "revoked": { "type": "boolean", "enum": [true] } }, "required": ["revoked"] }, "Token": { "type": "object", "properties": { "token": { "type": "string" }, "tokenType": { "anyOf": [{ "type": "string", "enum": ["Bearer"] }, { "type": "string", "minLength": 1 }] }, "expiresAt": { "$ref": "#/$defs/Time" } }, "required": ["token", "tokenType", "expiresAt"], "additionalProperties": {} }, "VerifyBody": { "type": "object", "properties": { "owner": { "$ref": "#/$defs/Address" }, "nonce": { "type": "string" }, "signature": { "$ref": "#/$defs/Signature" }, "audience": { "type": "string", "enum": ["http", "mcp", "both"] } }, "required": ["owner", "nonce", "signature"] }, "WithdrawBody": { "type": "object", "properties": { "product": { "$ref": "#/$defs/ProductId" }, "amount": { "$ref": "#/$defs/Amount" } }, "required": ["product", "amount"] } };
+var UNKNOWN_CODES = ["upstream_in_progress", "upstream_unavailable", "upstream_timeout", "upstream_unreadable"];
+var ERROR_BODY = { "type": "object", "properties": { "error": { "$ref": "#/$defs/ApiErrorSchema" } }, "required": ["error"] };
+var OPERATIONS = { "account": { "method": "GET", "path": "/v1/accounts/{product}", "auth": "owner", "response": { "$ref": "#/$defs/Account" } }, "account_performance": { "method": "GET", "path": "/v1/accounts/{product}/performance", "auth": "owner", "response": { "$ref": "#/$defs/Performance" } }, "cancel": { "method": "POST", "path": "/v1/requests/{requestId}/cancel", "auth": "owner", "response": { "$ref": "#/$defs/Request" } }, "deposit": { "method": "POST", "path": "/v1/deposits", "auth": "owner", "response": { "$ref": "#/$defs/Request" } }, "positions": { "method": "GET", "path": "/v1/positions", "auth": "owner", "response": { "$ref": "#/$defs/Positions" } }, "product": { "method": "GET", "path": "/v1/products/{id}", "auth": "none", "response": { "$ref": "#/$defs/Product" } }, "product_read": { "method": "GET", "path": "/v1/products/{id}/{read}", "auth": "none", "response": { "anyOf": [{ "$ref": "#/$defs/Tvl" }, { "$ref": "#/$defs/Market" }, { "$ref": "#/$defs/Tickers" }, { "$ref": "#/$defs/Reasoning" }, { "$ref": "#/$defs/Nav" }, { "type": "null" }] }, "outputs": { "tvl": { "anyOf": [{ "$ref": "#/$defs/Tvl" }, { "type": "null" }] }, "market": { "anyOf": [{ "$ref": "#/$defs/Market" }, { "type": "null" }] }, "tickers": { "anyOf": [{ "$ref": "#/$defs/Tickers" }, { "type": "null" }] }, "reasoning": { "$ref": "#/$defs/Reasoning" }, "nav": { "$ref": "#/$defs/Nav" } } }, "products": { "method": "GET", "path": "/v1/products", "auth": "none", "response": { "$ref": "#/$defs/ProductList" } }, "products_route": { "method": "GET", "path": "/v1/products/route", "auth": "none", "response": { "$ref": "#/$defs/Route" } }, "quote": { "method": "POST", "path": "/v1/quotes", "auth": "owner", "response": { "$ref": "#/$defs/Quote" } }, "sign_in_challenge": { "method": "POST", "path": "/v1/sign-in/challenge", "auth": "client", "response": { "$ref": "#/$defs/Challenge" } }, "sign_in_verify": { "method": "POST", "path": "/v1/sign-in/verify", "auth": "client", "response": { "$ref": "#/$defs/Token" } }, "sign_out": { "method": "POST", "path": "/v1/sign-in/revoke", "auth": "owner", "response": { "$ref": "#/$defs/Revoked" } }, "status": { "method": "GET", "path": "/v1/requests/{requestId}", "auth": "owner", "response": { "$ref": "#/$defs/Request" } }, "status_lookup": { "method": "GET", "path": "/v1/requests", "auth": "owner", "response": { "$ref": "#/$defs/Request" } }, "submit": { "method": "POST", "path": "/v1/requests/{requestId}/steps/{stepId}", "auth": "owner", "response": { "$ref": "#/$defs/Request" } }, "withdraw": { "method": "POST", "path": "/v1/withdrawals", "auth": "owner", "response": { "$ref": "#/$defs/Request" } } };
+var DEFAULT_TIMEOUT_MS = 3e4;
+var TRACE_HEADER = "x-trace-id";
+var validators = /* @__PURE__ */ new Map();
+var validator = (schema) => {
+  let v = validators.get(schema);
+  if (!v) {
+    v = external_exports.fromJSONSchema({ ...schema, $defs: DEFS });
+    validators.set(schema, v);
+  }
+  return v;
+};
+var check2 = (schema, json2) => {
+  try {
+    return validator(schema).safeParse(json2);
+  } catch {
+    return { success: false };
+  }
+};
+var headerSafe = (v) => /^[\t\x20-\x7e]*$/.test(v);
+var MAX_TIMEOUT_MS = 2 ** 31 - 1;
+var local = (method, code, message) => ({
+  code,
+  message,
+  outcome: method === "POST" ? "unknown" : "failed"
+});
+var offOrigin = (name) => ({ code: "wrong_origin", message: `The ${name} call would leave the configured origin; nothing was sent.`, outcome: "failed" });
+var headersSafe = (headers) => Object.values(headers).every(headerSafe);
+var unwritableBody = (name) => ({ code: "network_error", message: `The ${name} call was not sent: its body cannot be written as JSON.`, outcome: "failed" });
+var MAX_RETRY_AFTER_S = 86400;
+var unsentHeader = (name) => ({ code: "network_error", message: `The ${name} call was not sent: a key or token is not a valid header value.`, outcome: "failed" });
+var schemaMismatch = (method, name) => local(method, "unreadable_answer", `The ${name} answer did not match its schema.`);
+function answerSchema(op, path) {
+  const read = String(path?.read);
+  return op.outputs ? Object.hasOwn(op.outputs, read) ? op.outputs[read] : void 0 : op.response;
+}
+function apiErrorIn(body) {
+  const parsed = check2(ERROR_BODY, body);
+  if (!parsed.success)
+    return void 0;
+  const error62 = parsed.data.error;
+  return !UNKNOWN_CODES.includes(error62.code) || error62.outcome === "unknown" ? error62 : void 0;
+}
+function response(r) {
+  const v = r;
+  if (typeof v?.status !== "number" || typeof v.ok !== "boolean" || typeof v.headers?.get !== "function" || typeof v.json !== "function")
+    throw new TypeError("the fetch resolved to something that is not a response");
+  return v;
+}
+function send(opts, url2, method, headers, body, signal) {
+  const timeout = AbortSignal.timeout(opts.timeoutMs ?? DEFAULT_TIMEOUT_MS);
+  const stop = signal ? AbortSignal.any([signal, timeout]) : timeout;
+  const sent = (opts.fetch ?? fetch)(url2, { method, headers, redirect: "error", ...body !== void 0 ? { body } : {}, signal: stop }).then(response);
+  const stopped = new Promise((_, reject) => {
+    if (stop.aborted)
+      reject(stop.reason);
+    else
+      stop.addEventListener("abort", () => reject(stop.reason), { once: true });
+  });
+  return Promise.race([sent, stopped]).then((res) => ({
+    status: res.status,
+    ok: res.ok,
+    headers: res.headers,
+    json: () => Promise.race([res.json(), stopped])
+  }));
+}
+function checkOptions(urlName, url2, opts) {
+  checkUrl(urlName, url2);
+  checkTimeout(opts.timeoutMs);
+  checkClientKey(opts.clientKey);
+  if (opts.ownerToken === "")
+    throw new TypeError("ownerToken is empty: leave it out for a caller with no token, or give the token");
+  checkHeaderValue("ownerToken", opts.ownerToken);
+}
+function checkUrl(name, value) {
+  let u;
+  try {
+    u = new URL(value);
+  } catch {
+    throw new TypeError(`${name} must be an absolute URL, such as https://api.example.com; got ${JSON.stringify(value)}`);
+  }
+  if (u.username !== "" || u.password !== "")
+    throw new TypeError(`${name} must not carry a user name or password; got ${u.host}`);
+  if (u.protocol !== "https:" && u.protocol !== "http:")
+    throw new TypeError(`${name} must use https or http; got ${u.protocol}`);
+  if (u.protocol === "http:" && !LOCAL_HOSTS.includes(u.hostname))
+    throw new TypeError(`${name} must use https unless it is this machine (localhost, 127.0.0.1 or [::1]); got ${u.host}`);
+  return u;
+}
+function checkTimeout(t) {
+  if (t !== void 0 && !(Number.isInteger(t) && t > 0 && t <= MAX_TIMEOUT_MS))
+    throw new TypeError(`timeoutMs must be a whole number of milliseconds from 1 to ${MAX_TIMEOUT_MS}; got ${t}`);
+}
+var LOCAL_HOSTS = ["localhost", "127.0.0.1", "[::1]"];
+function checkClientKey(v) {
+  if (v !== void 0 && v.trim() === "")
+    throw new TypeError("clientKey is empty: leave it out for a caller with no key, or give the key");
+  checkHeaderValue("clientKey", v);
+}
+function checkHeaderValue(name, v) {
+  if (v !== void 0 && !headerSafe(v))
+    throw new TypeError(`${name} is not a valid header value (it has a line break or a control character)`);
+}
+var failed = (code, message, outcome2 = "failed") => ({ ok: false, status: 0, error: { code, message, outcome: outcome2 } });
+var reason = (e4) => e4 instanceof Error && e4.message ? e4.message : "no reason was given";
+async function signIn(client, options) {
+  const { owner, origin, signMessage, check: check22, audience } = options;
+  const challenge2 = await client.sign_in_challenge({ body: { owner, ...origin !== void 0 ? { origin } : {} } });
+  if (!challenge2.ok)
+    return challenge2;
+  const { message, nonce } = challenge2.body;
+  if (check22) {
+    let verdict;
+    try {
+      verdict = await check22(message);
+    } catch (e4) {
+      return failed("challenge_refused", `The sign-in challenge was refused before signing: ${reason(e4)}. Nothing was signed.`);
+    }
+    if (verdict !== true)
+      return failed("challenge_refused", "The sign-in challenge was refused before signing. Nothing was signed.");
+  }
+  let signature;
+  try {
+    signature = await signMessage(message);
+  } catch (e4) {
+    return failed("signing_failed", `The owner did not sign the challenge: ${reason(e4)}. Nothing was verified.`);
+  }
+  const verified = await client.sign_in_verify({ body: { owner, nonce, signature, ...audience !== void 0 ? { audience } : {} } });
+  if (!verified.ok)
+    return verified;
+  if (verified.body.tokenType !== "Bearer")
+    return failed("unsupported_token_type", `The token type ${JSON.stringify(verified.body.tokenType)} is not Bearer, the only kind this client sends. The token was not kept.`);
+  return verified;
+}
+async function withOwnerRetry(retry, call22) {
+  let token = retry.token;
+  let fresh = false;
+  const thrown = (what, e4, outcome2) => failed("callback_failed", `${what} threw: ${reason(e4)}.`, outcome2);
+  const renew = async () => {
+    let s2;
+    try {
+      s2 = await retry.signIn();
+    } catch (e4) {
+      return thrown("The sign-in function", e4, "failed");
+    }
+    if (!s2.ok)
+      return s2;
+    token = s2.body.token;
+    fresh = true;
+    try {
+      retry.onSignIn?.(s2.body);
+    } catch (e4) {
+      return thrown("onSignIn", e4, "failed");
+    }
+    return void 0;
+  };
+  const run2 = async () => {
+    try {
+      return await call22(token);
+    } catch (e4) {
+      return thrown("The call", e4, "unknown");
+    }
+  };
+  if (token === void 0) {
+    const refused2 = await renew();
+    if (refused2)
+      return refused2;
+  }
+  const first = await run2();
+  if (first.ok || first.error.code !== "wallet_proof_required" || first.error.outcome === "unknown" || fresh)
+    return first;
+  const refused = await renew();
+  if (refused)
+    return refused;
+  return run2();
+}
+var SELECTOR_HEX = 8;
+var WORD_HEX = 64;
+var ADDRESS_HEX = 40;
+var HEX_BYTES = /^0x([0-9a-fA-F]{2})*$/;
+function decodeCall(data, calls) {
+  if (!HEX_BYTES.test(data) || data.length < 2 + SELECTOR_HEX)
+    return { ok: false, refused: "encoding" };
+  const selector = data.slice(0, 2 + SELECTOR_HEX).toLowerCase();
+  const args = calls[selector];
+  if (!args)
+    return { ok: false, refused: "selector", selector };
+  const body = data.slice(2 + SELECTOR_HEX);
+  if (body.length !== args.length * WORD_HEX)
+    return { ok: false, refused: "canonical", selector };
+  const words = [];
+  for (let i = 0; i < args.length; i++) {
+    const word = body.slice(i * WORD_HEX, (i + 1) * WORD_HEX);
+    if (args[i] === "address") {
+      if (!/^0+$/.test(word.slice(0, WORD_HEX - ADDRESS_HEX)))
+        return { ok: false, refused: "canonical", selector };
+      words.push(`0x${word.slice(WORD_HEX - ADDRESS_HEX)}`);
+    } else {
+      words.push(BigInt(`0x${word}`));
+    }
+  }
+  return { ok: true, selector, words };
+}
+var PAYLOAD_FIELDS = {
+  send_transaction: ["generation", "expiresAt", "to", "data", "value"],
+  sign_message: ["generation", "expiresAt", "bytes"],
+  sign_typed_data: ["generation", "expiresAt", "typedData"]
+};
+function payloadOf(payload, kind) {
+  if (typeof payload !== "object" || payload === null || Array.isArray(payload))
+    return null;
+  const allowed = PAYLOAD_FIELDS[kind];
+  return Object.keys(payload).every((k) => allowed.includes(k)) ? payload : null;
+}
+var SELECTORS = {
+  "0x095ea7b3": "approve",
+  "0x6e553f65": "deposit",
+  "0xb460af94": "withdraw",
+  "0xba087652": "redeem"
+};
+var ARGS = {
+  approve: ["address", "uint"],
+  deposit: ["uint", "address"],
+  withdraw: ["uint", "address", "address"],
+  redeem: ["uint", "address", "address"]
+};
+var CALLS = Object.fromEntries(Object.entries(SELECTORS).map(([selector, call22]) => [selector, ARGS[call22]]));
+var UNLIMITED_APPROVAL = 2n ** 128n;
+var TYPED_DATA_FIELDS = ["domain", "types", "primaryType", "message"];
+var isRecord = (v) => typeof v === "object" && v !== null && !Array.isArray(v);
+var DOMAIN_NAME = "Glider Withdrawal Authorization";
+var FIELDS = {
+  transfer: [
+    ["portfolioId", "string"],
+    ["recipientAccountId", "string"],
+    ["assets", "WithdrawalAsset[]"],
+    ["nonce", "bytes32"],
+    ["expiresAt", "uint256"]
+  ],
+  sale: [
+    ["portfolioId", "string"],
+    ["recipientAccountId", "string"],
+    ["assets", "WithdrawalAsset[]"],
+    ["nonce", "bytes32"],
+    ["expiresAt", "uint256"],
+    ["liquidate", "bool"],
+    ["settlementAssetId", "string"]
+  ]
+};
+var ASSET_FIELDS = [
+  ["assetId", "string"],
+  ["amountRaw", "string"]
+];
+var DOMAIN_FIELDS = [
+  ["name", "string"],
+  ["version", "string"],
+  ["chainId", "uint256"],
+  ["verifyingContract", "address"]
+];
+var DEFAULT_LIFETIME_S = 3600;
+var MS_PER_S = 1e3;
+var FRACTION_PLACES = 18;
+var ADDRESS2 = /^0x[0-9a-fA-F]{40}$/;
+var RAW_POSITIVE = /^[1-9][0-9]*$/;
+var BYTES32 = /^0x[0-9a-fA-F]{64}$/;
+var CHAIN = /^eip155:([1-9][0-9]*)$/;
+var ACCOUNT = /^eip155:([1-9][0-9]*):(0x[0-9a-fA-F]{40})$/;
+var ASSET = /^eip155:([1-9][0-9]*)\/erc20:(0x[0-9a-fA-F]{40})$/;
+var assetKey = (v) => {
+  const m = typeof v === "string" ? ASSET.exec(v) : null;
+  return m ? `eip155:${m[1]}/erc20:${m[2].toLowerCase()}` : null;
+};
+var chainRef = (v) => typeof v === "string" ? CHAIN.exec(v)?.[1] ?? null : null;
+var same22 = (a, b) => a.toLowerCase() === b.toLowerCase();
+var keysAre = (o2, want) => {
+  const k = Object.keys(o2);
+  return k.length === want.length && want.every((w) => k.includes(w));
+};
+var fieldsAre = (list, want) => Array.isArray(list) && list.length === want.length && list.every((f, i) => f !== null && typeof f === "object" && keysAre(f, ["name", "type"]) && f.name === want[i][0] && f.type === want[i][1]);
+function fractionOf(a) {
+  if (a.kind === "all")
+    return { num: 1n, den: 1n };
+  const m = new RegExp(`^(0|1)(?:\\.(\\d{1,${FRACTION_PLACES}}))?$`).exec(a.value);
+  if (!m)
+    return null;
+  const den = 10n ** BigInt(FRACTION_PLACES);
+  const num2 = BigInt(m[1]) * den + BigInt((m[2] ?? "").padEnd(FRACTION_PLACES, "0"));
+  return num2 === 0n || num2 > den ? null : { num: num2, den };
+}
+function checkPortfolioWithdrawal(steps, intent) {
+  const whole = (reason2) => ({ ok: false, step: null, reason: reason2 });
+  if (!ADDRESS2.test(intent.owner))
+    return whole("the owner is not an address");
+  if (!ADDRESS2.test(intent.smartAccount))
+    return whole("the smart account is not an address");
+  const ref = chainRef(intent.chain);
+  if (!ref)
+    return whole(`the chain ${JSON.stringify(intent.chain)} is not an eip155 chain id`);
+  const settlement = assetKey(intent.settlementAssetId);
+  if (!settlement)
+    return whole("the settlement asset is not an asset id");
+  const fraction = fractionOf(intent.amount);
+  if (!fraction)
+    return whole("the fraction asked for is not a decimal above 0 and at most 1");
+  if (steps.length === 0)
+    return whole("a withdrawal with no steps has nothing to check");
+  if (typeof intent.now !== "number" || !Number.isFinite(intent.now))
+    return whole("now is not a finite number of milliseconds");
+  const lifetimeS = intent.maxLifetimeSeconds ?? DEFAULT_LIFETIME_S;
+  if (typeof lifetimeS !== "number" || !Number.isFinite(lifetimeS) || lifetimeS <= 0)
+    return whole("the longest lifetime is not a finite number of seconds above zero");
+  const nowS = intent.now / MS_PER_S;
+  const kinds = [];
+  const pending = [];
+  const totals = /* @__PURE__ */ new Map();
+  let earliest = Infinity;
+  for (const [i, s2] of steps.entries()) {
+    const refuse2 = (reason2) => ({ ok: false, step: i, reason: reason2 });
+    const notTheForm = refuse2("it is not in the form the provider's withdrawal authorization takes");
+    if (s2.kind !== "sign_typed_data")
+      return refuse2(`a step of kind ${s2.kind} is not a withdrawal authorization`);
+    if (chainRef(s2.chainId) !== ref)
+      return refuse2(`the step is on chain ${String(s2.chainId)}, not ${intent.chain}`);
+    if (s2.payload === void 0) {
+      if (s2.plan !== void 0) {
+        const plan = readPlan2(s2.plan);
+        if (!plan)
+          return refuse2("its plan cannot be read");
+        addTo(totals, plan);
+      }
+      pending.push(i);
+      continue;
+    }
+    const payload = payloadOf(s2.payload, "sign_typed_data");
+    if (!payload)
+      return refuse2(`its payload is not an object of only ${PAYLOAD_FIELDS.sign_typed_data.join(", ")}`);
+    if (!isRecord(payload.typedData) || !keysAre(payload.typedData, TYPED_DATA_FIELDS))
+      return notTheForm;
+    const a = payload.typedData;
+    const domain2 = a.domain ?? {};
+    const types = a.types ?? {};
+    const m = a.message ?? {};
+    const sale = m["liquidate"] === true;
+    const shape = sale ? "sale" : "transfer";
+    if (a.primaryType !== "Withdrawal" || domain2["name"] !== DOMAIN_NAME || domain2["version"] !== (sale ? "2" : "1"))
+      return notTheForm;
+    if (!keysAre(domain2, DOMAIN_FIELDS.map((f) => f[0])))
+      return notTheForm;
+    if (Object.keys(types).some((t) => t !== "Withdrawal" && t !== "WithdrawalAsset" && t !== "EIP712Domain"))
+      return notTheForm;
+    if (types["EIP712Domain"] !== void 0 && !fieldsAre(types["EIP712Domain"], DOMAIN_FIELDS))
+      return notTheForm;
+    if (!fieldsAre(types["Withdrawal"], FIELDS[shape]) || !fieldsAre(types["WithdrawalAsset"], ASSET_FIELDS))
+      return notTheForm;
+    if (!keysAre(m, FIELDS[shape].map((f) => f[0])))
+      return notTheForm;
+    if (typeof domain2["chainId"] !== "number" || String(domain2["chainId"]) !== ref)
+      return refuse2(`it is for chain ${String(domain2["chainId"])}, not ${intent.chain}`);
+    if (typeof domain2["verifyingContract"] !== "string" || !ADDRESS2.test(domain2["verifyingContract"]) || !same22(domain2["verifyingContract"], intent.smartAccount)) {
+      return refuse2(`it would take funds from ${String(domain2["verifyingContract"])}, not the smart account ${intent.smartAccount}`);
+    }
+    if (m["portfolioId"] !== intent.portfolioId)
+      return refuse2("it is for another portfolio");
+    const to = typeof m["recipientAccountId"] === "string" ? ACCOUNT.exec(m["recipientAccountId"]) : null;
+    if (!to || to[1] !== ref || !same22(to[2], intent.owner))
+      return refuse2(`it would pay ${String(m["recipientAccountId"])}, not the owner ${intent.owner} on ${intent.chain}`);
+    if (sale && assetKey(m["settlementAssetId"]) !== settlement)
+      return refuse2(`it settles in ${String(m["settlementAssetId"])}, not ${intent.settlementAssetId}`);
+    if (typeof m["nonce"] !== "string" || !BYTES32.test(m["nonce"]))
+      return notTheForm;
+    const raw = m["expiresAt"];
+    const expiry = typeof raw === "number" ? raw : typeof raw === "string" && /^[0-9]+$/.test(raw) ? Number(raw) : NaN;
+    if (!Number.isSafeInteger(expiry) || expiry <= 0)
+      return notTheForm;
+    if (expiry <= nowS)
+      return refuse2("it has expired");
+    if (expiry > nowS + lifetimeS)
+      return refuse2(`it stays valid for more than ${lifetimeS} seconds`);
+    earliest = Math.min(earliest, expiry);
+    const assets2 = Array.isArray(m["assets"]) ? m["assets"] : [];
+    if (assets2.length === 0)
+      return refuse2("it names no asset");
+    const signed = /* @__PURE__ */ new Map();
+    for (const x of assets2) {
+      if (x === null || typeof x !== "object")
+        return notTheForm;
+      const e4 = x;
+      const key = assetKey(e4.assetId);
+      if (!key || ref !== key.split(/[:/]/)[1] || typeof e4.amountRaw !== "string" || !RAW_POSITIVE.test(e4.amountRaw)) {
+        return refuse2(`it names an asset that is not a token on ${intent.chain}, or an amount that is not a whole number of units above zero`);
+      }
+      if (!keysAre(e4, ASSET_FIELDS.map((f) => f[0])))
+        return notTheForm;
+      if (signed.has(key))
+        return refuse2("it names the same asset twice");
+      if (!sale && key !== settlement)
+        return refuse2("it would move a holding other than the settlement asset without selling it");
+      signed.set(key, { assetId: e4.assetId, amount: BigInt(e4.amountRaw) });
+    }
+    {
+      const plan = readPlan2(s2.plan);
+      const matches = isRecord(s2.plan) && s2.plan.liquidate === sale && plan !== null && plan.size === signed.size && [...plan].every(([k, p]) => signed.get(k)?.amount === p.amount) && [...signed.keys()].every((k) => plan.has(k));
+      if (!matches)
+        return refuse2("it is not the plan the API attached to this step: another kind, another amount, an asset added or left out, or one named twice");
+    }
+    kinds.push(shape);
+    addTo(totals, signed);
+  }
+  if (pending.length === steps.length)
+    return whole("none of the withdrawal steps has anything to sign yet");
+  const held = /* @__PURE__ */ new Map();
+  for (const [id, raw] of Object.entries(intent.holdings)) {
+    const k = assetKey(id);
+    if (k && /^[0-9]+$/.test(raw))
+      held.set(k, BigInt(raw));
+  }
+  const out = [];
+  for (const [k, t] of totals) {
+    const h = held.get(k) ?? 0n;
+    if (h === 0n)
+      return whole(`the withdrawal names ${t.assetId}, which the smart account does not hold`);
+    const allowed = h * fraction.num / fraction.den;
+    if (t.amount > allowed)
+      return whole(`the withdrawal asks for ${t.amount} units of ${t.assetId}, more than ${intent.amount.kind === "all" ? "the account holds" : "the fraction asked of what it holds"} (${allowed} of ${h})`);
+    out.push({ assetId: t.assetId, amount: t.amount.toString(), held: h.toString() });
+  }
+  return { ok: true, kinds, totals: out, expiresAt: new Date((earliest === Infinity ? 0 : earliest) * MS_PER_S), pending };
+}
+var TRANSFER_SELECTOR = "0xa9059cbb";
+var TRANSFER = { [TRANSFER_SELECTOR]: ["address", "uint"] };
+var ENROL_PURPOSE = "enrol";
+var addTo = (totals, more) => {
+  for (const [k, v] of more)
+    totals.set(k, { assetId: totals.get(k)?.assetId ?? v.assetId, amount: (totals.get(k)?.amount ?? 0n) + v.amount });
+};
+function readPlan2(plan) {
+  if (!isRecord(plan) || !Array.isArray(plan.assets))
+    return null;
+  const out = /* @__PURE__ */ new Map();
+  for (const p of plan.assets) {
+    const k = assetKey(p?.assetId);
+    if (k === null || out.has(k) || typeof p.amountRaw !== "string" || !/^[0-9]+$/.test(p.amountRaw))
+      return null;
+    out.set(k, { assetId: p.assetId, amount: BigInt(p.amountRaw) });
+  }
+  return out;
+}
+function checkPortfolioDeposit(steps, intent) {
+  const whole = (reason2) => ({ ok: false, step: null, reason: reason2 });
+  const ref = chainRef(intent.chain);
+  if (!ref)
+    return whole(`the chain ${JSON.stringify(intent.chain)} is not an eip155 chain id`);
+  if (!ADDRESS2.test(intent.smartAccount))
+    return whole("the smart account is not an address");
+  if (!ADDRESS2.test(intent.tokenAddress))
+    return whole("the token is not an address");
+  if (intent.amount !== void 0 && !RAW_POSITIVE.test(intent.amount))
+    return whole("the amount asked for is zero or not a raw amount");
+  const want = intent.amount === void 0 ? [["enrol"]] : [["enrol", "transfer"], ["transfer"]];
+  if (!want.some((w) => w.length === steps.length))
+    return whole(`a portfolio deposit${intent.amount === void 0 ? " with no amount" : ""} with ${steps.length} steps is not a shape this client admits`);
+  const shape = want.find((w) => w.length === steps.length);
+  const pending = [];
+  for (const [i, s2] of steps.entries()) {
+    const refuse2 = (reason2) => ({ ok: false, step: i, reason: reason2 });
+    const role = shape[i];
+    const isEnrol = s2.kind === "sign_message";
+    if (role === "enrol" !== isEnrol)
+      return refuse2("the steps are not in the order a portfolio deposit takes: the enrol signature, then the transfer");
+    if (chainRef(s2.chainId) !== ref)
+      return refuse2(`the step is on chain ${String(s2.chainId)}, not ${intent.chain}`);
+    if (role === "enrol") {
+      if (s2.purpose !== ENROL_PURPOSE)
+        return refuse2(`a signature with purpose ${String(s2.purpose)} is not the enrol signature`);
+      if (s2.payload === void 0) {
+        pending.push(i);
+        continue;
+      }
+      const enrol = payloadOf(s2.payload, "sign_message");
+      if (!enrol)
+        return refuse2(`the enrol signature's payload is not an object of only ${PAYLOAD_FIELDS.sign_message.join(", ")}`);
+      if (typeof enrol.bytes !== "string" || !BYTES32.test(enrol.bytes))
+        return refuse2("the enrol signature is not exactly 32 bytes");
+      continue;
+    }
+    if (s2.kind !== "send_transaction")
+      return refuse2(`a step of kind ${s2.kind} is not the deposit transfer`);
+    if (s2.payload === void 0) {
+      pending.push(i);
+      continue;
+    }
+    const p = payloadOf(s2.payload, "send_transaction");
+    if (!p)
+      return refuse2(`the transfer's payload is not an object of only ${PAYLOAD_FIELDS.send_transaction.join(", ")}`);
+    if (typeof p.to !== "string" || typeof p.data !== "string" || typeof p.value !== "string")
+      return refuse2("the transfer has nothing to send");
+    if (p.value !== "0")
+      return refuse2("the transfer sends value; a token transfer carries none");
+    if (!same22(p.to, intent.tokenAddress))
+      return refuse2("the transfer is not sent to the deposit token's contract");
+    const d = decodeCall(p.data, TRANSFER);
+    if (!d.ok && d.refused !== "canonical")
+      return refuse2("the transfer is not a call to transfer(address,uint256)");
+    if (!d.ok)
+      return refuse2("the calldata is not the canonical encoding of transfer");
+    const [recipient, amount] = d.words;
+    if (!same22(recipient, intent.smartAccount))
+      return refuse2(`the transfer pays ${recipient}, not the smart account ${intent.smartAccount}`);
+    if (intent.amount === void 0 || amount !== BigInt(intent.amount))
+      return refuse2("the transfer's amount is not exactly the one asked for");
+  }
+  return { ok: true, pending };
+}
+var fill = (template, args = {}) => template.replace(/\{(\w+)\}/g, (_m, k) => {
+  const v = args[k];
+  if (typeof v !== "string" || v === "")
+    throw new TypeError(k);
+  return encodeURIComponent(v);
+});
+var dotSegment = (args = {}) => Object.values(args).some((v) => /^(\.|%2e){1,2}$/i.test(String(v)));
+function call2(opts, name, op) {
+  return async (input2 = {}, o2 = {}) => {
+    let url2;
+    try {
+      if (dotSegment(input2.path))
+        return { ok: false, status: 0, error: { code: "invalid_path_value", message: `A ${name} path value of "." or ".." is not a value; nothing was sent.`, outcome: "failed" } };
+      url2 = new URL(fill(op.path, input2.path), opts.baseUrl);
+    } catch {
+      return { ok: false, status: 0, error: { code: "invalid_path_value", message: `A ${name} path value is missing, empty, not text, or cannot be written into a URL; nothing was sent.`, outcome: "failed" } };
+    }
+    try {
+      for (const [k, v] of Object.entries(input2.query ?? {}))
+        if (v !== void 0)
+          url2.searchParams.set(k, String(v));
+    } catch {
+      return { ok: false, status: 0, error: { code: "network_error", message: `The ${name} call was not sent: a query value cannot be written into a URL.`, outcome: "failed" } };
+    }
+    if (url2.origin !== new URL(opts.baseUrl).origin)
+      return { ok: false, status: 0, error: offOrigin(name) };
+    const headers = { accept: "application/json" };
+    if (opts.clientKey !== void 0)
+      headers[CLIENT_KEY_HEADER] = opts.clientKey;
+    const token = o2.ownerToken ?? opts.ownerToken;
+    if (op.auth === "owner" && token !== void 0)
+      headers.authorization = `Bearer ${token}`;
+    if (input2.body !== void 0)
+      headers["content-type"] = "application/json";
+    if (!headersSafe(headers))
+      return { ok: false, status: 0, error: unsentHeader(name) };
+    let body;
+    try {
+      body = input2.body !== void 0 ? JSON.stringify(input2.body) : void 0;
+    } catch {
+      return { ok: false, status: 0, error: unwritableBody(name) };
+    }
+    let res;
+    try {
+      res = await send(opts, url2, op.method, headers, body, o2.signal);
+    } catch {
+      return { ok: false, status: 0, error: local(op.method, "network_error", `The ${name} call got no answer.`) };
+    }
+    const traceId = res.headers.get(TRACE_HEADER) ?? void 0;
+    const json2 = await res.json().catch(() => void 0);
+    if (res.ok) {
+      const schema = answerSchema(op, input2.path);
+      const body2 = schema === void 0 ? { success: false } : check2(schema, json2);
+      return body2.success ? { ok: true, status: res.status, body: body2.data, traceId } : { ok: false, status: res.status, error: schemaMismatch(op.method, name), traceId };
+    }
+    const error62 = apiErrorIn(json2);
+    const wait2 = res.headers.get("retry-after");
+    return {
+      ok: false,
+      status: res.status,
+      error: error62 ?? local(op.method, "unreadable_answer", `The ${name} error answer was not readable.`),
+      traceId,
+      ...wait2 !== null && /^\d+$/.test(wait2) && Number(wait2) <= MAX_RETRY_AFTER_S ? { retryAfter: Number(wait2) } : {}
+    };
+  };
+}
+function createClient2(options) {
+  const opts = Object.freeze({ baseUrl: options.baseUrl, clientKey: options.clientKey, ownerToken: options.ownerToken, timeoutMs: options.timeoutMs, fetch: options.fetch });
+  checkOptions("baseUrl", opts.baseUrl, opts);
+  const methods = {};
+  for (const [name, op] of Object.entries(OPERATIONS))
+    methods[name] = call2(opts, name, op);
+  return methods;
+}
+
+// src/invest/challenge.ts
+var CHALLENGE_FIRST_LINE = "Tempora sign-in";
+var CHALLENGE_CLIENT = "treasury-cli";
+var CHALLENGE_MAX_LIFETIME_MS = 5 * 6e4;
+var CLOCK_SKEW_MS = 6e4;
+var ISO = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{1,3})?Z$/;
+function checkChallenge(text3, expect) {
+  const refuse = (why) => {
+    throw new Error(`refused: the sign-in challenge ${why}; nothing was signed`);
+  };
+  if (typeof text3 !== "string") return refuse("is not text");
+  const lines = text3.split("\n");
+  if (lines.length !== 6) refuse("is not the six-line sign-in message");
+  const [first, host, client, owner, nonce, times] = lines;
+  if (first !== CHALLENGE_FIRST_LINE) refuse("does not start with the sign-in line");
+  if (host !== `Host: ${expect.host}`) refuse(`names a host other than ${expect.host}`);
+  if (client !== `Client: ${CHALLENGE_CLIENT}`) refuse("names another client");
+  if (owner !== `Owner: ${getAddress(expect.owner)}`) refuse(`is not for the connected wallet ${getAddress(expect.owner)}`);
+  const n = /^Nonce: ([A-Za-z0-9]{16,64})$/.exec(nonce);
+  if (!n) refuse("carries no valid nonce");
+  const t = /^Issued: (\S+) {3}Expires: (\S+)$/.exec(times);
+  if (!t || !ISO.test(t[1]) || !ISO.test(t[2])) refuse("carries no valid issue and expiry times");
+  const issued = Date.parse(t[1]);
+  const expires = Date.parse(t[2]);
+  if (!(expires > issued)) refuse("expires before it is issued");
+  if (expires - issued > CHALLENGE_MAX_LIFETIME_MS) refuse("is valid for longer than 5 minutes");
+  if (issued > expect.now + CLOCK_SKEW_MS) refuse("is issued in the future");
+  if (expires <= expect.now) refuse("has expired");
+  return { nonce: n[1], issuedAt: new Date(issued), expiresAt: new Date(expires) };
+}
+
+// src/invest/api.ts
+function apiUrl() {
+  const v = (process.env["TREASURY_API_URL"] ?? "").trim();
+  return v.length > 0 && !v.includes("${") ? v : INVEST.apiUrl;
+}
+var apiHost = () => new URL(apiUrl()).host;
+var apiClient = () => createClient2({ baseUrl: apiUrl(), timeoutMs: INVEST.apiTimeoutMs });
+var tokenKeyFor = (owner) => ({ host: apiHost(), clientId: CHALLENGE_CLIENT, owner, audience: "http" });
+function failure2(what, r) {
+  const e4 = r.error;
+  const retry = r.retryAfter !== void 0 ? ` Try again in ${r.retryAfter} s.` : "";
+  const trace = r.traceId ? ` (trace ${r.traceId})` : "";
+  return new Error(`${what}: ${e4.code}: ${e4.message}${retry}${trace}`);
+}
+async function asOwner(ownerInput, signMessage, call3, deps = {}) {
+  const owner = getAddress(ownerInput);
+  const client = deps.client ?? apiClient();
+  const now = deps.now ?? Date.now;
+  const key = tokenKeyFor(owner);
+  const host = apiHost();
+  const kept = readOwnerToken(key, now());
+  const fresh = () => {
+    clearOwnerToken(key);
+    return signIn(client, {
+      owner,
+      signMessage: (message) => signMessage(owner, message),
+      // The client goes on only when this returns true; `checkChallenge` throws on anything it refuses.
+      check: (message) => {
+        checkChallenge(message, { host, owner, now: now() });
+        return true;
+      },
+      audience: "http"
+    });
+  };
+  return withOwnerRetry(
+    {
+      ...kept !== void 0 && { token: kept },
+      signIn: fresh,
+      onSignIn: (s2) => writeOwnerToken(key, { token: s2.token, expiresAtIso: s2.expiresAt }, now())
+    },
+    (token) => call3(client, token)
+  );
+}
+
+// src/invest/chain.ts
+var BNB_INFO = {
+  key: "bnb",
+  name: "BNB Chain",
+  chainId: 56,
+  publicRpc: "https://bsc-dataseed.bnbchain.org"
+};
+var BNB_USDT = {
+  address: getAddress("0x55d398326f99059fF775485246999027B3197955"),
+  decimals: 18,
+  symbol: "USDT"
+};
+var assetIdOf = (token) => `eip155:${BNB_INFO.chainId}/erc20:${getAddress(token)}`;
+var BNB_USDT_ASSET_ID = assetIdOf(BNB_USDT.address);
+
+// src/invest/deposit.ts
+var INVEST_CHAIN_ID = `eip155:${BNB_INFO.chainId}`;
+var AMOUNT_PLACES = 6;
+var ZERO = "0x0000000000000000000000000000000000000000";
+function parseUsdt(text3) {
+  const t = text3.trim();
+  if (!new RegExp(`^\\d+(?:\\.\\d{1,${AMOUNT_PLACES}})?$`).test(t)) {
+    throw new Error(`refused: --amount_usdt must be a number of USDT with at most ${AMOUNT_PLACES} decimal places, not "${text3}"`);
+  }
+  const raw = parseUnits(t, BNB_USDT.decimals);
+  if (raw === 0n) throw new Error("refused: --amount_usdt must be above zero");
+  return raw;
+}
+var depositBody = (product, raw) => ({
+  product,
+  amount: { kind: "assets", assetId: BNB_USDT_ASSET_ID, raw: raw.toString() },
+  chain: INVEST_CHAIN_ID,
+  token: BNB_USDT.symbol
+});
+function checkDeposit(r, raw) {
+  const account = r.smartAccount;
+  const transferReady = r.steps.some((s2) => s2.kind === "send_transaction" && s2.payload !== void 0);
+  if (transferReady && (typeof account !== "string" || !/^0x[0-9a-fA-F]{40}$/.test(account))) {
+    return { ok: false, step: null, reason: "the request names no smart account for the transfer to pay" };
+  }
+  return checkPortfolioDeposit(r.steps, { chain: INVEST_CHAIN_ID, tokenAddress: BNB_USDT.address, smartAccount: account ?? ZERO, amount: raw.toString() });
+}
+function prepareDeposit(r, s2, raw, product) {
+  const p = s2.payload ?? {};
+  if (s2.kind === "sign_message") {
+    return {
+      view: {
+        title: "Open your Smart Growth account",
+        description: `Your wallet signs once to open your own account on ${product}. Nothing moves with this signature.`,
+        facts: [
+          { label: "Portfolio", value: product },
+          { label: "What you sign", value: p.bytes ?? "" }
+        ],
+        warning: "Your wallet will show a 32-byte code, not words: the portfolio provider's enrolment code for this account. It cannot be read on its own. Sign it only if you started this deposit just now."
+      },
+      ask: { kind: "sign_bytes", bytes: p.bytes }
+    };
+  }
+  return {
+    view: {
+      title: "Send USDT to your Smart Growth account",
+      description: `Your wallet sends ${formatUnits(raw, BNB_USDT.decimals)} USDT on ${BNB_INFO.name} to your own smart account for ${product}.`,
+      facts: [
+        { label: "Amount", value: `${formatUnits(raw, BNB_USDT.decimals)} USDT` },
+        { label: "To your smart account", value: getAddress(r.smartAccount) },
+        { label: "Token contract", value: BNB_USDT.address },
+        { label: "Network", value: BNB_INFO.name }
+      ]
+    },
+    // The contract is the pinned one, which the check has held `to` to; the calldata is the checked transfer.
+    ask: { kind: "send", to: BNB_USDT.address, data: p.data, value: "0" }
+  };
+}
+
+// src/invest/page.ts
+var INVEST_CHAIN = { chainId: 56, name: "BNB Chain" };
+var HASH = /^0x[0-9a-fA-F]{64}$/;
+var ENDING_SHOWN_MS = 3e3;
+var SIG = /^0x[0-9a-fA-F]+$/;
+async function openInvestPage(ownerInput, title, deps) {
+  const owner = getAddress(ownerInput);
+  const verify = deps.verify ?? { message: verifyMessage, typedData: verifyTypedData };
+  let index2 = 0;
+  let current;
+  let ending;
+  let handle;
+  handle = await serveOnce({
+    mode: "invest",
+    ttlMs: deps.ttlMs,
+    html: (s2) => shell(s2, title),
+    csp: PAGE_CSP,
+    assets: { "/app.js": { type: "text/javascript; charset=utf-8", body: readPageBundle() } },
+    ports: connectPorts(),
+    info: () => ({
+      mode: "invest",
+      appId: privyAppId(),
+      title,
+      owner,
+      chainId: INVEST_CHAIN.chainId,
+      chainName: INVEST_CHAIN.name,
+      ...current ? { step: { index: current.index, view: current.view, ask: current.ask } } : {},
+      ...ending ? { ending } : {}
+    }),
+    onReject: (body) => {
+      if (!current) return;
+      const why = typeof body["reason"] === "string" ? body["reason"].slice(0, 300) : "declined in the browser";
+      const step = current;
+      current = void 0;
+      if (body["index"] !== void 0 && body["index"] !== step.index) return step.reject(new Error(`the page ended over another step: ${why}`));
+      const hash4 = body["hash"];
+      if (step.ask.kind === "send" && typeof hash4 === "string" && HASH.test(hash4)) return step.resolve({ kind: "sent_unrecorded", hash: hash4, reason: why });
+      step.reject(new Error(why));
+    },
+    accept: async (body) => {
+      if (!current || body["index"] !== current.index) return { ok: false, reason: "that step is not the one waiting" };
+      const { ask } = current;
+      const value = body["value"];
+      if (typeof value !== "string") return { ok: false, reason: "no signature or hash" };
+      if (ask.kind === "send") {
+        if (!HASH.test(value)) return { ok: false, reason: "not a transaction hash" };
+      } else {
+        if (!SIG.test(value)) return { ok: false, reason: "malformed signature" };
+        const sig = value;
+        const good = ask.kind === "sign_typed" ? await verify.typedData({ ...ask.typedData, address: owner, signature: sig }).catch(() => false) : await verify.message({ address: owner, message: ask.kind === "sign_text" ? ask.message : { raw: ask.bytes }, signature: sig }).catch(() => false);
+        if (!good) return { ok: false, reason: `the signature is not from ${owner}` };
+      }
+      const resolve2 = current.resolve;
+      current = void 0;
+      resolve2({ kind: "answered", value });
+      return { ok: true, final: false };
+    }
+  });
+  const opened = deps.open(handle.url);
+  void handle.done.then((r) => {
+    if (current) {
+      current.reject(new Error(r.ok ? "the page closed" : r.reason));
+      current = void 0;
+    }
+  });
+  return {
+    url: handle.url,
+    opened,
+    done: handle.done,
+    ask: (view2, ask) => new Promise((resolve2, reject) => {
+      if (current) return reject(new Error("a step is already waiting on the page"));
+      current = { index: index2++, view: view2, ask, resolve: resolve2, reject };
+    }),
+    finish: (o2) => {
+      ending = o2.ok ? { ok: true, text: o2.text } : { ok: false, text: o2.reason };
+      setTimeout(() => handle.settle(o2.ok ? { ok: true, value: "done" } : { ok: false, reason: o2.reason }), ENDING_SHOWN_MS).unref();
+    }
+  };
+}
+
+// src/invest/flow.ts
+var FINAL_STATES = ["completed", "partial", "failed", "cancelled"];
+function announce2(url2) {
+  const opened = openBrowser(url2);
+  process.stderr.write(`${opened ? "Opened" : "Open this page in a browser on this machine"}: ${url2}
+`);
+  return opened;
+}
+function ownerWallet(ownerInput, title, deps = {}) {
+  const owner = getAddress(ownerInput);
+  const now = deps.now ?? Date.now;
+  let page;
+  const opened = () => page ??= (deps.openPage ?? openInvestPage)(owner, title, { open: deps.open ?? announce2, ttlMs: deps.ttlMs ?? INVEST.pageTtlMs });
+  let shown;
+  const ask = async (view2, a) => {
+    const p = await opened();
+    shown = p.url;
+    return p.ask(view2, a);
+  };
+  return {
+    ask,
+    url: () => shown,
+    signIn: async (signer2, message) => {
+      const c = checkChallenge(message, { host: apiHost(), owner: signer2, now: now() });
+      const a = await ask(
+        {
+          title: "Sign in to the Tempora API",
+          description: "This signature proves you hold this wallet, so the API answers for your account. It costs no gas and moves nothing.",
+          facts: [
+            { label: "API", value: apiHost() },
+            { label: "Wallet", value: getAddress(signer2) },
+            { label: "Valid until", value: c.expiresAt.toISOString() }
+          ]
+        },
+        { kind: "sign_text", message }
+      );
+      if (a.kind !== "answered") throw new Error("the sign-in was not signed");
+      return a.value;
+    },
+    finish: async (o2) => {
+      if (!page) return;
+      const p = await page;
+      p.finish(o2);
+      await p.done;
+    }
+  };
+}
+var payloadOf2 = (s2) => s2.payload;
+async function drive(first, owner, o2, deps) {
+  const call3 = (fn) => asOwner(owner, deps.wallet.signIn, fn, { client: deps.client, now: deps.now });
+  const acted = [];
+  const answered = /* @__PURE__ */ new Set();
+  let request = first;
+  let watchUntil = deps.now() + deps.watchMs;
+  for (; ; ) {
+    const c = o2.check(request);
+    if (!c.ok) {
+      throw new Error(`refused${c.step !== null ? ` (step ${c.step + 1} of ${request.steps.length})` : ""}: ${c.reason}. Nothing more was signed or sent; request ${request.requestId}`);
+    }
+    if (FINAL_STATES.includes(request.state)) return { request, settled: true, acted };
+    const next = request.steps.find((s2) => s2.state === "ready" && payloadOf2(s2) !== void 0 && !answered.has(`${s2.stepId}#${String(payloadOf2(s2)?.generation)}`));
+    if (next) {
+      if (acted.length >= INVEST.maxSteps) throw new Error(`refused: request ${request.requestId} asks for more than ${INVEST.maxSteps} steps`);
+      const sent = acted.find((a) => a.kind === "send");
+      if (sent && next.kind === "send_transaction") {
+        throw new Error(
+          `refused: the API asks for transfer ${next.stepId} again after a transfer was sent (transaction ${sent.value}); not sent twice. Read request ${request.requestId} with \`treasury invest request\``
+        );
+      }
+      const { view: view2, ask } = o2.prepare(request, next);
+      const answer = await deps.wallet.ask(view2, ask).catch((e4) => {
+        const why = e4 instanceof Error ? e4.message : String(e4);
+        throw new Error(ask.kind === "send" ? `${why}; request ${request.requestId}: read it with \`treasury invest request\` before trying again` : why);
+      });
+      answered.add(`${next.stepId}#${String(payloadOf2(next)?.generation)}`);
+      const value = answer.kind === "answered" ? answer.value : answer.hash;
+      acted.push({ stepId: next.stepId, kind: ask.kind, value });
+      const body = ask.kind === "send" ? (
+        // The wallet's own view of the transaction is not read here: the API reads the chain itself, at this hash.
+        { kind: "transaction", txHash: value, wallet: null }
+      ) : { kind: "signature", signature: value };
+      const r2 = await call3((cl, token) => cl.submit({ path: { requestId: request.requestId, stepId: next.stepId }, body }, { ownerToken: token }));
+      if (!r2.ok) {
+        if (ask.kind === "send") {
+          throw new Error(
+            `the transfer was sent from your wallet (transaction ${value}), but the API did not record it: ${r2.error.code}: ${r2.error.message}. Do not send it again. Check the transaction on BNB Chain, and read request ${request.requestId} with \`treasury invest request\`.`
+          );
+        }
+        throw failure2(`The API did not take step ${next.stepId} of request ${request.requestId}`, r2);
+      }
+      request = r2.body;
+      watchUntil = deps.now() + deps.watchMs;
+      continue;
+    }
+    if (deps.now() >= watchUntil) return { request, settled: false, acted };
+    await deps.sleep(deps.pollMs);
+    const r = await call3((cl, token) => cl.status({ path: { requestId: request.requestId } }, { ownerToken: token }));
+    if (!r.ok) throw failure2(`Request ${request.requestId} could not be read`, r);
+    request = r.body;
+  }
+}
+function summary(r) {
+  return {
+    requestId: r.requestId,
+    action: r.action,
+    state: r.state,
+    ...r.smartAccount !== void 0 && { smartAccount: r.smartAccount },
+    ...r.warning ? { warning: r.warning } : {},
+    steps: r.steps.map((s2) => {
+      const v = s2.verification;
+      return { stepId: s2.stepId, kind: s2.kind, state: s2.state, ...v !== void 0 && { verification: v } };
+    }),
+    expiresAt: r.expiresAt
+  };
+}
+
+// src/invest/withdraw.ts
+var DOMAIN_TYPE = [
+  { name: "name", type: "string" },
+  { name: "version", type: "string" },
+  { name: "chainId", type: "uint256" },
+  { name: "verifyingContract", type: "address" }
+];
+function withDomainType(typedData) {
+  const types = { ...typedData["types"] ?? {} };
+  if (types["EIP712Domain"] === void 0) {
+    const domain2 = typedData["domain"] ?? {};
+    types["EIP712Domain"] = DOMAIN_TYPE.filter((f) => domain2[f.name] !== void 0).map((f) => ({ ...f }));
+  }
+  return { ...typedData, types };
+}
+function holdingOf(positions, product) {
+  const p = positions.find((x) => x.product === product && x.kind === "portfolio");
+  if (!p) throw new Error(`refused: this wallet has no position in ${product}; nothing to withdraw`);
+  if (typeof p.smartAccount !== "string" || !/^0x[0-9a-fA-F]{40}$/.test(p.smartAccount)) {
+    throw new Error(`refused: the API names no smart account for ${product}; nothing to withdraw`);
+  }
+  const holdings = {};
+  const decimals = {};
+  for (const b of p.balances) {
+    holdings[b.assetId] = b.raw;
+    decimals[b.assetId.toLowerCase()] = b.decimals;
+  }
+  return { smartAccount: getAddress(p.smartAccount), holdings, decimals };
+}
+function portfolioIdOf(r) {
+  for (const s2 of r.steps) {
+    const m = s2.payload?.typedData?.message;
+    if (typeof m?.portfolioId === "string") return m.portfolioId;
+  }
+  return void 0;
+}
+function checkWithdrawal(r, owner, h, now) {
+  if (typeof r.smartAccount === "string" && r.smartAccount.toLowerCase() !== h.smartAccount.toLowerCase()) {
+    return { ok: false, step: null, reason: `the request debits ${r.smartAccount}, not the smart account ${h.smartAccount} your positions name` };
+  }
+  return checkPortfolioWithdrawal(r.steps, {
+    owner,
+    smartAccount: h.smartAccount,
+    portfolioId: portfolioIdOf(r) ?? "",
+    chain: INVEST_CHAIN_ID,
+    settlementAssetId: BNB_USDT_ASSET_ID,
+    amount: { kind: "all" },
+    holdings: h.holdings,
+    now,
+    maxLifetimeSeconds: INVEST.maxAuthorizationLifetimeSeconds
+  });
+}
+var amountText = (assetId, raw, h) => {
+  const d = h.decimals[assetId.toLowerCase()];
+  if (assetId.toLowerCase() === BNB_USDT_ASSET_ID.toLowerCase()) return `${formatUnits(BigInt(raw), BNB_USDT.decimals)} USDT`;
+  return d === void 0 ? `${raw} units of ${assetId}` : `${formatUnits(BigInt(raw), d)} of ${assetId}`;
+};
+function prepareWithdrawal(r, s2, owner, h, product) {
+  const step = s2;
+  const typedData = step.payload?.typedData ?? {};
+  const message = typedData["message"] ?? {};
+  const sale = message.liquidate === true;
+  const n = r.steps.indexOf(s2) + 1;
+  return {
+    view: {
+      title: `Authorize withdrawal ${n} of ${r.steps.length}`,
+      description: sale ? `Your wallet authorizes selling these holdings of your ${product} account for USDT, paid to your own wallet on ${BNB_INFO.name}.` : `Your wallet authorizes moving this USDT from your ${product} account to your own wallet on ${BNB_INFO.name}.`,
+      facts: [
+        ...(message.assets ?? []).map((a) => ({ label: sale ? "Sell" : "Move", value: amountText(a.assetId, a.amountRaw, h) })),
+        { label: "From your smart account", value: h.smartAccount },
+        { label: "Paid to your wallet", value: owner },
+        { label: "Valid until", value: new Date(Number(message.expiresAt) * 1e3).toISOString() }
+      ]
+    },
+    ask: { kind: "sign_typed", typedData: withDomainType(typedData) }
+  };
+}
+
+// src/invest/commands.ts
+var text2 = (v) => JSON.stringify(v, null, 2);
+var guarded2 = (fn) => async (...a) => {
+  try {
+    return await fn(...a);
+  } catch (e4) {
+    throw new Error(redactEndpoints(e4 instanceof Error ? e4.message : String(e4)));
+  }
+};
+var notConnected2 = () => new Error("no wallet is connected \u2014 run `treasury connect wallet` first, and let the operator sign in");
+var productArg = external_exports.string().min(1).describe("the portfolio's `id`, as `invest products` lists them");
+function buildInvestCommands(deps = {}) {
+  const commands = {};
+  const register = (name, meta3, handler) => {
+    commands[name] = { ...meta3, inputSchema: external_exports.object(meta3.inputSchema), handler };
+  };
+  const client = () => deps.client ?? apiClient();
+  const now = deps.now ?? Date.now;
+  const owner = () => {
+    const s2 = readSession();
+    if (!s2) throw notConnected2();
+    return getAddress(s2.account);
+  };
+  const withWallet = async (title, run2, ending) => {
+    const o2 = owner();
+    const w = deps.wallet ? deps.wallet(o2, title) : ownerWallet(o2, title, deps.walletDeps);
+    const c = client();
+    try {
+      const v = await run2(o2, w, c);
+      await w.finish({ ok: true, text: ending(v) });
+      return v;
+    } catch (e4) {
+      await w.finish({ ok: false, reason: e4 instanceof Error ? e4.message : String(e4) }).catch(() => void 0);
+      throw e4;
+    }
+  };
+  const call3 = (o2, w, c, fn) => asOwner(o2, w.signIn, fn, { client: c, now });
+  const driveDeps = (w, c) => ({
+    client: c,
+    wallet: w,
+    now,
+    sleep: deps.sleep ?? ((ms) => new Promise((r) => setTimeout(r, ms))),
+    watchMs: deps.watchMs ?? INVEST.watchMs,
+    pollMs: deps.pollMs ?? INVEST.pollMs
+  });
+  const portfolio = async (c, product) => {
+    const r = await c.products({});
+    if (!r.ok) throw failure2("The product list could not be read", r);
+    const p = r.body.products.find((x) => x.id === product);
+    if (!p || p.kind !== "portfolio") throw new Error(`refused: ${product} is not a portfolio the API offers; run \`treasury invest products\``);
+    if (!p.chains.includes(INVEST_CHAIN_ID) || !p.tokens.includes(BNB_USDT.symbol)) {
+      throw new Error(`refused: ${product} does not take ${BNB_USDT.symbol} on BNB Chain, the only deposit this command makes`);
+    }
+    return p;
+  };
+  const settledText = (r) => r.settled ? `Request ${r.request.requestId}: ${r.request.state}.` : `Request ${r.request.requestId} is still ${r.request.state}. Read it later with \`treasury invest request\`.`;
+  register(
+    "invest_products",
+    {
+      title: "List Smart Growth portfolios",
+      description: "The Smart Growth portfolios the Tempora API offers, read from the API now: each one's `id` (the value every other invest command takes as `product`), name, status, chain and deposit token, its minimums (`minimum.firstDepositUsd` for a first deposit, `minimum.topUpUsd` for a later one), the forms a deposit and a withdrawal may take (`amountForms`), and the steps the owner's wallet will be asked for (`steps`). A portfolio whose status is not `live` may refuse a deposit: say so to the operator. No sign-in is needed.",
+      inputSchema: {}
+    },
+    guarded2(async () => {
+      const r = await client().products({});
+      if (!r.ok) throw failure2("The product list could not be read", r);
+      const portfolios = r.body.products.filter((p) => p.kind === "portfolio");
+      return text2({
+        api: apiUrl(),
+        portfolios: portfolios.map((p) => ({
+          id: p.id,
+          name: p.name,
+          status: p.status,
+          chains: p.chains,
+          tokens: p.tokens,
+          minimum: p.minimum,
+          amountForms: p.amountForms,
+          steps: p.steps
+        }))
+      });
+    })
+  );
+  register(
+    "invest_balance",
+    {
+      title: "Smart Growth positions",
+      description: "The connected wallet's Smart Growth positions, read from the API now: per portfolio its `stage` (`not_enrolled`, `enrolled`, `awaiting_first_rebalance`, `below_minimum`, `invested`), its `smartAccount`, its value in USD and how that value was read (`value.state`), what it holds (`balances`, raw units with their decimals), idle USDT, profit and loss, and drift. When no sign-in is kept, a local page opens for the operator's wallet to sign in to the API (no gas, nothing moves).",
+      inputSchema: {}
+    },
+    guarded2(async () => {
+      const out = await withWallet(
+        "Invest: sign in",
+        async (o2, w, c) => {
+          const r = await call3(o2, w, c, (cl, token) => cl.positions({}, { ownerToken: token }));
+          if (!r.ok) throw failure2("The positions could not be read", r);
+          return { owner: o2, positions: r.body.positions.filter((p) => p.kind === "portfolio") };
+        },
+        () => "Signed in. You can close this page."
+      );
+      return text2({ api: apiUrl(), ...out });
+    })
+  );
+  register(
+    "invest_deposit",
+    {
+      title: "Deposit USDT into a Smart Growth portfolio",
+      description: "Deposits USDT on BNB Chain from the connected wallet into its own smart account for a Smart Growth portfolio. A local page opens; the operator's own wallet signs in to the API if needed, signs the enrolment when this wallet has no account on the portfolio yet (a 32-byte code from the portfolio provider, which the page says cannot be read on its own), then sends the transfer. Every step is checked before the wallet sees it: the transfer must be exactly the amount asked, on the USDT contract this command pins, to the smart account the request names, with no value attached. Ask the operator for the amount; never suggest one. The portfolio's minimums are in `invest products`. Answers with the request and its state: `completed` once the transfer has landed and been verified by the API. A request still settling is read again with `invest request`. Never repeat a deposit whose transfer was sent: read its request first.",
+      inputSchema: {
+        product: productArg,
+        amount_usdt: external_exports.string().describe('the USDT amount the operator chose, as a plain decimal with at most 6 places, e.g. "100" or "12.5"')
+      }
+    },
+    guarded2(async ({ product, amount_usdt }) => {
+      const raw = parseUsdt(amount_usdt);
+      const out = await withWallet(
+        `Invest: deposit into ${product}`,
+        async (o2, w, c) => {
+          await portfolio(c, product);
+          const r = await call3(o2, w, c, (cl, token) => cl.deposit({ body: depositBody(product, raw) }, { ownerToken: token }));
+          if (!r.ok) throw failure2("The API did not start the deposit", r);
+          return drive(r.body, o2, { check: (q) => checkDeposit(q, raw), prepare: (q, s2) => prepareDeposit(q, s2, raw, product) }, driveDeps(w, c));
+        },
+        settledText
+      );
+      return text2({ api: apiUrl(), settled: out.settled, request: summary(out.request), acted: out.acted });
+    })
+  );
+  register(
+    "invest_withdraw",
+    {
+      title: "Withdraw everything from a Smart Growth portfolio",
+      description: "Withdraws everything in the connected wallet's smart account for a Smart Growth portfolio, paid to the connected wallet in USDT on BNB Chain: idle USDT is moved, the rest is sold. `all` must be true; a part withdrawal is not offered here. A local page opens; the operator's own wallet signs in to the API if needed, then signs each withdrawal authorization in turn. Every authorization is checked before the wallet sees it: it must debit the smart account the positions name, pay the connected wallet, settle in USDT, expire within the hour, and ask in total for no more of any asset than the account holds. Answers with the request and its state; a withdrawal still running is read again with `invest request`.",
+      inputSchema: {
+        product: productArg,
+        all: external_exports.literal(true).describe("must be true: the whole position is withdrawn")
+      }
+    },
+    guarded2(async ({ product }) => {
+      const out = await withWallet(
+        `Invest: withdraw from ${product}`,
+        async (o2, w, c) => {
+          await portfolio(c, product);
+          const pos = await call3(o2, w, c, (cl, token) => cl.positions({}, { ownerToken: token }));
+          if (!pos.ok) throw failure2("The positions could not be read", pos);
+          const h = holdingOf(pos.body.positions, product);
+          const r = await call3(o2, w, c, (cl, token) => cl.withdraw({ body: { product, amount: { kind: "all" } } }, { ownerToken: token }));
+          if (!r.ok) throw failure2("The API did not start the withdrawal", r);
+          return drive(r.body, o2, { check: (q) => checkWithdrawal(q, o2, h, now()), prepare: (q, s2) => prepareWithdrawal(q, s2, o2, h, product) }, driveDeps(w, c));
+        },
+        settledText
+      );
+      return text2({ api: apiUrl(), settled: out.settled, request: summary(out.request), acted: out.acted });
+    })
+  );
+  register(
+    "invest_request",
+    {
+      title: "Read or cancel an invest request",
+      description: "Reads one of the connected wallet's requests again, by `request_id` (from `invest deposit` or `invest withdraw`) or by the `tx_hash` of a transfer the wallet sent for it: its state and each step's state, with the API's on-chain verification of a transfer. Give exactly one. With `cancel` true, cancels a request still waiting on the owner (nothing has moved for it); an earlier request that has not settled holds back a new one on the same portfolio. A page opens only when the wallet must sign in to the API.",
+      inputSchema: {
+        request_id: external_exports.string().optional().describe("the request's id"),
+        tx_hash: external_exports.string().regex(/^0x[0-9a-fA-F]{64}$/).optional().describe("the transaction hash of a transfer sent for the request"),
+        cancel: external_exports.boolean().optional().describe("true to cancel the request; it must be given by `request_id`")
+      }
+    },
+    guarded2(async ({ request_id, tx_hash, cancel }) => {
+      if (request_id === void 0 === (tx_hash === void 0)) throw new Error("give exactly one of --request_id or --tx_hash");
+      if (cancel && request_id === void 0) throw new Error("--cancel needs --request_id");
+      const out = await withWallet(
+        "Invest: sign in",
+        async (o2, w, c) => {
+          const r = cancel && request_id !== void 0 ? await call3(o2, w, c, (cl, token) => cl.cancel({ path: { requestId: request_id } }, { ownerToken: token })) : request_id !== void 0 ? await call3(o2, w, c, (cl, token) => cl.status({ path: { requestId: request_id } }, { ownerToken: token })) : await call3(o2, w, c, (cl, token) => cl.status_lookup({ query: { txHash: tx_hash } }, { ownerToken: token }));
+          if (!r.ok) throw failure2(cancel ? "The request could not be cancelled" : "The request could not be read", r);
+          return r.body;
+        },
+        () => "Signed in. You can close this page."
+      );
+      return text2({ api: apiUrl(), request: summary(out) });
+    })
+  );
+  return commands;
+}
+
 // src/guide.ts
-import { existsSync, realpathSync as realpathSync2 } from "fs";
+import { existsSync as existsSync2, realpathSync as realpathSync2 } from "fs";
 import { dirname, resolve } from "path";
 import { fileURLToPath as fileURLToPath2 } from "url";
 var GUIDE_URL = `https://raw.githubusercontent.com/TemporaLabs/treasury/v${PACKAGE_VERSION}/llms.txt`;
@@ -50132,8 +51470,8 @@ function root() {
 }
 function guidePointer() {
   const base2 = root();
-  if (base2 !== void 0 && (existsSync(resolve(base2, ".claude-plugin/plugin.json")) || existsSync(resolve(base2, ".codex-plugin/plugin.json")))) return void 0;
-  const file2 = base2 !== void 0 && existsSync(resolve(base2, "llms.txt")) ? resolve(base2, "llms.txt") : void 0;
+  if (base2 !== void 0 && (existsSync2(resolve(base2, ".claude-plugin/plugin.json")) || existsSync2(resolve(base2, ".codex-plugin/plugin.json")))) return void 0;
+  const file2 = base2 !== void 0 && existsSync2(resolve(base2, "llms.txt")) ? resolve(base2, "llms.txt") : void 0;
   return {
     read_first: `Read the guide before you run any command: it carries the rules for using treasury safely (which questions to ask the operator, what to show before a first deposit, what to post word for word). ${file2 ? `It is the file at "file" below, or at "url".` : `It is at "url".`}`,
     ...file2 ? { file: file2 } : {},
@@ -50142,7 +51480,7 @@ function guidePointer() {
 }
 
 // src/cli.ts
-var SKILLS = { earn: buildCommands, connect: () => buildConnectCommands() };
+var SKILLS = { earn: buildCommands, connect: () => buildConnectCommands(), invest: () => buildInvestCommands() };
 function kindOf(schema) {
   let s2 = schema;
   for (; ; ) {
