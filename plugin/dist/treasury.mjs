@@ -41852,9 +41852,6 @@ function redactEndpoints(s2) {
   ).replace(/\b(x-api-key|api[-_]?key|authorization)\b\s*[:=]\s*.*/gi, "$1: <redacted>").replace(/^\s*(URL|Request body|Raw Call Arguments):.*$/gim, "").replace(/\n{2,}/g, "\n");
 }
 
-// node_modules/viem/_esm/index.js
-init_exports();
-
 // node_modules/viem/_esm/clients/createClient.js
 init_parseAccount();
 
@@ -45152,33 +45149,29 @@ function isSupportedChainId(id) {
   return id in chains;
 }
 var CHAIN_INFO = {
-  8453: { key: "base", name: "Base", rpcEnv: ["TREASURY_RPC_BASE", "BASE_RPC_URL"], logsRpcEnv: "TREASURY_LOGS_RPC_BASE", publicRpc: "https://mainnet.base.org" },
+  8453: { key: "base", name: "Base", rpcEnv: ["TREASURY_RPC_BASE", "BASE_RPC_URL"], publicRpc: "https://mainnet.base.org" },
   42161: {
     key: "arbitrum",
     name: "Arbitrum One",
     rpcEnv: ["TREASURY_RPC_ARBITRUM", "ARBITRUM_RPC_URL"],
-    logsRpcEnv: "TREASURY_LOGS_RPC_ARBITRUM",
     publicRpc: "https://arb1.arbitrum.io/rpc"
   },
   4663: {
     key: "robinhood",
     name: "Robinhood Chain",
     rpcEnv: ["TREASURY_RPC_ROBINHOOD", "ROBINHOOD_RPC_URL"],
-    logsRpcEnv: "TREASURY_LOGS_RPC_ROBINHOOD",
     publicRpc: "https://rpc.mainnet.chain.robinhood.com"
   },
   1: {
     key: "ethereum",
     name: "Ethereum",
     rpcEnv: ["TREASURY_RPC_ETHEREUM", "ETHEREUM_RPC_URL"],
-    logsRpcEnv: "TREASURY_LOGS_RPC_ETHEREUM",
     publicRpc: "https://ethereum.reth.rs/rpc"
   },
   143: {
     key: "monad",
     name: "Monad",
     rpcEnv: ["TREASURY_RPC_MONAD", "MONAD_RPC_URL"],
-    logsRpcEnv: "TREASURY_LOGS_RPC_MONAD",
     publicRpc: "https://rpc.monad.xyz"
   }
 };
@@ -45282,7 +45275,7 @@ function resolvedRpcSecrets() {
     }
   };
   const urls = /* @__PURE__ */ new Set();
-  const names = [...supportedChainIds.flatMap((id) => [...CHAIN_INFO[id].rpcEnv, CHAIN_INFO[id].logsRpcEnv]), ...SOLANA_INFO.rpcEnv, "TREASURY_LOGS_FALLBACK"];
+  const names = [...supportedChainIds.flatMap((id) => CHAIN_INFO[id].rpcEnv), ...SOLANA_INFO.rpcEnv];
   for (const k of names) {
     const v = rpcUrlFromEnvValue(process.env[k]);
     if (v) urls.add(v);
@@ -45784,9 +45777,9 @@ var EARN = {
    *
    * `base`: Tempora Labs Cash Plus USDC (Test 2B) — a Morpho Vault V2, the Tempora Labs vault this client
    * offers when nothing is named. Tempora Labs Cash Plus USDC (Test 2), also on Base, is the DEMO
-   * vault: listed and open, selected by naming it. Deposits are OPEN to any account (measured by a simulated stranger
-   * deposit; `earn_vaults` reports `defaultAccess: "open"`). The whitelist-gated sibling, Cash Plus
-   * USDC (Test 2A), stays listed as `tlCashPlusUSDC2A` and is refused per account by the pre-flight.
+   * vault: listed and open, selected by naming it. Deposits are OPEN to any account (measured by a simulated
+   * stranger deposit). The whitelist-gated sibling, Cash Plus USDC (Test 2A), stays in the registry as
+   * `tlCashPlusUSDC2A`; the Tempora API decides per account who may deposit.
    *
    * `arbitrum`: Tempora Labs Cash Plus USDC (Test 2C) — a Morpho Vault V2 on Arbitrum One, open to
    * any account by the same measurement.
@@ -45824,27 +45817,10 @@ var EARN = {
     ethereum: "0x2AA9B1F12bbFE1E01dcb4DD52E6836d68416e3B6",
     monad: "0x163295A4d4381745A205DC5E9A436a3f51791593"
   },
-  /** The round-trip target. The same vault as the default; open, so the fork tier deposits from the whale directly. */
-  roundTripVault: "tlCashPlusUSDC2B",
-  /** USDC, as a decimal string — the amount the tiers prepare by default. Never a float. */
-  roundTripAmountUsdc: "0.05",
-  /** Fixtures the fork and live tiers share. */
+  /** Fixtures the unit tiers share. */
   fixtures: {
     /** An address that has never touched any vault — the negative control for access checks. */
-    stranger: "0x000000000000000000000000000000000000dEaD",
-    /** Morpho Blue on Base — held ~2.1e14 USDC base units when probed 2026-09-11. Impersonated on the fork, never keyed. */
-    usdcWhale: "0xBBBBBbbBBb9cC5e90e3b3Af64bdAF62C37EEFFCb",
-    /** Aave V3's aArbUSDCn token on Arbitrum One — held ~1.7e13 native-USDC base units when probed 2026-10-02. Impersonated on the fork, never keyed. */
-    usdcWhaleArbitrum: "0x724dc807b04555b71ed48a6896b6F41593b8C637",
-    /** Morpho Blue on Ethereum — held ~1.2e14 USDC base units when probed 2026-10-11. Impersonated on the fork, never keyed. */
-    usdcWhaleEthereum: "0xBBBBBbbBBb9cC5e90e3b3Af64bdAF62C37EEFFCb",
-    /** The largest USDC holder among recent transfers on Monad — ~1.3e13 base units when probed 2026-10-11. Impersonated on the fork, never keyed. */
-    usdcWhaleMonad: "0x188d586Ddcf52439676Ca21A244753fA19F9Ea8e",
-    /** The largest USDG holder among recent transfers on Robinhood Chain — ~1.0e14 base units when probed 2026-10-11. Impersonated on the fork, never keyed. */
-    usdgWhaleRobinhood: "0x94bAB9693Ba2f6358507eFfcbd372b0660AFfF9d",
-    /** USDC the fork round trip deposits, and what it seeds a discovered depositor with beforehand. */
-    forkDepositUsdc: "100",
-    forkSeedUsdc: "1000"
+    stranger: "0x000000000000000000000000000000000000dEaD"
   }
 };
 
@@ -48808,35 +48784,16 @@ function verifiedTerms(p) {
 
 // src/abi/erc4626.ts
 var erc4626Abi = [
-  // --- ERC-20 ---
   { type: "function", name: "name", stateMutability: "view", inputs: [], outputs: [{ type: "string" }] },
   { type: "function", name: "symbol", stateMutability: "view", inputs: [], outputs: [{ type: "string" }] },
   { type: "function", name: "decimals", stateMutability: "view", inputs: [], outputs: [{ type: "uint8" }] },
-  { type: "function", name: "totalSupply", stateMutability: "view", inputs: [], outputs: [{ type: "uint256" }] },
-  {
-    type: "function",
-    name: "balanceOf",
-    stateMutability: "view",
-    inputs: [{ name: "account", type: "address" }],
-    outputs: [{ type: "uint256" }]
-  },
-  {
-    type: "function",
-    name: "allowance",
-    stateMutability: "view",
-    inputs: [
-      { name: "owner", type: "address" },
-      { name: "spender", type: "address" }
-    ],
-    outputs: [{ type: "uint256" }]
-  },
   {
     type: "function",
     name: "approve",
     stateMutability: "nonpayable",
     inputs: [
       { name: "spender", type: "address" },
-      // `value`, not `amount`: these names are now USER-VISIBLE as `UnsignedCall.args`, and an
+      // `value`, not `amount`: these names are USER-VISIBLE as a step's `args` (`src/earn/request.ts`), and an
       // operator reads them next to a block explorer's own form, which is labelled from the
       // verified contract's ABI. EIP-20 and OpenZeppelin's implementation both name this `value`.
       // Encoding is unaffected — a parameter binds by position and type, never by name.
@@ -48844,51 +48801,7 @@ var erc4626Abi = [
     ],
     outputs: [{ type: "bool" }]
   },
-  // --- ERC-4626 ---
   { type: "function", name: "asset", stateMutability: "view", inputs: [], outputs: [{ type: "address" }] },
-  { type: "function", name: "totalAssets", stateMutability: "view", inputs: [], outputs: [{ type: "uint256" }] },
-  {
-    type: "function",
-    name: "convertToAssets",
-    stateMutability: "view",
-    inputs: [{ name: "shares", type: "uint256" }],
-    outputs: [{ type: "uint256" }]
-  },
-  {
-    type: "function",
-    name: "convertToShares",
-    stateMutability: "view",
-    inputs: [{ name: "assets", type: "uint256" }],
-    outputs: [{ type: "uint256" }]
-  },
-  {
-    type: "function",
-    name: "previewDeposit",
-    stateMutability: "view",
-    inputs: [{ name: "assets", type: "uint256" }],
-    outputs: [{ type: "uint256" }]
-  },
-  {
-    type: "function",
-    name: "previewRedeem",
-    stateMutability: "view",
-    inputs: [{ name: "shares", type: "uint256" }],
-    outputs: [{ type: "uint256" }]
-  },
-  {
-    type: "function",
-    name: "maxDeposit",
-    stateMutability: "view",
-    inputs: [{ name: "receiver", type: "address" }],
-    outputs: [{ type: "uint256" }]
-  },
-  {
-    type: "function",
-    name: "maxRedeem",
-    stateMutability: "view",
-    inputs: [{ name: "owner", type: "address" }],
-    outputs: [{ type: "uint256" }]
-  },
   {
     type: "function",
     name: "deposit",
@@ -48898,20 +48811,6 @@ var erc4626Abi = [
       { name: "receiver", type: "address" }
     ],
     outputs: [{ name: "shares", type: "uint256" }]
-  },
-  {
-    type: "function",
-    name: "previewWithdraw",
-    stateMutability: "view",
-    inputs: [{ name: "assets", type: "uint256" }],
-    outputs: [{ type: "uint256" }]
-  },
-  {
-    type: "function",
-    name: "maxWithdraw",
-    stateMutability: "view",
-    inputs: [{ name: "owner", type: "address" }],
-    outputs: [{ type: "uint256" }]
   },
   {
     type: "function",
@@ -50129,15 +50028,6 @@ function planAcknowledgementText(legs, totals) {
     `Do you acknowledge and want the signing page opened for exactly these ${n} ${n === 1 ? "leg" : "legs"}, run one leg at a time? Reply yes or no.`
   ].join("\n");
 }
-
-// src/connect/gate.ts
-var UNLIMITED = 2n ** 128n;
-
-// src/connect/verify.ts
-var approvalEvent = parseAbiItem("event Approval(address indexed owner, address indexed spender, uint256 value)");
-var transferEvent = parseAbiItem("event Transfer(address indexed from, address indexed to, uint256 value)");
-var depositEvent = parseAbiItem("event Deposit(address indexed sender, address indexed owner, uint256 assets, uint256 shares)");
-var withdrawEvent = parseAbiItem("event Withdraw(address indexed sender, address indexed receiver, address indexed owner, uint256 assets, uint256 shares)");
 
 // src/connect/vault-request.ts
 var assetSymbol = (p) => p.tokens[0] ?? "the vault's asset";
