@@ -13,7 +13,7 @@ import { readOwnerToken } from "../src/connect/owner-tokens.js";
 
 const OWNER = getAddress("0x52908400098527886e0f7030069857d2e4169ee7");
 const NOW = Date.parse("2026-11-14T00:00:00.000Z");
-const HOST = "api-test.temporalabs.com";
+const HOST = "api.staging.example";
 const iso = (ms: number) => new Date(ms).toISOString();
 const message = (o: { host?: string; owner?: string; client?: string } = {}) =>
   [

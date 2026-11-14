@@ -19,7 +19,7 @@ import { buildConnectCommands } from "../src/connect/commands.js";
 
 const NOW = Date.parse("2026-11-14T00:00:00.000Z");
 const HOUR = 3_600_000;
-const KEY: TokenKey = { host: "api-test.temporalabs.com", clientId: "treasury-cli", owner: "0x52908400098527886E0F7030069857D2E4169EE7", audience: "http" };
+const KEY: TokenKey = { host: "api.staging.example", clientId: "treasury-cli", owner: "0x52908400098527886E0F7030069857D2E4169EE7", audience: "http" };
 const later = (ms: number) => new Date(NOW + ms).toISOString();
 
 let home: string;

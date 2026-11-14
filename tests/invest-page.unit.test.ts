@@ -12,7 +12,7 @@ import { openInvestPage, type StepView } from "../src/invest/page.js";
 
 const owner = privateKeyToAccount(generatePrivateKey());
 const stranger = privateKeyToAccount(generatePrivateKey());
-const VIEW: StepView = { title: "Sign in", description: "Sign in to the Tempora API.", facts: [{ label: "Host", value: "api-test.temporalabs.com" }] };
+const VIEW: StepView = { title: "Sign in", description: "Sign in to the Tempora API.", facts: [{ label: "Host", value: "api.staging.example" }] };
 const TYPED = {
   domain: { name: "Example", version: "1", chainId: 56, verifyingContract: "0x1111111111111111111111111111111111111111" as const },
   types: { Thing: [{ name: "n", type: "uint256" }] },

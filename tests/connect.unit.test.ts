@@ -255,7 +255,7 @@ describe("sign-in: the wallet signs the process's own message, whose nonce is th
     ["the same account again", ACCOUNT, true],
   ])("connecting %s forgets the owner tokens kept for the account before it, or keeps them", async (_n, before, kept) => {
     writeSession({ account: before, walletType: "external", connectedAtIso: new Date().toISOString() });
-    const key: TokenKey = { host: "api-test.temporalabs.com", clientId: "treasury-cli", owner: before, audience: "http" };
+    const key: TokenKey = { host: "api.staging.example", clientId: "treasury-cli", owner: before, audience: "http" };
     writeOwnerToken(key, { token: "tok-1", expiresAtIso: new Date(Date.now() + 3_600_000).toISOString() });
     let url = "";
     const cmd = buildConnectCommands({ open: (u) => ((url = u), true), verifySignature: async () => true })["connect_wallet"]!;
