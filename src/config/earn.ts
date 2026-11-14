@@ -1,21 +1,23 @@
 /**
  * The earn wiring — THE place to point the skill at a vault. Shipped code names no vault ticker
- * as a literal; `scripts/roundtrip.ts` and the tiers read the default and the round-trip target
+ * as a literal; the tiers read the library's default and the round-trip target
  * from here (the fork and live tiers also name the gated sibling directly, for the access pair).
  *
  * Three knobs, deliberately separate, because they can legitimately differ:
  *
  *   `defaultChain`        the chain the tools use when the caller names neither a chain nor a vault.
- *   `defaultVaultByChain` what the tools use on each chain when the caller names no vault. Each
+ *   `defaultVaultByChain` what the library uses on each chain when the caller names no vault (the
+ *                         commands pick it by `defaultVaultAddressByChain` on the EVM chains). Each
  *                         registry row must also be `isDefault` — `defaultVault()` refuses a
  *                         config/registry disagreement — and the schema allows a WHITELIST_GATED
  *                         default, because the pre-flight re-measures access live on every call and
  *                         refuses a non-member before anything is built.
- *   `roundTripVault`      what `scripts/roundtrip.ts` exercises by default. The Base default today. (The fork
+ *   `roundTripVault`      the vault the tiers take as the round-trip target. The Base default today. (The fork
  *                         tier round-trips every depositable vault on each chain, from the registry.)
  *
  * Addresses live in the registry (`registry/vaults.json`, schema-validated, block-stamped) — a
- * ticker here resolves through it.
+ * ticker here resolves through it. `defaultVaultAddressByChain` copies the default tickers' registry
+ * addresses, and a unit test holds the two equal.
  *
  * 🔴 NO DEPOSITOR ADDRESS IS CONFIGURED HERE, and that is a rule rather than an omission. A gated
  * vault's whitelist is the fund's to hold, and its members are readable from the chain: the fork
@@ -64,10 +66,26 @@ export const EARN = {
     monad: "tlCashPlusUSDC2F",
   } satisfies Record<ChainKey, VaultSymbol>,
 
+  /**
+   * The default vault on each chain by its contract address: the registry's address for that chain's ticker in
+   * `defaultVaultByChain` (a unit test holds the two maps equal). The address only PICKS the vault among those the
+   * Tempora API lists on that chain; the API supplies everything else about it (its asset, decimals, status, terms and
+   * warnings) on every call. A default the API does not list is refused, never replaced by another vault.
+   *
+   * `Record<ChainKey, …>`: a chain added to `CHAIN_INFO` without a default here does not compile.
+   */
+  defaultVaultAddressByChain: {
+    base: "0x91BcEbA5feCB9E92d80F1845B55cC56621E9352F",
+    arbitrum: "0x4057a63953142Ac2b3E5dB1954Fc14d578662587",
+    robinhood: "0x758f00731943aA88e8C7fB709e0B727903B4F833",
+    ethereum: "0x2AA9B1F12bbFE1E01dcb4DD52E6836d68416e3B6",
+    monad: "0x163295A4d4381745A205DC5E9A436a3f51791593",
+  } satisfies Record<ChainKey, `0x${string}`>,
+
   /** The round-trip target. The same vault as the default; open, so the fork tier deposits from the whale directly. */
   roundTripVault: "tlCashPlusUSDC2B" satisfies VaultSymbol,
 
-  /** USDC, as a decimal string — the amount `scripts/roundtrip.ts` prepares by default. Never a float. */
+  /** USDC, as a decimal string — the amount the tiers prepare by default. Never a float. */
   roundTripAmountUsdc: "0.05",
 
   /** Fixtures the fork and live tiers share. */
