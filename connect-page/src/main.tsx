@@ -22,13 +22,16 @@ import {
   useWallets as useSolanaWallets,
   type ConnectedStandardSolanaWallet,
 } from "@privy-io/react-auth/solana";
-import { arbitrum, base, mainnet, monad, robinhood } from "viem/chains";
+import { arbitrum, base, bsc, mainnet, monad, robinhood } from "viem/chains";
 // viem's Robinhood Chain definition lists a third-party RPC beside the chain's own. The page's
 // Content-Security-Policy keeps the page itself off it, but a wallet asked to add the chain takes the
 // RPC list it is handed, so the wallet is given only the chain's own RPC (the CLI's public RPC for it).
 const robinhoodChain = { ...robinhood, rpcUrls: { default: { http: ["https://rpc.mainnet.chain.robinhood.com"] } } };
+// viem's BNB Chain definition names a third-party RPC; a wallet asked to add the chain gets the chain's own public one.
+const bnbChain = { ...bsc, rpcUrls: { default: { http: ["https://bsc-dataseed.bnbchain.org"] } } };
 import { CSS } from "./styles";
 import { secret, type WalletType, post, reject, errText, type Phase, rejected, fmt, base58, fromBase64, Page, Status, WalletMark, CheckMark, ButtonIcon } from "./shared";
+import { Invest, type InvestInfo } from "./invest";
 import { Plan, type PlanInfo } from "./plan";
 
 
@@ -755,7 +758,8 @@ function ConfirmSolana({ info }: { info: SolanaConfirm }) {
   );
 }
 
-function App({ info }: { info: Info | PlanInfo }) {
+function App({ info }: { info: Info | PlanInfo | InvestInfo }) {
+  if (info.mode === "invest") return <Invest info={info} />;
   if (info.mode === "plan") return <Plan info={info} />;
   if (info.chain === "solana") return info.mode === "connect" ? <ConnectSolana /> : <ConfirmSolana info={info as SolanaConfirm} />;
   return info.mode === "connect" ? <Connect /> : <Confirm info={info as Extract<Info, { mode: "confirm"; chain?: undefined }>} />;
@@ -774,14 +778,14 @@ async function main() {
       </Page>,
     );
   }
-  const info = (await res.json()) as Info | PlanInfo;
+  const info = (await res.json()) as Info | PlanInfo | InvestInfo;
   // A plan's chain families: one of only Solana legs signs in as a Solana flow does; one that mixes them signs in as an
   // EVM flow and also loads Privy's Solana connectors, for the page to connect the same wallet's Solana account.
   const planSolana = info.mode === "plan" && info.legs.some((l) => l.family === "solana");
   const planEvm = info.mode === "plan" && info.legs.some((l) => l.family !== "solana");
   // A Solana flow gets Privy's Solana side: Solana wallets on the first screen, a Privy Solana wallet for an
   // email or social login, and Privy's own Solana RPC for that wallet to send through. An EVM flow is unchanged.
-  if ((info.mode !== "plan" && info.chain === "solana") || (planSolana && !planEvm)) {
+  if ((info.mode !== "plan" && info.mode !== "invest" && info.chain === "solana") || (planSolana && !planEvm)) {
     return root.render(
       <PrivyProvider
         appId={info.appId}
@@ -808,7 +812,8 @@ async function main() {
     loginMethodsAndOrder: { primary: ["detected_ethereum_wallets", "email", "google"], overflow: ["apple", "twitter", "coinbase_wallet"] },
     externalWallets: { walletConnect: { enabled: false } },
     embeddedWallets: { ethereum: { createOnLogin: "users-without-wallets" }, showWalletUIs: true },
-    supportedChains: [base, arbitrum, robinhoodChain, mainnet, monad],
+    // BNB Chain is for `invest` (Smart Growth) only; no earn vault is on it.
+    supportedChains: [base, arbitrum, robinhoodChain, mainnet, monad, bnbChain],
     defaultChain: base,
   } satisfies PrivyClientConfig;
   root.render(

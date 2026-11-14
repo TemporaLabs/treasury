@@ -38,11 +38,11 @@ describe("help and version", () => {
   });
 });
 
-describe("the surface: two skills, a fixed set of commands, nothing that signs", () => {
+describe("the surface: three skills, a fixed set of commands, nothing that signs", () => {
   it("`treasury --help` lists exactly these skills — another is a reviewed change, not a quiet addition", async () => {
     const r = await run(["--help"]);
     expect(r.code).toBe(0);
-    expect((JSON.parse(r.stdout!) as { skills: string[] }).skills).toEqual(["earn", "connect"]);
+    expect((JSON.parse(r.stdout!) as { skills: string[] }).skills).toEqual(["earn", "connect", "invest"]);
   });
 
   it("help repeats what each flag's schema will refuse: descriptions behind `.optional()`, enums, patterns, ranges, switches", async () => {

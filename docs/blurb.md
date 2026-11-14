@@ -94,8 +94,8 @@ no money. Later:
 ## Security
 
 - **No keys, no custody:** the operator's wallet holds the position. Only its signer can move funds.
-- **Direct RPC:** no Tempora Labs service in the request path, and no telemetry from Treasury itself. Keyed RPC URLs are redacted
-  from every output.
+- **Direct RPC for the vaults:** no Tempora Labs service in the request path of `earn` or `connect`, and no telemetry from Treasury itself. Keyed RPC URLs are redacted
+  from every output. Smart Growth portfolios (`invest`) go through the Tempora API, with every step checked before the wallet sees it.
 - **Verifiable builds:** CI checks the committed bundle, and each npm release carries provenance.
 - Vulnerabilities go through private reporting, not public issues.
 

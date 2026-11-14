@@ -1,5 +1,5 @@
 /**
- * Agent Treasury — the command line. `treasury <earn|connect> <command> [--flag value …]`; every command prints
+ * Agent Treasury — the command line. `treasury <earn|connect|invest> <command> [--flag value …]`; every command prints
  * one JSON document on stdout (`--version` prints the bare version).
  *
  * Headless on purpose: an agent with a shell runs this with `node` and reads the JSON, and nothing
@@ -25,6 +25,7 @@ import { parseArgs } from "node:util";
 import { z } from "zod";
 import { buildCommands, type Command } from "./earn/commands.js";
 import { buildConnectCommands } from "./connect/commands.js";
+import { buildInvestCommands } from "./invest/commands.js";
 import { resolvedRpcSecrets } from "./client.js";
 import { redactEndpoints, registerSecretSource } from "./redact.js";
 import { PACKAGE_VERSION } from "./version.js";
@@ -34,7 +35,7 @@ import { guidePointer } from "./guide.js";
  * The skills this CLI carries: a word on the command line, and the commands it opens. A command's name
  * starts with its skill's word (`earn_quote`), and only that skill's builder is ever consulted for it.
  */
-const SKILLS: Record<string, () => Record<string, Command>> = { earn: buildCommands, connect: () => buildConnectCommands() };
+const SKILLS: Record<string, () => Record<string, Command>> = { earn: buildCommands, connect: () => buildConnectCommands(), invest: () => buildInvestCommands() };
 
 type Kind = "string" | "number" | "boolean";
 

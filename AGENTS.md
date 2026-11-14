@@ -21,9 +21,16 @@ builders for **unsigned** deposit and withdraw calls, served as a library and as
    `src/connect/gate-solana.ts` on Solana) refuse any call whose destination is not a vault in `registry/vaults.json` or that vault's asset
    (the approval to it, for exactly the deposit's amount), and any receiver or owner other than the
    connected account. Do not add a private-key variable, a local signer, a tool that signs, or a
-   relay that accepts an arbitrary destination: that is a design change, not a pull request. CI runs
-   the bundled CLI and fails if `earn --help` or `connect --help` lists any command beyond its pinned set.
-2. **The client knows only the chain.** It has a vault address and an RPC endpoint, nothing else.
+   relay that accepts an arbitrary destination: that is a design change, not a pull request. The invest
+   commands (`treasury invest`, `src/invest/`) hand the connected wallet the steps the Tempora API prepares
+   for a Smart Growth portfolio, each held first by `@temporalabs/client`'s own checks to what the operator
+   asked for: a deposit only to the pinned USDT contract, paying the owner's own smart account, and a
+   withdrawal paid only to the connected wallet. CI runs the bundled CLI and fails if `earn --help`,
+   `connect --help` or `invest --help` lists any command beyond its pinned set.
+2. **The client knows only the chain, except in `treasury invest`.** For a vault it has a vault address and
+   an RPC endpoint, nothing else. `treasury invest` also calls the Tempora API, which prepares each portfolio
+   deposit and withdrawal, and only through `@temporalabs/client` (`src/invest/api.ts`); nothing the API says about a step is
+   trusted.
    `tests/boundary.unit.test.ts` parses every audited file and fails on any import, `require`, child
    process or path that reaches outside this repository's allowlist. Do not weaken that test to make
    a change pass.

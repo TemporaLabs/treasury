@@ -102,13 +102,12 @@ const ENTRY_POINTS = ["src/index.ts", "src/cli.ts"];
 const ENV_READS_ALLOWED = [
   "ARBITRUM_RPC_URL",
   "BASE_RPC_URL",
-  // BNB Chain, for `invest` only (src/invest/chain.ts): the owner's holdings that bound a withdrawal.
-  "BNB_RPC_URL",
-  "TREASURY_RPC_BNB",
   "ETHEREUM_RPC_URL",
   "MONAD_RPC_URL",
   "ROBINHOOD_RPC_URL",
   "SOLANA_RPC_URL",
+  // `treasury invest` (src/invest/api.ts): the Tempora API it calls, when not the pinned one.
+  "TREASURY_API_URL",
   // `treasury connect` (src/connect/): its own optional settings, and the four a browser launcher
   // needs to tell whether there is a browser to open at all.
   "DISPLAY",
@@ -157,9 +156,14 @@ const BUILTINS_ALLOWED_PER_FILE: Record<string, string[]> = {
   "src/connect/http.ts": ["crypto"], //                    the one-shot page server's random secret and constant-time compare
   "src/connect/open.ts": ["child_process"], //             opens the operator's browser at the local page
   "src/connect/session.ts": ["os"], //                     the session file lives under the home directory
+  "src/connect/owner-tokens.ts": ["crypto"], //            a random name for the file written aside before it is renamed into place
   "tests/connect.unit.test.ts": ["os", "net"], //           a temporary session directory; a free local port per test
   "tests/third-party-notices.unit.test.ts": ["os"], //      a temporary package directory per test
   "tests/connect-plan.unit.test.ts": ["os", "net"], //      the same, for `connect plan`
+  "tests/owner-tokens.unit.test.ts": ["os"], //             a temporary directory for the owner-token file
+  "tests/invest-api.unit.test.ts": ["os"], //               the same, for the invest sign-in
+  "tests/invest-page.unit.test.ts": ["os", "net"], //       a temporary session directory; a free local port per test
+  "tests/invest-flow.unit.test.ts": ["os"], //               a temporary session directory per test
   "tests/fork.test.ts": ["child_process"], //              spawns anvil; anvil holds the keys, this repo never does
   "tests/fork-solana.test.ts": ["child_process", "os"], //  spawns surfpool in a temporary directory; the key is generated per run
   "tests/registry-check.chain.test.ts": ["child_process"], // runs scripts/registry-check.ts against a mock chain
@@ -440,9 +444,11 @@ describe("A. the runtime module graph cannot leave this package", () => {
     expect(undeclared).toEqual([]);
   });
 
-  it("the dependency set is EXACTLY these three — membership, so a swap holding the count fails too", () => {
+  it("the dependency set is EXACTLY these four — membership, so a swap holding the count fails too", () => {
+    // @temporalabs/client: the Tempora API's own client, the only way `invest` reaches the API (src/invest/api.ts).
     expect(Object.keys(pkg.dependencies ?? {}).sort()).toEqual([
       "@solana/kit",
+      "@temporalabs/client",
       "viem",
       "zod",
     ]);
@@ -470,6 +476,7 @@ describe("B. the environment surface, statically and at runtime", () => {
       "SOLANA_RPC_URL",
       "SSH_CONNECTION",
       "SSH_TTY",
+      "TREASURY_API_URL",
       "TREASURY_CONNECT_HOME",
       "TREASURY_CONNECT_NO_OPEN",
       "TREASURY_CONNECT_PORT",
