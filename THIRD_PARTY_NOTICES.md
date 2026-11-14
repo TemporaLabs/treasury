@@ -1,7 +1,8 @@
 # Third-party notices
 
 `dist/treasury.mjs` is a single file that includes the third-party components below. Each
-component remains under its own licence, reproduced here in full for the exact version included.
+component remains under its own licence, reproduced here in full for the exact version included,
+followed by the component's NOTICE file when it ships one.
 Tempora Labs' Apache License 2.0 (`LICENSE`) applies to Tempora Labs' own code, not to these
 components.
 
