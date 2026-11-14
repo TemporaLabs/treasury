@@ -82,6 +82,44 @@ describe("the connect page's source", () => {
     expect(caught).toMatch(/Not confirmed sent\. Check your wallet's activity/);
   });
 
+  /**
+   * A vault on an EVM chain is a request of the Tempora API, whose next step only exists once the one before it is
+   * recorded, and which the process checks before every step. So the confirm and plan views send only the step as the
+   * process holds it now (read from /info just before the wallet is asked), never a copy the tab kept, and never a step
+   * with nothing to send. Their transaction is built from that fresh read alone.
+   */
+  const plan = readFileSync(join(dir, "plan.tsx"), "utf8");
+  const sendBody = (text: string, from: string) => text.slice(text.indexOf(from), text.indexOf("} catch (e) {", text.indexOf(from)));
+  it("the confirm view sends exactly the step the process holds now, and nothing for a step that is not ready", () => {
+    const send = sendBody(main, "const send = useCallback(async () => {");
+    expect(send).toMatch(/const now = live\.calls\?\.\[next\];/);
+    expect(send).toMatch(/if \(!now \|\| !now\.to \|\| !now\.data\) \{/);
+    expect(send).toMatch(/const tx = \{ from: wallet\.address, to: now\.to, data: now\.data, value: now\.value \};/);
+    // The fresh read and its guard come before the wallet is asked for anything.
+    expect(send.indexOf("const live =")).toBeLessThan(send.indexOf("if (!now"));
+    expect(send.indexOf("if (!now")).toBeLessThan(send.indexOf("eth_estimateGas"));
+    expect(send.indexOf("eth_estimateGas")).toBeLessThan(send.indexOf("eth_sendTransaction"));
+    // No other source for what is sent: the step this tab rendered is not read for its destination or data.
+    expect(send).not.toMatch(/\bcall\.(to|data|value)\b/);
+  });
+
+  it("the plan view sends exactly the step the process holds now, and nothing for a step that is not ready", () => {
+    const send = sendBody(plan, "async (leg: LegView, _call: PlanCall, index: number, chainId: number)");
+    expect(send).toMatch(/const call = live\.current\.chain === "solana" \? undefined : live\.current\.calls\[index\];/);
+    expect(send).toMatch(/if \(!call \|\| !call\.to \|\| !call\.data\) throw/);
+    expect(send).toMatch(/const tx = \{ from: wallet\.address, to: call\.to, data: call\.data, value: call\.value \};/);
+    expect(send.indexOf("const live = await readInfo()")).toBeLessThan(send.indexOf("const call ="));
+    expect(send.indexOf("const call =")).toBeLessThan(send.indexOf("eth_sendTransaction"));
+    expect(send).not.toMatch(/\b_call\.(to|data|value)\b/);
+  });
+
+  it("the confirm and plan views never say a step was not sent once the wallet was asked: it is 'not confirmed sent'", () => {
+    for (const text of [main.slice(main.indexOf("function Confirm(")), plan]) {
+      expect(text).toMatch(/stage = "send";\n\s*hash = \(await provider\.request\(\{ method: "eth_sendTransaction"/);
+      expect(text).toMatch(/await reject\(`not confirmed sent: the wallet returned an error without a transaction hash/);
+    }
+  });
+
   it("never signs typed data outside the invest view, signs or sends raw transactions, or reaches for key material", () => {
     expect(rest).not.toMatch(/signTypedData/i);
     for (const banned of [
