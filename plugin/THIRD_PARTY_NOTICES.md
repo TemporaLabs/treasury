@@ -850,6 +850,18 @@ Apache License
    limitations under the License.
 ```
 
+Its NOTICE file:
+
+```text
+Tempora API client
+Copyright 2026 Tempora Labs
+
+This product includes software developed by Tempora Labs.
+
+"Tempora" and "Tempora Labs" are names of Tempora Labs. The Apache License (section 6) does not grant
+permission to use them beyond describing where the work came from.
+```
+
 ## abitype 1.2.3 (MIT)
 
 ```text
