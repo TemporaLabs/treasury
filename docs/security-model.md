@@ -5,10 +5,12 @@ how that sentence is made true in code rather than in a promise.
 
 ## The boundary
 
-Treasury has three kinds of command. READ commands query the chain and return facts. PREPARE commands
+Treasury has four kinds of command. READ commands query the chain and return facts. PREPARE commands
 return unsigned calls. CONNECT commands hand calls that passed a gate to the operator's own wallet,
 which asks for approval each time, and report what landed
-([below](#the-wallet-connection-treasury-connect)). Nothing in the package signs or holds a key, and
+([below](#the-wallet-connection-treasury-connect)). INVEST commands do the same for the steps the Tempora
+API prepares for a Smart Growth portfolio, each checked before the wallet sees it
+([below](#smart-growth-portfolios-treasury-invest)). Nothing in the package signs or holds a key, and
 a command that did would be a design change the project refuses.
 
 ```
@@ -31,8 +33,9 @@ library directly, you are the boundary.)
 **`tests/boundary.unit.test.ts`** parses every TypeScript file under the package with the TypeScript
 compiler and fails the build if any file:
 
-- imports, requires or dynamically loads anything outside the package and its three declared
-  dependencies (`viem`, `zod`, `@solana/kit`);
+- imports, requires or dynamically loads anything outside the package and its four declared
+  dependencies (`viem`, `zod`, `@solana/kit`, and `@temporalabs/client`, the Tempora API's own client,
+  which only `treasury invest` uses);
 - reads an environment variable that is not on the allowlist
   ([`configuration.md`](configuration.md)), or reads one with a computed key;
 - starts a process, except the named files — the test tiers that spawn the reconciliation script, a
@@ -80,7 +83,8 @@ The parts of a vault's interface that lie are not trusted:
 
 ## What this model does not cover
 
-The vault contracts and the protocols they hold, the RPC provider's honesty, the agent runtime
+The vault contracts and the protocols they hold, the RPC provider's honesty, for `treasury invest` the
+Tempora API and the portfolio provider behind it (below), the agent runtime
 that hosts the plugin, and, for `treasury connect`, Privy's service and the keys it manages for an
 embedded wallet, and the browser and wallet extension the operator confirms in. Treasury believes the RPC; it cannot verify the chain. And Treasury cannot
 stop a model from *reporting* that something was deposited — nothing at a command boundary can. What it
@@ -166,7 +170,8 @@ open for nothing but the calls that text described.
 - **Tests pin the page's source and policy** (`tests/connect-page-source.unit.test.ts`). They read
   every file under `connect-page/src` as text: the page may ask a wallet only for `personal_sign`
   (sign-in), `eth_estimateGas`, `eth_sendTransaction` and a chain switch, and a Solana wallet only to sign
-  the sign-in message and to sign and send the transaction the Solana gate admitted; it may not sign typed data,
+  the sign-in message and to sign and send the transaction the Solana gate admitted; outside the invest view
+  (`connect-page/src/invest.tsx`, [below](#smart-growth-portfolios-treasury-invest)) it may not sign typed data,
   send raw transactions, touch key material, write HTML from strings, store anything in the browser,
   or reach the network except by a direct `fetch` of its own local server. The
   Content-Security-Policy is pinned host by host, and `tests/connect.unit.test.ts` checks that the
@@ -175,3 +180,48 @@ open for nothing but the calls that text described.
   reviewer's eyes; they are not a proof. A text scan cannot follow every computed name, the bundled
   Privy library is not scanned, and the policy admits images from any HTTPS host, so it limits
   scripts, frames and connections but is not an exfiltration boundary.
+
+## Smart Growth portfolios (`treasury invest`)
+
+`treasury invest` deposits into and withdraws from Smart Growth portfolios, which an outside provider holds on
+BNB Chain, through the Tempora API. Unlike `earn` and `connect`, **a Tempora Labs service is in the request path**:
+the API lists the portfolios, prepares every request and records each step. Nothing it says about a step is
+trusted. What protects this path:
+
+- **The owner signs in to the API with their own wallet.** The API's sign-in message is checked line by line before
+  the wallet is asked to sign it (`src/invest/challenge.ts`): the API host this release pins (or `TREASURY_API_URL`),
+  this client, the connected wallet, and an expiry at most five minutes away. A message naming any other host is
+  never signed. The token the API issues is kept in its own file, readable only by its owner
+  (`owner-tokens.json` beside the connect session), keyed by host, client, wallet and use; `connect disconnect`, or
+  connecting another wallet, forgets it. `TREASURY_API_URL` therefore decides which host a sign-in is given for.
+- **Every step is checked before the wallet sees it, and the whole request again before each step.** The checks are
+  `@temporalabs/client`'s own (`checkPortfolioDeposit`, `checkPortfolioWithdrawal`), which read the step's bytes, not
+  what the API says about them. A deposit's transfer must be `transfer(smartAccount, amount)` on the USDT contract
+  this release pins, for exactly the amount asked, with no value. A withdrawal's authorizations must debit the smart
+  account the API's positions name, pay the connected wallet, settle in USDT on BNB Chain, expire within the hour,
+  and ask in total for no more of any asset than the account holds. A refused check stops the command; nothing more
+  is signed or sent.
+- **A sent transfer is never sent again.** When the page could not record a transfer's hash, the hash still goes to
+  the API, which reads the chain itself. When the API does not take it, the command stops with the hash and says not
+  to send again. A wallet error after the wallet was asked to send, with no hash, is shown as "not confirmed sent".
+- **The invest page may do more than the connect page, and only it.** `connect-page/src/invest.tsx` may also ask the
+  owner's wallet to sign a checked withdrawal authorization (`eth_signTypedData_v4`) and the enrolment's raw bytes
+  (`personal_sign` over hex). Before typed data is signed, the standard `EIP712Domain` type is added, because a
+  wallet signing through `eth_signTypedData_v4` signs a missing domain type as an empty one, which binds neither the
+  chain nor the account. The page acts only through the wallet whose address is the connected one, and switches it
+  to BNB Chain before typed data or a send. Every signature it returns is checked to be that wallet's before the command uses it. The
+  source tests pin all of this; every other page file keeps the connect page's narrower set.
+
+**What this cannot check:**
+
+- **The smart account a deposit pays comes from the API.** Only the provider knows it; the enrolment opens it. The
+  transfer still pays exactly that account, and the API verifies on chain that it left the owner's wallet for it.
+- **The enrolment signature is blind.** It is a 32-byte hash the provider builds and does not document. The check
+  confirms its kind, purpose, chain and length, nothing about what it commits to, and many smart accounts accept
+  a `personal_sign` over a 32-byte hash as their own signature. The page says it is a code that cannot be read, to
+  be signed only for a deposit the owner just started.
+- **The portfolio id a withdrawal names** is read from its first authorization, since the request does not carry
+  it; every other authorization is held to it. The account it debits is bound separately, to the positions.
+- **The API's word on state.** Positions, balances and a request's state are the API's reading; the withdrawal
+  bound is only as independent as that reading.
+

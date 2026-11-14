@@ -158,6 +158,7 @@ See [vault details](docs/vaults.md) for addresses, access rules, fees, and dated
 
 - **No keys or custody:** your wallet holds the position; Treasury never holds a key. With an email or social login, that wallet's keys are managed by Privy; see [risks](docs/risks.md).
 - **Direct RPC access:** the `earn` commands talk only to the chain's RPC (yours, or the chain's public endpoint when none is set or a history scan needs it; see [configuration](docs/configuration.md)), with no Tempora Labs service in the request path and no telemetry. Keyed RPC URLs are redacted.
+- **Smart Growth through the Tempora API:** `treasury invest` is the one part that calls a Tempora Labs service. The Tempora API prepares each deposit and withdrawal; every step is checked before your wallet sees it, and your wallet signs in to the API with a message checked line by line first. See [the security model](docs/security-model.md#smart-growth-portfolios-treasury-invest).
 - **Sign-in through Privy:** `treasury connect` signs you in through [Privy](https://privy.io), using Tempora Labs' Privy app unless you set `PRIVY_APP_ID`. Privy, and Tempora Labs as that app's owner, see your login and wallet address, and Privy's script on the page sends its own analytics. The page also loads Cloudflare's bot check (challenges.cloudflare.com) for Privy's sign-in.
 - **Verifiable builds:** CI checks the committed bundle; [verify its provenance](docs/runbooks/verify_the_bundle.md).
 - **Private vulnerability reporting:** follow [SECURITY.md](SECURITY.md), not a public issue.

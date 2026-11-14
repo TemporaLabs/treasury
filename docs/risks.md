@@ -79,6 +79,19 @@ third party. Review every transaction your signer is asked to sign.
   signer approves. Configure it to show destination, amount and calldata, and to refuse anything it
   does not recognise.
 
+## Smart Growth portfolios (`treasury invest`)
+
+- **A Tempora Labs service is in the path.** The Tempora API prepares every deposit and withdrawal and records
+  each step. Treasury checks every step before your wallet sees it, but the positions, balances and request states
+  it shows are the API's reading.
+- **An outside provider holds the portfolio.** Your USDT goes to a smart account the provider opens for you; the
+  provider runs the portfolio and the withdrawals. The address of that account comes from the API, and only the
+  provider can confirm it.
+- **The enrolment signature cannot be read.** It is a 32-byte code from the provider. Sign it only for a deposit
+  you started just now, in your own terminal.
+- **A transfer sent once is never sent again by Treasury.** If a command stops after a transfer was sent, read the
+  request (`invest request`) before anything else.
+
 ## What Treasury will not do
 
 It will not sign, hold a key, hold funds, send anything you have not approved in your own wallet,
