@@ -64,24 +64,23 @@ post anything, search it for the above. If you are not sure whether something is
 
 ## Commands
 
-Node.js 22 or later. The fork tier also needs [Foundry](https://getfoundry.sh) for `anvil`, and
-[Surfpool](https://surfpool.run) on `PATH` for Solana's.
+Node.js 22 or later. The fork tier (Solana) also needs [Surfpool](https://surfpool.run) on `PATH`.
 
 ```bash
 npm ci                     # never `npm install` — CI fails on a stale lockfile
 npm run build              # tsc, the dist/treasury.mjs bundle, THIRD_PARTY_NOTICES.md, and the plugin/ copies
 npm run typecheck
 npm test                   # unit tier; live and fork tiers skip themselves without an RPC
-TREASURY_RPC_BASE=https://... npm test           # adds live read-only checks against Base
-TREASURY_RPC_BASE=https://... npm run test:fork  # anvil fork round trips, impersonated accounts
+TREASURY_RPC_SOLANA=https://... npm test           # adds live read-only checks against Solana
+TREASURY_RPC_SOLANA=https://... npm run test:fork  # a Surfpool fork round trip on Solana, signed by a key made for the run
 npm run registry:check     # reconcile registry/vaults.json against the chain
 ```
 
-Each chain's live and fork tiers run when that chain's RPC variable is set: add
-`TREASURY_RPC_ARBITRUM=https://...` for Arbitrum One, `TREASURY_RPC_ROBINHOOD=https://...` for Robinhood Chain,
-`TREASURY_RPC_ETHEREUM=https://...` for Ethereum, `TREASURY_RPC_MONAD=https://...` for Monad, or `TREASURY_RPC_SOLANA=https://...` for Solana, to the same commands
-(the fork tier covers every chain: anvil for the EVM chains, Surfpool for Solana). `registry:check` reads
-each row on its own chain and reports a chain it could not reach as not checked.
+The live and fork tiers cover the vault on Solana, which this client reads from its own chain; on the EVM chains the
+Tempora API reads and prepares everything, and the unit tier holds the commands to a stand-in API. `registry:check`
+reads each row on its own chain (`TREASURY_RPC_BASE`, `TREASURY_RPC_ARBITRUM`, `TREASURY_RPC_ROBINHOOD`,
+`TREASURY_RPC_ETHEREUM`, `TREASURY_RPC_MONAD`, `TREASURY_RPC_SOLANA`) and reports a chain it could not reach as not
+checked.
 
 ## Things that fail CI if forgotten
 
@@ -102,8 +101,7 @@ each row on its own chain and reports a chain it could not reach as not checked.
 
 ## Conventions
 
-- **Tests never need a real key.** Anything that moves funds runs on a fork and impersonates the
-  account.
+- **Tests never need a real key.** Anything that moves funds runs on a local fork, signed by a key made for that run.
 - **Show that a new test can fail**: break the behaviour it guards, see it go red, restore it.
 - **Measured, not assumed.** A registry row, decimal count, revert selector or RPC window carries the
   block or date it was measured at. `registry/vaults.json` is a set of measurements, and a row is a

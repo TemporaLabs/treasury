@@ -54,6 +54,18 @@ Pre-1.0, minor versions may change tool names, schemas and behaviour.
 
 ### Removed
 - **`earn claim`.** No vault queues withdrawals, and a request's state is now read with `earn request`.
+- **The local EVM builders, pre-flight and readers.** The vaults on the EVM chains are reached through the Tempora
+  API, which prepares and checks every step, so treasury's own code for them is gone. Removed from the library:
+  `buildDeposit`, `buildWithdraw`, `UnsignedCall`, `preflightDeposit`, `classifyRevert`, `extractRevert`,
+  `PreflightResult`, `PreflightStatus`, `RevertObservation`, `quoteDeposit`, `quoteWithdraw`, `DepositQuote`,
+  `WithdrawQuote`, `getPosition`, `Position`, `UNKNOWN_AFTER_SCAN_FAILURE` and `logsRpcUrlFromEnv`. The library keeps
+  the registry, `makePublicClient`, `rpcUrlFromEnv`, `isSupportedChainId`, `chains`, `parseAmount`, `formatAmount`
+  and `DISCLOSURES`.
+- **The event-scan variables.** `TREASURY_LOGS_RPC_BASE`, `TREASURY_LOGS_RPC_ARBITRUM`, `TREASURY_LOGS_RPC_ROBINHOOD`,
+  `TREASURY_LOGS_RPC_ETHEREUM`, `TREASURY_LOGS_RPC_MONAD` and `TREASURY_LOGS_FALLBACK` are no longer read. The other
+  EVM RPC variables are now read only by `connect wallet` (Base, for a smart-contract wallet's sign-in) and by
+  `npm run registry:check`.
+- **The EVM fork and live test tiers.** `npm run test:fork` and the live tier cover the vault on Solana only.
 
 ## [v0.1.4] - 2026-11-08
 

@@ -5,19 +5,20 @@
 A **registry row** describes one vault contract: its ticker, name, chain, address, chassis, asset,
 share decimals, whether a stranger can deposit, and (where known) the block it was deployed at.
 Every field that can be read from the chain is a claim the chain can contradict, and the code treats
-it that way: the EVM pre-flight compares `asset()` and `decimals()` with the row before anything else
-(`src/preflight.ts`), and the Solana `readVault` refuses a row whose mints or decimals disagree with
-the vault state (`src/solana/vault.ts`).
+it that way: the Solana `readVault` refuses a row whose mints or decimals disagree with the vault state
+(`src/solana/vault.ts`), and `npm run registry:check` reconciles every row, EVM and Solana, against its chain
+(below). On the EVM chains a row now only turns a ticker into an address and names a vault's ticker; everything
+else about the vault, and every step, comes from the Tempora API.
 
 The **chassis** is the vault's contract family. `chassisSchema` in `src/registry-schema.ts` lists the
-values; `erc4626Chassis` is the subset with a standard ERC-4626 `deposit`/`redeem`, and every build,
-pre-flight and default rule checks against it. A chassis outside that set can be listed but never
-built for.
+values; `erc4626Chassis` is the subset with a standard ERC-4626 `deposit`/`redeem`, and the schema's open and
+default rules check against it. A chassis outside that set can be listed but never marked open or default.
 
 **Access is measured, not configured.** `depositOpen` records the result of a simulated deposit from
 a stranger, with its method, block (or slot) and time, and a reason when closed. The schema refuses a
-closed row with no reason, an open row with one, and a non-ERC-4626 row marked open. The pre-flight
-re-measures access on every call, so a stale row costs a clear refusal, never funds.
+closed row with no reason, an open row with one, and a non-ERC-4626 row marked open. A deposit is checked live on
+every call (by the Tempora API on the EVM chains, by the Solana pre-flight), so a stale row costs a clear refusal,
+never funds.
 
 ## Two families, two schemas
 
@@ -48,8 +49,10 @@ reaches a test seam.
 
 ## Resolving `vault` and `chain`
 
-Every vault-taking command accepts an optional `vault` (a ticker) and an optional `chain`.
-`resolveVault(symbol, chain)` settles them for the EVM rows:
+Every vault-taking command accepts an optional `vault` and an optional `chain`. On the EVM chains the commands
+resolve them against the Tempora API's list (`resolveProduct` in `src/earn/api.ts`), using the registry only to turn
+a ticker into its address and each chain's default address from `src/config/earn.ts`. In the registry itself,
+`resolveVault(symbol, chain)` settles them for the EVM rows, and is what the library exports:
 
 | caller names | result |
 |---|---|
@@ -67,10 +70,12 @@ An empty string counts as omitted, because some hosts send `""` for every option
 `src/config/earn.ts` are the toggle; the registry's `isDefault` is the measurement. `defaultVault`
 throws when they disagree ("change both or neither"). `defaultVaultByChain` is typed
 `Record<ChainKey, …>`, so a chain added to `CHAIN_INFO` without a default does not compile.
+`EARN.defaultVaultAddressByChain`, the address the commands pick the API's vault by, copies the default rows'
+addresses, and `tests/registry.test.ts` holds the two equal.
 
 Other selectors in `src/registry.ts`: `offeredChains()` (supported chains that have a vault, default
 first), `offeredChainKeys()` (the list a refusal names, with Solana), and `depositableVaults()` /
-`depositableSolanaVaults()`, which are a rule (buildable chassis and measured open), not a list.
+`depositableSolanaVaults()`, which are a rule (ERC-4626 chassis and measured open), not a list.
 
 ## Adding a chain
 

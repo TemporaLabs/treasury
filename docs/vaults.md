@@ -60,7 +60,7 @@ open to any account and exercises every path. It is not what an agent uses unles
 | chassis | Morpho Vault V2 (ERC-4626) |
 | deployed | block 51,436,870 (first block with code) |
 | deposits | **open to any account**. A stranger's simulated `deposit()` reaches the USDC pull and reverts `TransferFromReverted` only for lack of funds (measured at block 52,097,648). `maxDeposit()` reads `0` to every caller on this chassis by design and is not consulted |
-| withdrawals | **public**. Served from idle USDC, then through the vault's liquidity adapter; a withdrawal larger than that reverts until positions are unwound — `earn_balance` reports `exit.exitableNow` by simulating it. `maxWithdraw()` also reads `0` by design |
+| withdrawals | **public**. Served from idle USDC, then through the vault's liquidity adapter; a withdrawal larger than that reverts until positions are unwound — `earn_balance` reports what can be withdrawn now (`withdrawable`, the Tempora API's reading), found by simulation. `maxWithdraw()` also reads `0` by design |
 | fees | none set: `performanceFee()` and `managementFee()` read `0` at block 52,097,648. The curator can introduce one, and the vault's fee timelocks are **0** (`timelock(setPerformanceFee)` and `timelock(setManagementFee)` both read `0` at block 52,097,648), so a change needs no notice; Morpho Vault V2's protocol constants cap them at 50% performance and 5%/yr management. Read both fees on-chain before depositing |
 | positions | three adapters on Base — readable on-chain; Treasury does not model the fund's allocation. Whether any of them lends against a stablecoin whose oracle assumes par is not measured here for this vault (see [`risks.md`](risks.md)). Read the vault's positions on-chain before a first deposit |
 | links | BaseScan only. Morpho's app has no page for this vault (`app.morpho.org/base/vault/…` answered 404 on 2026-10-02, and Morpho's API does not list it), so `earn_vaults` offers no `app` link for it |
@@ -77,7 +77,7 @@ open to any account and exercises every path. It is not what an agent uses unles
 | chassis | Morpho Vault V2 (ERC-4626) |
 | deployed | block 51,371,133 (first block with code) |
 | deposits | **open to any account**. A stranger's simulated `deposit()` reaches the USDC pull and reverts `TransferFromReverted` only for lack of funds (measured at block 51,372,415). `maxDeposit()` reads `0` to every caller on this chassis by design and is not consulted |
-| withdrawals | **public**. Served from idle USDC, then through the vault's liquidity adapter; a withdrawal larger than that reverts until positions are unwound — `earn_balance` reports `exit.exitableNow` by simulating it. `maxWithdraw()` also reads `0` by design |
+| withdrawals | **public**. Served from idle USDC, then through the vault's liquidity adapter; a withdrawal larger than that reverts until positions are unwound — `earn_balance` reports what can be withdrawn now (`withdrawable`, the Tempora API's reading), found by simulation. `maxWithdraw()` also reads `0` by design |
 | fees | none set: `performanceFee()` and `managementFee()` read `0` at block 51,372,415. The curator can introduce one, and the vault's fee timelocks are **0** (`timelock(setPerformanceFee)` and `timelock(setManagementFee)` both read `0` at block 51,404,161), so a change needs no notice; Morpho Vault V2's protocol constants cap them at 50% performance and 5%/yr management. Read both fees on-chain before depositing |
 | positions | ERC-4626 vaults on Base through the vault's adapters — readable on-chain; Treasury does not model the fund's allocation. One of the fund's positions lends against a stablecoin whose Morpho oracle is fixed at par; a depeg is not priced by the fund's loss model. Read the vault's positions on-chain before a first deposit |
 
@@ -93,7 +93,7 @@ open to any account and exercises every path. It is not what an agent uses unles
 | chassis | Morpho Vault V2 (ERC-4626) |
 | deployed | block 510,270,114 (first block with code) |
 | deposits | **open to any account**. A stranger's simulated `deposit()` reaches the USDC pull and reverts `TransferFromReverted` only for lack of an allowance (measured at block 511,070,816). `maxDeposit()` reads `0` to every caller on this chassis by design and is not consulted |
-| withdrawals | **public**. Served from idle USDC, then through the vault's liquidity adapter; a withdrawal larger than that reverts until positions are unwound — `earn_balance` reports `exit.exitableNow` by simulating it. `maxWithdraw()` also reads `0` by design |
+| withdrawals | **public**. Served from idle USDC, then through the vault's liquidity adapter; a withdrawal larger than that reverts until positions are unwound — `earn_balance` reports what can be withdrawn now (`withdrawable`, the Tempora API's reading), found by simulation. `maxWithdraw()` also reads `0` by design |
 | fees | none set: `performanceFee()` and `managementFee()` read `0` at block 511,070,816. The curator can introduce one, and the vault's fee timelocks are **0** (`timelock(setPerformanceFee)` and `timelock(setManagementFee)` both read `0` at that block), so a change needs no notice; Morpho Vault V2's protocol constants cap them at 50% performance and 5%/yr management. Read both fees on-chain before depositing |
 | positions | through the vault's three adapters on Arbitrum One — readable on-chain; Treasury does not model the fund's allocation. Whether any of them lends against a stablecoin whose oracle assumes par is not measured here for this vault (see [`risks.md`](risks.md)). Read the vault's positions on-chain before a first deposit |
 | links | Arbiscan only. Morpho's app has no page for this vault yet (`app.morpho.org/arbitrum/vault/…` answered 404 on 2026-10-02), so `earn_vaults` offers no `app` link for it |
@@ -110,7 +110,7 @@ open to any account and exercises every path. It is not what an agent uses unles
 | chassis | Morpho Vault V2 (ERC-4626) |
 | deployed | block 79,381,803 (the block of the factory call that created it; its `CreateVaultV2` event names this vault) |
 | deposits | **open to any account**. A stranger's simulated `deposit()` reaches the USDG pull and reverts `TransferFromReverted` only for lack of an allowance (measured at block 79,974,900). `maxDeposit()` reads `0` to every caller on this chassis by design and is not consulted |
-| withdrawals | **public**. Served from idle USDG, then through the vault's liquidity adapter; a withdrawal larger than that reverts until positions are unwound — `earn_balance` reports `exit.exitableNow` by simulating it. `maxWithdraw()` also reads `0` by design |
+| withdrawals | **public**. Served from idle USDG, then through the vault's liquidity adapter; a withdrawal larger than that reverts until positions are unwound — `earn_balance` reports what can be withdrawn now (`withdrawable`, the Tempora API's reading), found by simulation. `maxWithdraw()` also reads `0` by design |
 | fees | none set: `performanceFee()` and `managementFee()` read `0` at block 79,974,900. The curator can introduce one, and the vault's fee timelocks are **0** (`timelock(setPerformanceFee)` and `timelock(setManagementFee)` both read `0` at that block), so a change needs no notice; Morpho Vault V2's protocol constants cap them at 50% performance and 5%/yr management. Read both fees on-chain before depositing |
 | positions | through the vault's three adapters on Robinhood Chain — readable on-chain; Treasury does not model the fund's allocation. Whether any of them lends against a stablecoin whose oracle assumes par is not measured here for this vault (see [`risks.md`](risks.md)). Read the vault's positions on-chain before a first deposit |
 | links | Blockscout only; `earn_vaults` offers no `app` link for it |
@@ -127,7 +127,7 @@ open to any account and exercises every path. It is not what an agent uses unles
 | chassis | Morpho Vault V2 (ERC-4626) |
 | deployed | block 26,164,268 (first block with code) |
 | deposits | **open to any account**. A stranger's simulated `deposit()` reaches the USDC pull and reverts `TransferFromReverted` only for lack of an allowance (measured at block 26,166,799). `maxDeposit()` reads `0` to every caller on this chassis by design and is not consulted |
-| withdrawals | **public**. Served from idle USDC, then through the vault's liquidity adapter; a withdrawal larger than that reverts until positions are unwound — `earn_balance` reports `exit.exitableNow` by simulating it. `maxWithdraw()` also reads `0` by design |
+| withdrawals | **public**. Served from idle USDC, then through the vault's liquidity adapter; a withdrawal larger than that reverts until positions are unwound — `earn_balance` reports what can be withdrawn now (`withdrawable`, the Tempora API's reading), found by simulation. `maxWithdraw()` also reads `0` by design |
 | fees | none set: `performanceFee()` and `managementFee()` read `0` at block 26,166,799. The curator can introduce one, and the vault's fee timelocks are **0** (`timelock(setPerformanceFee)` and `timelock(setManagementFee)` both read `0` at that block), so a change needs no notice; Morpho Vault V2's protocol constants cap them at 50% performance and 5%/yr management. Read both fees on-chain before depositing |
 | gas | **far higher than on the other chains.** The approve, the deposit and a later withdrawal each pay Ethereum gas in ETH, which can be a large share of a small deposit; the skill says so when an operator picks Ethereum for a small amount |
 | positions | three adapters on Ethereum (listed above) — readable on-chain; Treasury does not model the fund's allocation. Whether any of them lends against a stablecoin whose oracle assumes par is not measured here for this vault (see [`risks.md`](risks.md)). Read the vault's positions on-chain before a first deposit |
@@ -145,9 +145,8 @@ open to any account and exercises every path. It is not what an agent uses unles
 | chassis | Morpho Vault V2 (ERC-4626) |
 | deployed | block 112,273,210 (first block with code) |
 | deposits | **open to any account**. A stranger's simulated `deposit()` reaches the USDC pull and reverts `TransferFromReverted` only for lack of an allowance (measured at block 112,372,495). `maxDeposit()` reads `0` to every caller on this chassis by design and is not consulted |
-| withdrawals | **public**. Served from idle USDC, then through the vault's liquidity adapter; a withdrawal larger than that reverts until positions are unwound — `earn_balance` reports `exit.exitableNow` by simulating it. `maxWithdraw()` also reads `0` by design |
+| withdrawals | **public**. Served from idle USDC, then through the vault's liquidity adapter; a withdrawal larger than that reverts until positions are unwound — `earn_balance` reports what can be withdrawn now (`withdrawable`, the Tempora API's reading), found by simulation. `maxWithdraw()` also reads `0` by design |
 | fees | none set: `performanceFee()` and `managementFee()` read `0` at block 112,372,495. The curator can introduce one, and the vault's fee timelocks are **0** (`timelock(setPerformanceFee)` and `timelock(setManagementFee)` both read `0` at that block), so a change needs no notice; Morpho Vault V2's protocol constants cap them at 50% performance and 5%/yr management. Read both fees on-chain before depositing |
-| history | Monad's public endpoint serves `eth_getLogs` over at most **100 blocks** per request, and Monad makes about three blocks a second, so `earn_balance`'s history scan through it covers under an hour and says it was cut short. Set `TREASURY_LOGS_RPC_MONAD` to a provider with a wider range for entry basis and yield |
 | positions | three adapters on Monad (listed above) — readable on-chain; Treasury does not model the fund's allocation. Whether any of them lends against a stablecoin whose oracle assumes par is not measured here for this vault (see [`risks.md`](risks.md)). Read the vault's positions on-chain before a first deposit |
 | links | MonadScan only; `earn_vaults` offers no `app` link for it |
 
@@ -184,7 +183,7 @@ open to any account and exercises every path. It is not what an agent uses unles
 | deployed | block 51,359,816 (first block with code) |
 | deposits | **whitelist-gated**: `deposit()` needs a role on the vault's AccessManager. A stranger's simulated deposit reverts `AccessManagedUnauthorized` (measured at block 51,361,109) |
 | withdrawals | **public**: not gated by the whitelist, so an account that holds shares can leave, subject to the liquidity described under exit |
-| exit | instant-withdrawal fuses are configured, so a withdrawal is served from the vault's liquid balance and then by unwinding positions in the same transaction. A withdrawal larger than what those positions can release in-block still reverts — `earn_balance` reports `exit.exitableNow` by simulating it |
+| exit | instant-withdrawal fuses are configured, so a withdrawal is served from the vault's liquid balance and then by unwinding positions in the same transaction. A withdrawal larger than what those positions can release in-block still reverts — `earn_balance` reports what can be withdrawn now (`withdrawable`, the Tempora API's reading), found by simulation |
 | fees | a management fee and a performance fee, both readable on-chain from the vault (`getManagementFeeData`, `getPerformanceFeeData`) |
 | positions | ERC-4626 leaf vaults on Base — readable on-chain; Treasury does not model the fund's allocation |
 
@@ -196,12 +195,12 @@ positions, operated by Tempora Labs while the product is proven. Read [`risks.md
 Admission is a fund-side action: the vault's operator grants the deposit role to your account on the
 vault's AccessManager. Treasury cannot do it, request it, or work around it, and the skill instructs
 an agent to stop rather than substitute a different vault. Until you are admitted, `earn_status`
-returns `WHITELIST_GATED` for your account and the vault is not in `depositable`. Test 2A, the only gated
+reports the deposit check `not_admitted` for your account and the vault is not in `depositable`. Test 2A, the only gated
 vault listed, is listed so an account that already holds it can read and exit its position; it is not
 offered for new deposits.
 
 Who is admitted is on the chain, in the AccessManager's `hasRole`. Treasury writes no member address
-anywhere in this repository; its own test tiers discover one from the chain when they need it.
+anywhere in this repository; the Tempora API checks it per account when a deposit is asked for.
 
 ## Why the default is what it is
 
@@ -213,5 +212,6 @@ here, and says so.
 ## What a registry row is not
 
 A row is not a recommendation, a yield forecast, or a promise of liquidity. `depositOpen` is a
-measurement with a block on it and is re-taken live by the pre-flight on every call; a yield figure,
+measurement with a block on it, and the deposit itself is checked live on every call — by the Tempora API's
+simulation on the EVM chains, by the pre-flight on Solana; a yield figure,
 where one is shown, is somebody's measurement over some window and is labelled with its source.

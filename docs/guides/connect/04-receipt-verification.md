@@ -1,17 +1,18 @@
 # 04: What landed: receipt verification
 
-> **Scope.** On the EVM chains, `connect` no longer reads receipts itself: each hash goes to the Tempora API, whose
-> reading of how the step landed is the verdict reported
-> ([`../earn-api/01-the-api-path.md`](../earn-api/01-the-api-path.md)). The EVM receipt check described here
-> (`src/connect/verify.ts`) remains in the library; the Solana check is what `connect` uses on Solana.
+> **Scope.** On the EVM chains, `connect` does not read receipts itself: each hash goes to the Tempora API, whose
+> reading of how the step landed (the vault's or token's own event for this owner and this amount) is mapped onto the
+> verdicts below ([`../earn-api/01-the-api-path.md`](../earn-api/01-the-api-path.md)). This guide is the Solana check.
 
 After the wallet sends a transaction, the page posts its hash (EVM) or signature (Solana) to the local
-process, which decides whether it did what the operator confirmed. That verdict, not the wallet's
+process, which has it judged (on the EVM chains by the Tempora API, on Solana here) against what the operator
+confirmed. That verdict, not the wallet's
 word, decides whether the next call is offered and what the command reports.
 
 ## The verdicts
 
-`Verdict` in `src/connect/verify.ts` defines them, and the Solana check uses the same type:
+`Verdict` in `src/connect/verify.ts` defines them; the Solana check and the EVM mapping of the API's reading
+(`src/connect/vault-request.ts`) both use it:
 
 | verdict | meaning |
 |---|---|
@@ -22,29 +23,6 @@ word, decides whether the next call is offered and what the command reports.
 | `unverified` | no answer within the wait, or the records needed to judge it were missing |
 
 Only `matched` and `extra_transfer` let a flow continue. Anything else stops it, with the reason.
-
-## EVM: `verifyLanded`
-
-A smart-account wallet does not send the call itself: it wraps it in a batch a relayer submits, so a
-transaction's `from` and `to` name the relayer. So the evidence is read from the **receipt's logs**,
-never from the transaction envelope:
-
-1. Poll for the receipt until the attempts run out or the flow's deadline passes; none is `unverified`.
-   A failed receipt is `reverted`.
-2. A receipt mined at or before the chain head read when the flow started (`notBefore`) is an older
-   transaction of the same shape, so it is a `mismatch`.
-3. Look for the token's or the vault's own event for the connected account and the exact admitted
-   amount: `Approval` for an approve, `Deposit` for a deposit, `Withdraw` (receiver and owner the
-   account, assets or shares as admitted) for a withdraw or redeem. Missing is a `mismatch`.
-4. Every `Transfer` of the asset out of the account that the call does not explain (a deposit
-   explains exactly one pull of its amount to the vault) is listed in `alsoMoved`, and turns a match
-   into `extra_transfer`. ETH movements are not checked.
-
-In `prepareConfirm` (`src/connect/commands.ts`), each hash is put on record **before** its receipt is
-read, so whatever ends the flow, the command reports the transaction rather than saying nothing was
-sent. A hash the page could not hand over is recorded through `onReject` as `unverified`. Between an
-approval and its deposit, `allowanceVisible` waits until the allowance reads back on this process's
-RPC; if it never does, the flow stops before the deposit is sent.
 
 ## Solana: `verifySolanaLanded`
 
@@ -73,7 +51,7 @@ to check the account with `earn balance` before any retry.
 
 ## Tests
 
-`tests/connect.unit.test.ts` scripts receipts for each verdict on EVM; `tests/solana-connect.unit.test.ts`
+`tests/connect-api.unit.test.ts` maps each step state the API reports onto a verdict; `tests/solana-connect.unit.test.ts`
 checks landed Solana transactions against a scripted RPC; `tests/solana-withdraw-sim.unit.test.ts`
 holds every path to refusing a partial withdrawal before it is sent; `tests/fork-solana.test.ts` runs
 `verifySolanaLanded` on transactions that really landed on a local fork.

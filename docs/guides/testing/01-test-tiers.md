@@ -8,18 +8,17 @@ fails the run before any test.
 
 | tier | what it proves | runs when | files |
 |---|---|---|---|
-| **unit** | the code's logic, against synthetic rows, scripted RPC answers and committed snapshots; no network | always (`npm test`) | `tests/*.unit.test.ts`, and the offline files without the suffix (`tests/build.test.ts`, `tests/withdraw.test.ts`, `tests/registry.test.ts`, `tests/registry-check.chain.test.ts`) |
-| **live** | the instruments still fire on the real chain: a gated vault classifies as gated, an open one as needing an approval, a public control vault the same | that chain's RPC variable is set; each chain's block is skipped otherwise | `tests/live.test.ts` |
-| **fork** | a full deposit and withdrawal round trip against every depositable vault, using only calls and transactions this package builds | `TREASURY_FORK=1` (`npm run test:fork`) and that chain's RPC variable to fork from | `tests/fork.test.ts` (anvil, EVM), `tests/fork-solana.test.ts` (Surfpool, Solana) |
+| **unit** | the code's logic, against synthetic rows, a stand-in Tempora API, scripted RPC answers and committed snapshots; no network | always (`npm test`) | `tests/*.unit.test.ts`, and the offline files without the suffix (`tests/registry.test.ts`, `tests/registry-check.chain.test.ts`) |
+| **live** | the Solana decoders still read the program's current layout, and a stranger's pre-flight still says it needs funds | `TREASURY_RPC_SOLANA` (or `SOLANA_RPC_URL`) is set; skipped otherwise | `tests/live.test.ts` |
+| **fork** | a full deposit and withdrawal round trip on the Solana vault, using only transactions this package builds | `TREASURY_FORK=1` (`npm run test:fork`) and a Solana RPC to fork from | `tests/fork-solana.test.ts` (Surfpool) |
 
 CI runs the unit tier only; live and fork skip themselves there. Say in a pull request which tiers
-you ran, because the unit tier says nothing about the chain.
+you ran, because the unit tier says nothing about the chain. There is no EVM live or fork tier: on the EVM chains
+the Tempora API reads and prepares everything, so the unit tier holds the commands to a stand-in API
+(`tests/fixtures/api.ts`), and `checkSteps` is tested in `@temporalabs/client` itself.
 
-**No tier needs a real key.** The EVM fork signs by impersonating funded accounts on anvil (the
-fixtures in `EARN.fixtures`, `src/config/earn.ts`). A whitelist member for a gated vault is discovered
-from the vault's own access manager (`tests/access.ts`), never written into the repository. The
-Solana fork signs with a key generated for the run and funded only on the local fork. Each fork test
-uses its own port, records the PID it started, and kills only that PID.
+**No tier needs a real key.** The Solana fork signs with a key generated for the run and funded only on the local
+fork. It uses its own port, records the PID it started, and kills only that PID.
 
 ## Shared fixtures
 
@@ -58,8 +57,7 @@ if the rule should change, that is a separate decision.
 - **Separate a refusal from a transport failure** in what you assert, as the code does: a mocked
   revert and a mocked network error must produce different results.
 - **Inject, do not patch globals.** The connect flows take a `ConnectDeps` (`src/connect/commands.ts`)
-  for the clock, the browser opener, the chain reads and the time limits; the position read takes a
-  `now` and budgets. Use them.
+  for the clock, the browser opener, the Tempora API, the Solana reads and the time limits. Use them.
 - **Keep a tier honest.** A test that needs a chain belongs in the live or fork tier and must skip,
   visibly, when its variable is unset.
 

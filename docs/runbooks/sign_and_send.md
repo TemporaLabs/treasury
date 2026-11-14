@@ -25,9 +25,8 @@ Robinhood Chain, `robinhood` and a Robinhood Chain RPC; on Ethereum, `mainnet` a
    involved. Returns `{ requires_signature: true, status: "unsigned", calls }`, each call
    `{ chainId, to, data, value, gasAdvice, precondition? }` plus display fields (`function`, `args`,
    `description`, `step`, `of`). This is the entire handoff surface: nothing else crosses from
-   Treasury's process into the signer's. ⚠️ Consuming the LIBRARY directly rather than the CLI
-   — as this runbook's own script does — gets the bare `UnsignedCall[]` with no envelope;
-   the envelope is a property of the command boundary, not of `buildDeposit`/`buildWithdraw`.
+   Treasury's process into the signer's. The commands are the only source of these calls: the
+   library builds none.
 3. **Sign and send** — outside Treasury entirely. The runbook below is one way to do this when the
    signer is a key held on a remote host the operator runs, rather than a local wallet.
 
@@ -141,9 +140,9 @@ logged, only in the process's own environment.
   real `.sh` file, deploy it, and run that file as the single command.
 - **Gas estimation undercounts for Morpho V2.** An `eth_estimateGas` taken moments before sending
   can still under-provision, because Morpho V2's interest-accrual storage writes grow with elapsed
-  time since the vault's last accrual — work invisible to the estimate. `gasAdvice` on every
-  `UnsignedCall` says estimate × 1.5; this script applies it unconditionally, not just when
-  something looks tight.
+  time since the vault's last accrual — work invisible to the estimate. Treasury's advice at the
+  time was estimate × 1.5; this script applies it unconditionally, not just when something looks
+  tight.
 - **The public Base RPC rate-limits fast** (`eth_call`/`eth_getLogs` failures mid-session, "over rate
   limit"). Use a real provider key for anything beyond one or two reads.
 
