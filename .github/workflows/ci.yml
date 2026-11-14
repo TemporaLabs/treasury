@@ -393,16 +393,16 @@ jobs:
           npm pack --ignore-scripts --pack-destination "$RUNNER_TEMP"
           npm install --prefix "$RUNNER_TEMP/cur" --ignore-scripts --no-audit --no-fund "$RUNNER_TEMP"/temporalabs-treasury-*.tgz
           npm install --prefix "$RUNNER_TEMP/v012" --ignore-scripts --no-audit --no-fund @temporalabs/treasury@0.1.2
-      # The endpoint URLs are secrets; a pull request from a fork gets neither, and the script then
-      # uses the public endpoints. Each URL's token and the host's first label are masked on their own
+      # The Solana endpoint URL is a secret; a pull request from a fork does not get it, and the script
+      # then uses the public endpoint. Its token and the host's first label are masked on their own
       # too, in case anything prints them without the rest of the URL (a DNS error names the host).
+      # No EVM endpoint is needed: on the EVM chains the CLI reads the Tempora API, not a chain.
       - name: the built CLI exits 0 with a network answer (the Tempora API, or Solana's chain), and 1 on a refused argument
         shell: bash
         env:
-          CI_RPC_BASE: ${{ secrets.CI_RPC_BASE }}
           CI_RPC_SOLANA: ${{ secrets.CI_RPC_SOLANA }}
         run: |
-          for u in "$CI_RPC_BASE" "$CI_RPC_SOLANA"; do
+          for u in "$CI_RPC_SOLANA"; do
             [ -n "$u" ] || continue
             t="${u%/}"; t="${t##*/}"; if [ -n "$t" ]; then echo "::add-mask::$t"; fi
             h="${u#*://}"; h="${h%%/*}"; h="${h%%.*}"; if [ -n "$h" ]; then echo "::add-mask::$h"; fi
