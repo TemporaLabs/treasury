@@ -7,7 +7,7 @@ import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { createServer } from "node:net";
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { encodeFunctionData, getAddress, type Address, type Hex } from "viem";
 import { erc4626Abi } from "../src/abi/erc4626.js";
 import { buildConnectCommands, type ConnectDeps } from "../src/connect/commands.js";
@@ -214,6 +214,8 @@ describe("the check holds before every step, and nothing is ever sent twice", ()
     const run = acknowledged("connect_withdraw", { amount_usdc: "1" });
     const p = await page();
     const first = p.post({ index: 0, hash: H(1) });
+    // The two posts are separate requests: wait until the first is recorded, so the second cannot overtake it.
+    await vi.waitFor(() => expect(api.submits).toHaveLength(1), { timeout: 5000 });
     const again = await p.post({ index: 0, hash: H(2) });
     expect(again["ok"]).toBe(false);
     await first;
