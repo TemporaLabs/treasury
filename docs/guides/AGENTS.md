@@ -19,8 +19,9 @@ Copy no number or list out of prose. Read it from the file that owns it.
 
 | fact | owned by |
 |---|---|
-| vaults: addresses, assets, decimals, chassis, measured access, deployment block | `registry/vaults.json`, validated by `src/registry-schema.ts` |
-| default chain, default vault per chain, round-trip vault, test fixtures | `src/config/earn.ts` (`EARN`) |
+| vaults on the EVM chains: contract, asset, decimals, status, terms, warnings | the Tempora API's products, read by `src/earn/api.ts`; nothing about them is stored here |
+| the Solana vault (and the library's EVM rows): addresses, assets, decimals, chassis, measured access, deployment block | `registry/vaults.json`, validated by `src/registry-schema.ts` |
+| default chain, default vault address per EVM chain, the library's default vault per chain, round-trip vault, test fixtures | `src/config/earn.ts` (`EARN`) |
 | supported EVM chains, their RPC variables and public endpoints | `chains` and `CHAIN_INFO` in `src/client.ts` |
 | Solana's RPC variables and public endpoint | `SOLANA_INFO` in `src/client.ts` |
 | block explorers | `EXPLORER` in `src/links.ts` |
@@ -43,10 +44,11 @@ Copy no number or list out of prose. Read it from the file that owns it.
 |---|---|
 | Nothing signs, holds or derives a key; the earn commands only return unsigned calls | no signer code exists; the CI step that runs the bundle and asserts the exact command and flag set (`.github/workflows/ci.yml`) |
 | The client reaches only the chain: no import, process or environment variable outside the allowlist | `tests/boundary.unit.test.ts` (an AST analysis, with fixtures that must fail it). Never loosen it to make a change pass |
-| `treasury connect` puts in front of a wallet only registry vaults, for the connected account | `src/connect/gate.ts`, `src/connect/gate-solana.ts`; see [`connect/02-gates.md`](connect/02-gates.md) |
+| `treasury connect` and `earn prepare_*` put in front of a wallet only checked steps, for the connected account | on the EVM chains `checkSteps` in `src/earn/request.ts` and `src/connect/vault-request.ts`, see [`earn-api/01-the-api-path.md`](earn-api/01-the-api-path.md); on Solana `src/connect/gate-solana.ts`, see [`connect/02-gates.md`](connect/02-gates.md) |
 | A page opens only for calls the operator was shown in the acknowledgement text | `checkAck` and `checkPlanLeg` in `src/connect/ack.ts` |
 | A deposit response carries the vault's warning, from one place only | `commitsMoney` in `src/earn/commands.ts`, asserted by `tests/commands.unit.test.ts` |
-| The default vault in config and the registry's `isDefault` agree | `defaultVault` in `src/registry.ts` throws on disagreement |
+| The library's default vault in config and the registry's `isDefault` agree | `defaultVault` in `src/registry.ts` throws on disagreement |
+| An EVM chain's default product is one the API lists, never replaced by another | `resolveProduct` in `src/earn/api.ts`, asserted by `tests/earn-api.unit.test.ts` |
 | Committed bundles and generated files match a fresh build | CI rebuilds and compares; see [`release/01-build-and-bundles.md`](release/01-build-and-bundles.md) |
 | `plugin/` copies are never edited by hand | `scripts/sync-plugin.sh --check` (`npm run plugin:check`) |
 | Adding, removing or renaming a command updates `plugin/skills/earn/SKILL.md` in the same pull request | the CI step comparing the skill's command table with `earn --help` |
@@ -59,8 +61,9 @@ Copy no number or list out of prose. Read it from the file that owns it.
 |---|---|
 | [`architecture/`](architecture/README.md) | you are new, or a change crosses layers |
 | [`cli/`](cli/README.md) | you add or change a command, a flag, a response field or an error |
-| [`registry/`](registry/README.md) | you add a vault or a chain, or change how one is chosen |
-| [`evm/`](evm/README.md) | you change an EVM read, quote, pre-flight, build or position |
+| [`earn-api/`](earn-api/README.md) | you change an EVM earn or connect command, or what is checked before a step reaches a wallet |
+| [`registry/`](registry/README.md) | you change the Solana row, a chain, or how the library chooses a vault |
+| [`evm/`](evm/README.md) | you change the library's EVM read, quote, pre-flight, build or position (the commands no longer use it) |
 | [`solana/`](solana/README.md) | you change anything for the Solana vault |
 | [`connect/`](connect/README.md) | you change `treasury connect`, its gates, acknowledgements or page |
 | [`invest/`](invest/README.md) | you change `src/invest/` |

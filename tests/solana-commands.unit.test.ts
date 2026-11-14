@@ -16,10 +16,14 @@ const EVM = "0x1111111111111111111111111111111111111111";
 
 describe("earn on Solana: listing and resolution", () => {
   it("earn_vaults lists Solana as a chain with its default, and the vault with a Solscan link and no chain id", async () => {
-    const out = await run("earn_vaults", {});
+    // The EVM vaults are the Tempora API's: a stand-in that lists none, so this reads nothing beyond this machine.
+    const none = new Proxy({}, { get: () => async () => ({ ok: true, status: 200, body: { products: [] } }) });
+    const out = JSON.parse(await (buildCommands({ mcp: none as never }) as unknown as Record<string, { handler: Handler }>)["earn_vaults"]!.handler({}, {}));
     const v = listSolanaVaults()[0]!;
-    expect(out.chains.at(-1)).toEqual({ chain: "solana", chainId: null, name: "Solana", default: v.symbol, defaultAccess: "open", depositable: [v.symbol] });
-    expect(out.depositable).toContain(v.symbol);
+    // On Solana a vault is named by its ticker, in the same `{ vault, ticker, name }` shape the EVM vaults use.
+    const named = { vault: v.symbol, ticker: v.symbol, name: v.name };
+    expect(out.chains.at(-1)).toEqual({ chain: "solana", chainId: null, name: "Solana", default: named, defaultAccess: "open", depositable: [named] });
+    expect(out.depositable).toContainEqual(named);
     const row = out.vaults.find((x: { symbol: string }) => x.symbol === v.symbol);
     expect(row).toMatchObject({ chain: "solana", chainId: null, address: v.address, chassis: "kamino-vault", sharesMint: v.sharesMint, links: { explorer: `https://solscan.io/account/${v.address}` } });
     expect(row.warning).toMatch(/TEST VAULT/);

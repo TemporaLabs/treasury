@@ -95,6 +95,8 @@ export interface AckSummary {
   receiver: string;
   warning: string;
   disclosures: string[];
+  /** The vault's terms a deposit is made under, as the Tempora API publishes them and as the deposit sends them. */
+  terms?: { version: string; sha256: string };
 }
 
 /**
@@ -172,6 +174,7 @@ export function acknowledgementText(s: AckSummary): string {
     `  Vault: ${s.vault.name} (${s.vault.symbol})`,
     `         ${s.vault.explorer}`,
     `  ${lands}: ${s.receiver} (the connected wallet)`,
+    ...(s.terms ? [`  Terms: version ${s.terms.version}, sha256 ${s.terms.sha256} (\`earn terms\` shows them in full)`] : []),
     `  ${prompts}`,
     ``,
     `WARNING: ${s.warning}`,
@@ -337,6 +340,7 @@ export function planAcknowledgementText(legs: AckSummary[], totals: string[]): s
       `     Vault: ${s.vault.name} (${s.vault.symbol})`,
       `            ${s.vault.explorer}`,
       `     ${lands}: ${s.receiver} (the connected wallet)`,
+      ...(s.terms ? [`     Terms: version ${s.terms.version}, sha256 ${s.terms.sha256}`] : []),
       `     ${prompts}`,
       ``,
     ];

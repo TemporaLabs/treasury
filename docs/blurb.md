@@ -4,7 +4,8 @@
 Current release: **v0.1.4** (November 2026).
 
 Open Agent Treasury gives an AI agent a safe way to manage on-chain capital. The agent reads the
-chain directly, works out what it wants to do, and hands back unsigned transactions. A human, or
+vaults through the Tempora API (on Solana, from the chain itself), works out what it wants to do, and hands back
+unsigned transactions, each checked before a wallet sees it. A human, or
 the agent's own signer, reviews and signs them. OAT never holds a private key and never signs: a
 transaction goes out only from the operator's own wallet, after they approve it there. Treasury itself
 sends no telemetry; the optional sign-in page loads Privy, whose script sends its own analytics.
@@ -14,15 +15,16 @@ sends no telemetry; the optional sign-in page loads Privy, whose script sends it
 Earn puts idle USDC to work in vaults curated by Tempora Labs on Base, Arbitrum One, Ethereum, Monad and Solana, and idle USDG on Robinhood Chain. With it, an agent can:
 
 - **Inspect vaults:** assets, fees, deposit access, and links to verify each contract independently.
-- **Prepare a deposit:** review the terms, simulate access, then build unsigned calls.
-- **Track a position:** its value, deposits and earnings, read from on-chain records.
-- **Prepare a withdrawal:** check what is withdrawable right now, then build unsigned calls.
+- **Prepare a deposit:** review the vault's terms, check access, then prepare unsigned steps.
+- **Track a position:** its value, and what can be withdrawn now.
+- **Prepare a withdrawal:** check what is withdrawable right now, then prepare unsigned steps.
 
 Earn takes the vault's own asset in and pays it out: USDC on Base, Arbitrum One, Ethereum, Monad and Solana,
-USDG on Robinhood Chain. It runs as a command line: eight `earn` commands, READ commands that
-return facts from the chain and PREPARE commands that return unsigned calls, and six `connect`
-commands that hand calls to the operator's own wallet for approval. CI asserts both command lists on
-every build, so a signing command cannot slip in.
+USDG on Robinhood Chain. It runs as a command line: nine `earn` commands, READ commands that
+return facts about a vault and a position, PREPARE commands that return unsigned steps, and SUBMIT and REQUEST
+commands that hand a sent step's hash back and read where a request stands; and six `connect` commands that hand
+steps to the operator's own wallet for approval. CI asserts both command lists on every build, so a signing command
+cannot slip in.
 
 ## The default vault
 
@@ -45,12 +47,12 @@ page for its current total.
 
 ## Install the skill
 
-**Requires Node.js 22 or later.** Use a keyed Base RPC: the public endpoint rate-limits quickly.
+**Requires Node.js 22 or later.** The EVM chains need no RPC of your own: the commands reach the Tempora API. For
+the vault on Solana, set a keyed `TREASURY_RPC_SOLANA`; the public endpoint rate-limits quickly.
 
 ### Claude Code
 
 ```bash
-export TREASURY_RPC_BASE=https://...   # your Base RPC URL
 claude plugin marketplace add TemporaLabs/treasury@v0.1.4
 claude plugin install treasury@treasury
 ```
@@ -76,26 +78,33 @@ Ask your agent:
 
 With a browser on the machine, you sign in once with `treasury connect`. For each deposit the agent
 first shows you a fixed confirmation text, and only on your yes opens a page where you confirm each
-call in your own wallet. Otherwise it returns unsigned calls for your signer. Preparing a deposit moves
+step in your own wallet. Otherwise it returns unsigned steps for your signer. Preparing a deposit moves
 no money. Later:
 
 > What is my position worth, and how much can I withdraw now?
 
 ## For agents reading this
 
-- Every tool that takes a vault takes its ticker (`tlCashPlusUSDC2B` is the default on Base); every
-  tool that takes an address takes it as `account`.
+- Every tool that takes a vault takes it as `earn vaults` lists it: on the EVM chains its contract address (`vault`)
+  or its `ticker` (`tlCashPlusUSDC2B` is the default on Base), on Solana its ticker. On the EVM chains `account` is
+  the connected wallet; another is refused.
 - Amounts are decimal strings in the vault's asset (USDC; USDG on Robinhood Chain). Shares are exact strings and never cross the boundary as numbers.
-- `earn_vaults` returns a `warning` for each vault. Show it to the operator before any deposit.
-- A deposit is two calls, `approve` then `deposit`, returned in order with signer rules attached (on Solana, one transaction).
+- `earn_vaults` returns the `warnings` for each vault. Show them to the operator before any deposit, with the terms from
+  `earn_terms`, whose `sha256` a deposit on an EVM chain is prepared against.
+- A deposit is two steps, `approve` then `deposit`, with signer rules attached (on Solana, one transaction). Send the
+  first, hand its hash to `earn_submit`, and read the request with `earn_request` until the second is `ready`.
 - Whether a balance is surplus is the operator's decision. A balance in the wallet is not
   permission to deposit it.
 
 ## Security
 
 - **No keys, no custody:** the operator's wallet holds the position. Only its signer can move funds.
-- **Direct RPC for the vaults:** no Tempora Labs service in the request path of `earn` or `connect`, and no telemetry from Treasury itself. Keyed RPC URLs are redacted
-  from every output. Smart Growth portfolios (`invest`) go through the Tempora API, with every step checked before the wallet sees it.
+- **The Tempora API on the EVM chains:** `earn` and `connect` call the Tempora API and nothing else there. A deposit
+  reaches the vault the API lists; Treasury holds no contract address for these vaults, and checks every step against
+  the API's own record of the vault before the wallet sees it (a wrong step is caught; a wrong record is not). Smart
+  Growth portfolios (`invest`) go through the same API, with every step checked too.
+- **Direct RPC on Solana:** no Tempora Labs service in the request path for the vault on Solana, and no telemetry from
+  Treasury itself. Keyed RPC URLs are redacted from every output.
 - **Verifiable builds:** CI checks the committed bundle, and each npm release carries provenance.
 - Vulnerabilities go through private reporting, not public issues.
 

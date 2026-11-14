@@ -4,6 +4,57 @@ All notable changes to Agent Treasury are recorded here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versions follow [SemVer](https://semver.org/).
 Pre-1.0, minor versions may change tool names, schemas and behaviour.
 
+## [v0.1.5] - Unreleased
+
+### Changed
+- **The vaults on the EVM chains go through the Tempora API.** On Base, Arbitrum One, Robinhood Chain, Ethereum and
+  Monad, `treasury earn` and `treasury connect` now call the Tempora API, and nothing else: its MCP endpoint for
+  every read and request, its HTTP routes for the owner's sign-in. They read no RPC there, except `connect wallet`'s
+  check of a smart-contract wallet's sign-in. The API lists the vaults, and a deposit reaches the vault it lists:
+  Treasury names a vault only by its contract address, and keeps only each chain's default vault address; everything
+  else about a vault is the API's. Every step the API
+  prepares is checked against the API's own record of the vault, and against what the operator asked for, by
+  `@temporalabs/client`'s `checkSteps` before a wallet sees it: a wrong step is caught, a wrong record is not.
+  Solana is unchanged and still reads its chain directly.
+- **`--vault` takes the vault's contract address or its ticker on the EVM chains** (for example `tlCashPlusUSDC2B`,
+  or its address `0x91BcEbA5feCB9E92d80F1845B55cC56621E9352F`, Base's default). The address picks the vault the API
+  lists; an address no listed vault has, or more than one has, is refused. Each chain's default is a contract address,
+  and a default the API does not list is refused, never replaced. Responses name a vault by `vault` (its contract
+  address), `ticker` and `name`. On Solana `--vault` is still the vault's ticker.
+- **Owner reads and requests act for the connected wallet only.** `earn status` with an account, `earn quote`,
+  `earn balance`, the prepare commands, `earn submit` and `earn request` act for the wallet `treasury connect wallet`
+  connected; another `--account` is refused. A sign-in page opens only when the API needs a sign-in, and one sign-in
+  serves `invest` and `earn`.
+- **`earn terms` returns the vault's terms from the API** (text, version and sha256), refused unless the text hashes
+  to that sha256 here, beside the client's disclosures. It takes `--vault` and `--chain`.
+- **`earn prepare_deposit` needs `--terms_sha256`** on an EVM chain, the sha256 the operator accepted; terms that
+  changed since are refused. It returns the request's checked steps: the approval is `ready`, the deposit `waiting`
+  until the approval's hash is submitted. `--receiver` is taken only on Solana.
+- **`earn prepare_withdraw` takes exactly one of `--amount_usdc`, `--all` or `--shares_exact`** on an EVM chain; on
+  Solana `--all` still goes with `--shares_exact`.
+- **`earn status`, `earn quote` and `earn balance` report the API's reading.** Health is the API's reachability; with
+  an account, the standing, every gate with its reason, and the wallet's balance and allowance. A share balance the
+  API could not read is `unknown`, never 0; entry basis and yield are reported as not available.
+  `--lookback_blocks` and `--max_log_requests` are removed.
+- **`connect deposit`, `connect withdraw` and `connect plan` run each EVM leg as an API request.** The
+  acknowledgement names the terms version and sha256 the deposit sends, and binds them. The request is checked
+  before the page opens and after every step; the page sends exactly the checked step it reads from this process
+  just before the wallet is asked; each hash goes to the API, whose reading is the verdict reported. A step the API
+  puts up again after it was sent is refused, a hash the page could not hand over is still submitted once, a wallet
+  error after the send was asked for is "not confirmed sent", and the result names the request. A request nothing
+  was sent for is cancelled. On an EVM chain `--all` alone, and a plan's "withdraw <vault> all" leg, withdraw the
+  whole position as it stands when the withdrawal runs.
+- The signer rules drop the receiver check and the gas-limit rule, and add: send only a `ready` step, and submit
+  the hash you have rather than sending again.
+
+### Added
+- **`earn submit`** hands the hash of a step the connected wallet sent to the API, with the wallet's nonce and sender
+  when known, and answers with the request and any next step, checked.
+- **`earn request`** reads a request again by id or by transaction hash, or cancels one still waiting.
+
+### Removed
+- **`earn claim`.** No vault queues withdrawals, and a request's state is now read with `earn request`.
+
 ## [v0.1.4] - 2026-11-08
 
 ### Added

@@ -8,17 +8,16 @@
  * a secret.
  *
  * The fix is not another pattern. `rpcUrlFromEnv` resolved the value, so the redactor masks the
- * literal wherever it appears. These tests drive a REAL viem failure through a REAL handler.
+ * literal wherever it appears. These tests drive a REAL viem failure through the endpoint the
+ * operator configured, and redact it the way every command and the command line do: the secret source
+ * registered (`buildCommands()` and `src/cli.ts` both register it), then `redactEndpoints`. The earn
+ * reads that once carried this path read through the Tempora API on an EVM chain now; the redactor and
+ * the reads that still go through a keyed endpoint are what remain to hold.
  */
-import { describe, it, expect, afterEach, beforeAll, afterAll } from "vitest";
+import { describe, it, expect, afterEach } from "vitest";
 import { createServer, type Server } from "node:http";
-import { buildCommands } from "../src/earn/commands.js";
-import { FIXTURE, useFixtureRegistry, useShippedRegistry } from "./fixtures/registry.js";
-
-// The unit tiers exercise code paths (18-decimal shares, an open vault) that the shipped
-// registry does not offer; `fixtures/registry.ts` explains why they are synthetic.
-beforeAll(() => useFixtureRegistry());
-afterAll(() => useShippedRegistry());
+import { makePublicClient, resolvedRpcSecrets, rpcUrlFromEnv } from "../src/client.js";
+import { redactEndpoints, registerSecretSource } from "../src/redact.js";
 
 // 🔴 A key whose percent-ENCODED and DECODED forms DIFFER. The earlier key here was
 // `SECRETKEY123abc`, which encodes to itself — so the test could not distinguish the two forms and
@@ -44,37 +43,30 @@ afterEach(async () => {
   delete process.env["TREASURY_LOGS_RPC_BASE"];
 });
 
-type Handler = (a: unknown, extra: unknown) => Promise<string>;
-const tools = () => (buildCommands() as unknown as Record<string, { handler: Handler }>);
+/** A real read through the configured Base endpoint, and its failure as a command would print it. */
+const readThroughBase = async (): Promise<string> => {
+  registerSecretSource(resolvedRpcSecrets);
+  try {
+    await makePublicClient(8453, rpcUrlFromEnv(8453)).getBlockNumber();
+    return "no error";
+  } catch (e) {
+    return redactEndpoints(e instanceof Error ? e.message : String(e));
+  }
+};
 
 describe("a provider that echoes the rejected key back in its BODY", () => {
-  it("earn_status returns a verdict and the key is not in it", async () => {
+  it("a failed read says it failed, and the key is not in it", async () => {
     await start(JSON.stringify({ error: { message: `invalid api key: ${KEY}` } }));
     process.env["TREASURY_RPC_BASE"] = `http://127.0.0.1:${PORT}/v2/${encodeURIComponent(KEY)}`;
-    const res = await tools()["earn_status"]!.handler({}, {});
-    const out = res;
+    const out = await readThroughBase();
     expect(out).not.toContain(KEY); // the whole point
-    expect(JSON.parse(out).rpc).toBe("unreachable"); // and it still ANSWERS
-  });
-
-  it("a throwing tool is redacted by guarded() on the same path", async () => {
-    await start(JSON.stringify({ error: { message: `bad key ${KEY}` } }));
-    process.env["TREASURY_RPC_BASE"] = `http://127.0.0.1:${PORT}/v2/${encodeURIComponent(KEY)}`;
-    process.env["TREASURY_LOGS_RPC_BASE"] = `http://127.0.0.1:${PORT}/v2/${encodeURIComponent(KEY)}`;
-    let thrown = "";
-    try {
-      await tools()["earn_balance"]!.handler({ account: "0x000000000000000000000000000000000000dEaD", vault: FIXTURE.morphoOpen, max_log_requests: 1 }, {});
-    } catch (e) {
-      thrown = e instanceof Error ? e.message : String(e);
-    }
-    expect(thrown.length).toBeGreaterThan(0);
-    expect(thrown).not.toContain(KEY);
+    expect(out).not.toBe("no error"); // and it did fail
   });
 
   it("the key is masked even in a shape with no scheme, errno or header keyword", async () => {
     await start(JSON.stringify({ error: `auth failed for token ${KEY}` }));
     process.env["TREASURY_RPC_BASE"] = `http://127.0.0.1:${PORT}/v2/${encodeURIComponent(KEY)}`;
-    const out = (await tools()["earn_status"]!.handler({}, {}));
+    const out = await readThroughBase();
     expect(out).not.toContain(KEY);
   });
 
@@ -83,7 +75,7 @@ describe("a provider that echoes the rejected key back in its BODY", () => {
     const enc = encodeURIComponent(KEY);
     expect(enc).not.toBe(KEY); // the guard on this test: the transformation must be real
     process.env["TREASURY_RPC_BASE"] = `http://127.0.0.1:${PORT}/v2/${enc}`;
-    const out = (await tools()["earn_status"]!.handler({}, {}));
+    const out = await readThroughBase();
     expect(out).not.toContain(KEY); // decoded — what the provider echoes
     expect(out).not.toContain(enc); // encoded — what sits in the URL
   });
@@ -95,7 +87,7 @@ describe("a provider that echoes the rejected key back in its BODY", () => {
     expect(new URL(`http://x/y?k=${QKEY}`).searchParams.get("k")).not.toBe(QKEY); // premise is real
     await start(JSON.stringify({ error: { message: `invalid api key: ${QKEY}` } }));
     process.env["TREASURY_RPC_BASE"] = `http://127.0.0.1:${PORT}/rpc?apikey=${QKEY}`;
-    const out = (await tools()["earn_status"]!.handler({}, {}));
+    const out = await readThroughBase();
     expect(out).not.toContain(QKEY);
   });
 });

@@ -1,6 +1,8 @@
 # The vault registry
 
-`registry/vaults.json` is the list of vaults the client will list and build calls for. This topic is
+`registry/vaults.json` is the list of vaults the library knows, and the one the Solana commands read; on the EVM
+chains the commands list and reach the vaults the Tempora API lists instead
+([`../earn-api/`](../earn-api/README.md)). This topic is
 how it is validated, embedded, resolved and reconciled. Which vaults it lists today, and why, is
 [`../../vaults.md`](../../vaults.md); the checklist for adding a vault or a chain is the "Adding or
 changing a vault" section of [`CONTRIBUTING.md`](../../../CONTRIBUTING.md).

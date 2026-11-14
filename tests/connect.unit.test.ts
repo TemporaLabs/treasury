@@ -24,6 +24,8 @@ import { DISCLOSURES } from "../src/disclosures.js";
 import { operatorWarning } from "../src/connect/ack.js";
 import { linksFor } from "../src/links.js";
 import { defaultVault, getVault, listSolanaVaults, listVaults } from "../src/registry.js";
+import { tokenKeyFor } from "../src/invest/api.js";
+import { keptTokenWallet, noHttp, standInApi } from "./fixtures/api.js";
 
 /**
  * `treasury connect`, offline. No browser and no key: the tests play the page by speaking its HTTP
@@ -825,10 +827,14 @@ describe("the sign-in message", () => {
 describe("the acknowledgement before any signing page opens", () => {
   let clock: Date;
   let opened: string[];
+  // A vault on an EVM chain is the Tempora API's: a stand-in whose products mirror the registry's EVM rows.
+  let api: ReturnType<typeof standInApi>;
   beforeEach(() => {
     clock = new Date("2026-10-04T12:00:00Z");
     opened = [];
+    api = standInApi({ owner: ACCOUNT });
     writeSession({ account: ACCOUNT, walletType: "external", connectedAtIso: "2026-10-04T11:59:00Z" });
+    writeOwnerToken(tokenKeyFor(ACCOUNT), { token: "tok", expiresAtIso: "2026-10-05T00:00:00Z" }, clock.getTime());
   });
   const deps = (): ConnectDeps => ({
     open: (u) => (opened.push(u), true),
@@ -836,6 +842,11 @@ describe("the acknowledgement before any signing page opens", () => {
     ttlMs: 150,
     balanceTimeoutMs: 20,
     now: () => clock,
+    mcp: api.mcp,
+    apiClient: noHttp,
+    wallet: () => keptTokenWallet(),
+    pollMs: 1,
+    sleep: async () => undefined,
   });
   async function connect(name: "connect_deposit" | "connect_withdraw", args: Record<string, unknown>): Promise<Record<string, unknown>> {
     const c = buildConnectCommands(deps())[name]!;
@@ -925,9 +936,12 @@ describe("the acknowledgement before any signing page opens", () => {
       const text = String((await connect("connect_deposit", { amount_usdc: "1" }))["acknowledgement"]);
       // The full, formal items are what `earn terms` returns; none of them is pasted here.
       for (const full of [...DISCLOSURES.items, ...DISCLOSURES.clientNotes]) expect(text).not.toContain(full);
-      expect(text.length).toBeLessThan(1_600);
+      // The terms line (the version and sha256 the deposit is made under) is on top of the same budget as before.
+      const terms = text.split("\n").find((l) => l.trim().startsWith("Terms: version"))!;
+      expect(terms, "a deposit names the terms it is made under").toBeDefined();
+      expect(text.length).toBeLessThan(1_600 + terms.length);
       // A gated vault's deposit is the longest form: one more line, and still well short of the full text.
-      expect(String((await connect("connect_deposit", { amount_usdc: "1", vault: "tlCashPlusUSDC2A" }))["acknowledgement"]).length).toBeLessThan(1_750);
+      expect(String((await connect("connect_deposit", { amount_usdc: "1", vault: "tlCashPlusUSDC2A" }))["acknowledgement"]).length).toBeLessThan(1_750 + terms.length);
       // Every full item still has its plain sentence: the points an operator must not lose.
       for (const point of [/not a bank deposit/, /no deposit insurance/, /can go down/, /third-party protocols/, /past performance, not a promise/, /may not come out right away/, /can charge fees/, /not because it pays the most/, /never signs or moves your money/, /where you live/]) {
         expect(text).toMatch(point);

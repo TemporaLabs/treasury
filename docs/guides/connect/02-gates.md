@@ -1,5 +1,10 @@
 # 02: The gates
 
+> **Scope.** On the EVM chains, `connect` no longer calls the EVM gate (`src/connect/gate.ts`): each step comes from
+> the Tempora API and is held by `checkSteps` from `@temporalabs/client` instead
+> ([`../earn-api/01-the-api-path.md`](../earn-api/01-the-api-path.md)). The EVM gate described here remains in the
+> library; the Solana gate is what `connect` uses on Solana.
+
 A **gate** decides what `treasury connect` may put in front of the operator's wallet at all. It runs
 before any acknowledgement is issued and again before any page opens, on exactly the calls (or the
 transaction) the wallet will receive. It trusts nothing the builder says about its own output: it

@@ -23,7 +23,12 @@ import { useLogin, usePrivy, useWallets } from "@privy-io/react-auth";
 import { useSignAndSendTransaction, useStandardWallets, useWallets as useSolanaWallets, type ConnectedStandardSolanaWallet, type SolanaStandardWallet } from "@privy-io/react-auth/solana";
 import { secret, post, reject, errText, rejected, base58, fromBase64, Page, WalletMark, CheckMark, ButtonIcon, type WalletType } from "./shared";
 
-type PlanCall = { step: number; of: number; kind: "approve" | "deposit" | "withdraw" | "redeem"; description: string; to: `0x${string}`; data: `0x${string}`; value: string };
+/**
+ * One step of the current leg. A step the Tempora API prepares carries what to send (`to`, `data`, `value`) only once
+ * it is checked and ready: a deposit's second step only exists once the first is sent and recorded. The page sends only
+ * what the latest /info gives, never a copy it kept.
+ */
+type PlanCall = { step: number; of: number; kind: "approve" | "deposit" | "withdraw" | "redeem"; description: string; to: `0x${string}` | ""; data: `0x${string}` | ""; value: string; function?: string; state?: string };
 type LegView = {
   leg: number;
   action: "deposit" | "withdraw";
@@ -272,8 +277,8 @@ function PlanPage({ info: first, solana }: { info: PlanInfo; solana?: SolanaSide
       throw Object.assign(new Error("You declined it in your wallet. Nothing was sent."), { idle: true });
     }
     if (stage === "send") {
-      await reject(`the wallet returned an error without a transaction hash; it may or may not have been sent: ${text}`);
-      throw Object.assign(new Error(`Your wallet returned an error without a transaction hash, so this page cannot tell whether step ${leg.leg} was sent. Check your wallet's activity.`), { ended: true });
+      await reject(`not confirmed sent: the wallet returned an error without a transaction hash; it may or may not have been sent: ${text}`);
+      throw Object.assign(new Error(`Not confirmed sent: your wallet returned an error without a transaction hash, so this page cannot tell whether step ${leg.leg} was sent. Check your wallet's activity.`), { ended: true });
     }
     // Before the wallet was asked: nothing was sent.
     if ((e as { late?: boolean }).late) {
@@ -290,19 +295,15 @@ function PlanPage({ info: first, solana }: { info: PlanInfo; solana?: SolanaSide
 
   /** Sends one call of the current leg; resolves with the process's reply, or undefined once the plan stopped here. */
   const sendCall = useCallback(
-    async (leg: LegView, call: PlanCall, index: number, chainId: number): Promise<Record<string, unknown> | undefined> => {
+    async (leg: LegView, _call: PlanCall, index: number, chainId: number): Promise<Record<string, unknown> | undefined> => {
       if (!wallet) throw new Error("the connected wallet is not available on this page");
       let hash: string | undefined;
       let stage: "prepare" | "estimate" | "send" = "prepare";
       try {
         setLocal({ leg: leg.leg, phase: "wallet" });
         if (chainId !== leg.chainId) throw new Error(`this step's calls are for chain ${chainId}, not ${leg.chainName}`);
-        await wallet.switchChain(leg.chainId);
-        const provider = await wallet.getEthereumProvider();
-        const tx = { from: wallet.address, to: call.to, data: call.data, value: call.value };
-        stage = "estimate";
-        const est = BigInt((await provider.request({ method: "eth_estimateGas", params: [tx] })) as string);
-        stage = "prepare";
+        // The step is read again from the process just before the wallet is asked, and what is sent is exactly what the
+        // process holds now, checked: never a copy this tab kept.
         const live = await readInfo();
         if (live === "gone") throw new Error("the page lost its connection to your agent");
         if (live.current?.leg !== leg.leg || live.current.next !== index) {
@@ -313,6 +314,13 @@ function PlanPage({ info: first, solana }: { info: PlanInfo; solana?: SolanaSide
         if (live.msLeft < 60_000) {
           throw Object.assign(new Error("less than a minute is left before your agent's run pauses, too little to confirm in your wallet"), { late: true });
         }
+        const call = live.current.chain === "solana" ? undefined : live.current.calls[index];
+        if (!call || !call.to || !call.data) throw new Error(`step ${index + 1} is not ready yet: the step before it is still being recorded`);
+        await wallet.switchChain(leg.chainId);
+        const provider = await wallet.getEthereumProvider();
+        const tx = { from: wallet.address, to: call.to, data: call.data, value: call.value };
+        stage = "estimate";
+        const est = BigInt((await provider.request({ method: "eth_estimateGas", params: [tx] })) as string);
         stage = "send";
         hash = (await provider.request({ method: "eth_sendTransaction", params: [{ ...tx, chainId: `0x${leg.chainId.toString(16)}`, gas: `0x${((est * 3n) / 2n).toString(16)}` }] })) as string;
         setLocal({ leg: leg.leg, phase: "sent" });
