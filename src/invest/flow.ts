@@ -145,6 +145,15 @@ export async function drive(
     const next = request.steps.find((s) => s.state === "ready" && payloadOf(s) !== undefined && !answered.has(`${s.stepId}#${String(payloadOf(s)?.generation)}`));
     if (next) {
       if (acted.length >= INVEST.maxSteps) throw new Error(`refused: request ${request.requestId} asks for more than ${INVEST.maxSteps} steps`);
+      // A signature asked for again (a new generation) is harmless to give again. A transfer is not: once one was sent,
+      // whatever the API now says about its step, no command sends a second, so a step re-issued after the send is refused.
+      const sent = acted.find((a) => a.kind === "send");
+      if (sent && next.kind === "send_transaction") {
+        throw new Error(
+          `refused: the API asks for transfer ${next.stepId} again after a transfer was sent (transaction ${sent.value}); not sent twice. ` +
+            `Read request ${request.requestId} with \`treasury invest request\``,
+        );
+      }
       const { view, ask } = o.prepare(request, next);
       const answer = await deps.wallet.ask(view, ask).catch((e: unknown) => {
         const why = e instanceof Error ? e.message : String(e);

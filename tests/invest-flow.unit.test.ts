@@ -187,6 +187,45 @@ describe("invest deposit", () => {
     expect(log.filter((l) => l === "wallet:send")).toHaveLength(1);
   });
 
+  const reissued = () => ({ ...transfer(), payload: { ...(transfer().payload as object), generation: 2 } });
+  it("a transfer the API asks for again after its answer to the send is refused, and never sent twice", async () => {
+    const log: Log = [];
+    const client = api(log, {
+      deposit: () => request({ smartAccount: ACCOUNT, steps: [transfer()] as never }),
+      submit: () => request({ smartAccount: ACCOUNT, steps: [reissued()] as never }),
+    });
+    await expect(run(client, wallet(log, signs), "invest_deposit", { product: PRODUCT, amount_usdt: "100" })).rejects.toThrow(
+      new RegExp(`asks for transfer s2 again after a transfer was sent \\(transaction ${HASH}\\); not sent twice.*req_1`),
+    );
+    expect(log.filter((l) => l === "wallet:send")).toHaveLength(1);
+  });
+
+  it("a transfer re-issued in a later read of the request, after the send was recorded, is refused too", async () => {
+    const log: Log = [];
+    const client = api(log, {
+      deposit: () => request({ smartAccount: ACCOUNT, steps: [transfer()] as never }),
+      submit: () => request({ state: "processing", smartAccount: ACCOUNT, steps: [transfer({ state: "confirming" })] as never }),
+      status: () => request({ smartAccount: ACCOUNT, steps: [reissued()] as never }),
+    });
+    await expect(run(client, wallet(log, () => ({ kind: "sent_unrecorded", hash: HASH, reason: "x" })), "invest_deposit", { product: PRODUCT, amount_usdt: "100" })).rejects.toThrow(/not sent twice/);
+    expect(log.filter((l) => l === "wallet:send")).toHaveLength(1);
+  });
+
+  it("a signature asked for again under a new generation is given again", async () => {
+    const log: Log = [];
+    const enrol2 = () => ({ ...enrol(), payload: { ...(enrol().payload as object), generation: 2 } });
+    let n = 0;
+    const client = api(log, {
+      deposit: () => request({ steps: [enrol(), transfer({ state: "waiting", payload: false })] as never }),
+      submit: () =>
+        ++n === 1
+          ? request({ steps: [enrol2(), transfer({ state: "waiting", payload: false })] as never })
+          : request({ state: "cancelled", steps: [enrol("completed"), transfer({ state: "cancelled", payload: false })] as never }),
+    });
+    await run(client, wallet(log, signs), "invest_deposit", { product: PRODUCT, amount_usdt: "100" });
+    expect(log.filter((l) => l === "wallet:sign_bytes")).toHaveLength(2);
+  });
+
   it("a send that ended without a hash names the request to read before anything is retried", async () => {
     const log: Log = [];
     const client = api(log, { deposit: () => request({ smartAccount: ACCOUNT, steps: [transfer()] as never }) });
