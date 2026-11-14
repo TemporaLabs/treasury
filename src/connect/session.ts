@@ -21,7 +21,9 @@ export interface Session {
   connectedAtIso: string;
 }
 
-const dir = () => connectHome() ?? join(homedir(), ".config", "treasury");
+/** The directory every connect file lives in (`TREASURY_CONNECT_HOME` moves it). */
+export const connectDir = () => connectHome() ?? join(homedir(), ".config", "treasury");
+const dir = connectDir;
 export const sessionPath = () => join(dir(), "connect-session.json");
 
 export function readSession(): Session | undefined {

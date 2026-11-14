@@ -1,6 +1,6 @@
 {
   "name": "@temporalabs/treasury",
-  "version": "0.1.4",
+  "version": "0.1.5",
   "license": "Apache-2.0",
   "repository": {
     "type": "git",
@@ -49,6 +49,7 @@
     "lint:skill": "bash scripts/lint-skill.sh"
   },
   "dependencies": {
+    "@temporalabs/client": "https://github.com/TemporaLabs/client-sdk/releases/download/v0.1.0-rc.1/temporalabs-client-0.1.0.tgz",
     "@solana/kit": "^8.6.0",
     "viem": "^2.57.16",
     "zod": "^4.1.0"

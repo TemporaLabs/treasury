@@ -58,6 +58,7 @@ import {
 import { connectPorts, privyAppId } from "./config.js";
 import { admit } from "./gate.js";
 import { newSecret, serveOnce, type Settled } from "./http.js";
+import { clearOwnerTokens } from "./owner-tokens.js";
 import { openBrowser } from "./open.js";
 import { PAGE_CSP, readPageBundle, shell } from "./page.js";
 import {
@@ -458,8 +459,11 @@ export function buildConnectCommands(deps: ConnectDeps = {}): Record<string, Com
         writeSolanaSession(r.result.value);
         return JSON.stringify({ status: "connected", chain: "solana", ...r.result.value, opened: r.opened }, null, 2);
       }
+      const before = readSession()?.account;
       const r = await runConnect(deps);
       if (!r.result.ok) return Promise.reject(new Error(`not connected: ${r.result.reason}`));
+      // Another account: the owner tokens kept for the one before it go, as its acknowledgements do.
+      if (before !== undefined && before !== r.result.value.account) clearOwnerTokens();
       return JSON.stringify({ status: "connected", ...r.result.value, opened: r.opened }, null, 2);
     },
   );
@@ -468,10 +472,10 @@ export function buildConnectCommands(deps: ConnectDeps = {}): Record<string, Com
     "connect_disconnect",
     {
       title: "Forget the connected wallet",
-      description: "Deletes the local connection record, the EVM and the Solana one. It moves nothing and revokes nothing in the wallet itself.",
+      description: "Deletes the local connection record, the EVM and the Solana one, and the API sign-in tokens `invest` kept. It moves nothing and revokes nothing in the wallet itself.",
       inputSchema: {},
     },
-    async () => JSON.stringify({ status: "disconnected", hadConnection: clearSession(), hadSolanaConnection: clearSolanaSession() }, null, 2),
+    async () => JSON.stringify({ status: "disconnected", hadConnection: clearSession(), hadSolanaConnection: clearSolanaSession(), hadOwnerTokens: clearOwnerTokens() }, null, 2),
   );
 
   const now = deps.now ?? (() => new Date());

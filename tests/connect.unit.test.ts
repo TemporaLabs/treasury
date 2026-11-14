@@ -12,6 +12,7 @@ import { buildConnectCommands, outcome, runConfirm, runConnect, signInMessage, t
 import { claimPageLock, pageLockPath, pendingAckPath, readSession, replaceStale, writeSession } from "../src/connect/session.js";
 import { serveOnce, type Flow } from "../src/connect/http.js";
 import { DEFAULT_CONNECT_PORTS, connectPorts } from "../src/connect/config.js";
+import { readOwnerToken, writeOwnerToken, type TokenKey } from "../src/connect/owner-tokens.js";
 import { PAGE_CSP, shell } from "../src/connect/page.js";
 import { runConfirmSolana } from "../src/connect/solana.js";
 import { getBase58Decoder } from "@solana/kit";
@@ -249,6 +250,25 @@ function page(url: string) {
 }
 
 describe("sign-in: the wallet signs the process's own message, whose nonce is the flow secret", () => {
+  it.each([
+    ["another account", OTHER, false],
+    ["the same account again", ACCOUNT, true],
+  ])("connecting %s forgets the owner tokens kept for the account before it, or keeps them", async (_n, before, kept) => {
+    writeSession({ account: before, walletType: "external", connectedAtIso: new Date().toISOString() });
+    const key: TokenKey = { host: "api.staging.example", clientId: "treasury-cli", owner: before, audience: "http" };
+    writeOwnerToken(key, { token: "tok-1", expiresAtIso: new Date(Date.now() + 3_600_000).toISOString() });
+    let url = "";
+    const cmd = buildConnectCommands({ open: (u) => ((url = u), true), verifySignature: async () => true })["connect_wallet"]!;
+    const run = cmd.handler({} as never);
+    await new Promise((r) => setTimeout(r, 50));
+    const p = page(url);
+    await p.post("/challenge", { address: ACCOUNT });
+    await p.post("/result", { address: ACCOUNT, signature: "0x1234", walletType: "external" });
+    await run;
+    expect(readSession()?.account).toBe(ACCOUNT);
+    expect(readOwnerToken(key) === "tok-1").toBe(kept);
+  });
+
   it("a correct signature connects, and the session file is written owner-only", async () => {
     let checked: { address: string; message: string } | undefined;
     let url = "";

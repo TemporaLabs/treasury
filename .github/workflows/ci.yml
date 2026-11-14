@@ -213,7 +213,7 @@ jobs:
           want="git+https://github.com/TemporaLabs/treasury.git"
           [ "$got" = "$want" ] || { echo "::error file=package.json::repository.url is '$got' but the public repository is TemporaLabs/treasury — an npm publish with provenance from anywhere else will be refused"; exit 1; }
           echo "repository.url names the public repository"
-      - name: bundled CLI opens exactly its two skills, the eight earn commands and the six connect commands, with no sign/send command
+      - name: bundled CLI opens exactly its three skills, the eight earn commands, the six connect commands and the five invest commands, with no sign/send command
         if: steps.pk.outputs.present == 'yes'
         run: |
           python3 - <<'PY'
@@ -222,7 +222,7 @@ jobs:
           # do) must be a reviewed change here, so the skill list is pinned before the earn commands are.
           top = subprocess.run(["node","dist/treasury.mjs","--help"], capture_output=True, text=True, timeout=60)
           assert top.returncode == 0, top.stderr
-          assert json.loads(top.stdout)["skills"] == ["earn", "connect"], top.stdout
+          assert json.loads(top.stdout)["skills"] == ["earn", "connect", "invest"], top.stdout
           # The connect commands hand calls to the operator's own wallet and nothing else: their names
           # and flags are pinned exactly, like the earn set below, and none of them signs or sends here.
           con = subprocess.run(["node","dist/treasury.mjs","connect","--help"], capture_output=True, text=True, timeout=60)
@@ -237,6 +237,19 @@ jobs:
               "connect_plan": {"legs", "ack", "status", "run"},
           }, cprops
           assert not any(k in n for n in cprops for k in ("sign","send","transfer")), "a signing command leaked in"
+          # The invest commands put steps the Tempora API prepares to the operator's own wallet, each checked
+          # first, and nothing else: their names and flags are pinned exactly too.
+          inv = subprocess.run(["node","dist/treasury.mjs","invest","--help"], capture_output=True, text=True, timeout=60)
+          assert inv.returncode == 0, inv.stderr
+          iprops = {c["tool"]: {f["flag"].removeprefix("--") for f in c["flags"]} for c in json.loads(inv.stdout)["commands"]}
+          assert iprops == {
+              "invest_products": set(),
+              "invest_balance": set(),
+              "invest_deposit": {"product", "amount_usdt"},
+              "invest_withdraw": {"product", "all"},
+              "invest_request": {"request_id", "tx_hash", "cancel"},
+          }, iprops
+          assert not any(k in n for n in iprops for k in ("sign","send","transfer")), "a signing command leaked in"
           out = subprocess.run(["node","dist/treasury.mjs","earn","--help"], capture_output=True, text=True, timeout=60)
           assert out.returncode == 0, out.stderr
           commands = json.loads(out.stdout)["commands"]

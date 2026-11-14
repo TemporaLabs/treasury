@@ -1,7 +1,7 @@
 # Configuration
 
-Treasury reads the environment variables below and nothing else that an operator can set: eighteen
-for the chains, and four optional ones for `treasury connect`. A test pins the exact set — these, plus
+Treasury reads the environment variables below and nothing else that an operator can set: twenty
+for the chains, four optional ones for `treasury connect`, and one optional one for `treasury invest`. A test pins the exact set — these, plus
 `TREASURY_FORK` (a switch only the fork test tier reads, never the shipped code) and the four a
 browser launcher checks to see whether there is a browser to open (`DISPLAY`, `WAYLAND_DISPLAY`,
 `SSH_CONNECTION`, `SSH_TTY`) — so a variable read anywhere else in the package fails the build.
@@ -29,6 +29,7 @@ with "returned no data", which looks like a broken vault, not like a misconfigur
 | `MONAD_RPC_URL` | a conventional alias, used when `TREASURY_RPC_MONAD` is unset — through the plugin too | — |
 | `TREASURY_RPC_SOLANA` | the Solana RPC every tool reads through for the vault on Solana. An endpoint whose genesis hash is not mainnet-beta's is reported as `wrong_chain` | falls back to `SOLANA_RPC_URL`, then to Solana's public endpoint `https://api.mainnet-beta.solana.com`, which rate-limits after a handful of requests |
 | `SOLANA_RPC_URL` | a conventional alias, used when `TREASURY_RPC_SOLANA` is unset — through the plugin too | — |
+| `TREASURY_API_URL` | the Tempora API `treasury invest` calls, in place of the one this release pins. It must be `https` (plain `http` only for this machine). **It also decides which host a sign-in is given for:** the wallet signs the API's sign-in message only when it names this URL's host, so point it only at a deployment you trust with your wallet's sign-in | `https://api.temporalabs.com` |
 | `TREASURY_LOGS_FALLBACK` | where a scan goes when the configured RPC cannot cover the range: an `http(s)` URL for a Base endpoint, or anything that is not a URL (`off`, `disabled`, …) to forbid a fallback on every chain | the chain's own public endpoint |
 | `PRIVY_APP_ID` | the Privy app the `treasury connect` sign-in page uses. A Privy app ID is public — it ships in the page — so a fork can point at its own app | Tempora Labs' own app |
 | `TREASURY_CONNECT_PORT` | one local port for the connect page, in place of the default list. Privy accepts sign-in only from origins its dashboard lists exactly, so set it only to a port listed there | the first free of `53682` to `53686` |
@@ -112,9 +113,12 @@ history there, set that chain's logs variable (`TREASURY_LOGS_RPC_ARBITRUM`, `TR
 
 ## What Treasury never does with the network
 
-No telemetry or analytics from Treasury itself. The CLI calls no host but the RPC endpoints above —
-there is no yield API, no vendor endpoint, and no code path that could add one without a code change.
-The one exception is the `treasury connect` page in your browser, which loads Privy's sign-in
+No telemetry or analytics from Treasury itself. The `earn` and `connect` commands call no host but the RPC
+endpoints above — there is no yield API, no vendor endpoint, and no code path that could add one without a code
+change. `treasury invest` is the exception by design: it calls the Tempora API (`TREASURY_API_URL`, above), and
+only that, through `@temporalabs/client`; see
+[security-model.md](security-model.md#smart-growth-portfolios-treasury-invest). The other exception is the
+`treasury connect` page in your browser, which loads Privy's sign-in
 (auth.privy.io and Privy's RPC) and Cloudflare's bot check, and Privy's script sends its own
 analytics; see [security-model.md](security-model.md#the-wallet-connection-treasury-connect). The
 boundary test enforces that no code under the package reaches any other module or environment

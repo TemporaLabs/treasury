@@ -10,7 +10,9 @@ bare version. A flag's `_` may be typed as `-` (`--amount-usdc`), and so may a c
 return facts; **PREPARE** commands return unsigned calls for your signer. Nothing signs, sends or
 transfers, and CI asserts the command list exactly — a ninth command, or a `sign`, fails the build.
 The six `connect` commands [further down](#the-connect-commands--treasury-connect-command) are a third
-kind: they hand calls to the operator's own wallet for approval. Their list is pinned by CI the same way.
+kind: they hand calls to the operator's own wallet for approval. Their list is pinned by CI the same way. The five
+`invest` commands [after them](#the-invest-commands--treasury-invest-command) do the same for Smart Growth
+portfolios, through the Tempora API, and are pinned the same way.
 
 Every tool that takes a vault takes it as `vault`, the vault's ticker (e.g. `tlCashPlusUSDC2`: its ERC-20 ticker on the EVM chains, one the registry assigns on Solana), and uses the default when it is
 omitted. Every tool that takes an address takes it as `account` — whose shares these are.
@@ -464,6 +466,25 @@ beside `connect-ack.json`, owner-readable only; a `connect wallet` that complete
 `connect disconnect`, clears it. A single acknowledgement with `--ack` works as before.
 
 ---
+
+## The invest commands — `treasury invest <command>`
+
+Smart Growth portfolios: USDT on BNB Chain, held by an outside provider, through the Tempora API. The API
+prepares each request; the operator's own connected wallet signs in to the API and signs or sends each step on a
+local page (the same ports as `connect`), and every step is checked before the wallet sees it. They need a
+connected wallet (`connect wallet`); the API's sign-in token is kept for the next command. Nothing here signs.
+See [`security-model.md`](security-model.md#smart-growth-portfolios-treasury-invest).
+
+| command | flags | does |
+|---|---|---|
+| `invest products` | — | the portfolios the API offers: `id` (the `--product` every other command takes), status, chain and token, minimums, the amount forms and the steps. No sign-in |
+| `invest balance` | — | the connected wallet's positions: stage, smart account, value, balances, idle USDT, profit and loss |
+| `invest deposit` | `--product`, `--amount_usdt` | deposits the operator's own amount (at most 6 decimal places) from the connected wallet to its own smart account: the enrolment signature first when the wallet has none, then the transfer. Returns the request and whether it settled |
+| `invest withdraw` | `--product`, `--all` | withdraws everything, paid to the connected wallet in USDT: one signature per authorization. A part withdrawal is not offered |
+| `invest request` | `--request_id` or `--tx_hash`; optional `--cancel` with `--request_id` | reads a request again, or cancels one still waiting on the owner (nothing has moved for it) |
+
+A command that sent a transfer and could not have it recorded stops with the transaction hash: read the request
+with `invest request` before doing anything else, and never send it again.
 
 ## Failure paths, in general
 
