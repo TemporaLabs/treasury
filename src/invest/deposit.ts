@@ -46,7 +46,7 @@ export function checkDeposit(r: Request, raw: bigint) {
   if (transferReady && (typeof account !== "string" || !/^0x[0-9a-fA-F]{40}$/.test(account))) {
     return { ok: false as const, step: null, reason: "the request names no smart account for the transfer to pay" };
   }
-  return checkPortfolioDeposit(r.steps as never, { chain: INVEST_CHAIN_ID, tokenAddress: BNB_USDT.address, smartAccount: account ?? ZERO, amount: raw.toString() });
+  return checkPortfolioDeposit(r.steps, { chain: INVEST_CHAIN_ID, tokenAddress: BNB_USDT.address, smartAccount: account ?? ZERO, amount: raw.toString() });
 }
 
 /** What the page shows for a deposit step, from the checked request and the owner's own numbers, never the API's words. */

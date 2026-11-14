@@ -219,7 +219,8 @@ trusted. What protects this path:
 - **The enrolment signature is blind.** It is a 32-byte hash the provider builds and does not document. The check
   confirms its kind, purpose, chain and length, nothing about what it commits to, and many smart accounts accept
   a `personal_sign` over a 32-byte hash as their own signature. The page says it is a code that cannot be read, to
-  be signed only for a deposit the owner just started.
+  be signed only for a deposit the owner just started. Only this form is taken: an enrolment in any other form (a
+  contract wallet's typed-data one, for example) is refused before anything is signed.
 - **The portfolio id a withdrawal names** is read from its first authorization, since the request does not carry
   it; every other authorization is held to it. The account it debits is bound separately, to the positions.
 - **The API's word on state.** Positions, balances and a request's state are the API's reading; the withdrawal

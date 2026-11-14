@@ -142,9 +142,10 @@ export async function drive(
     }
     if (FINAL_STATES.includes(request.state)) return { request, settled: true, acted };
 
-    const next = request.steps.find((s) => s.state === "ready" && payloadOf(s) !== undefined && !answered.has(`${s.stepId}#${String(payloadOf(s)?.generation)}`));
+    const keyOf = (s: Step) => `${s.stepId}#${String(payloadOf(s)?.generation)}`;
+    const ready = request.steps.filter((s) => s.state === "ready" && payloadOf(s) !== undefined && !answered.has(keyOf(s)));
+    const next = ready[0];
     if (next) {
-      if (acted.length >= INVEST.maxSteps) throw new Error(`refused: request ${request.requestId} asks for more than ${INVEST.maxSteps} steps`);
       // A signature asked for again (a new generation) is harmless to give again. A transfer is not: once one was sent,
       // whatever the API now says about its step, no command sends a second, so a step re-issued after the send is refused.
       const sent = acted.find((a) => a.kind === "send");
@@ -154,31 +155,43 @@ export async function drive(
             `Read request ${request.requestId} with \`treasury invest request\``,
         );
       }
-      const { view, ask } = o.prepare(request, next);
-      const answer = await deps.wallet.ask(view, ask).catch((e: unknown) => {
-        const why = e instanceof Error ? e.message : String(e);
-        // A send that ended without a hash may still have gone out: the request is named, so it can be read before anything is retried.
-        throw new Error(ask.kind === "send" ? `${why}; request ${request.requestId}: read it with \`treasury invest request\` before trying again` : why);
-      });
-      answered.add(`${next.stepId}#${String(payloadOf(next)?.generation)}`);
-      const value = answer.kind === "answered" ? answer.value : answer.hash;
-      acted.push({ stepId: next.stepId, kind: ask.kind, value });
-      const body =
-        ask.kind === "send"
-          ? // The wallet's own view of the transaction is not read here: the API reads the chain itself, at this hash.
-            ({ kind: "transaction", txHash: value as Hex, wallet: null } as const)
-          : ({ kind: "signature", signature: value } as const);
-      const r = await call((cl, token) => cl.submit({ path: { requestId: request.requestId, stepId: next.stepId }, body }, { ownerToken: token }));
-      if (!r.ok) {
-        if (ask.kind === "send") {
-          throw new Error(
-            `the transfer was sent from your wallet (transaction ${value}), but the API did not record it: ${r.error.code}: ${r.error.message}. ` +
-              `Do not send it again. Check the transaction on BNB Chain, and read request ${request.requestId} with \`treasury invest request\`.`,
-          );
-        }
-        throw failure(`The API did not take step ${next.stepId} of request ${request.requestId}`, r);
+      // Withdrawal authorizations that are ready together are all signed first, then handed back one after another, as
+      // the portfolio provider's own flow does: handing each back while the owner reads the next would leave the account
+      // half withdrawn for as long as the owner takes, long enough for it to be rebalanced in between.
+      const group = next.kind === "sign_typed_data" ? ready.filter((s) => s.kind === "sign_typed_data") : [next];
+      if (acted.length + group.length > INVEST.maxSteps) throw new Error(`refused: request ${request.requestId} asks for more than ${INVEST.maxSteps} steps`);
+      const given: { step: Step; kind: WalletAsk["kind"]; value: string }[] = [];
+      for (const step of group) {
+        const { view, ask } = o.prepare(request, step);
+        const answer = await deps.wallet.ask(view, ask).catch((e: unknown) => {
+          const why = e instanceof Error ? e.message : String(e);
+          // A send that ended without a hash may still have gone out: the request is named, so it can be read before anything is retried.
+          throw new Error(ask.kind === "send" ? `${why}; request ${request.requestId}: read it with \`treasury invest request\` before trying again` : why);
+        });
+        answered.add(keyOf(step));
+        const value = answer.kind === "answered" ? answer.value : answer.hash;
+        acted.push({ stepId: step.stepId, kind: ask.kind, value });
+        given.push({ step, kind: ask.kind, value });
       }
-      request = r.body;
+      for (const { step, kind, value } of given) {
+        const body =
+          kind === "send"
+            ? // The wallet's own view of the transaction is not read here: the API reads the chain itself, at this hash.
+              ({ kind: "transaction", txHash: value as Hex, wallet: null } as const)
+            : ({ kind: "signature", signature: value } as const);
+        const r = await call((cl, token) => cl.submit({ path: { requestId: request.requestId, stepId: step.stepId }, body }, { ownerToken: token }));
+        if (!r.ok) {
+          if (kind === "send") {
+            throw new Error(
+              `the transfer was sent from your wallet (transaction ${value}), but the API did not record it: ${r.error.code}: ${r.error.message}. ` +
+                `Do not send it again. Check the transaction on BNB Chain, and read request ${request.requestId} with \`treasury invest request\`.`,
+            );
+          }
+          const again = r.error.code === "request_expired" ? " The request expired before it was signed: run the command again." : "";
+          throw new Error(`${failure(`The API did not take step ${step.stepId} of request ${request.requestId}`, r).message}${again}`);
+        }
+        request = r.body;
+      }
       watchUntil = deps.now() + deps.watchMs;
       continue;
     }
@@ -200,6 +213,8 @@ export function summary(r: Request) {
     state: r.state,
     ...(r.smartAccount !== undefined && { smartAccount: r.smartAccount }),
     ...(r.warning ? { warning: r.warning } : {}),
+    // What a withdrawal leaves in the account (holdings too small to sell), as the API reports it.
+    ...(r.leftBehind && r.leftBehind.length > 0 ? { leftBehind: r.leftBehind } : {}),
     steps: r.steps.map((s) => {
       const v = (s as { verification?: unknown }).verification;
       return { stepId: s.stepId, kind: s.kind, state: s.state, ...(v !== undefined && { verification: v }) };

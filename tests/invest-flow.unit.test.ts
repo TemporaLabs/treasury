@@ -346,7 +346,8 @@ describe("invest withdraw", () => {
     const seen: { view: StepView; ask: WalletAsk }[] = [];
     const out = await run(client, wallet(log, signs, seen), "invest_withdraw", { product: PRODUCT, all: true });
     expect(bodies[0]).toEqual({ product: PRODUCT, amount: { kind: "all" } });
-    expect(log).toEqual(["api:products", "api:positions", "api:withdraw", "wallet:sign_typed", "api:submit:b0", "wallet:sign_typed", "api:submit:b1"]);
+    // Both authorizations are ready together: both are signed first, then handed back one after another.
+    expect(log).toEqual(["api:products", "api:positions", "api:withdraw", "wallet:sign_typed", "wallet:sign_typed", "api:submit:b0", "api:submit:b1"]);
     for (const s of seen) {
       const td = (s.ask as { typedData: { types: Record<string, unknown> } }).typedData;
       expect(td.types["EIP712Domain"]).toEqual([
@@ -371,6 +372,38 @@ describe("invest withdraw", () => {
     const client = api(log, { positions: () => positions(), withdraw: () => withdrawal(batches) });
     await expect(run(client, wallet(log, signs), "invest_withdraw", { product: PRODUCT, all: true })).rejects.toThrow(why);
     expect(log.filter((l) => l.startsWith("wallet:"))).toEqual([]);
+  });
+
+  it("refuses a withdrawal whose second authorization names another portfolio, before anything is signed", async () => {
+    const log: Log = [];
+    const other = { ...typed({ sale: true, assets: stock }), message: { ...typed({ sale: true, assets: stock }).message, portfolioId: "pf_2" } };
+    const client = api(log, { positions: () => positions(), withdraw: () => withdrawal([batch(0, typed({ sale: false, assets: idle })), batch(1, other as never)]) });
+    await expect(run(client, wallet(log, signs), "invest_withdraw", { product: PRODUCT, all: true })).rejects.toThrow(/another portfolio/);
+    expect(log.filter((l) => l.startsWith("wallet:"))).toEqual([]);
+  });
+
+  it("shows what the withdrawal leaves in the account before the first signature, and reports it", async () => {
+    const log: Log = [];
+    const seen: { view: StepView; ask: WalletAsk }[] = [];
+    const left = [{ assetId: STOCK, raw: "1", valueUsd: 0.4, reason: "below the swap minimum" }];
+    const client = api(log, {
+      positions: () => positions(),
+      withdraw: () => ({ ...withdrawal([batch(0, typed({ sale: false, assets: idle }))]), leftBehind: left }),
+      submit: () => ({ ...withdrawal([{ ...batch(0, typed({ sale: false, assets: idle })), state: "completed" }]), state: "completed", leftBehind: left }),
+    });
+    const out = await run(client, wallet(log, signs, seen), "invest_withdraw", { product: PRODUCT, all: true });
+    expect(seen[0]!.view.warning).toMatch(/leaves these in your account.*1 of eip155:56\/erc20:0x3333.*below the swap minimum/);
+    expect(out.request.leftBehind).toEqual(left);
+  });
+
+  it("says to run the command again when the request expired before it was signed", async () => {
+    const log: Log = [];
+    const client = api(log, {
+      positions: () => positions(),
+      withdraw: () => withdrawal([batch(0, typed({ sale: false, assets: idle }))]),
+      submit: () => ({ ok: false, status: 410, error: { code: "request_expired", message: "This request has expired.", outcome: "failed" } }),
+    });
+    await expect(run(client, wallet(log, signs), "invest_withdraw", { product: PRODUCT, all: true })).rejects.toThrow(/request_expired.*run the command again/);
   });
 
   it("refuses a request that debits another smart account than the positions name", async () => {
@@ -466,7 +499,7 @@ describe("where the wallet is asked", () => {
     const driveBody = flow.slice(flow.indexOf("export async function drive"));
     // In `drive`, the check comes before the step is prepared, and the step is prepared before the wallet is asked.
     const check = driveBody.indexOf("o.check(request)");
-    const prepare = driveBody.indexOf("o.prepare(request, next)");
+    const prepare = driveBody.indexOf("o.prepare(request, step)");
     const ask = driveBody.indexOf("deps.wallet.ask(");
     expect(check).toBeGreaterThan(0);
     expect(prepare).toBeGreaterThan(check);

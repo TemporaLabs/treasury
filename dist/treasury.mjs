@@ -51139,37 +51139,47 @@ async function drive(first, owner, o2, deps) {
       throw new Error(`refused${c.step !== null ? ` (step ${c.step + 1} of ${request.steps.length})` : ""}: ${c.reason}. Nothing more was signed or sent; request ${request.requestId}`);
     }
     if (FINAL_STATES.includes(request.state)) return { request, settled: true, acted };
-    const next = request.steps.find((s2) => s2.state === "ready" && payloadOf2(s2) !== void 0 && !answered.has(`${s2.stepId}#${String(payloadOf2(s2)?.generation)}`));
+    const keyOf2 = (s2) => `${s2.stepId}#${String(payloadOf2(s2)?.generation)}`;
+    const ready = request.steps.filter((s2) => s2.state === "ready" && payloadOf2(s2) !== void 0 && !answered.has(keyOf2(s2)));
+    const next = ready[0];
     if (next) {
-      if (acted.length >= INVEST.maxSteps) throw new Error(`refused: request ${request.requestId} asks for more than ${INVEST.maxSteps} steps`);
       const sent = acted.find((a) => a.kind === "send");
       if (sent && next.kind === "send_transaction") {
         throw new Error(
           `refused: the API asks for transfer ${next.stepId} again after a transfer was sent (transaction ${sent.value}); not sent twice. Read request ${request.requestId} with \`treasury invest request\``
         );
       }
-      const { view: view2, ask } = o2.prepare(request, next);
-      const answer = await deps.wallet.ask(view2, ask).catch((e4) => {
-        const why = e4 instanceof Error ? e4.message : String(e4);
-        throw new Error(ask.kind === "send" ? `${why}; request ${request.requestId}: read it with \`treasury invest request\` before trying again` : why);
-      });
-      answered.add(`${next.stepId}#${String(payloadOf2(next)?.generation)}`);
-      const value = answer.kind === "answered" ? answer.value : answer.hash;
-      acted.push({ stepId: next.stepId, kind: ask.kind, value });
-      const body = ask.kind === "send" ? (
-        // The wallet's own view of the transaction is not read here: the API reads the chain itself, at this hash.
-        { kind: "transaction", txHash: value, wallet: null }
-      ) : { kind: "signature", signature: value };
-      const r2 = await call3((cl, token) => cl.submit({ path: { requestId: request.requestId, stepId: next.stepId }, body }, { ownerToken: token }));
-      if (!r2.ok) {
-        if (ask.kind === "send") {
-          throw new Error(
-            `the transfer was sent from your wallet (transaction ${value}), but the API did not record it: ${r2.error.code}: ${r2.error.message}. Do not send it again. Check the transaction on BNB Chain, and read request ${request.requestId} with \`treasury invest request\`.`
-          );
-        }
-        throw failure2(`The API did not take step ${next.stepId} of request ${request.requestId}`, r2);
+      const group = next.kind === "sign_typed_data" ? ready.filter((s2) => s2.kind === "sign_typed_data") : [next];
+      if (acted.length + group.length > INVEST.maxSteps) throw new Error(`refused: request ${request.requestId} asks for more than ${INVEST.maxSteps} steps`);
+      const given = [];
+      for (const step of group) {
+        const { view: view2, ask } = o2.prepare(request, step);
+        const answer = await deps.wallet.ask(view2, ask).catch((e4) => {
+          const why = e4 instanceof Error ? e4.message : String(e4);
+          throw new Error(ask.kind === "send" ? `${why}; request ${request.requestId}: read it with \`treasury invest request\` before trying again` : why);
+        });
+        answered.add(keyOf2(step));
+        const value = answer.kind === "answered" ? answer.value : answer.hash;
+        acted.push({ stepId: step.stepId, kind: ask.kind, value });
+        given.push({ step, kind: ask.kind, value });
       }
-      request = r2.body;
+      for (const { step, kind, value } of given) {
+        const body = kind === "send" ? (
+          // The wallet's own view of the transaction is not read here: the API reads the chain itself, at this hash.
+          { kind: "transaction", txHash: value, wallet: null }
+        ) : { kind: "signature", signature: value };
+        const r2 = await call3((cl, token) => cl.submit({ path: { requestId: request.requestId, stepId: step.stepId }, body }, { ownerToken: token }));
+        if (!r2.ok) {
+          if (kind === "send") {
+            throw new Error(
+              `the transfer was sent from your wallet (transaction ${value}), but the API did not record it: ${r2.error.code}: ${r2.error.message}. Do not send it again. Check the transaction on BNB Chain, and read request ${request.requestId} with \`treasury invest request\`.`
+            );
+          }
+          const again = r2.error.code === "request_expired" ? " The request expired before it was signed: run the command again." : "";
+          throw new Error(`${failure2(`The API did not take step ${step.stepId} of request ${request.requestId}`, r2).message}${again}`);
+        }
+        request = r2.body;
+      }
       watchUntil = deps.now() + deps.watchMs;
       continue;
     }
@@ -51187,6 +51197,8 @@ function summary(r) {
     state: r.state,
     ...r.smartAccount !== void 0 && { smartAccount: r.smartAccount },
     ...r.warning ? { warning: r.warning } : {},
+    // What a withdrawal leaves in the account (holdings too small to sell), as the API reports it.
+    ...r.leftBehind && r.leftBehind.length > 0 ? { leftBehind: r.leftBehind } : {},
     steps: r.steps.map((s2) => {
       const v = s2.verification;
       return { stepId: s2.stepId, kind: s2.kind, state: s2.state, ...v !== void 0 && { verification: v } };
@@ -51267,7 +51279,9 @@ function prepareWithdrawal(r, s2, owner, h, product) {
         { label: "From your smart account", value: h.smartAccount },
         { label: "Paid to your wallet", value: owner },
         { label: "Valid until", value: new Date(Number(message.expiresAt) * 1e3).toISOString() }
-      ]
+      ],
+      // What the API says this withdrawal will not take out (holdings too small to sell): shown before anything is signed.
+      ...r.leftBehind && r.leftBehind.length > 0 ? { warning: `This withdrawal leaves these in your account, as the API reports: ${r.leftBehind.map((x) => `${amountText(x.assetId, x.raw, h)} (${x.reason})`).join("; ")}.` } : {}
     },
     ask: { kind: "sign_typed", typedData: withDomainType(typedData) }
   };

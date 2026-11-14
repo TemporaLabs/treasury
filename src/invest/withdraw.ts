@@ -78,7 +78,7 @@ export function checkWithdrawal(r: Request, owner: Address, h: Holding, now: num
   if (typeof r.smartAccount === "string" && r.smartAccount.toLowerCase() !== h.smartAccount.toLowerCase()) {
     return { ok: false as const, step: null, reason: `the request debits ${r.smartAccount}, not the smart account ${h.smartAccount} your positions name` };
   }
-  return checkPortfolioWithdrawal(r.steps as never, {
+  return checkPortfolioWithdrawal(r.steps, {
     owner,
     smartAccount: h.smartAccount,
     portfolioId: portfolioIdOf(r) ?? "",
@@ -116,6 +116,10 @@ export function prepareWithdrawal(r: Request, s: Request["steps"][number], owner
         { label: "Paid to your wallet", value: owner },
         { label: "Valid until", value: new Date(Number(message.expiresAt) * 1000).toISOString() },
       ],
+      // What the API says this withdrawal will not take out (holdings too small to sell): shown before anything is signed.
+      ...(r.leftBehind && r.leftBehind.length > 0
+        ? { warning: `This withdrawal leaves these in your account, as the API reports: ${r.leftBehind.map((x) => `${amountText(x.assetId, x.raw, h)} (${x.reason})`).join("; ")}.` }
+        : {}),
     },
     ask: { kind: "sign_typed", typedData: withDomainType(typedData) },
   };

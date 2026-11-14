@@ -23,7 +23,9 @@ the wallet is the owner's own.
    steps is held to the same intent, and a refused check stops the command with nothing more signed or sent.
 2. The step is prepared from the checked request: what the page shows is built from the step's own bytes and the
    owner's own numbers, never from the API's words.
-3. The wallet signs or sends it, and the result goes back to the API with `submit`.
+3. The wallet signs or sends it, and the result goes back to the API with `submit`. Withdrawal authorizations that
+   are ready together are all signed first, then handed back one after another, so the account is never left half
+   withdrawn while the owner reads the next one.
 4. With nothing left for the wallet, the request is read again every `INVEST.pollMs` until it ends, or until
    `INVEST.watchMs` passes; then the command reports it as still running.
 
