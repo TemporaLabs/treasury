@@ -3,7 +3,7 @@ import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "no
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { createServer } from "node:net";
-import { encodeAbiParameters, encodeEventTopics, getAddress, parseAbiItem, type Address, type Hex } from "viem";
+import { getAddress, type Hex } from "viem";
 import { buildConnectCommands, type ConnectDeps } from "../src/connect/commands.js";
 import { clearSession, pendingAckPath, planPath, readPlan, writeSession, writeSolanaSession } from "../src/connect/session.js";
 import { PLAN_MAX_LEGS, PLAN_TTL_MS, operatorWarning } from "../src/connect/ack.js";
@@ -27,21 +27,6 @@ const vault = defaultVault();
 const other = listVaults().find((v) => v.chainId !== vault.chainId && v.depositOpen.open)!;
 const sol = listSolanaVaults()[0]!;
 
-const ev = {
-  approval: parseAbiItem("event Approval(address indexed owner, address indexed spender, uint256 value)"),
-  transfer: parseAbiItem("event Transfer(address indexed from, address indexed to, uint256 value)"),
-  deposit: parseAbiItem("event Deposit(address indexed sender, address indexed owner, uint256 assets, uint256 shares)"),
-  withdraw: parseAbiItem("event Withdraw(address indexed sender, address indexed receiver, address indexed owner, uint256 assets, uint256 shares)"),
-};
-const log = (address: Address, topics: Hex[], data: Hex) => ({ address, topics, data, blockHash: "0x" as Hex, blockNumber: 1n, logIndex: 0, transactionHash: "0x" as Hex, transactionIndex: 0, removed: false });
-const u256 = (v: bigint) => encodeAbiParameters([{ type: "uint256" }], [v]);
-const approvalLog = (value: bigint) => log(vault.asset.address, encodeEventTopics({ abi: [ev.approval], eventName: "Approval", args: { owner: ACCOUNT, spender: vault.address } }) as Hex[], u256(value));
-const transferLog = (value: bigint) => log(vault.asset.address, encodeEventTopics({ abi: [ev.transfer], eventName: "Transfer", args: { from: ACCOUNT, to: vault.address } }) as Hex[], u256(value));
-const depositLog = (assets: bigint) =>
-  log(vault.address, encodeEventTopics({ abi: [ev.deposit], eventName: "Deposit", args: { sender: ACCOUNT, owner: ACCOUNT } }) as Hex[], encodeAbiParameters([{ type: "uint256" }, { type: "uint256" }], [assets, assets]));
-const withdrawLog = (assets: bigint) =>
-  log(vault.address, encodeEventTopics({ abi: [ev.withdraw], eventName: "Withdraw", args: { sender: ACCOUNT, receiver: ACCOUNT, owner: ACCOUNT } }) as Hex[], encodeAbiParameters([{ type: "uint256" }, { type: "uint256" }], [assets, 1n]));
-
 const freePort = () =>
   new Promise<number>((resolve) => {
     const s = createServer();
@@ -58,8 +43,6 @@ let opened: string[];
 let shares: bigint;
 /** The Solana share account's raw balance (a Solana `withdraw … all` leg reads it). */
 let solShares: bigint;
-/** Receipts by hash, for legs whose page the test plays to the end. */
-let receipts: Record<string, unknown>;
 /** The Tempora API, for the EVM legs: its products mirror the registry's EVM rows. */
 let api: StandIn;
 
@@ -71,7 +54,6 @@ beforeEach(async () => {
   opened = [];
   shares = 5n * 10n ** BigInt(other.shareDecimals);
   solShares = 3_000_000n;
-  receipts = {};
   api = standInApi({ owner: ACCOUNT, shares: () => shares });
   writeSession({ account: ACCOUNT, walletType: "external", connectedAtIso: "2026-10-13T11:59:00Z" });
   writeOwnerToken(tokenKeyFor(ACCOUNT), { token: "tok", expiresAtIso: "2026-10-14T00:00:00Z" }, clock.getTime());
@@ -90,13 +72,8 @@ const tokenAccount = (amount: bigint) => {
 };
 const deps = (over: Partial<ConnectDeps> = {}): ConnectDeps => ({
   open: (u) => (opened.push(u), true),
-  client: () => ({
-    getTransactionReceipt: async ({ hash }: { hash: Hex }) => (receipts[hash] ?? new Promise<never>(() => {})) as never,
-    readContract: async (q: { functionName: string }) => (q.functionName === "balanceOf" ? shares : q.functionName === "allowance" ? 10n ** 30n : 0n) as never,
-  }),
   solanaRpc: { getAccountInfo: () => ({ send: async () => ({ value: { data: tokenAccount(solShares) } }) }) } as never,
   ttlMs: 150,
-  balanceTimeoutMs: 20,
   verifyOpts: { attempts: 1, delayMs: 1 },
   now: () => clock,
   mcp: api.mcp,
@@ -422,11 +399,6 @@ describe("a plan's legs: in order, each held to what was acknowledged, and a leg
     const legs = `deposit ${vault.symbol} 0.6; withdraw ${vault.symbol} 0.25`;
     const { commands } = await acknowledged(legs);
     const [h1, h2, h3] = ([1, 2, 3] as const).map((n) => `0x${String(n).padStart(2, "0").repeat(32)}` as Hex);
-    receipts = {
-      [h1]: { status: "success", logs: [approvalLog(600_000n)] },
-      [h2]: { status: "success", logs: [transferLog(600_000n), depositLog(600_000n)] },
-      [h3]: { status: "success", logs: [withdrawLog(250_000n)] },
-    };
     const d = deps({ ttlMs: 5_000 });
     const leg1 = runLeg(commands[0]!, d);
     await play([h1, h2]);
@@ -543,11 +515,6 @@ describe("connect plan --status", () => {
 describe("connect plan --run: one page for every leg (#174)", () => {
   const EVM_LEGS = `deposit ${vault.symbol} 0.6; withdraw ${vault.symbol} 0.25`;
   const [h1, h2, h3] = ([1, 2, 3] as const).map((n) => `0x${String(n).padStart(2, "0").repeat(32)}` as Hex);
-  const landedReceipts = () => ({
-    [h1]: { status: "success", logs: [approvalLog(600_000n)] },
-    [h2]: { status: "success", logs: [transferLog(600_000n), depositLog(600_000n)] },
-    [h3]: { status: "success", logs: [withdrawLog(250_000n)] },
-  });
   async function acked(legs = EVM_LEGS) {
     const { ack } = await plan({ legs });
     await plan({ legs, ack });
@@ -564,7 +531,6 @@ describe("connect plan --run: one page for every leg (#174)", () => {
 
   it("walks every leg on ONE page: each leg started in order, each call checked from its receipt, the plan completed", async () => {
     await acked();
-    receipts = landedReceipts();
     const run = plan({ run: true }, deps({ ttlMs: 10_000, legMinMs: 0 }));
     const { u, s } = await pageOf();
     expect(u.pathname).toBe("/plan");
@@ -634,7 +600,6 @@ describe("connect plan --run: one page for every leg (#174)", () => {
 
   it("a leg that finishes near the time limit hands over: the run returns in_progress before the next leg starts", async () => {
     await acked();
-    receipts = landedReceipts();
     const run = plan({ run: true }, deps({ ttlMs: 20_000, legMinMs: 19_000 }));
     const { u, s } = await pageOf();
     expect(await send(u, s, { start: 1 })).toMatchObject({ ok: true, started: 1 });
@@ -671,7 +636,6 @@ describe("connect plan --run: one page for every leg (#174)", () => {
 
   it("stopping between legs ends the plan before the next leg", async () => {
     await acked();
-    receipts = landedReceipts();
     const run = plan({ run: true }, deps({ ttlMs: 10_000, legMinMs: 0 }));
     const { u, s } = await pageOf();
     await send(u, s, { start: 1 });
@@ -720,7 +684,6 @@ describe("connect plan --run: one page for every leg (#174)", () => {
 
   it("a plan replaced while a leg is in the wallet: the outcome stays on the run's own plan, and the newer plan is untouched", async () => {
     await acked();
-    receipts = landedReceipts();
     const run = plan({ run: true }, deps({ ttlMs: 10_000, legMinMs: 0 }));
     const { u, s } = await pageOf();
     await send(u, s, { start: 1 });
@@ -747,7 +710,6 @@ describe("connect plan --run: one page for every leg (#174)", () => {
 
   it("a plan cleared by `connect disconnect` mid-leg: the run still reports the transactions that landed", async () => {
     await acked();
-    receipts = landedReceipts();
     const run = plan({ run: true }, deps({ ttlMs: 10_000, legMinMs: 0 }));
     const { u, s } = await pageOf();
     await send(u, s, { start: 1 });
@@ -955,11 +917,6 @@ describe("connect plan --run with Solana legs: the same page, each Solana leg he
   /** A Solana deposit of 2.5 USDC that lands as built (on the last blockhash handed out): the asset falls by exactly
    * 2.5, and shares arrive. */
   const depositLanded = () => ({ pre: [bal(1, SOL_ACCOUNT, sol.asset.address, 5_000_000n)], post: [bal(1, SOL_ACCOUNT, sol.asset.address, 2_500_000n), bal(2, SOL_ACCOUNT, sol.sharesMint, 2_400_000n)] });
-  const receiptsEvm = () => ({
-    [h1]: { status: "success", logs: [approvalLog(600_000n)] },
-    [h2]: { status: "success", logs: [transferLog(600_000n), depositLog(600_000n)] },
-    [h3]: { status: "success", logs: [withdrawLog(250_000n)] },
-  });
   const d = (over: Partial<ConnectDeps> = {}) => deps({ ttlMs: 10_000, legMinMs: 0, solanaRpc: solanaRpc(), ...over });
 
   beforeEach(async () => {
@@ -988,7 +945,6 @@ describe("connect plan --run with Solana legs: the same page, each Solana leg he
 
   it("EVM → Solana → EVM on ONE page: in order, the Solana leg built at its press and checked from what landed, the third leg only after it matched", async () => {
     await acked(MIXED);
-    receipts = receiptsEvm();
     const run = plan({ run: true }, d());
     const { u, s } = await pageOf();
     const i0 = await info(u, s);

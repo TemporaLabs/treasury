@@ -2,25 +2,21 @@
  * The operator's acknowledgement, which `connect deposit` and `connect withdraw` require before the
  * signing page opens.
  *
- * Run without `--ack`, either command builds and gate-checks its calls, records them as pending, and
- * returns `acknowledgement`: one fixed text, written here and not by the agent, naming the action,
- * amount, chain, vault, its explorer link, the receiver, the vault's warning and the disclosures in
- * plain words (`DISCLOSURES.plain`; the full text stays in `earn terms`). The agent posts it to the
- * operator and waits for an explicit yes. Run again
- * with `--ack <code>`, the page opens only if the code names the pending acknowledgement, it has not
- * expired, and the calls are exactly the ones it described. The code is then spent, so every page
- * open is preceded by its own acknowledgement.
+ * Run without `--ack`, either command works out exactly what it will do (on an EVM chain the vault the
+ * Tempora API lists and the request it will make, `vault-request.ts`; on Solana the intent), records its
+ * digest as pending, and returns `acknowledgement`: one fixed text, written here and not by the agent,
+ * naming the action, amount, chain, vault, its explorer link, the receiver, the vault's warning and the
+ * disclosures in plain words (`DISCLOSURES.plain`; the full text stays in `earn terms`). The agent posts
+ * it to the operator and waits for an explicit yes. Run again with `--ack <code>`, the page opens only if
+ * the code names the pending acknowledgement, it has not expired, and the run is for exactly what it
+ * described. The code is then spent, so every page open is preceded by its own acknowledgement.
  *
  * The code is not a secret and does not need to be: it ties the second run to the text the operator
- * read. An amount, vault, chain, receiver or account that changes in between gives different calls,
- * and the code no longer matches them.
+ * read. An amount, vault, chain, receiver or account that changes in between gives a different digest,
+ * and the code no longer matches it.
  */
-import { formatUnits, keccak256, stringToHex, type Address } from "viem";
-import type { UnsignedCall } from "../build.js";
-import { CHAIN_INFO } from "../client.js";
+import { keccak256, stringToHex } from "viem";
 import { DISCLOSURES } from "../disclosures.js";
-import { linksFor } from "../links.js";
-import type { Admitted } from "./gate.js";
 import type { SolanaVaultEntry } from "../registry-schema.js";
 
 /** How long an acknowledgement stays usable: long enough to read it and answer, not long enough to forget it. */
@@ -31,15 +27,6 @@ export interface PendingAck {
   digest: string;
   issuedAtIso: string;
   expiresAtIso: string;
-}
-
-/** What the calls ARE: the connected account and each call's chain, destination, calldata and value. */
-export function callsDigest(calls: UnsignedCall[], account: Address): string {
-  return keccak256(stringToHex(JSON.stringify([account, calls.map((c) => [c.chainId, c.to, c.data, c.value])])));
-}
-
-export function issueAck(calls: UnsignedCall[], account: Address, now: Date): PendingAck {
-  return issueAckForDigest(callsDigest(calls, account), now);
 }
 
 /**
@@ -63,12 +50,7 @@ export function issueAckForDigest(digest: string, now: Date): PendingAck {
   };
 }
 
-/** Throws unless `code` names `pending`, it is unexpired, and it was issued for exactly these calls. */
-export function checkAck(code: string, pending: PendingAck | undefined, calls: UnsignedCall[], account: Address, now: Date): void {
-  checkAckDigest(code, pending, callsDigest(calls, account), now);
-}
-
-/** `checkAck` against a digest computed by the caller (a Solana intent's). */
+/** Throws unless `code` names `pending`, it is unexpired, and it was issued for exactly this digest (a vault leg's or a Solana intent's). */
 export function checkAckDigest(code: string, pending: PendingAck | undefined, digest: string, now: Date): void {
   const again = "run the same command without --ack, post its `acknowledgement` to the operator, and wait for their yes";
   if (!pending) throw new Error(`refused: no acknowledgement is pending; ${again}`);
@@ -108,32 +90,6 @@ export function operatorWarning(w: string, action: "deposit" | "withdraw" = "dep
   const s = w.replace(/\s*Show this warning before preparing any deposit\.\s*$/, "").trim();
   // Before a withdrawal, advice on how much to deposit does not apply.
   return action === "withdraw" ? s.replace(/\s*Deposit only .*?\.(?=\s|$)/g, "").trim() : s;
-}
-
-export function summarize(action: "deposit" | "withdraw", calls: UnsignedCall[], admitted: Admitted[], receiver: Address): AckSummary {
-  const main = admitted.find((a) => a.kind !== "approve")!;
-  const v = main.vault;
-  const chainId = calls[0]!.chainId as keyof typeof CHAIN_INFO;
-  const amount =
-    main.kind === "redeem"
-      ? `${formatUnits(main.amount, v.shareDecimals)} ${v.symbol} shares (the amount given; it is the whole position only if it equals the account's share balance, which is not checked here)`
-      : `${formatUnits(main.amount, v.asset.decimals)} ${v.asset.symbol}`;
-  return {
-    action,
-    amount,
-    asset: v.asset.symbol,
-    chain: CHAIN_INFO[chainId].name,
-    chainId,
-    vault: { symbol: v.symbol, name: v.name, address: v.address, explorer: linksFor(v).explorer },
-    receiver,
-    warning: operatorWarning(v.warning, action),
-    // The disclosures in plain words (`DISCLOSURES.plain`): the operator reads this before every page,
-    // so it is the short form. Before a withdrawal, only what holds for every action.
-    disclosures:
-      action === "deposit"
-        ? [...DISCLOSURES.plain.deposit, ...(v.depositOpen.open ? [] : [DISCLOSURES.plain.gatedDeposit]), ...DISCLOSURES.plain.always]
-        : [...DISCLOSURES.plain.always],
-  };
 }
 
 /** The summary for a Solana intent: one transaction, no approve, and shares only ever to the account itself. */
@@ -190,8 +146,9 @@ export function acknowledgementText(s: AckSummary): string {
 /**
  * A plan: one acknowledgement for several deposits and withdrawals, across vaults and chains (`connect plan`).
  *
- * Each leg is bound to the same digest its own `--ack` would be (`callsDigest`, `solanaIntentDigest`), so a
- * leg run rebuilds its calls exactly as a single acknowledgement does and is held to them. The plan's code
+ * Each leg is bound to the same digest its own `--ack` would be (a vault leg's, `vaultLeg` in
+ * `vault-request.ts`, or `solanaIntentDigest`), so a leg run works out its request exactly as a single
+ * acknowledgement does and is held to it. The plan's code
  * is spent leg by leg, in order: a leg that does not complete ends the plan, and the legs after it never run.
  */
 export const PLAN_TTL_MS = 60 * 60_000;

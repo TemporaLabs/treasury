@@ -147,7 +147,7 @@ describe("the shipped registry", () => {
   it("🔴 the depositable set is the five chain defaults and Test 2 — each open to any account: open to any account, measured by a simulated deposit", () => {
     // The Morpho V2 vault takes a deposit from anyone (a stranger's simulated deposit reached the token
     // pull). The Fusion sibling is whitelist-gated and stays out of the set — listed so an admitted
-    // account's position can be read and exited, refused for everyone else before anything is built.
+    // account's position can be read and exited; the Tempora API refuses anyone else's deposit.
     expect(depositableVaults().map((v) => v.symbol)).toEqual(["tlCashPlusUSDC2", "tlCashPlusUSDC2B", "tlCashPlusUSDC2C", "tlCashPlusUSDG2D", "tlCashPlusUSDC2E", "tlCashPlusUSDC2F"]);
     expect(defaultVault().depositOpen.open).toBe(true);
     expect(getVault("tlCashPlusUSDC2A").depositOpen).toMatchObject({ open: false, reason: "WHITELIST_GATED" });
@@ -179,8 +179,6 @@ describe("the shipped registry", () => {
       expect(defaultVault(c.chainId).symbol, c.key).toBe(named);
       expect(loadRegistry().vaults.filter((v) => v.chainId === c.chainId && v.isDefault).map((v) => v.symbol), c.key).toEqual([named]);
     }
-    // and the round-trip target resolves — a typo'd ticker fails here, not in a fork run 20 minutes in
-    expect(getVault(EARN.roundTripVault).symbol).toBe(EARN.roundTripVault);
   });
 
   it("each chain's default vault ADDRESS (what the commands pick the API's vault by) is the registry's address for that chain's default ticker", () => {
@@ -255,7 +253,7 @@ describe("the shipped registry", () => {
 
   it("names no depositor: who may deposit is on the chain, not in this repository", () => {
     // A whitelist member's address in the client would publish who the fund has onboarded and would
-    // rot the moment the fund changes it. The fork tier discovers one from the AccessManager instead.
+    // rot the moment the fund changes it. The Tempora API checks who may deposit, per account.
     expect(EARN).not.toHaveProperty("depositors");
     expect(JSON.stringify(loadRegistry())).not.toMatch(/depositor/i);
   });

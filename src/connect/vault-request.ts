@@ -141,7 +141,7 @@ export interface VaultCoreDeps {
   pollMs?: number;
 }
 
-/** The confirm flow for one leg, in the shape the confirm and plan pages drive (`ConfirmCore` in `commands.ts`). */
+/** The confirm flow for one leg, in the shape the confirm and plan pages drive (`LegCore` in `commands.ts`). */
 export interface VaultCore {
   chainId: number;
   done: VaultTx[];

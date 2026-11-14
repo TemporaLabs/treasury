@@ -21,8 +21,8 @@ export function isSupportedChainId(id: number): id is SupportedChainId {
  * uses for it (`chain: "arbitrum"`), the name shown to an operator, the environment variables that
  * configure its RPC, and the public endpoint used when none is set.
  *
- * ONE TABLE, so a chain cannot be half-added: `rpcUrlFromEnv`, `logsRpcUrlFromEnv`,
- * `rpcSourceForEnv`, `resolvedRpcSecrets` and `publicRpcHint` all read it, and `Record<
+ * ONE TABLE, so a chain cannot be half-added: `rpcUrlFromEnv`, `rpcSourceForEnv`,
+ * `resolvedRpcSecrets` and `publicRpcHint` all read it, and `Record<
  * SupportedChainId, …>` makes a chain present in `chains` and absent here a compile error.
  * `links.ts` holds the explorer map and is the one place this table does not reach; it fails loudly
  * on a chain it does not know.
@@ -34,37 +34,32 @@ export interface ChainInfo {
   key: string;
   name: string;
   rpcEnv: readonly string[];
-  logsRpcEnv: string;
   publicRpc: string;
 }
 export const CHAIN_INFO = {
-  8453: { key: "base", name: "Base", rpcEnv: ["TREASURY_RPC_BASE", "BASE_RPC_URL"], logsRpcEnv: "TREASURY_LOGS_RPC_BASE", publicRpc: "https://mainnet.base.org" },
+  8453: { key: "base", name: "Base", rpcEnv: ["TREASURY_RPC_BASE", "BASE_RPC_URL"], publicRpc: "https://mainnet.base.org" },
   42161: {
     key: "arbitrum",
     name: "Arbitrum One",
     rpcEnv: ["TREASURY_RPC_ARBITRUM", "ARBITRUM_RPC_URL"],
-    logsRpcEnv: "TREASURY_LOGS_RPC_ARBITRUM",
     publicRpc: "https://arb1.arbitrum.io/rpc",
   },
   4663: {
     key: "robinhood",
     name: "Robinhood Chain",
     rpcEnv: ["TREASURY_RPC_ROBINHOOD", "ROBINHOOD_RPC_URL"],
-    logsRpcEnv: "TREASURY_LOGS_RPC_ROBINHOOD",
     publicRpc: "https://rpc.mainnet.chain.robinhood.com",
   },
   1: {
     key: "ethereum",
     name: "Ethereum",
     rpcEnv: ["TREASURY_RPC_ETHEREUM", "ETHEREUM_RPC_URL"],
-    logsRpcEnv: "TREASURY_LOGS_RPC_ETHEREUM",
     publicRpc: "https://ethereum.reth.rs/rpc",
   },
   143: {
     key: "monad",
     name: "Monad",
     rpcEnv: ["TREASURY_RPC_MONAD", "MONAD_RPC_URL"],
-    logsRpcEnv: "TREASURY_LOGS_RPC_MONAD",
     publicRpc: "https://rpc.monad.xyz",
   },
 } as const satisfies Record<SupportedChainId, ChainInfo>;
@@ -127,12 +122,12 @@ export function chainIdForKey(key: string): SupportedChainId | undefined {
 
 /**
  * Read-only client. This module constructs exactly one kind of thing — a public (unsigned)
- * client from an RPC URL. It never constructs a wallet client: the signer is the consumer's,
- * handed in from outside if at all (see `build.ts`, which emits unsigned calls only).
+ * client from an RPC URL. It never constructs a wallet client: every transaction is signed by the
+ * operator's own wallet, outside this package.
  */
 export type ReadClient = PublicClient<HttpTransport, (typeof chains)[SupportedChainId]>;
 
-/** The public endpoint used when nothing is configured, and the fallback for event scans. */
+/** The public endpoint used when nothing is configured. */
 export const PUBLIC_RPC: Record<SupportedChainId, string> = {
   8453: CHAIN_INFO[8453].publicRpc,
   42161: CHAIN_INFO[42161].publicRpc,
@@ -245,9 +240,10 @@ export function rpcUrlFromEnvValue(v: string | undefined): string | undefined {
  * `TREASURY_RPC_ETHEREUM` then `ETHEREUM_RPC_URL`; on Monad, `TREASURY_RPC_MONAD` then `MONAD_RPC_URL`.
  * The CLI inherits its shell's whole environment, so on every path, the plugin's
  * included, the second name of each pair is used when the first is unset.
- * The chain's logs variable (`TREASURY_LOGS_RPC_<CHAIN>`: BASE, ARBITRUM, ROBINHOOD, ETHEREUM, MONAD), if set, is
- * preferred for log scans (providers cap eth_getLogs ranges very differently: Alchemy free 10 blocks,
- * Base public 2,000, Infura 10,000 on Arbitrum) — see `position.ts`.
+ *
+ * What reads an EVM chain from here now: `connect wallet`'s check of a smart-contract wallet's sign-in
+ * (ERC-1271 / ERC-6492, on Base), and `scripts/registry-check.ts` (every chain). The earn and connect
+ * commands reach the EVM vaults through the Tempora API, which reads their chains itself.
  *
  * 🔴 A chain reads ONLY its own variables. An Arbitrum call never falls back to a Base endpoint: a
  * vault's address has no contract on the other chain, so reads fail with "returned no data" — which
@@ -262,50 +258,8 @@ export function rpcUrlFromEnv(chainId: SupportedChainId): string {
 }
 
 /**
- * The endpoint an event scan falls back to when the configured logs RPC cannot cover the range — and
- * the operator's opt-out from it. `TREASURY_LOGS_FALLBACK` unset ⇒ the chain's public endpoint; an
- * http(s) URL ⇒ that endpoint, ON BASE ONLY; ANY other value — `off`, `none`, `disabled`, a typo — ⇒ no
- * fallback at all, and the scan degrades to a cut-short window as it did before the fallback existed. It exists because the fallback
- * otherwise sends a query to a third party the operator never named, which some
- * deployments cannot accept — and it fails CLOSED for the same reason.
- *
- * 🔴 The variable names ONE endpoint, and that endpoint is on Base. On any other chain a URL there
- * cannot serve the scan — it would answer for the wrong chain — so a SET variable means no fallback
- * on that chain, whatever it holds: either the operator opted out, or they named a Base endpoint and
- * so constrained where this process talks. An operator who wants history on another chain points that
- * chain's logs variable (`TREASURY_LOGS_RPC_ARBITRUM`, `TREASURY_LOGS_RPC_MONAD`, …) at a provider with a wide eth_getLogs range.
- */
-export function logsFallbackUrlFromEnv(chainId: SupportedChainId, logsUrl: string): string | undefined {
-  const raw = (process.env["TREASURY_LOGS_FALLBACK"] ?? "").trim();
-  // Unset, empty, or an unexpanded `${VAR}` placeholder: the default fallback.
-  // ⚠️ The placeholder is THE ONE DELIBERATE EXCEPTION to fail-closed below.
-  // A host can forward `${TREASURY_LOGS_FALLBACK}` verbatim when the variable is unset, so a
-  // placeholder means the operator never set it — and unset must behave exactly as absent, or every
-  // plugin install without the variable silently loses its fallback. The function cannot tell "the
-  // host did not expand it" from "someone typed it"; the second reading is treated as implausible on
-  // purpose, and this comment is the record of that choice.
-  if (raw.length === 0 || raw.includes("${")) return sameOrUndefined(PUBLIC_RPC[chainId], logsUrl);
-  // 🔴 An operator who set this variable at all was constraining where this process talks. Reading an
-  // unrecognised value as "use the default third party" is the one outcome they cannot have meant
-  // (measured in review: `disabled` silently kept the public fallback until this failed closed).
-  if (chainId !== 8453) return undefined; // set, and this chain is not the one the variable names an endpoint for
-  const url = rpcUrlFromEnvValue(raw);
-  return url === undefined ? undefined : sameOrUndefined(url, logsUrl);
-}
-
-/** A fallback that is the same endpoint as the primary is not a fallback. */
-function sameOrUndefined(url: string, logsUrl: string): string | undefined {
-  return url === logsUrl ? undefined : url;
-}
-
-/** RPC to use for eth_getLogs scans: a dedicated one if configured, else the general one. */
-export function logsRpcUrlFromEnv(chainId: SupportedChainId): string {
-  return rpcUrlFromEnvValue(process.env[CHAIN_INFO[chainId].logsRpcEnv]) ?? rpcUrlFromEnv(chainId);
-}
-
-/**
  * Which environment variable supplied the RPC URL — the NAME only, never the value. A keyed provider
- * URL is a secret, so `earn_status` reports provenance and nothing else. `configured: false` means
+ * URL is a secret, so a setup hint or `scripts/registry-check.ts` reports provenance and nothing else. `configured: false` means
  * no variable resolved and the public endpoint is in use (rate-limited, never a failure).
  */
 export function rpcSourceForEnv(chainId: SupportedChainId): { source: string; configured: boolean } {
@@ -349,11 +303,10 @@ export function resolvedRpcSecrets(): string[] {
   };
 
   const urls = new Set<string>();
-  // Every variable that can name a URL the package will CALL — the logs fallback included: it builds a
-  // real client, and a provider's error body can echo its key exactly as the primary's (measured in
-  // review; dormant until describeError began reporting the body).
+  // Every variable that can name a URL the package will CALL: a provider's error body can echo its key
+  // (measured in review; dormant until describeError began reporting the body).
   // Derived from the chain table, so a chain added there cannot be left out of the redactor.
-  const names = [...supportedChainIds.flatMap((id) => [...CHAIN_INFO[id].rpcEnv, CHAIN_INFO[id].logsRpcEnv]), ...SOLANA_INFO.rpcEnv, "TREASURY_LOGS_FALLBACK"];
+  const names = [...supportedChainIds.flatMap((id) => CHAIN_INFO[id].rpcEnv), ...SOLANA_INFO.rpcEnv];
   for (const k of names) {
     const v = rpcUrlFromEnvValue(process.env[k]);
     if (v) urls.add(v);
@@ -399,77 +352,4 @@ export function publicRpcHint(chainId: SupportedChainId): string | undefined {
     "retry. Reads like the vault list and the disclosures work without one; quotes, pre-flight and " +
     "position history generally do not."
   );
-}
-
-/** How long a chain-identity probe may take before the endpoint counts as "did not say". */
-export const CHAIN_PROBE_MS = 3_000;
-
-/** Endpoints that have already said which chain they are. An endpoint does not change chain. */
-const reportedChain = new Map<string, number>();
-
-/**
- * Which chain does this endpoint say it is? `undefined` when it did not say within
- * `CHAIN_PROBE_MS` — an error, a rate limit, a hang — which is NOT a statement about the chain: the
- * caller reports that as "not verified", never as a match and never as a mismatch.
- *
- * It exists because two chains mean two RPC variables, and the likeliest mistake is one pointed at
- * the other chain. Nothing then errors usefully: a vault's address has no code there, so reads fail
- * with "returned no data" and the failure reads as a broken vault.
- *
- * Bounded on purpose. The transport's own deadline is 10 s and a rate-limited `eth_chainId` is waited
- * out for all of it, which would make a health check that already has its answer wait ten seconds
- * for a second one (measured in review). An answer is remembered per endpoint URL, so a process asks
- * each endpoint once.
- */
-export async function endpointChainId(client: ReadClient, rpcUrl: string, timeoutMs: number = CHAIN_PROBE_MS): Promise<number | undefined> {
-  const known = reportedChain.get(rpcUrl);
-  if (known !== undefined) return known;
-  let timer: ReturnType<typeof setTimeout> | undefined;
-  const timedOut = new Promise<undefined>((r) => {
-    timer = setTimeout(() => r(undefined), timeoutMs);
-    timer.unref?.();
-  });
-  try {
-    const got = await Promise.race([client.getChainId().catch(() => undefined), timedOut]);
-    if (got !== undefined) reportedChain.set(rpcUrl, got);
-    return got;
-  } finally {
-    if (timer !== undefined) clearTimeout(timer);
-  }
-}
-
-/** An endpoint a tool is about to read through, and the NAME of the variable that supplied it. */
-export interface Endpoint {
-  client: ReadClient;
-  url: string;
-  source: string;
-}
-
-/**
- * The first of these endpoints that answers for a chain other than `chainId`, or `undefined`.
- * A chain's public endpoint is never asked: it is this client's own constant, so the question
- * would be a request to a third party with a known answer. An endpoint that does not say is not a
- * mismatch.
- */
-export async function firstEndpointOnWrongChain(chainId: SupportedChainId, endpoints: Endpoint[]): Promise<{ source: string; answersFor: number } | undefined> {
-  const asked = endpoints.filter((e) => e.url !== PUBLIC_RPC[chainId]);
-  const said = await Promise.all(asked.map((e) => endpointChainId(e.client, e.url)));
-  for (const [i, id] of said.entries()) {
-    if (id !== undefined && id !== chainId) return { source: asked[i]!.source, answersFor: id };
-  }
-  return undefined;
-}
-
-/** TEST SEAM — forgets what every endpoint said, so one test's mock port cannot answer for the next. NOT re-exported from index.ts. */
-export function __forgetEndpointChainsForTests(): void {
-  reportedChain.clear();
-}
-
-/**
- * Which variable supplied the endpoint `earn_balance` scans events through — the chain's logs
- * variable when it resolves, otherwise whatever supplied the general RPC. The NAME only.
- */
-export function logsRpcSourceForEnv(chainId: SupportedChainId): { source: string; configured: boolean } {
-  const k = CHAIN_INFO[chainId].logsRpcEnv;
-  return rpcUrlFromEnvValue(process.env[k]) ? { source: k, configured: true } : rpcSourceForEnv(chainId);
 }

@@ -1,7 +1,6 @@
 /**
  * Unit — the command surface itself. A tool rename and the `account` normalisation
- * touch only this boundary, and the boundary is exactly the layer no existing test covered: the
- * library tests call `buildWithdraw`/`getPosition` directly and never go through a handler.
+ * touch only this boundary, so these go through the registered handlers, as the CLI does.
  *
  * These assert the CONTRACT, not the mechanism: the exact tool set, the exact input properties
  * (so a leftover `depositor` is a failure rather than a tolerated extra key), the unsigned
@@ -239,4 +238,42 @@ describe("a response field an agent must surface is named in its tool's own desc
   it("earn_status's description says the gates' reasons are given verbatim", () => {
     expect((tools()["earn_status"] as unknown as { description: string }).description).toMatch(/`reason` VERBATIM/);
   });
+});
+
+/**
+ * A response field an agent is expected to SURFACE has to be named in the tool's own description,
+ * not only in `docs/tools.md`.
+ *
+ * The discriminator, which is the part worth keeping: **does an agent learn this field exists
+ * without reading a file it never reads?** `docs/tools.md` is the human integrator's document; the
+ * description is what reaches the model before it decides what to tell an operator. It bites
+ * hardest here, because the entire point of `function`/`args` is helping an operator who cannot
+ * read calldata — and the agent that would offer them is the one being told they exist.
+ */
+describe("the prepare tools tell an agent the decoded form exists (#11)", () => {
+  type Registered = Record<string, { description?: string }>;
+  const registered = (buildCommands() as unknown as Registered);
+  const described = (name: string) => (registered[name] ?? {}).description ?? "";
+
+  // The population is DERIVED from what the commands register, not written down here: a third
+  // money-committing tool is subject to this requirement the moment it exists, rather than only
+  // tripping the census and being waved through once the count is bumped (#17). A derived loop
+  // over nothing would generate no tests and pass vacuously, so the population is asserted first,
+  // against the two tools known to exist — a filter that stops matching fails here, loudly.
+  const prepareTools = Object.keys(registered).filter((n) => n.startsWith("earn_prepare_"));
+  it("the derived population holds every prepare tool (the loop below cannot be empty)", () => {
+    expect(prepareTools).toEqual(expect.arrayContaining(["earn_prepare_deposit", "earn_prepare_withdraw"]));
+    expect(prepareTools.every((n) => n.startsWith("earn_prepare_"))).toBe(true);
+  });
+
+  for (const name of prepareTools) {
+    it(`${name}'s description names function and args`, () => {
+      const d = described(name);
+      expect(d, "the description must exist at all").not.toBe("");
+      expect(d).toContain("`function`");
+      expect(d).toContain("`args`");
+      // the unit trap travels with the field, or an operator pastes "1.5" where 1500000 belongs
+      expect(d).toMatch(/RAW contract units|raw contract units/);
+    });
+  }
 });
