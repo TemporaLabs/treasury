@@ -19,13 +19,16 @@
     "esbuild": "^0.28.2",
     "react": "^19.3.1",
     "react-dom": "^19.3.1",
-    "typescript": "^5.6.0",
-    "viem": "^2.57.16"
+    "typescript": "6.0.3",
+    "viem": "2.57.17"
   },
   "overrides": {
     "ws@^8.0.0": "8.22.0",
     "uuid": "11.1.1",
-    "decode-uri-component": "0.5.0"
+    "decode-uri-component": "0.5.0",
+    "@solana/kit": {
+      "typescript": "$typescript"
+    }
   },
-  "//": "date-fns is pinned only to satisfy @base-ui/react's optional peer; without it npm hoists the v2 copy another package needs and `npm ci` then rejects its own lockfile. The page does not import it. The overrides lift ws (8.x), uuid and decode-uri-component past their advisories; none of the three is in the built page, so they change only this lockfile."
+  "//": "date-fns is pinned only to satisfy @base-ui/react's optional peer; without it npm hoists the v2 copy another package needs and `npm ci` then rejects its own lockfile. The page does not import it. The overrides lift ws (8.x), uuid and decode-uri-component past their advisories; none of the three is in the built page, so they change only this lockfile. The @solana/kit override lets the copy the wallet library brings in (5.x, whose optional peer range is typescript ^5) accept the TypeScript the page is checked with; that peer is used only for types."
 }
