@@ -103,7 +103,28 @@ export function standInApi(o: { owner: Address; products?: Product[]; shares?: (
     payload: { generation: 1, expiresAt: "2099-01-01T00:00:00Z", to, data, value: "0" },
     ...extra,
   });
+  /**
+   * The request's `next`, as the API decides it (its rules, simplified to what these tests drive): a final state is
+   * done, failed or cancelled; otherwise the first step not landed decides: ready with no hash is `send` at its
+   * generation, anything else in flight is `wait`.
+   */
+  const nextOf = (r: Request): Record<string, unknown> => {
+    const steps = r.steps as unknown as Record<string, any>[];
+    const state = (r as { state: string }).state;
+    if (state === "cancelled") return { kind: "cancelled", sent: steps.some((x) => x["verification"]?.hash !== undefined) };
+    if (state === "completed") return { kind: "done", outcome: "completed" };
+    if (state === "failed") {
+      const bad = steps.find((x) => x["state"] === "reverted" || x["state"] === "mismatch");
+      return { kind: "failed", reason: bad?.["verification"]?.message ?? "the request failed", ...(bad ? { stepId: bad["stepId"] } : {}) };
+    }
+    const first = steps.find((x) => x["state"] !== "landed" && x["state"] !== "completed");
+    if (first && first["state"] === "ready" && first["verification"]?.hash === undefined && first["payload"]) {
+      return { kind: "send", stepId: first["stepId"], generation: first["payload"].generation };
+    }
+    return { kind: "wait", retryAfterMs: 5000, until: "2099-01-01T00:00:00Z" };
+  };
   const out = (r: Request, event: "start" | "submit" | "status") => {
+    (r as { next?: unknown }).next = nextOf(r);
     const bent = s.bend ? s.bend(structuredClone(r), event) : r;
     return ok(structuredClone(bent));
   };
