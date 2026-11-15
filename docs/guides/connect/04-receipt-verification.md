@@ -7,7 +7,9 @@
 After the wallet sends a transaction, the page posts its hash (EVM) or signature (Solana) to the local
 process, which has it judged (on the EVM chains by the Tempora API, on Solana here) against what the operator
 confirmed. That verdict, not the wallet's
-word, decides whether the next call is offered and what the command reports.
+word, decides whether the next call is offered and what the command reports. On the EVM chains a call is offered only
+when the API's next action (`next`) names that step at its generation; `offered` and `nextStops` in
+`src/connect/vault-request.ts` read it.
 
 ## The verdicts
 

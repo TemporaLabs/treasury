@@ -146,7 +146,9 @@ open for nothing but the calls that text described.
   turn, and the wallet's prompt is that call's confirmation.
 - **What landed.** On the EVM chains each hash goes to the Tempora API, which reads the chain at it and says how the
   step landed; that reading is the `verified` reported, and the next step is offered only once the API has recorded
-  this one and the whole request passes the check again. The API's check, like Solana's here, is the vault's or
+  this one, the API's next action (`next`) names it, and the whole request passes the check again. Any other next
+  action (wait, done, failed, cancelled, expired, a hash asked back, or one this client does not know) offers
+  nothing to send. The API's check, like Solana's here, is the vault's or
   token's own effect for the connected account and the exact amount, never the transaction's own `from`/`to` (a
   smart-account wallet relays a call inside a batch, so those name a relayer); any other movement of the asset out
   of the account in the same transaction is reported as `extra_transfer`, never folded into a match. On Solana the landed

@@ -351,6 +351,64 @@ describe("what the page may send", () => {
     await run;
   });
 
+  describe("the page follows the API's `next`", () => {
+    it("next: expired at the start opens no page, cancels the request, and sends nothing", async () => {
+      api.bend = (r, event) => (event === "start" ? Object.assign(r, { next: { kind: "expired", startAgain: true } }) : r);
+      await expect(acknowledged("connect_deposit", { amount_usdc: "1" })).rejects.toThrow(/ran out before it was finished.*Nothing was sent/);
+      expect(opened).toEqual([]);
+      expect(api.log).toContain("cancel");
+      expect(api.submits).toEqual([]);
+    });
+
+    it("next: wait at the start is waited out; the page opens once the API offers the first step", async () => {
+      let reads = 0;
+      api.bend = (r, event) => (event === "start" || (event === "status" && reads++ === 0) ? Object.assign(r, { next: { kind: "wait", retryAfterMs: 1, until: "2099-01-01T00:00:00Z" } }) : r);
+      const run = acknowledged("connect_deposit", { amount_usdc: "1" });
+      const p = await page();
+      expect((await p.info())["calls"][0].to).toBe(vault.asset.address);
+      await p.post({ rejected: true, reason: "cancelled by the operator on the confirm page" });
+      await run;
+      expect(api.log.filter((l) => l === "status").length).toBeGreaterThanOrEqual(2);
+    });
+
+    for (const [what, next] of [
+      ["names another step", { kind: "send", stepId: "s2", generation: 1 }],
+      ["names it at another generation", { kind: "send", stepId: "s1", generation: 2 }],
+    ] as const) {
+      it(`a ready step has nothing to send, and a hash for it is refused, when the API's next ${what}`, async () => {
+        api.bend = (r, event) => (event === "start" ? Object.assign(r, { next }) : r);
+        const run = acknowledged("connect_deposit", { amount_usdc: "1" });
+        const p = await page();
+        expect((await p.info())["calls"][0]).toMatchObject({ state: "ready", to: "" });
+        expect(await p.post({ index: 0, hash: H(1) })).toMatchObject({ ok: false, reason: "step 1 is not the step the API offers to send now" });
+        await p.post({ rejected: true, reason: "cancelled by the operator on the confirm page" });
+        await run;
+        expect(api.submits).toEqual([]);
+      });
+    }
+
+    it("after a send, next: hand_back stops the flow with the hash, and nothing more is sent", async () => {
+      api.bend = (r, event) => (event === "submit" ? Object.assign(r, { next: { kind: "hand_back", stepId: "s2", reason: "may have been sent" } }) : r);
+      const run = acknowledged("connect_deposit", { amount_usdc: "1" });
+      const p = await page();
+      const reply = await p.post({ index: 0, hash: H(1) });
+      expect(String(reply["reason"])).toMatch(/asks for the hash of step s2: it may already have been sent\. Do not send it again/);
+      const out = await run;
+      expect(out["status"]).toBe("stopped");
+      expect(api.submits.map((x) => x.stepId)).toEqual(["s1"]);
+    });
+
+    it("after a send, a next kind this client does not know stops the flow; nothing more is sent", async () => {
+      api.bend = (r, event) => (event === "submit" ? Object.assign(r, { next: { kind: "teleport" } }) : r);
+      const run = acknowledged("connect_deposit", { amount_usdc: "1" });
+      const p = await page();
+      const reply = await p.post({ index: 0, hash: H(1) });
+      expect(String(reply["reason"])).toMatch(/a next action this client does not know \(teleport\)/);
+      expect((await run)["status"]).toBe("stopped");
+      expect(api.submits.map((x) => x.stepId)).toEqual(["s1"]);
+    });
+  });
+
   it("a hash posted for a step the API has not made ready is refused, and nothing reaches the API", async () => {
     // The API holds step 1 back (waiting, nothing to send): a page that posts a hash for it anyway is refused.
     api.bend = (r, event) => {
@@ -360,7 +418,7 @@ describe("what the page may send", () => {
     const run = acknowledged("connect_deposit", { amount_usdc: "1" });
     const p = await page();
     expect((await p.info())["calls"][0]).toMatchObject({ state: "waiting", to: "" });
-    expect(await p.post({ index: 0, hash: H(1) })).toMatchObject({ ok: false, reason: "step 1 is not ready to send" });
+    expect(await p.post({ index: 0, hash: H(1) })).toMatchObject({ ok: false, reason: "step 1 is not the step the API offers to send now" });
     await p.post({ rejected: true, reason: "cancelled by the operator on the confirm page" });
     await run;
     expect(api.submits).toEqual([]);
