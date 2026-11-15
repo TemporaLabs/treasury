@@ -14,7 +14,6 @@ import type { Amount, Product } from "@temporalabs/client";
 import { createMcpClient, type McpClient } from "@temporalabs/client/mcp";
 import { CHAIN_INFO, chainIdForKey, isSupportedChainId, supportedChainIds, type ChainKey, type SupportedChainId } from "../client.js";
 import { EARN } from "../config/earn.js";
-import { listVaults } from "../registry.js";
 import { INVEST } from "../config/invest.js";
 import { apiUrl, failure } from "../invest/api.js";
 import { parseAmount } from "../units.js";
@@ -66,26 +65,22 @@ export function knownChain(chain: string | undefined, withSolana = false): Suppo
 /** A vault's contract address as typed: `0x` and 40 hex digits, in any case. */
 const VAULT_ADDRESS = /^0x[0-9a-fA-F]{40}$/;
 
-/** The registry's ticker for the vault contract at `address` on `chainId`, or null when the registry has none. */
-export function tickerOf(address: string, chainId: number | null): string | null {
-  if (chainId === null) return null;
-  const a = address.toLowerCase();
-  return listVaults().find((v) => v.chainId === chainId && v.address.toLowerCase() === a)?.symbol ?? null;
-}
+/** The vault's share ticker, as the Tempora API names it (`vault.shareSymbol`). */
+export const tickerOf = (p: VaultProduct): string => p.vault.shareSymbol;
 
 /** An address shortened for a label: `0x91Bc…352F`. */
 export const shortAddress = (address: string): string => `${address.slice(0, 6)}…${address.slice(-4)}`;
 
 /**
- * How every response names a vault on an EVM chain: `vault`, its contract address (the API's), `ticker`, the registry's
- * ticker for that address or null, and `name`, the API's. Never the API's product id.
+ * How every response names a vault on an EVM chain: `vault`, its contract address, `ticker`, its share ticker, and
+ * `name`, all the API's. Never the API's product id.
  */
 export function vaultNamed(p: VaultProduct): { vault: string; ticker: string | null; name: string } {
-  return { vault: p.vault.vaultAddress, ticker: tickerOf(p.vault.vaultAddress, chainOf(p).chainId), name: p.name };
+  return { vault: p.vault.vaultAddress, ticker: tickerOf(p), name: p.name };
 }
 
 /** A vault in a sentence: its ticker, or its contract address when the registry has no ticker for it. */
-export const vaultLabel = (p: VaultProduct): string => tickerOf(p.vault.vaultAddress, chainOf(p).chainId) ?? p.vault.vaultAddress;
+export const vaultLabel = (p: VaultProduct): string => tickerOf(p);
 
 /** The listed vaults, by ticker or address: those on `on`, or every one with its chain. Never by product id. */
 function listing(listed: readonly VaultProduct[], on: SupportedChainId | undefined): string {
