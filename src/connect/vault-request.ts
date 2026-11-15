@@ -19,6 +19,7 @@ import type { McpClient } from "@temporalabs/client/mcp";
 import { formatUnits, getAddress, keccak256, stringToHex, type Address, type Hex } from "viem";
 import { CHAIN_INFO, chains, type SupportedChainId } from "../client.js";
 import { DISCLOSURES } from "../disclosures.js";
+import { EARN } from "../config/earn.js";
 import { assetsAmount, chainOf, shortAddress, tickerOf, vaultLabel, verifiedTerms, type VaultProduct } from "../earn/api.js";
 import { describeStep, depositIntent, withdrawIntent, type WithdrawAmount } from "../earn/request.js";
 import { failure } from "../invest/api.js";
@@ -104,7 +105,8 @@ export function vaultLeg(p: VaultProduct, owner: Address, ask: VaultAsk): VaultL
     chainId,
     vault: { symbol: pageSymbol(p), name: p.name, address: p.vault.vaultAddress, explorer: p.vaultLinks?.explorer ?? "" },
     receiver: owner,
-    warning: operatorWarning(p.warnings.join(" "), ask.action),
+    // The API's warnings; with none, the client's own first disclosure, so the operator is always told it is a test vault.
+    warning: operatorWarning(p.warnings.join(" ").trim() || DISCLOSURES.items[0]!, ask.action),
     // A vault the API gates by an allowlist takes deposits only from accounts admitted to it: said before a deposit.
     disclosures:
       ask.action === "deposit"
@@ -165,7 +167,7 @@ export async function startVaultCore(leg: VaultLeg, session: Session, deps: Vaul
   const p = leg.product;
   const now = deps.now ?? Date.now;
   const sleep = deps.sleep ?? ((ms: number) => new Promise<void>((r) => setTimeout(r, ms)));
-  const pollMs = deps.pollMs ?? 3_000;
+  const pollMs = deps.pollMs ?? EARN.requestPollMs;
   const started = await deps.call((m, ownerToken) => (leg.action === "deposit" ? m.deposit({ body: leg.body as DepositBody }, { ownerToken }) : m.withdraw({ body: leg.body as WithdrawBody }, { ownerToken })));
   if (!started.ok) throw failure(`The API did not start the ${leg.action} on ${vaultLabel(p)}`, started);
   let request = started.body;
@@ -344,6 +346,3 @@ export async function startVaultCore(leg: VaultLeg, session: Session, deps: Vaul
 export const noPageSignIn = async (): Promise<string> => {
   throw new Error("the Tempora API asked the wallet to sign in again while the signing page was open; run the command again");
 };
-
-/** For the type checker: the HTTP client signs in, the MCP client does everything else. */
-export type ApiClients = { mcp: McpClient; http: Client };

@@ -76,6 +76,9 @@ export const EARN = {
     monad: "0x163295A4d4381745A205DC5E9A436a3f51791593",
   } satisfies Record<ChainKey, `0x${string}`>,
 
+  /** How often `connect` reads a vault request again while a step settles. */
+  requestPollMs: 3_000,
+
   /** Fixtures the unit tiers share. */
   fixtures: {
     /** An address that has never touched any vault — the negative control for access checks. */

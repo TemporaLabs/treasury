@@ -732,7 +732,7 @@ export function buildCommands(deps: EarnDeps = {}): Record<string, Command> {
       const wallet = nonce !== undefined && from !== undefined ? { nonce, from: getAddress(from), blockNumber: block ?? null } : null;
       return json(
         await asOwner(owner, async (m, call) => {
-          const all = await products(m);
+          // The hash goes first: nothing read before it may stop a sent transaction from being recorded.
           const r = await call((c, ownerToken) => c.submit({ path: { requestId: request_id, stepId: step_id }, body: { kind: "transaction", txHash: tx_hash, wallet } }, { ownerToken }));
           if (!r.ok) {
             throw new Error(
@@ -741,7 +741,7 @@ export function buildCommands(deps: EarnDeps = {}): Record<string, Command> {
             );
           }
           try {
-            return view(r.body, all, owner);
+            return view(r.body, await products(m), owner);
           } catch (e) {
             // The hash is recorded either way: say so, so the refusal of what comes next is never read as "send it again".
             throw new Error(`The API recorded transaction ${tx_hash} for step ${step_id}. ${e instanceof Error ? e.message : String(e)}`);
