@@ -137,6 +137,21 @@ describe("the invest page", () => {
     await s;
   });
 
+  it("a step asked after the page has ended is refused at once, whatever ended it", async () => {
+    // A Cancel between two steps: no step is waiting, so the decline answers nothing, and the page ends.
+    const p = await open();
+    expect((await p.result({ rejected: true, reason: "cancelled in the browser" })).status).toBe(200);
+    expect(await p.page.done).toEqual({ ok: false, reason: "cancelled in the browser" });
+    const hung = Symbol("hung");
+    const asked = p.page.ask(VIEW, { kind: "sign_text", message: "hello" }).then(
+      () => "answered",
+      (e: Error) => e.message,
+    );
+    const outcome = await Promise.race([asked, new Promise((r) => setTimeout(() => r(hung), 1000))]);
+    expect(outcome).not.toBe(hung);
+    expect(outcome).toMatch(/cancelled in the browser/);
+  });
+
   it("tells the page how it ended before it closes", async () => {
     const p = await open();
     p.page.finish({ ok: false, reason: "the API refused the deposit" });
