@@ -93,7 +93,7 @@ describe("a deposit through the API: two steps, the second prepared only once th
     const r = await cmd("connect_deposit", { receiver: ACCOUNT, vault: vault.symbol, amount_usdc: "1" });
     expect(r["terms"]).toEqual({ version: TERMS.version, sha256: TERMS.sha256 });
     expect(String(r["acknowledgement"])).toContain(`Terms: version ${TERMS.version}, sha256 ${TERMS.sha256}`);
-    expect(api.log).toEqual(["products"]);
+    expect(api.log).toEqual(["product"]);
     expect(opened).toEqual([]);
   });
 
@@ -118,7 +118,7 @@ describe("a deposit through the API: two steps, the second prepared only once th
       [1, H(1), "matched"],
       [2, H(2), "matched"],
     ]);
-    expect(api.log.filter((l) => l !== "products")).toEqual(["deposit", "submit:s1", "submit:s2"]);
+    expect(api.log.filter((l) => l !== "products" && l !== "product")).toEqual(["deposit", "submit:s1", "submit:s2"]);
     expect(api.submits.map((x) => x.body)).toEqual([
       { kind: "transaction", txHash: H(1), wallet: null },
       { kind: "transaction", txHash: H(2), wallet: null },
@@ -290,7 +290,7 @@ describe("connect plan: each EVM leg is one API request, driven in order on one 
       [1, "completed", [H(1), H(2)]],
       [2, "completed", [H(3)]],
     ]);
-    expect(api.log.filter((l) => l !== "products" && l !== "positions")).toEqual(["deposit", "submit:s1", "submit:s2", "withdraw", "submit:s1"]);
+    expect(api.log.filter((l) => l !== "products" && l !== "product" && l !== "positions")).toEqual(["deposit", "submit:s1", "submit:s2", "withdraw", "submit:s1"]);
   });
 
   it("a plan leg run on its own page (`--plan --leg`) is the same API request", async () => {

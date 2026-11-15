@@ -15,10 +15,10 @@ in the table `buildCommands()` returns (`src/earn/commands.ts`), validates the f
 command's zod schema, and prints what the handler returns. On the EVM chains the handler asks the Tempora API's MCP
 endpoint for its products (`vaultProducts` in `src/earn/api.ts`, through `createMcpClient` from
 `@temporalabs/client/mcp`) and keeps the vaults. Each row is the API's: its status, chain, contract, asset,
-decimals, terms version, warnings and links. `resolveProduct` picks the row by its contract address: the `--vault`
-given (an address, or a ticker the registry turns into one) or, with none, the chain's default address in
-`EARN.defaultVaultAddressByChain` (`src/config/earn.ts`), named only when the API lists it. An address no listed vault
-has, or more than one has, is refused. The row's own product id is only ever sent back to the API. The Solana row
+decimals, terms version, warnings and links. `vaultProduct` asks the API for the vault the `--vault` names (its
+ticker, its contract address, or its CAIP-10 id, as given) or, with none, the chain's default address in
+`EARN.defaultVaultAddressByChain` (`src/config/earn.ts`), named only when the API knows it. A value the API knows as
+no vault is refused. The row's own product id is never shown. The Solana row
 comes from the registry, as before.
 
 ## 2. The terms and the quote
@@ -28,8 +28,8 @@ treasury earn terms --chain base
 treasury earn quote --direction deposit --amount_usdc 25 --chain base
 ```
 
-`resolveProduct` (`src/earn/api.ts`) picks the chain's default product and refuses one the API does not list, or a
-vault named with another chain. `verifiedTerms` hashes the terms text (SHA-256 of its UTF-8 bytes) and refuses it
+`vaultProduct` (`src/earn/api.ts`) asks the API for the chain's default product and refuses one the API does not know,
+or a vault named with another chain. `verifiedTerms` hashes the terms text (SHA-256 of its UTF-8 bytes) and refuses it
 unless that matches the sha256 the API sent; the operator is shown the text, and its sha256 is what a deposit is later
 prepared against.
 

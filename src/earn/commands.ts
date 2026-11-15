@@ -28,7 +28,7 @@
  *    tools. On an EVM chain it can only be the connected wallet, which owns the shares and receives the asset;
  *    `receiver` is taken only on Solana, where it must be the account itself.
  * 3. A vault lives on ONE chain, and every tool that takes `vault` also takes `chain`. Naming a chain alone selects
- *    that chain's default vault; naming both and having them disagree is refused (`resolveProduct`, and
+ *    that chain's default vault; naming both and having them disagree is refused (`vaultProduct`, and
  *    `resolveAnyVault` on Solana), never settled by picking one. Every response that names a vault says which chain it
  *    is on, because a prepared step is only correct on that chain.
  */
@@ -50,7 +50,7 @@ import { readSession } from "../connect/session.js";
 import { apiClient, apiUrl, failure, notConnected, withOwner } from "../invest/api.js";
 import { ownerWallet, type OwnerWallet, type WalletDeps } from "../invest/flow.js";
 import { EARN } from "../config/earn.js";
-import { assetsAmount, chainOf, knownChain, mcpClient, resolveProduct, vaultLabel, vaultNamed, vaultProducts, verifiedTerms, type VaultProduct } from "./api.js";
+import { assetsAmount, chainOf, knownChain, mcpClient, vaultLabel, vaultNamed, vaultProduct, vaultProducts, verifiedTerms, type VaultProduct } from "./api.js";
 import { checkedSteps, depositIntent, intentOf, nextStep, SIGNER_RULES, uncheckedSteps, withdrawIntent, type WithdrawAmount } from "./request.js";
 import { parseAmount } from "../units.js";
 
@@ -281,7 +281,7 @@ export function buildCommands(deps: EarnDeps = {}): Record<string, Command> {
   const now = deps.now ?? Date.now;
   const mcp = () => deps.mcp ?? mcpClient();
   const products = (m: McpClient) => vaultProducts(m);
-  const resolve = (all: readonly Product[], vault: string | undefined, c: string | undefined) => resolveProduct(all, vault, c, listSolanaVaults().length > 0);
+  const resolve = (m: McpClient, vault: string | undefined, c: string | undefined) => vaultProduct(m, vault, c, listSolanaVaults().length > 0);
 
   /**
    * The connected wallet: the only owner the API reads act for. An `account`, when given, must be it; a refusal is
@@ -456,7 +456,7 @@ export function buildCommands(deps: EarnDeps = {}): Record<string, Command> {
     guarded(async ({ vault, chain }) => {
       if (solanaTarget(vault, chain)) return text(DISCLOSURES, "solana");
       knownChain(chain, listSolanaVaults().length > 0);
-      const p = resolve(await products(mcp()), vault, chain);
+      const p = await resolve(mcp(), vault, chain);
       const terms = verifiedTerms(p);
       return json({
         ...onProduct(p),
@@ -486,7 +486,7 @@ export function buildCommands(deps: EarnDeps = {}): Record<string, Command> {
       if (account !== undefined) {
         const owner = connectedOwner(account, chain);
         const out = await asOwner(owner, async (m, call) => {
-          const p = resolve(await products(m), symbol, chain);
+          const p = await resolve(m, symbol, chain);
           const amount = amount_usdc === undefined ? undefined : assetsAmount(p, amount_usdc);
           const a = await call((c, ownerToken) => c.account({ path: { product: p.id } }, { ownerToken }));
           if (!a.ok) throw failure(`The account on ${vaultLabel(p)} could not be read`, a);
@@ -524,7 +524,7 @@ export function buildCommands(deps: EarnDeps = {}): Record<string, Command> {
         return json({ ...base, apiStatus: "unreachable", reason: redactEndpoints(e instanceof Error ? e.message : String(e)) });
       }
       // A vault or chain that does not resolve is the call's own problem, and is refused as one.
-      const p = resolve(all, symbol, chain);
+      const p = await resolve(mcp(), symbol, chain);
       return json({ ...base, apiStatus: "ok", vaultsListed: all.length, ...onProduct(p) });
     }, { api: true }),
   );
@@ -559,7 +559,7 @@ export function buildCommands(deps: EarnDeps = {}): Record<string, Command> {
       // CONSTRUCTION; a swapped route is then wrong about the REQUEST, which the handler test catches.
       return json(
         await asOwner(owner, async (m, call) => {
-          const p = resolve(await products(m), symbol, chain);
+          const p = await resolve(m, symbol, chain);
           const amount = amount_usdc === undefined ? undefined : assetsAmount(p, amount_usdc);
           if (direction === "deposit") {
             const q = await call((c, ownerToken) => c.quote({ body: { product: p.id, action: "deposit", amount: amount!.amount } }, { ownerToken }));
@@ -631,7 +631,7 @@ export function buildCommands(deps: EarnDeps = {}): Record<string, Command> {
       const owner = connectedOwner(account, chain);
       return json(
         await asOwner(owner, async (m, call) => {
-          const p = resolve(await products(m), symbol, chain);
+          const p = await resolve(m, symbol, chain);
           const terms = verifiedTerms(p);
           if (terms_sha256.toLowerCase() !== terms.sha256) {
             throw new Error(
@@ -683,7 +683,7 @@ export function buildCommands(deps: EarnDeps = {}): Record<string, Command> {
       const owner = connectedOwner(account, chain);
       return json(
         await asOwner(owner, async (m, call) => {
-          const p = resolve(await products(m), symbol, chain);
+          const p = await resolve(m, symbol, chain);
           const form: { body: WithdrawBody["amount"]; intent: WithdrawAmount } =
             amount_usdc !== undefined
               ? (() => {
@@ -800,7 +800,7 @@ export function buildCommands(deps: EarnDeps = {}): Record<string, Command> {
       const owner = connectedOwner(account, chain);
       return json(
         await asOwner(owner, async (m, call) => {
-          const p = resolve(await products(m), symbol, chain);
+          const p = await resolve(m, symbol, chain);
           const r = await call((c, ownerToken) => c.positions({}, { ownerToken }));
           if (!r.ok) throw failure("The positions could not be read", r);
           const row = r.body.positions.find((x) => x.product === p.id && x.kind === "vault");

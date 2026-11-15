@@ -1,10 +1,10 @@
 /**
  * Where `earn` reaches the Tempora API for a vault on an EVM chain: its MCP endpoint, through `@temporalabs/client/mcp`,
  * never a second client. Every fact about a vault (its chain, contract, asset, decimals, status, terms and warnings) is
- * read from the API when a command runs. A vault is named by its contract address (or its ticker, which the registry
- * turns into one), and each chain's default is an address (`EARN.defaultVaultAddressByChain`): the address only picks
- * the API's row, which stays the source of everything else. The API's own product id is never taken from a caller and
- * never shown; it only goes back to the API, as the `product` of a call.
+ * read from the API when a command runs. A vault is named as the operator types it (its ticker, its contract address
+ * or its CAIP-10 id) and the API decides which vault that is; each chain's default is an address
+ * (`EARN.defaultVaultAddressByChain`). The API's own product id is never shown; it only goes back to the API, as the
+ * `product` of a call.
  *
  * The address and the sign-in are `invest`'s (`../invest/api.ts`): the same pinned API, `TREASURY_API_URL` to point at
  * another deployment, and one sign-in serving both of the API's doors.
@@ -87,64 +87,88 @@ export function vaultNamed(p: VaultProduct): { vault: string; ticker: string | n
 /** A vault in a sentence: its ticker, or its contract address when the registry has no ticker for it. */
 export const vaultLabel = (p: VaultProduct): string => tickerOf(p.vault.vaultAddress, chainOf(p).chainId) ?? p.vault.vaultAddress;
 
-/**
- * The vault a command is about. `vault` is the vault's contract address (any case) or its ticker, which the registry
- * turns into an address; with none, the address of `chain`'s default (or the default chain's). The address only picks
- * the API's row, among the vaults it lists: an address no listed vault has, or more than one has, is refused, and so
- * is a value that is neither an address nor a known ticker (the API's product id is not taken). A default the API does
- * not list is refused, never replaced by another vault. A vault on one chain named with another `chain` is refused,
- * in both directions.
- */
-export function resolveProduct(products: readonly Product[], vault: string | undefined, chain: string | undefined, withSolana = false): VaultProduct {
-  const chainId = knownChain(chain, withSolana);
-  const listed = products.filter((p): p is VaultProduct => p.kind === "vault" && p.vault !== undefined);
-  const onChainId = (p: VaultProduct) => chainOfCaip2(p.vault.chain);
-  /** The listed vaults, by ticker or address: those on `on`, or every one with its chain. Never by product id. */
-  const listing = (on: SupportedChainId | undefined): string => {
-    const names = listed.filter((p) => on === undefined || onChainId(p) === on).map((p) => (on === undefined ? `${vaultLabel(p)} (${chainOf(p).chain ?? p.vault.chain})` : vaultLabel(p)));
-    return names.length > 0 ? names.join(", ") : "none";
-  };
-  const listedOn = (on: SupportedChainId | undefined) => `the vaults the Tempora API lists${on === undefined ? "" : ` on ${CHAIN_INFO[on].key}`}: ${listing(on)}`;
-  const key = (chain ?? EARN.defaultChain) as ChainKey;
-  // The chain the row must be on: the one named, or, for a default, the default's own chain.
-  const want = chainId ?? (vault === undefined ? chainIdForKey(key) : undefined);
-  let address: string;
-  if (vault === undefined) address = EARN.defaultVaultAddressByChain[key];
-  else if (VAULT_ADDRESS.test(vault)) address = vault;
-  else {
-    const t = listVaults().find((v) => v.symbol === vault);
-    if (!t) throw new Error(`refused: \`--vault\` takes a vault's contract address (0x…) or its ticker, and the value given is neither; ${listedOn(chainId)}`);
-    address = t.address;
-  }
-  const matches = listed.filter((p) => p.vault.vaultAddress.toLowerCase() === address.toLowerCase());
-  const scoped = want === undefined ? matches : matches.filter((p) => onChainId(p) === want);
-  if (scoped.length === 0) {
-    if (vault === undefined) {
-      throw new Error(`refused: the default vault on ${key} (${address}) is not listed by the Tempora API now; run \`treasury earn vaults\` and name a listed vault with --vault`);
-    }
-    const elsewhere = matches[0];
-    if (elsewhere !== undefined && chainId !== undefined) {
-      const its = chainOf(elsewhere);
-      const on = its.chain ?? its.caip2;
-      const others = listing(chainId);
-      throw new Error(
-        `vault "${vault}" is on ${on}, not ${chain}. Name one or the other: drop \`chain\` to use ${vaultLabel(elsewhere)} on ${on}` +
-          (others !== "none" ? `, or pick a vault on ${chain} (${others}).` : "."),
-      );
-    }
-    throw new Error(`refused: no vault the Tempora API lists has the address ${address}; ${listedOn(chainId)}`);
-  }
-  if (scoped.length > 1) {
-    const chains = new Set(scoped.map(onChainId));
+/** The listed vaults, by ticker or address: those on `on`, or every one with its chain. Never by product id. */
+function listing(listed: readonly VaultProduct[], on: SupportedChainId | undefined): string {
+  const names = listed
+    .filter((p) => on === undefined || chainOfCaip2(p.vault.chain) === on)
+    .map((p) => (on === undefined ? `${vaultLabel(p)} (${chainOf(p).chain ?? p.vault.chain})` : vaultLabel(p)));
+  return names.length > 0 ? names.join(", ") : "none";
+}
+const listedOn = (listed: readonly VaultProduct[], on: SupportedChainId | undefined) =>
+  `the vaults the Tempora API lists${on === undefined ? "" : ` on ${CHAIN_INFO[on].key}`}: ${listing(listed, on)}`;
+const vaultsOf = (products: readonly Product[]) => products.filter((p): p is VaultProduct => p.kind === "vault" && p.vault !== undefined);
+
+/** A vault the API answered with, refused when it is on another chain than the one named, or on one this client does not support. */
+function onNamedChain(vp: VaultProduct, vault: string, chain: string | undefined, chainId: SupportedChainId | undefined, others: () => string): VaultProduct {
+  const its = chainOf(vp);
+  if (chainId !== undefined && its.chainId !== chainId) {
+    const on = its.chain ?? its.caip2;
+    const o = others();
     throw new Error(
-      `refused: the Tempora API lists more than one vault at ${address}${want === undefined ? "" : ` on ${CHAIN_INFO[want].key}`}, so it does not name one vault; nothing is read for it` +
-        (want === undefined && chains.size > 1 ? ". Name its chain with `chain`" : ""),
+      `vault "${vault}" is on ${on}, not ${chain}. Name one or the other: drop \`chain\` to use ${vaultLabel(vp)} on ${on}` + (o !== "none" ? `, or pick a vault on ${chain} (${o}).` : "."),
     );
   }
-  const vp = scoped[0]!;
-  const its = chainOf(vp);
   if (its.chainId === null) throw new Error(`refused: ${vaultLabel(vp)} is on ${its.caip2}, a chain this client does not support`);
   return vp;
+}
+
+/**
+ * The vault a command is about, as the Tempora API names it. `vault` goes to the API as given: its ticker, its contract
+ * address (any case, and with `chain` as its CAIP-10 id), or its CAIP-10 id; the API decides which vault that is. With none, `chain`'s default (or the
+ * default chain's), asked for by its CAIP-10 id. A default the API does not know is refused, never replaced by another
+ * vault, and so is a product that is not a vault. A vault on one chain named with another `chain` is refused.
+ */
+export async function vaultProduct(mcp: McpClient, vault: string | undefined, chain: string | undefined, withSolana = false): Promise<VaultProduct> {
+  const chainId = knownChain(chain, withSolana);
+  const key = (chain ?? EARN.defaultChain) as ChainKey;
+  const defaultId = () => `${caip2Of(chainIdForKey(key)!)}:${EARN.defaultVaultAddressByChain[key]}`;
+  // An address named with its chain is asked for by its CAIP-10 id: the same address can be a vault on more than one chain.
+  const id = vault === undefined ? defaultId() : chainId !== undefined && VAULT_ADDRESS.test(vault) ? `${caip2Of(chainId)}:${vault}` : vault;
+  /** The vaults the API lists, for a refusal's own hint; a list that cannot be read only leaves the hint out. */
+  const hint = async (): Promise<VaultProduct[] | undefined> => {
+    try {
+      return vaultsOf(await vaultProducts(mcp));
+    } catch {
+      return undefined;
+    }
+  };
+  let r = await mcp.product({ path: { id } });
+  // Not on the chain named: asked again by the address alone, so a vault on another chain is refused as one.
+  if (!r.ok && r.status === 404 && vault !== undefined && id !== vault) r = await mcp.product({ path: { id: vault } });
+  if (!r.ok) {
+    if (r.status !== 404) throw failure(`The vault ${vault ?? `default on ${key}`} could not be read from the Tempora API`, r);
+    if (vault === undefined) {
+      throw new Error(`refused: the default vault on ${key} (${EARN.defaultVaultAddressByChain[key]}) is not listed by the Tempora API now; run \`treasury earn vaults\` and name a listed vault with --vault`);
+    }
+    const listed = await hint();
+    throw new Error(`refused: the Tempora API knows no vault "${vault}"; name a vault by its ticker or contract address${listed ? `; ${listedOn(listed, chainId)}` : ""}`);
+  }
+  const p = r.body as Product;
+  if (p.kind !== "vault" || p.vault === undefined) throw new Error(`refused: "${vault ?? id}" is not a vault on the Tempora API; name a vault by its ticker or contract address`);
+  const vp = p as VaultProduct;
+  // The list is read only for a refusal's hint: a vault on another chain than the one named.
+  const listed = chainId !== undefined && chainOf(vp).chainId !== chainId ? await hint() : undefined;
+  return onNamedChain(vp, vault ?? id, chain, chainId, () => (listed ? listing(listed, chainId) : "none"));
+}
+
+/**
+ * The vault at contract address `address`, among the vaults the API lists: how a plan's leg, recorded by its vault's
+ * address, finds that vault again. An address no listed vault has, or more than one has on `chain`, is refused.
+ */
+export function listedVault(products: readonly Product[], address: string, chain: string | undefined, withSolana = false): VaultProduct {
+  const chainId = knownChain(chain, withSolana);
+  const listed = vaultsOf(products);
+  if (!VAULT_ADDRESS.test(address)) throw new Error(`refused: a plan leg names its vault by contract address, and "${address}" is not one; make the plan again with \`connect plan --legs\``);
+  const matches = listed.filter((p) => p.vault.vaultAddress.toLowerCase() === address.toLowerCase());
+  const scoped = chainId === undefined ? matches : matches.filter((p) => chainOfCaip2(p.vault.chain) === chainId);
+  if (scoped.length === 0) {
+    if (matches[0] !== undefined) return onNamedChain(matches[0], address, chain, chainId, () => listing(listed, chainId));
+    throw new Error(`refused: no vault the Tempora API lists has the address ${address}; ${listedOn(listed, chainId)}`);
+  }
+  if (scoped.length > 1) {
+    throw new Error(`refused: the Tempora API lists more than one vault at ${address}${chainId === undefined ? "" : ` on ${CHAIN_INFO[chainId].key}`}, so it does not name one vault; nothing is read for it`);
+  }
+  return onNamedChain(scoped[0]!, address, chain, chainId, () => listing(listed, chainId));
 }
 
 /** The vault's asset, as a CAIP-19 id: the form the API takes an amount in. Read from the API's own row. */

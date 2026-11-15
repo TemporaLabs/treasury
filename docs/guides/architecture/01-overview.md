@@ -59,7 +59,7 @@ pre-deposit text) and `src/version.ts` (the version, inlined at build time).
 |---|---|---|
 | which vaults exist on the EVM chains, with which contract, asset and decimals | the Tempora API (`products`), read in `src/earn/api.ts`; each chain's default vault address in `src/config/earn.ts` | [`../earn-api/01-the-api-path.md`](../earn-api/01-the-api-path.md) |
 | which vault exists on Solana | `registry/vaults.json` (data), `src/registry-schema.ts` (rules) | [`../registry/01-the-vault-registry.md`](../registry/01-the-vault-registry.md) |
-| which vault a call means when the caller names a chain, a vault, both or neither | `resolveProduct` in `src/earn/api.ts` (EVM), `resolveAnyVault` in `src/registry.ts` (Solana) | both of the above |
+| which vault a call means when the caller names a chain, a vault, both or neither | `vaultProduct` in `src/earn/api.ts` (EVM), `resolveAnyVault` in `src/registry.ts` (Solana) | both of the above |
 | whether an account can deposit | the API's gates and its simulated deposit check (EVM), a simulated transaction in `src/solana/vault.ts` (Solana) | [`../earn-api/01-the-api-path.md`](../earn-api/01-the-api-path.md), [`../solana/01-kamino-vault-path.md`](../solana/01-kamino-vault-path.md) |
 | the bytes of a deposit or withdrawal | the Tempora API (EVM), `src/solana/kvault.ts` (Solana) | same |
 | what may be put in front of a wallet | `checkSteps` from `@temporalabs/client`, in `src/earn/request.ts` and `src/connect/vault-request.ts` (EVM); `src/connect/gate-solana.ts` (Solana) | [`../earn-api/01-the-api-path.md`](../earn-api/01-the-api-path.md), [`../connect/02-gates.md`](../connect/02-gates.md) |

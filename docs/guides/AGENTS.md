@@ -48,7 +48,7 @@ Copy no number or list out of prose. Read it from the file that owns it.
 | A page opens only for what the operator was shown in the acknowledgement text | `checkAckDigest` and `checkPlanLeg` in `src/connect/ack.ts` |
 | A deposit response carries the vault's warning, from one place only | `commitsMoney` in `src/earn/commands.ts`, asserted by `tests/commands.unit.test.ts` |
 | Each chain's default ticker in config and the registry's `isDefault` agree, and the default address is that row's address | `defaultVault` in `src/registry.ts` throws on disagreement; `tests/registry.test.ts` holds the address map to the rows |
-| An EVM chain's default product is one the API lists, never replaced by another | `resolveProduct` in `src/earn/api.ts`, asserted by `tests/earn-api.unit.test.ts` |
+| An EVM chain's default product is one the API knows, never replaced by another | `vaultProduct` in `src/earn/api.ts`, asserted by `tests/earn-api.unit.test.ts` |
 | Committed bundles and generated files match a fresh build | CI rebuilds and compares; see [`release/01-build-and-bundles.md`](release/01-build-and-bundles.md) |
 | `plugin/` copies are never edited by hand | `scripts/sync-plugin.sh --check` (`npm run plugin:check`) |
 | Adding, removing or renaming a command updates `plugin/skills/earn/SKILL.md` in the same pull request | the CI step comparing the skill's command table with `earn --help` |

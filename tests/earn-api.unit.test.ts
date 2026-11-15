@@ -22,6 +22,7 @@ import { writeSession } from "../src/connect/session.js";
 import { EARN } from "../src/config/earn.js";
 import { DISCLOSURES } from "../src/disclosures.js";
 import { getVault, listSolanaVaults } from "../src/registry.js";
+import { productLookup } from "./fixtures/api.js";
 
 const OWNER = getAddress("0x52908400098527886e0f7030069857d2e4169ee7");
 const STRANGER = getAddress("0x9999999999999999999999999999999999999999");
@@ -112,6 +113,10 @@ function mcp(log: Log, handlers: Partial<Record<keyof McpClient, (input: any) =>
       log.push(`mcp:${name}${opts?.ownerToken ? `@${opts.ownerToken}` : ""}`);
       if (opts?.ownerToken !== undefined && !tokens.includes(opts.ownerToken)) {
         return { ok: false, status: 401, error: { code: "wallet_proof_required", message: "Sign in again.", outcome: "failed" } };
+      }
+      if (name === "product" && !handlers.product) {
+        const products = handlers.products ? ((handlers.products(undefined) as any).products ?? []) : LISTED;
+        return productLookup(products, input.path.id);
       }
       const h = handlers[name as keyof McpClient] ?? (name === "products" ? () => ({ products: LISTED }) : undefined);
       if (!h) throw new Error(`unexpected call ${name}`);
@@ -281,7 +286,7 @@ describe("which vault a call is about", () => {
     expect(await status(log, { vault: BASE_VAULT.toLowerCase(), chain: "base" })).toMatchObject({ vault: BASE_VAULT, ticker: "tlCashPlusUSDC2B" });
   });
 
-  it("a ticker is turned into its address through the registry, and that address picks the API's row", async () => {
+  it("a ticker goes to the API as typed, and the vault the API answers with is the one used", async () => {
     const log: Log = [];
     expect(await status(log, { vault: "tlCashPlusUSDC2" })).toMatchObject({ vault: DEMO_VAULT, ticker: "tlCashPlusUSDC2", chain: "base", chainId: 8453 });
     expect(await status(log, { vault: "tlCashPlusUSDC2C", chain: "arbitrum" })).toMatchObject({ vault: ARB_VAULT, ticker: "tlCashPlusUSDC2C", chain: "arbitrum" });
@@ -299,34 +304,39 @@ describe("which vault a call is about", () => {
     const log: Log = [];
     const unknown = `0x${"ab".repeat(20)}`;
     const err = await refusal(log, { vault: unknown });
-    expect(err).toMatch(new RegExp(`no vault the Tempora API lists has the address ${unknown}`));
+    expect(err).toMatch(new RegExp(`the Tempora API knows no vault "${unknown}"`));
     expect(err).toContain(`tlCashPlusUSDC2B (base), tlCashPlusUSDC2 (base), tlCashPlusUSDC2C (arbitrum), ${OTHER_VAULT} (ethereum)`);
     expect(await refusal(log, { vault: unknown, chain: "base" })).toMatch(/the vaults the Tempora API lists on base: tlCashPlusUSDC2B, tlCashPlusUSDC2$/);
-    // A ticker the registry has, for a vault the API does not list: refused the same way, by its address.
-    expect(await refusal(log, { vault: "tlCashPlusUSDC2E" })).toMatch(new RegExp(`no vault the Tempora API lists has the address ${getVault("tlCashPlusUSDC2E").address}`));
+    // A ticker for a vault the API does not list: refused the same way.
+    expect(await refusal(log, { vault: "tlCashPlusUSDC2E" })).toMatch(/the Tempora API knows no vault "tlCashPlusUSDC2E"/);
     for (const id of PRODUCT_IDS) expect(err).not.toContain(id);
   });
 
-  it("the API's product id is not taken as a vault, and a value that is neither an address nor a ticker is refused", async () => {
+  it("a value the API knows as no vault is refused, and so is a product that is not a vault; the product id is never shown", async () => {
     const log: Log = [];
-    for (const typed of [BASE_ID, OTHER_ID, "tlCashPlusUSDC2X", "0x1234"]) {
+    for (const typed of ["tlCashPlusUSDC2X", "0x1234"]) {
       const err = await refusal(log, { vault: typed });
-      expect(err).toMatch(/`--vault` takes a vault's contract address \(0x…\) or its ticker, and the value given is neither/);
+      expect(err).toMatch(new RegExp(`the Tempora API knows no vault "${typed}"`));
       for (const id of PRODUCT_IDS) expect(err).not.toContain(id);
     }
+    expect(await refusal(log, { vault: PORTFOLIO_ID })).toMatch(/is not a vault on the Tempora API/);
+    // A product id is the API's to resolve; the answer still names the vault by address and ticker, never by that id.
+    const out = await status(log, { vault: BASE_ID });
+    expect(out).toMatchObject({ vault: BASE_VAULT, ticker: "tlCashPlusUSDC2B" });
+    for (const id of PRODUCT_IDS) expect(JSON.stringify(out)).not.toContain(id);
   });
 
-  it("an address more than one listed vault has is refused, with or without a chain", async () => {
+  it("an address the API does not resolve to one vault is the API's refusal, passed on", async () => {
     const log: Log = [];
     const twiceOnBase = listing([vault(BASE_ID, 8453, BASE_VAULT), vault("vault-base-9", 8453, BASE_VAULT.toLowerCase())]);
     for (const args of [{ vault: BASE_VAULT }, { vault: "tlCashPlusUSDC2B", chain: "base" }, {}]) {
       const err = await refusal(log, args, twiceOnBase);
-      expect(err).toMatch(/lists more than one vault at 0x91BcEbA5feCB9E92d80F1845B55cC56621E9352F/);
+      expect(err).toMatch(/could not be read from the Tempora API: ambiguous_product/);
       expect(err).not.toContain("vault-base-");
     }
     // The same address on two chains: ambiguous until the chain is named, and then it is the one on that chain.
     const onTwoChains = listing([vault(BASE_ID, 8453, BASE_VAULT), vault(ARB_ID, 42161, BASE_VAULT)]);
-    expect(await refusal(log, { vault: BASE_VAULT }, onTwoChains)).toMatch(/lists more than one vault at 0x91Bc.*Name its chain with `chain`/);
+    expect(await refusal(log, { vault: BASE_VAULT }, onTwoChains)).toMatch(/could not be read from the Tempora API: ambiguous_product/);
     expect(await status(log, { vault: BASE_VAULT, chain: "arbitrum" }, onTwoChains)).toMatchObject({ vault: BASE_VAULT, chain: "arbitrum", ticker: null });
   });
 
@@ -362,7 +372,7 @@ describe("earn terms", () => {
     expect(out.terms).toEqual({ text: TERMS, version: "2026-11-01", sha256: sha256(stringToBytes(TERMS)) });
     expect(out).toMatchObject({ vault: BASE_VAULT, ticker: "tlCashPlusUSDC2B", chain: "base", chainId: 8453 });
     expect(out.disclosures).toEqual(JSON.parse(JSON.stringify(DISCLOSURES)));
-    expect(log).toEqual(["mcp:products"]); // public: no sign-in, no owner call
+    expect(log).toEqual(["mcp:product"]); // public: no sign-in, no owner call
   });
 
   it("an upper-case sha256 that matches is taken, and given back in the form computed here", async () => {
@@ -387,7 +397,7 @@ describe("earn status", () => {
     const out = await run(log, mcp(log), "earn_status", {});
     expect(out).toMatchObject({ mode: "health", apiStatus: "ok", api: `https://${HOST}`, vault: BASE_VAULT, ticker: "tlCashPlusUSDC2B", chain: "base", chainId: 8453 });
     expect(out.requested).toBeUndefined();
-    expect(log).toEqual(["mcp:products"]);
+    expect(log).toEqual(["mcp:products", "mcp:product"]);
   });
 
   it("an API that cannot be reached is a verdict, not a throw", async () => {
@@ -410,7 +420,7 @@ describe("earn status", () => {
       return { product: i.path.product, owner: OWNER, standing: { state: "registered", code: "ok", reason: "Registered." }, gates, account: { enrolled: false, wallet: reading }, alerts: [] };
     };
     const out = await run(log, mcp(log, { account }), "earn_status", { account: OWNER.toLowerCase() });
-    expect(log).toEqual(["mcp:products", "mcp:account@tok", `product:${BASE_ID}`, "wallet:finish:true"]);
+    expect(log).toEqual(["mcp:product", "mcp:account@tok", `product:${BASE_ID}`, "wallet:finish:true"]);
     expect(out).toMatchObject({ mode: "preflight", account: OWNER, vault: BASE_VAULT, ticker: "tlCashPlusUSDC2B", chain: "base", standing: { state: "registered" }, wallet: reading });
     expect(out.gates).toEqual(gates);
     expect(out.warnings).toEqual([WARNING]);
@@ -455,7 +465,7 @@ describe("earn quote", () => {
     expect(out).toMatchObject({ direction: "deposit", vault: BASE_VAULT, ticker: "tlCashPlusUSDC2B", chain: "base", account: OWNER, expectedShares: d.expectedShares, sharePrice: d.sharePrice, check: d.check, block: "100" });
     expect(out.warnings).toEqual([WARNING]);
     expect(out.position).toBeUndefined();
-    expect(log).toEqual(["mcp:products", "mcp:quote@tok", "wallet:finish:true"]);
+    expect(log).toEqual(["mcp:product", "mcp:quote@tok", "wallet:finish:true"]);
   });
 
   it("withdraw: the position and what can be withdrawn now, tagged withdraw, with no deposit warning", async () => {
@@ -549,7 +559,7 @@ describe("earn balance", () => {
     expect(out.value).toEqual({ usd: 5.1, state: "read", asOf: iso(NOW) });
     expect(out.withdrawable).toEqual(row().withdrawable);
     expect([out.basis, out.yield]).toEqual(["not available", "not available"]);
-    expect(log).toEqual(["mcp:products", "mcp:positions@tok", "wallet:finish:true"]);
+    expect(log).toEqual(["mcp:product", "mcp:positions@tok", "wallet:finish:true"]);
   });
 
   it("a share balance the API could not read is `unknown`, never 0", async () => {
@@ -596,7 +606,7 @@ describe("the sign-in", () => {
     const m = mcp(log, { positions: () => ({ positions: [] }) }, ["tok-new"]);
     const out = JSON.parse(await buildCommands({ mcp: m, client: c, wallet: () => wallet(log), now: () => NOW })["earn_balance"]!.handler({} as never));
     expect(out.position).toBe("none");
-    expect(log).toEqual(["mcp:products", "http:sign_in_challenge", "wallet:sign-in", "http:sign_in_verify", "mcp:positions@tok-new", "wallet:finish:true"]);
+    expect(log).toEqual(["mcp:product", "http:sign_in_challenge", "wallet:sign-in", "http:sign_in_verify", "mcp:positions@tok-new", "wallet:finish:true"]);
     expect(audiences).toEqual(["both"]);
     expect(readOwnerToken(tokenKeyFor(OWNER), NOW)).toBe("tok-new");
   });
@@ -642,7 +652,7 @@ describe("earn prepare_deposit", () => {
     const bodies: unknown[] = [];
     const deposit = (i: { body: unknown }) => (bodies.push(i.body), req({ steps: [approveStep(), waitingStep("s2", "s1")] }));
     const out = await run(log, mcp(log, { deposit }), "earn_prepare_deposit", args);
-    expect(log).toEqual(["mcp:products", "mcp:deposit@tok", "wallet:finish:true"]);
+    expect(log).toEqual(["mcp:product", "mcp:deposit@tok", "wallet:finish:true"]);
     expect(bodies).toEqual([{ product: BASE_ID, amount: ASSETS_25, vaultTerms: { version: "2026-11-01", sha256: TERMS_SHA } }]);
     expect(out).toMatchObject({ requires_signature: true, status: "unsigned", chain: "base", chainId: 8453, vault: BASE_VAULT, ticker: "tlCashPlusUSDC2B", account: OWNER, requestId: "req_1" });
     expect(out.warnings).toEqual([WARNING]);
@@ -671,7 +681,7 @@ describe("earn prepare_deposit", () => {
     const log: Log = [];
     const other = `0x${"ab".repeat(32)}`;
     await expect(fails(log, mcp(log, { deposit: () => req({ steps: [] }) }), "earn_prepare_deposit", { ...args, terms_sha256: other })).rejects.toThrow(/the terms of .* changed since the operator read them .*Show them again/);
-    expect(log).toEqual(["mcp:products", "wallet:finish:false"]);
+    expect(log).toEqual(["mcp:product", "wallet:finish:false"]);
     log.length = 0;
     await expect(fails(log, mcp(log), "earn_prepare_deposit", { amount_usdc: "25" })).rejects.toThrow(/--terms_sha256 is required/);
     expect(log).toEqual([]);
