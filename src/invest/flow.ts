@@ -115,6 +115,46 @@ export interface Driven {
 type Step = Request["steps"][number];
 const payloadOf = (s: Step): { generation?: unknown } | undefined => (s as { payload?: { generation?: unknown } }).payload;
 
+/** The API's decision on what comes next for a request, when its answer carries one (`next`). */
+type Next = { kind?: unknown; stepId?: unknown; stepIds?: unknown; generation?: unknown };
+
+/**
+ * The steps that may reach the wallet now. The API decides: only a step its `next` action names (a `send` or
+ * `sign_again` step, or the `sign` group), ready, at the generation it names. Any other decision offers nothing: `wait`
+ * means read the request again, and `expired`, `hand_back` and a kind this client does not know stop the command. An
+ * answer without `next` is held to the request's and each step's own expiry instead, and one that cannot be read as a
+ * date is refused. A request can run out while its steps still read `ready`, so a step is never offered on its state alone.
+ */
+function offered(r: Request, ready: Step[], now: number): Step[] {
+  const rid = r.requestId;
+  const ranOut = `request ${rid} ran out before it was finished; nothing more is sent for it. Run the command again`;
+  const next = (r as { next?: Next }).next;
+  if (next !== undefined) {
+    const named = (ids: unknown[]) => ready.filter((s) => ids.includes(s.stepId) && (next.generation === undefined || payloadOf(s)?.generation === next.generation));
+    switch (next.kind) {
+      case "send":
+      case "sign_again":
+        return named([next.stepId]);
+      case "sign":
+        return named(Array.isArray(next.stepIds) ? next.stepIds : []);
+      case "wait":
+      case "done":
+      case "failed":
+      case "cancelled":
+        return [];
+      case "expired":
+        throw new Error(`${ranOut}.`);
+      case "hand_back":
+        throw new Error(`request ${rid}: the API asks for the hash of a transfer that may already have been sent. Do not send it again: read the request with \`treasury invest request\`.`);
+      default:
+        throw new Error(`the API answered with a next action this client does not know (${String(next.kind)}); nothing is sent. Read request ${rid} with \`treasury invest request\`.`);
+    }
+  }
+  const lapsed = (iso: unknown) => iso !== undefined && !(Date.parse(String(iso)) > now);
+  if (ready.length > 0 && (lapsed(r.expiresAt) || ready.some((s) => lapsed((payloadOf(s) as { expiresAt?: unknown } | undefined)?.expiresAt)))) throw new Error(`${ranOut}.`);
+  return ready;
+}
+
 /**
  * Carries a request through. Before every step is put to the wallet, the whole request is checked again (`check`): a
  * request the API changed between two steps is held to the same intent. A step is prepared (`prepare`) only from the
@@ -143,7 +183,7 @@ export async function drive(
     if (FINAL_STATES.includes(request.state)) return { request, settled: true, acted };
 
     const keyOf = (s: Step) => `${s.stepId}#${String(payloadOf(s)?.generation)}`;
-    const ready = request.steps.filter((s) => s.state === "ready" && payloadOf(s) !== undefined && !answered.has(keyOf(s)));
+    const ready = offered(request, request.steps.filter((s) => s.state === "ready" && payloadOf(s) !== undefined && !answered.has(keyOf(s))), deps.now());
     const next = ready[0];
     if (next) {
       // A signature asked for again (a new generation) is harmless to give again. A transfer is not: once one was sent,
