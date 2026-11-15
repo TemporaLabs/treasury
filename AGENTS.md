@@ -8,8 +8,8 @@ Before changing how the system works, read [`docs/guides/AGENTS.md`](docs/guides
 
 Treasury is a depositor client for ERC-4626 vaults on Base, Arbitrum One, Robinhood Chain, Ethereum and Monad, reached
 through the Tempora API, and a Kamino vault on Solana, read from its chain: unsigned deposit and withdraw steps, checked
-before the operator's wallet sees them, served as a library and as a command-line program (`treasury earn <command>`,
-one JSON document per run).
+before the operator's wallet sees them, served as a library and as a command-line program (`treasury earn`, `treasury
+connect` and, for Smart Growth portfolios through the same API, `treasury invest`; one JSON document per run).
 
 ## Two rules that decide every review
 
@@ -103,7 +103,7 @@ checked.
 
 - **Tests never need a real key.** Anything that moves funds runs on a local fork, signed by a key made for that run.
 - **Show that a new test can fail**: break the behaviour it guards, see it go red, restore it.
-- **Measured, not assumed.** A registry row, decimal count, revert selector or RPC window carries the
+- **Measured, not assumed.** A registry row, decimal count or revert selector carries the
   block or date it was measured at. `registry/vaults.json` is a set of measurements, and a row is a
   product decision — see CONTRIBUTING's section on vaults.
 - **Amounts are strings in the asset's own decimals.** Never a float; never round a share balance.
@@ -129,7 +129,7 @@ checked.
 - Target the current `release/vX.Y.Z` branch, not `main`.
 - One change per pull request; a documentation fix found along the way gets its own.
 - Say which test tier ran: unit, live read-only, or fork.
-- Adding, removing or renaming a command needs the matching change to
+- Adding, removing or renaming an `earn` command needs the matching change to
   [`plugin/skills/earn/SKILL.md`](plugin/skills/earn/SKILL.md) in the same pull request; CI checks the
   skill's command table against the CLI's real `earn --help`.
 - Security issues go through private vulnerability reporting ([`SECURITY.md`](SECURITY.md)), never a
