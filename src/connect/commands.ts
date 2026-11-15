@@ -104,8 +104,8 @@ const CONNECT_TTL_MS = 9 * 60_000;
 const CONFIRM_TTL_MS = 9 * 60_000;
 /**
  * Below this much page time left, `connect plan --run` starts no new leg: the next run carries on instead. A deposit's
- * chain waits alone can take three minutes (the approval's receipt, the allowance showing, the deposit's receipt, a
- * minute each), so this leaves the operator two more to answer the wallet.
+ * two steps each wait for the API to read them landed before the next is offered, so a leg needs this long for those
+ * waits and for the operator to answer the wallet.
  */
 const LEG_MIN_MS = 5 * 60_000;
 
@@ -572,7 +572,14 @@ export function buildConnectCommands(deps: ConnectDeps = {}): Record<string, Com
     const http = deps.apiClient ?? apiClient();
     const m = deps.mcp ?? mcpClient();
     let pageAllowed = true;
-    const call: OwnerCall = (fn) => withOwner(owner, (o, message) => (pageAllowed ? w.signIn(o, message) : noPageSignIn()), (token) => fn(m, token), { client: http, now: () => now().getTime() });
+    // Before the signing page opens, a kept token must outlast the page itself: once it is open no sign-in can be asked
+    // for, so a token that lapsed mid-flow would leave a sent step's hash unrecorded.
+    const call: OwnerCall = (fn) =>
+      withOwner(owner, (o, message) => (pageAllowed ? w.signIn(o, message) : noPageSignIn()), (token) => fn(m, token), {
+        client: http,
+        now: () => now().getTime(),
+        minValidMs: pageAllowed ? (deps.ttlMs ?? CONFIRM_TTL_MS) : 0,
+      });
     return {
       owner,
       m,

@@ -48043,7 +48043,7 @@ async function withOwner(ownerInput, signMessage, call3, deps = {}) {
   const now = deps.now ?? Date.now;
   const key = tokenKeyFor(owner);
   const host = apiHost();
-  const kept = readOwnerToken(key, now());
+  const kept = readOwnerToken(key, now() + (deps.minValidMs ?? 0));
   const fresh = () => {
     clearOwnerToken(key);
     return signIn(client, {
@@ -50260,7 +50260,7 @@ async function startVaultCore(leg, session, deps, deadline) {
       request = r.body;
       return void 0;
     }
-    return `the transaction was sent from your wallet (${hash4}), but the API did not record it: ${r.error.code}: ${r.error.message}. Do not send it again: check it on ${CHAIN_INFO[leg.chainId].name}, and read the request with ${read}`;
+    return `the transaction was sent from your wallet (${hash4}), but the API did not record it: ${r.error.code}: ${r.error.message}. Do not send it again: check it on ${CHAIN_INFO[leg.chainId].name}, then hand the hash to the API with \`treasury earn submit --request_id ${rid} --step_id ${stepId} --tx_hash ${hash4}\` and read the request with ${read}`;
   };
   const refresh = async () => {
     const r = await deps.call((m, ownerToken) => m.status({ path: { requestId: rid } }, { ownerToken }));
@@ -50711,7 +50711,11 @@ function buildConnectCommands(deps = {}) {
     const http3 = deps.apiClient ?? apiClient();
     const m = deps.mcp ?? mcpClient();
     let pageAllowed = true;
-    const call3 = (fn) => withOwner(owner, (o2, message) => pageAllowed ? w.signIn(o2, message) : noPageSignIn(), (token) => fn(m, token), { client: http3, now: () => now().getTime() });
+    const call3 = (fn) => withOwner(owner, (o2, message) => pageAllowed ? w.signIn(o2, message) : noPageSignIn(), (token) => fn(m, token), {
+      client: http3,
+      now: () => now().getTime(),
+      minValidMs: pageAllowed ? deps.ttlMs ?? CONFIRM_TTL_MS : 0
+    });
     return {
       owner,
       m,
