@@ -96,7 +96,7 @@ export async function openInvestPage(ownerInput: string, title: string, deps: In
       const why = typeof body["reason"] === "string" ? body["reason"].slice(0, 300) : "declined in the browser";
       const step = current;
       current = undefined;
-      // A report about another step than the waiting one (a stale tab) says nothing about this one.
+      // A report about another step than the waiting one (a stale tab) cannot be taken as about this one: the waiting step is refused, never answered by it.
       if (body["index"] !== undefined && body["index"] !== step.index) return step.reject(new Error(`the page ended over another step: ${why}`));
       // The wallet sent it, then the page could not record it: the transfer may have gone out. Keep the hash.
       const hash = body["hash"];

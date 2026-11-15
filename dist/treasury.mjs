@@ -51332,19 +51332,21 @@ function checkDeposit(r, raw) {
 function prepareDeposit(r, s2, raw, product) {
   const p = s2.payload ?? {};
   if (s2.kind === "sign_message") {
+    if (typeof p.bytes !== "string" || !p.bytes.startsWith("0x")) throw new Error("refused: the enrolment step carries no code to sign; nothing was signed or sent");
     return {
       view: {
         title: "Open your Smart Growth account",
         description: `Your wallet signs once to open your own account on ${product}. Nothing moves with this signature.`,
         facts: [
           { label: "Portfolio", value: product },
-          { label: "What you sign", value: p.bytes ?? "" }
+          { label: "What you sign", value: p.bytes }
         ],
         warning: "Your wallet will show a 32-byte code, not words: the portfolio provider's enrolment code for this account. It cannot be read on its own. Sign it only if you started this deposit just now."
       },
       ask: { kind: "sign_bytes", bytes: p.bytes }
     };
   }
+  if (typeof p.data !== "string" || !p.data.startsWith("0x")) throw new Error("refused: the transfer step carries no calldata; nothing was signed or sent");
   return {
     view: {
       title: "Send USDT to your Smart Growth account",
@@ -51423,6 +51425,8 @@ function prepareWithdrawal(r, s2, owner, h, product) {
   const typedData = step.payload?.typedData ?? {};
   const message = typedData["message"] ?? {};
   const sale = message.liquidate === true;
+  const expiresAt = Number(message.expiresAt);
+  if (!Number.isFinite(expiresAt) || expiresAt <= 0) throw new Error("refused: the authorization carries no expiry to show; nothing was signed or sent");
   const n = r.steps.indexOf(s2) + 1;
   return {
     view: {
@@ -51432,7 +51436,7 @@ function prepareWithdrawal(r, s2, owner, h, product) {
         ...(message.assets ?? []).map((a) => ({ label: sale ? "Sell" : "Move", value: amountText(a.assetId, a.amountRaw, h) })),
         { label: "From your smart account", value: h.smartAccount },
         { label: "Paid to your wallet", value: owner },
-        { label: "Valid until", value: new Date(Number(message.expiresAt) * 1e3).toISOString() }
+        { label: "Valid until", value: new Date(expiresAt * 1e3).toISOString() }
       ],
       // What the API says this withdrawal will not take out (holdings too small to sell): shown before anything is signed.
       ...r.leftBehind && r.leftBehind.length > 0 ? { warning: `This withdrawal leaves these in your account, as the API reports: ${r.leftBehind.map((x) => `${amountText(x.assetId, x.raw, h)} (${x.reason})`).join("; ")}.` } : {}
