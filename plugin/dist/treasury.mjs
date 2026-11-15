@@ -46011,8 +46011,8 @@ function resolveVault(symbol2, chain) {
   if (chain) {
     if (chain === SOLANA_INFO.key) throw new Error(`chain "${chain}" has no ERC-4626 vault; this resolves the EVM vaults only, and the Solana vault is reached through the CLI (\`treasury earn \u2026 --chain solana\`)`);
     chainId = chainIdForKey(chain);
-    const offered = offeredChains();
-    if (chainId === void 0 || !offered.some((c) => c.chainId === chainId)) {
+    const offered2 = offeredChains();
+    if (chainId === void 0 || !offered2.some((c) => c.chainId === chainId)) {
       throw new Error(`unknown chain "${chain}"; chains with a vault: ${offeredChainKeys().join(", ")}`);
     }
   }
@@ -48461,6 +48461,35 @@ function ownerWallet(ownerInput, title, deps = {}) {
   };
 }
 var payloadOf2 = (s2) => s2.payload;
+function offered(r, ready, now) {
+  const rid = r.requestId;
+  const ranOut = `request ${rid} ran out before it was finished; nothing more is sent for it. Run the command again`;
+  const next = r.next;
+  if (next !== void 0) {
+    const named = (ids) => ready.filter((s2) => ids.includes(s2.stepId) && (next.generation === void 0 || payloadOf2(s2)?.generation === next.generation));
+    switch (next.kind) {
+      case "send":
+      case "sign_again":
+        return named([next.stepId]);
+      case "sign":
+        return named(Array.isArray(next.stepIds) ? next.stepIds : []);
+      case "wait":
+      case "done":
+      case "failed":
+      case "cancelled":
+        return [];
+      case "expired":
+        throw new Error(`${ranOut}.`);
+      case "hand_back":
+        throw new Error(`request ${rid}: the API asks for the hash of a transfer that may already have been sent. Do not send it again: read the request with \`treasury invest request\`.`);
+      default:
+        throw new Error(`the API answered with a next action this client does not know (${String(next.kind)}); nothing is sent. Read request ${rid} with \`treasury invest request\`.`);
+    }
+  }
+  const lapsed = (iso) => iso !== void 0 && !(Date.parse(String(iso)) > now);
+  if (ready.length > 0 && (lapsed(r.expiresAt) || ready.some((s2) => lapsed(payloadOf2(s2)?.expiresAt)))) throw new Error(`${ranOut}.`);
+  return ready;
+}
 async function drive(first, owner, o2, deps) {
   const call3 = (fn) => asOwner(owner, deps.wallet.signIn, fn, { client: deps.client, now: deps.now });
   const acted = [];
@@ -48474,7 +48503,7 @@ async function drive(first, owner, o2, deps) {
     }
     if (FINAL_STATES.includes(request.state)) return { request, settled: true, acted };
     const keyOf2 = (s2) => `${s2.stepId}#${String(payloadOf2(s2)?.generation)}`;
-    const ready = request.steps.filter((s2) => s2.state === "ready" && payloadOf2(s2) !== void 0 && !answered.has(keyOf2(s2)));
+    const ready = offered(request, request.steps.filter((s2) => s2.state === "ready" && payloadOf2(s2) !== void 0 && !answered.has(keyOf2(s2))), deps.now());
     const next = ready[0];
     if (next) {
       const sent = acted.find((a) => a.kind === "send");
@@ -49096,14 +49125,14 @@ var ownerArg = addressArg.optional().describe(
   "the account whose shares these are \u2014 the depositor, the owner, the holder. On an EVM chain it is the connected wallet (`treasury connect wallet`), and may be left out; another account is refused. Required on Solana"
 );
 var chainArg = () => {
-  let offered;
+  let offered2;
   try {
-    offered = offeredChainKeys();
+    offered2 = offeredChainKeys();
   } catch {
-    offered = supportedChainIds.map((id) => CHAIN_INFO[id].key);
+    offered2 = supportedChainIds.map((id) => CHAIN_INFO[id].key);
   }
   return external_exports.string().optional().describe(
-    `which chain: ${offered.map((k) => `"${k}"`).join(" or ")}. Omit for ${CHAIN_INFO[defaultChainId()].key} (the default), or when \`vault\` already names a vault. If the operator has not said which chain to deposit on, ASK them before preparing a deposit. A \`vault\` that is on a different chain than \`chain\` is refused.`
+    `which chain: ${offered2.map((k) => `"${k}"`).join(" or ")}. Omit for ${CHAIN_INFO[defaultChainId()].key} (the default), or when \`vault\` already names a vault. If the operator has not said which chain to deposit on, ASK them before preparing a deposit. A \`vault\` that is on a different chain than \`chain\` is refused.`
   );
 };
 function hintChain(args) {
