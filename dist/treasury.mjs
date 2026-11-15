@@ -48758,6 +48758,10 @@ async function vaultProduct(mcp, vault, chain, withSolana = false) {
   const p = r.body;
   if (p.kind !== "vault" || p.vault === void 0) throw new Error(`refused: "${vault ?? id}" is not a vault on the Tempora API; name a vault by its ticker or contract address`);
   const vp = p;
+  if (vault === void 0 && chainOf(vp).chainId !== chainIdForKey(key)) {
+    const its = chainOf(vp);
+    throw new Error(`refused: the Tempora API answers the default vault on ${key} (${EARN.defaultVaultAddressByChain[key]}) with a vault on ${its.chain ?? its.caip2}; nothing is read for it`);
+  }
   const listed = chainId !== void 0 && chainOf(vp).chainId !== chainId ? await hint() : void 0;
   return onNamedChain(vp, vault ?? id, chain, chainId, () => listed ? listing(listed, chainId) : "none");
 }

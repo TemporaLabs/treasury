@@ -300,6 +300,16 @@ describe("which vault a call is about", () => {
     await expect(fails(log, mcp(log), "earn_status", { chain: "robinhood" })).rejects.toThrow(/default vault on robinhood .* not listed/);
   });
 
+  it("a default the API answers with a vault on another chain is refused, named or not", async () => {
+    const log: Log = [];
+    const elsewhere = mcp(log, { product: () => vault(BASE_ID, 42161, BASE_VAULT) });
+    for (const args of [{}, { chain: "base" }]) {
+      await expect(fails(log, elsewhere, "earn_status", args)).rejects.toThrow(
+        new RegExp(`answers the default vault on base \\(${EARN.defaultVaultAddressByChain.base}\\) with a vault on arbitrum; nothing is read for it`),
+      );
+    }
+  });
+
   it("an address no listed vault has is refused, naming the vaults the API lists by ticker or address", async () => {
     const log: Log = [];
     const unknown = `0x${"ab".repeat(20)}`;

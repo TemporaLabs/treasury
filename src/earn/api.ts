@@ -146,6 +146,11 @@ export async function vaultProduct(mcp: McpClient, vault: string | undefined, ch
   const p = r.body as Product;
   if (p.kind !== "vault" || p.vault === undefined) throw new Error(`refused: "${vault ?? id}" is not a vault on the Tempora API; name a vault by its ticker or contract address`);
   const vp = p as VaultProduct;
+  // The default is asked for on its own chain, named or not: an answer on any other chain is a different vault.
+  if (vault === undefined && chainOf(vp).chainId !== chainIdForKey(key)) {
+    const its = chainOf(vp);
+    throw new Error(`refused: the Tempora API answers the default vault on ${key} (${EARN.defaultVaultAddressByChain[key]}) with a vault on ${its.chain ?? its.caip2}; nothing is read for it`);
+  }
   // The list is read only for a refusal's hint: a vault on another chain than the one named.
   const listed = chainId !== undefined && chainOf(vp).chainId !== chainId ? await hint() : undefined;
   return onNamedChain(vp, vault ?? id, chain, chainId, () => (listed ? listing(listed, chainId) : "none"));
