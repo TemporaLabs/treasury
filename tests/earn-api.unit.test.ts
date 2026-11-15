@@ -815,6 +815,66 @@ describe("earn submit", () => {
 });
 
 describe("earn request", () => {
+  // The API decides what comes next. A step is shown to send only when `next` says send that step, or, from an answer
+  // without `next`, when neither the request nor the step's payload has expired.
+  describe("what is shown to send follows the API's `next`, and the expiry when there is none", () => {
+    const status = (o: Record<string, unknown>, steps: unknown[] = [approveStep(), waitingStep("s2", "s1")]) => mcp([], { status: () => req({ steps, ...o }) });
+    const shown = async (m: McpClient) => {
+      const out = await run([], m, "earn_request", { request_id: "req_1" });
+      return { out, sends: out.steps.filter((s: any) => s.to !== undefined).map((s: any) => s.stepId) };
+    };
+
+    it("next: send that step: it is shown, with what to send", async () => {
+      const { out, sends } = await shown(status({ next: { kind: "send", stepId: "s1", generation: 1 } }));
+      expect(sends).toEqual(["s1"]);
+      expect(out.next_step).toMatch(/^Send step s1/);
+    });
+
+    it("next: expired: nothing is shown to send, and the deposit is started again", async () => {
+      const { out, sends } = await shown(status({ next: { kind: "expired", startAgain: true } }));
+      expect(sends).toEqual([]);
+      expect(out.next_step).not.toMatch(/Send step/);
+      expect(out.next_step).toMatch(/ran out.*`treasury earn prepare_deposit`/);
+      expect(out.signer_rules).toBeUndefined();
+    });
+
+    it("next: hand_back: nothing is sent again; the hash is handed back", async () => {
+      const { out, sends } = await shown(status({ next: { kind: "hand_back", stepId: "s1", reason: "the wallet may have sent it" } }));
+      expect(sends).toEqual([]);
+      expect(out.next_step).toMatch(/Do not send step s1 again.*`treasury earn submit --request_id req_1 --step_id s1/);
+    });
+
+    it("next: wait, done, failed, cancelled: nothing is shown to send", async () => {
+      for (const next of [{ kind: "wait", retryAfterMs: 5000, until: iso(NOW + 60_000) }, { kind: "done" }, { kind: "failed", reason: "reverted", stepId: "s1" }, { kind: "cancelled", sent: false }]) {
+        const { out, sends } = await shown(status({ next }));
+        expect(sends).toEqual([]);
+        expect(out.next_step).not.toMatch(/Send step/);
+      }
+    });
+
+    it("a next kind this client does not know sends nothing, and says to read the request again", async () => {
+      const { out, sends } = await shown(status({ next: { kind: "teleport", stepId: "s1" } }));
+      expect(sends).toEqual([]);
+      expect(out.next_step).toMatch(/does not know.*read the request again/);
+    });
+
+    it("next: send for a step that is not ready, or at another generation, sends nothing", async () => {
+      expect((await shown(status({ next: { kind: "send", stepId: "s2", generation: 1 } }))).sends).toEqual([]);
+      expect((await shown(status({ next: { kind: "send", stepId: "s1", generation: 2 } }))).sends).toEqual([]);
+    });
+
+    it("without next, a request past its expiry, or a payload past its own, sends nothing", async () => {
+      const late = await shown(status({ expiresAt: iso(NOW - 1) }));
+      expect(late.sends).toEqual([]);
+      expect(late.out.next_step).toMatch(/ran out/);
+      const stale = approveStep();
+      (stale as any).payload.expiresAt = iso(NOW - 1);
+      expect((await shown(status({}, [stale, waitingStep("s2", "s1")]))).sends).toEqual([]);
+      // Control: the same answer within both expiries is sent.
+      expect((await shown(status({}))).sends).toEqual(["s1"]);
+    });
+  });
+
   it("reads by id, by transaction hash, and cancels by id; exactly one of id or hash", async () => {
     const log: Log = [];
     const seen: string[] = [];
