@@ -53,7 +53,7 @@ the vault on Solana, set a keyed `TREASURY_RPC_SOLANA`; the public endpoint rate
 ### Claude Code
 
 ```bash
-claude plugin marketplace add TemporaLabs/treasury@v0.1.4
+claude plugin marketplace add TemporaLabs/treasury@v0.1.5
 claude plugin install treasury@treasury
 ```
 
@@ -64,7 +64,7 @@ repository as of v0.1.1. If you installed from the earlier `treasury-plugin` rep
 ### Any agent with a shell
 
 ```bash
-npm install --save-exact @temporalabs/treasury@0.1.4
+npm install --save-exact @temporalabs/treasury@0.1.5
 npx --no-install treasury earn --help
 ```
 
