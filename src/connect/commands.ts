@@ -20,11 +20,9 @@
  */
 import { getAddress, isAddress, verifyMessage, type Address, type Hex } from "viem";
 import { z } from "zod";
-import type { UnsignedCall } from "../build.js";
-import { CHAIN_INFO, chains, makePublicClient, rpcUrlFromEnv, isSupportedChainId, type SupportedChainId } from "../client.js";
-import { erc4626Abi } from "../abi/erc4626.js";
+import { CHAIN_INFO, makePublicClient, rpcUrlFromEnv, type SupportedChainId } from "../client.js";
 import type { Command } from "../earn/commands.js";
-import { explorerTxUrl, linksFor } from "../links.js";
+import { explorerTxUrl } from "../links.js";
 import { redactEndpoints } from "../redact.js";
 import { resolveAnyVault } from "../registry.js";
 import { isAddress as isSolanaAddress } from "@solana/kit";
@@ -55,7 +53,6 @@ import {
   type PlanTx,
 } from "./ack.js";
 import { connectPorts, privyAppId } from "./config.js";
-import { admit } from "./gate.js";
 import { newSecret, serveOnce, type Settled } from "./http.js";
 import { clearOwnerTokens } from "./owner-tokens.js";
 import { openBrowser } from "./open.js";
@@ -74,7 +71,7 @@ import {
   writeSolanaSession,
   type Session,
 } from "./session.js";
-import { verifyLanded, type Verdict } from "./verify.js";
+import type { Verdict } from "./verify.js";
 import type { Client, Product } from "@temporalabs/client";
 import type { McpClient } from "@temporalabs/client/mcp";
 import { chainOf, mcpClient, resolveProduct, shortAddress, tickerOf, vaultProducts, type VaultProduct } from "../earn/api.js";
@@ -139,14 +136,10 @@ function announce(url: string): boolean {
 export interface ConnectDeps {
   verifySignature?: (a: { address: Address; message: string; signature: Hex }) => Promise<boolean>;
   open?: (url: string) => boolean;
-  /** The confirm flow's chain reads (receipts, allowance, balances), injectable for tests. */
-  client?: (chainId: number) => Pick<ReturnType<typeof makePublicClient>, "getTransactionReceipt" | "readContract"> & Partial<Pick<ReturnType<typeof makePublicClient>, "getBalance" | "getBlockNumber">>;
   verifyOpts?: { attempts?: number; delayMs?: number };
   /** Overrides the flow's time limit and the cancel grace period (tests). */
   ttlMs?: number;
   cancelGraceMs?: number;
-  /** How long the balance read may hold the page back before it opens without balances (tests). */
-  balanceTimeoutMs?: number;
   /** The clock acknowledgements are issued and checked against (tests). */
   now?: () => Date;
   /** The Solana flows' chain reads (tests). */
@@ -203,27 +196,19 @@ export async function runConnect(deps: ConnectDeps = {}): Promise<{ result: Sett
   return { result, url: handle.url, opened };
 }
 
-interface TxOutcome extends Verdict {
-  step: number;
-  description: string;
-  hash: string;
-}
-
-/** One leg's confirm core: the gate, the chain reads, and the step-by-step verdicts, without the page around it. */
-export interface ConfirmCore {
+/**
+ * What the confirm and plan pages drive for one leg: a request of the API (`VaultCore`), or a Solana transaction
+ * (`SolanaConfirmCore`). `accept` records the hash for step `index`, has it checked, and says whether the next step may go;
+ * `onReject` puts a hash the page could not hand over on record, against the step it names.
+ */
+export interface LegCore {
   chainId: number;
-  calls: UnsignedCall[];
-  done: TxOutcome[];
+  done: (Verdict & { step: number; description: string; hash: string })[];
   stopReason: () => string | undefined;
   info: () => Record<string, unknown>;
-  /** Records the hash for step `index`, reads its receipt, and says whether the next step may go. */
   accept: (index: unknown, hash: unknown) => Promise<{ ok: false; reason: string } | { ok: true; kind: "next" | "finished" | "stop"; reply: Record<string, unknown> }>;
-  /** Puts a hash the page could not hand over on record, against the step it names. */
   onReject: (body: Record<string, unknown>) => void;
 }
-
-/** What the confirm and plan pages drive for one leg: the local flow's `ConfirmCore`, or a request of the API (`VaultCore`). */
-export type LegCore = Pick<ConfirmCore, "chainId" | "stopReason" | "info" | "accept" | "onReject"> & { done: (Verdict & { step: number; description: string; hash: string })[] };
 
 /** Serves the confirm page for one leg's core, until the leg settles, the operator stops it, or the time runs out. */
 async function serveConfirm(core: LegCore, total: () => number, ttlMs: number, deps: ConnectDeps) {
@@ -252,152 +237,6 @@ async function serveConfirm(core: LegCore, total: () => number, ttlMs: number, d
   const result = await handle.done;
   const stopReason = core.stopReason();
   return { result, url: handle.url, opened, done, total: total(), ...(stopReason ? { stopReason } : {}) };
-}
-
-/**
- * The confirm flow without its page: the gate runs here, on exactly the calls the page will hand the
- * wallet, so no caller can pass a check for one batch and the calls of another. It throws before any
- * page opens. `deadline`: when the page closes, so every chain read stops waiting by then.
- */
-export async function prepareConfirm(calls: UnsignedCall[], session: Session, deps: ConnectDeps, deadline: number): Promise<ConfirmCore> {
-  const admitted = admit(calls, session.account as Address);
-  const chainId = calls[0]!.chainId;
-  if (!isSupportedChainId(chainId)) throw new Error(`chain ${chainId} unsupported`);
-  const account = session.account as Address;
-  const client = deps.client ? deps.client(chainId) : makePublicClient(chainId, rpcUrlFromEnv(chainId));
-  const done: TxOutcome[] = [];
-  let stopReason: string | undefined;
-  // The chain head when the flow starts: a receipt mined in it or before it cannot be from this flow.
-  // Read beside the balances below; a read that fails or is slow leaves no floor, never blocks the flow.
-  const notBeforeRead = client.getBlockNumber
-    ? Promise.race([client.getBlockNumber().catch(() => undefined), new Promise<undefined>((r) => setTimeout(() => r(undefined), deps.balanceTimeoutMs ?? 5_000))])
-    : Promise.resolve(undefined);
-  const wellFormedHash = (h: unknown): h is string => typeof h === "string" && /^0x[0-9a-fA-F]{64}$/.test(h);
-  const known = (h: string) => done.some((t) => t.hash.toLowerCase() === h.toLowerCase());
-
-  /**
-   * A deposit's allowance must be visible on our RPC before the page may send it. What to read is
-   * derived from the admitted calls (the approval's token, the account, the vault, the deposit's
-   * own amount), never from the call's `precondition` field, which the gate does not check.
-   */
-  const allowanceVisible = async (index: number): Promise<boolean> => {
-    const a = admitted[index]!;
-    if (a.kind !== "deposit" || admitted[index - 1]?.kind !== "approve") return true;
-    for (let i = 0; i < (deps.verifyOpts?.attempts ?? 30) && Date.now() < deadline; i++) {
-      try {
-        const v = (await client.readContract({ address: a.vault.asset.address, abi: erc4626Abi, functionName: "allowance", args: [account, a.vault.address] })) as bigint;
-        if (v >= a.amount) return true;
-      } catch {
-        // a failed read is retried, never read as "insufficient"
-      }
-      await new Promise((r) => setTimeout(r, deps.verifyOpts?.delayMs ?? 2_000));
-    }
-    return false;
-  };
-
-  // What the wallet holds, for the page to warn before a send that cannot pay (a new Privy wallet
-  // starts empty). Read once, briefly; a read that fails or is slow leaves it out, never blocks.
-  const asset = admitted[0]!.vault.asset;
-  const readBalances = async () => {
-    const [held, native] = await Promise.all([
-      client.readContract({ address: asset.address, abi: erc4626Abi, functionName: "balanceOf", args: [account] }) as Promise<bigint>,
-      client.getBalance ? client.getBalance({ address: account }) : Promise.resolve(undefined),
-    ]);
-    return { asset: held.toString(), ...(native !== undefined ? { native: native.toString() } : {}) };
-  };
-  const [balances, notBefore] = await Promise.all([
-    Promise.race([readBalances().catch(() => undefined), new Promise<undefined>((r) => setTimeout(() => r(undefined), deps.balanceTimeoutMs ?? 5_000))]),
-    notBeforeRead,
-  ]);
-  const verifyOpts = { ...deps.verifyOpts, deadline, ...(notBefore !== undefined ? { notBefore } : {}) };
-  const deposit = admitted.find((a) => a.kind === "deposit");
-
-  return {
-    chainId,
-    calls,
-    done,
-    stopReason: () => stopReason,
-    info: () => ({
-      account,
-      walletType: session.walletType,
-      chainId,
-      chainName: CHAIN_INFO[chainId].name,
-      next: done.length,
-      txBase: explorerTxUrl(chainId, ""),
-      asset: { symbol: asset.symbol, decimals: asset.decimals },
-      nativeSymbol: chains[chainId].nativeCurrency.symbol,
-      ...(balances ? { balances } : {}),
-      ...(deposit ? { needs: deposit.amount.toString() } : {}),
-      calls: calls.map((c, i) => ({
-        step: c.step,
-        of: c.of,
-        kind: admitted[i]!.kind,
-        description: c.description,
-        to: c.to,
-        data: c.data,
-        value: c.value,
-        vault: { symbol: admitted[i]!.vault.symbol, name: admitted[i]!.vault.name, address: admitted[i]!.vault.address, asset: admitted[i]!.vault.asset.symbol, assetAddress: admitted[i]!.vault.asset.address, links: linksFor(admitted[i]!.vault) },
-      })),
-    }),
-    // The page reports a hash it could not hand over (its POST failed after the wallet sent):
-    // put it on record, against the step the page names, so the command reports it unchecked
-    // instead of losing it. A hash that names no step is still recorded, as such.
-    onReject: (body) => {
-      const hash = body["hash"];
-      if (!wellFormedHash(hash) || known(hash)) return;
-      const i = body["index"];
-      const call = typeof i === "number" && Number.isInteger(i) && i >= 0 && i < calls.length ? calls[i] : undefined;
-      done.push({
-        step: call?.step ?? 0,
-        description: call?.description ?? "a transaction the page reported for no known step",
-        hash,
-        verified: "unverified",
-        detail: "the page reported this transaction but could not hand it over for checking; look it up before retrying anything",
-      });
-    },
-    accept: async (index, hash) => {
-      if (index !== done.length) return { ok: false, reason: `expected step ${done.length + 1}` };
-      if (!wellFormedHash(hash)) return { ok: false, reason: "malformed transaction hash" };
-      const call = calls[index]!;
-      if (known(hash)) return { ok: false, reason: "this transaction hash was already reported for an earlier step" };
-      // The hash is on record before the receipt is read: whatever ends the flow from here on, the
-      // command reports this transaction and never says nothing was sent.
-      const entry: TxOutcome = { step: call.step, description: call.description, hash, verified: "unverified", detail: "the flow ended while this transaction was still being checked" };
-      done.push(entry);
-      let verdict: Verdict;
-      try {
-        verdict = await verifyLanded(client, hash as Hex, admitted[index]!, account, verifyOpts);
-      } catch (e) {
-        // A receipt that cannot be read is a stop, never a step skipped.
-        verdict = { verified: "unverified", detail: `could not check ${hash}: ${redactEndpoints(e instanceof Error ? e.message : String(e))}; look it up before retrying anything` };
-      }
-      // The verdict replaces the placeholder: a `matched` verdict carries no `detail`, and merging
-      // would leave "still being checked" on a transaction that landed.
-      delete entry.detail;
-      Object.assign(entry, verdict);
-      if (verdict.verified !== "matched" && verdict.verified !== "extra_transfer") {
-        // Stop at the first step that did not land as confirmed: the next one depends on it.
-        stopReason = `step ${call.step} (${call.description}) is ${verdict.verified}: ${verdict.detail ?? "it did not land as confirmed"}`;
-        return { ok: true, kind: "stop", reply: { stop: true, verdict } };
-      }
-      if (index + 1 === calls.length) return { ok: true, kind: "finished", reply: { finished: true, verdict } };
-      if (!(await allowanceVisible(index + 1))) {
-        stopReason = "the approval landed, but its allowance is not visible on this RPC yet; the deposit was not sent";
-        return { ok: true, kind: "stop", reply: { stop: true, reason: stopReason } };
-      }
-      return { ok: true, kind: "next", reply: { next: index + 1, verdict } };
-    },
-  };
-}
-
-export async function runConfirm(
-  calls: UnsignedCall[],
-  session: Session,
-  deps: ConnectDeps = {},
-): Promise<{ result: Settled<TxOutcome[]>; url: string; opened: boolean; done: TxOutcome[]; total: number; stopReason?: string }> {
-  const ttlMs = deps.ttlMs ?? CONFIRM_TTL_MS;
-  const core = await prepareConfirm(calls, session, deps, Date.now() + ttlMs);
-  return serveConfirm(core, () => calls.length, ttlMs, deps) as Promise<{ result: Settled<TxOutcome[]>; url: string; opened: boolean; done: TxOutcome[]; total: number; stopReason?: string }>;
 }
 
 const notConnected = () => new Error("no wallet is connected — run `treasury connect wallet` first, and let the operator sign in");
@@ -524,8 +363,9 @@ export function buildConnectCommands(deps: ConnectDeps = {}): Record<string, Com
 
   /**
    * How a deposit or withdrawal run is authorised. `ack`: the single acknowledgement (none yet: issue it).
-   * `plan`: leg `leg` of an acknowledged plan (`connect plan`). `describe`: build and gate-check the calls and
-   * return what the acknowledgement would say, writing nothing — how `connect plan` reads each of its legs.
+   * `plan`: leg `leg` of an acknowledged plan (`connect plan`). `describe`: work out the leg (on an EVM chain the API's
+   * vault and the request body; on Solana the intent) and return what the acknowledgement would say, writing
+   * nothing — how `connect plan` reads each of its legs.
    */
   type Mode = { kind: "ack"; ack: string | undefined } | { kind: "plan"; code: string; leg: number } | { kind: "describe" };
   interface Described {
@@ -1100,8 +940,9 @@ export function buildConnectCommands(deps: ConnectDeps = {}): Record<string, Com
 
   /**
    * `connect plan --run`: ONE page for every leg of the acknowledged plan (#174), EVM and Solana legs alike (#184).
-   * Each leg is still rebuilt, held to the digest it was acknowledged as (`checkPlanLeg`), and admitted by the same
-   * gate: an EVM leg's calls through `prepareConfirm`, checked from their receipts; a Solana leg's transaction through
+   * Each leg is still worked out again, held to the digest it was acknowledged as (`checkPlanLeg`), and checked the
+   * same way as its own run: an EVM leg as a request of the Tempora API whose every step `checkSteps` holds to the
+   * leg (`startVaultCore`), its landing read by the API; a Solana leg's transaction through
    * `buildForIntent` when the leg starts and again when the operator presses for it (`prepareConfirmSolana`: a
    * blockhash lasts about a minute), checked from what landed. One leg at a time; a leg that does not complete ends
    * the plan, exactly as `--plan --leg`. The page lives across runs: it keeps the plan's secret and port, so a run that

@@ -19,7 +19,7 @@
     "access": "public",
     "provenance": true
   },
-  "description": "Agent Treasury by Tempora Labs — a depositor client for ERC-4626 vaults and a Kamino vault on Solana: registry, pre-flight, and unsigned deposit/withdraw builders. Never signs, never holds a key.",
+  "description": "Agent Treasury by Tempora Labs — a depositor client for ERC-4626 vaults, reached through the Tempora API, and a Kamino vault on Solana: every step is checked before the operator's own wallet signs it. Never signs, never holds a key.",
   "type": "module",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
@@ -40,7 +40,7 @@
     "build": "tsc -b && tsup && tsx scripts/third-party-notices.ts --write && tsx scripts/llms-txt.ts --write && bash scripts/sync-plugin.sh",
     "typecheck": "tsc -b && tsc -p tsconfig.scripts.json",
     "test": "tsc -b && tsc -p tsconfig.scripts.json && vitest run",
-    "test:fork": "tsc -b && TREASURY_FORK=1 vitest run --testTimeout 300000 tests/fork.test.ts tests/fork-solana.test.ts",
+    "test:fork": "tsc -b && TREASURY_FORK=1 vitest run --testTimeout 300000 tests/fork-solana.test.ts",
     "cli": "tsx src/cli.ts",
     "registry:check": "tsx scripts/registry-check.ts",
     "notices:check": "tsx scripts/third-party-notices.ts",
