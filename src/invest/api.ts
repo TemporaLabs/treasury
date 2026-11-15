@@ -68,14 +68,15 @@ export async function withOwner<T>(
   ownerInput: string,
   signMessage: MessageSigner,
   call: (token: string) => Promise<Result<T>>,
-  deps: { client?: Client; now?: () => number } = {},
+  deps: { client?: Client; now?: () => number; minValidMs?: number } = {},
 ): Promise<Result<T>> {
   const owner = getAddress(ownerInput);
   const client = deps.client ?? apiClient();
   const now = deps.now ?? Date.now;
   const key = tokenKeyFor(owner);
   const host = apiHost();
-  const kept = readOwnerToken(key, now());
+  // A kept token is used only if it outlasts what the caller needs it for (`minValidMs` from now).
+  const kept = readOwnerToken(key, now() + (deps.minValidMs ?? 0));
   const fresh = (): Promise<Result<SignedIn>> => {
     // A token the API refused is forgotten before the new sign-in, so a failed sign-in never leaves it to be tried again.
     clearOwnerToken(key);

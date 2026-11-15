@@ -113,6 +113,17 @@ describe("the connect page's source", () => {
     expect(send).not.toMatch(/\b_call\.(to|data|value)\b/);
   });
 
+  it("the confirm and plan views read the time left again after the wallet's network switch, just before the send", () => {
+    for (const [code, start] of [
+      [main, "const send = useCallback(async () => {"],
+      [plan, "async (leg: LegView, _call: PlanCall, index: number, chainId: number)"],
+    ] as const) {
+      const send = sendBody(code, start);
+      const afterSwitch = send.slice(send.indexOf("switchChain"), send.indexOf("eth_sendTransaction"));
+      expect(afterSwitch).toMatch(/msLeft \?\? 0\) < 60_000|msLeft < 60_000/);
+    }
+  });
+
   it("the confirm and plan views never say a step was not sent once the wallet was asked: it is 'not confirmed sent'", () => {
     for (const text of [main.slice(main.indexOf("function Confirm(")), plan]) {
       expect(text).toMatch(/stage = "send";\n\s*hash = \(await provider\.request\(\{ method: "eth_sendTransaction"/);
