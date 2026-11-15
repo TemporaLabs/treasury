@@ -16,6 +16,7 @@ import { tokenKeyFor } from "../src/invest/api.js";
 import { writeOwnerToken } from "../src/connect/owner-tokens.js";
 import { writeSession } from "../src/connect/session.js";
 import { BNB_USDT, BNB_USDT_ASSET_ID } from "../src/invest/chain.js";
+import { INVEST } from "../src/config/invest.js";
 import type { Answer, StepView, WalletAsk } from "../src/invest/page.js";
 
 const OWNER = getAddress("0x52908400098527886e0f7030069857d2e4169ee7");
@@ -326,6 +327,16 @@ describe("invest withdraw", () => {
     ],
   });
   const withdrawal = (batches: ReturnType<typeof batch>[]) => request({ action: "withdraw", smartAccount: ACCOUNT, steps: batches as never });
+
+  it("refuses a request asking for more than the step limit, before anything is signed", async () => {
+    const log: Log = [];
+    // One more authorization than the limit allows, each a valid one for one unit of a holding the account has plenty of.
+    const many = Array.from({ length: INVEST.maxSteps + 1 }, (_, i) => batch(i, typed({ sale: true, assets: [{ assetId: STOCK, amountRaw: "1" }] })));
+    const rich = { positions: [{ ...positions().positions[0]!, balances: [{ assetId: STOCK, raw: "100", decimals: 0 }] }] };
+    const client = api(log, { positions: () => rich, withdraw: () => withdrawal(many) });
+    await expect(run(client, wallet(log, signs), "invest_withdraw", { product: PRODUCT, all: true })).rejects.toThrow(new RegExp(`more than ${INVEST.maxSteps} steps`));
+    expect(log.filter((l) => l.startsWith("wallet:"))).toEqual([]);
+  });
 
   it("signs each checked authorization with its domain type added, and hands each signature to the API", async () => {
     const log: Log = [];
