@@ -51,7 +51,7 @@ import { apiClient, apiUrl, failure, notConnected, withOwner } from "../invest/a
 import { ownerWallet, type OwnerWallet, type WalletDeps } from "../invest/flow.js";
 import { EARN } from "../config/earn.js";
 import { assetsAmount, chainOf, knownChain, mcpClient, vaultLabel, vaultNamed, vaultProduct, vaultProducts, verifiedTerms, type VaultProduct } from "./api.js";
-import { checkedSteps, depositIntent, intentOf, nextStep, SIGNER_RULES, uncheckedSteps, withdrawIntent, type WithdrawAmount } from "./request.js";
+import { checkedSteps, depositIntent, intentOf, nextStep, offerOf, SIGNER_RULES, uncheckedSteps, withdrawIntent, type Offer, type WithdrawAmount } from "./request.js";
 import { parseAmount } from "../units.js";
 
 /**
@@ -328,7 +328,7 @@ export function buildCommands(deps: EarnDeps = {}): Record<string, Command> {
    * An unsigned request, as a prepare command returns it: never a bare list of calls. The chain FIRST (these steps are
    * correct on this chain and on no other), and the deposit's warnings before `next_step`, where a reader stops.
    */
-  const envelope = (r: Request, p: VaultProduct, owner: Address, steps: ReturnType<typeof checkedSteps>, kind: "deposit" | "withdraw") => {
+  const envelope = (r: Request, p: VaultProduct, owner: Address, steps: ReturnType<typeof checkedSteps>, offer: Offer, kind: "deposit" | "withdraw") => {
     const c = chainOf(p);
     return {
       requires_signature: true,
@@ -342,7 +342,7 @@ export function buildCommands(deps: EarnDeps = {}): Record<string, Command> {
       state: r.state,
       expiresAt: r.expiresAt,
       steps,
-      next_step: nextStep(r, p, owner, true),
+      next_step: nextStep(r, p, owner, true, offer),
       signer_rules: SIGNER_RULES,
     };
   };
@@ -367,8 +367,9 @@ export function buildCommands(deps: EarnDeps = {}): Record<string, Command> {
       };
     }
     const c = chainOf(found);
-    const steps = checkedSteps(r, found, intent);
-    const ready = r.steps.some((s) => s.state === "ready" && (s as { payload?: unknown }).payload !== undefined);
+    const offer = offerOf(r, now());
+    const steps = checkedSteps(r, found, intent, offer);
+    const ready = offer.send !== null;
     return {
       ...base,
       ...vaultNamed(found),
@@ -377,7 +378,7 @@ export function buildCommands(deps: EarnDeps = {}): Record<string, Command> {
       ...(ready && r.action === "deposit" ? commitsMoney(found) : {}),
       checked: true,
       steps,
-      next_step: nextStep(r, found, owner, false),
+      next_step: nextStep(r, found, owner, false, offer),
       ...(ready ? { signer_rules: SIGNER_RULES } : {}),
     };
   };
@@ -642,8 +643,9 @@ export function buildCommands(deps: EarnDeps = {}): Record<string, Command> {
           const amount = assetsAmount(p, amount_usdc);
           const r = await call((c, ownerToken) => c.deposit({ body: { product: p.id, amount: amount.amount, vaultTerms: { version: terms.version, sha256: terms.sha256 } } }, { ownerToken }));
           if (!r.ok) throw failure(`The API did not start the deposit into ${vaultLabel(p)}`, r);
-          const steps = checkedSteps(r.body, p, depositIntent(p, owner, amount.raw));
-          return envelope(r.body, p, owner, steps, "deposit");
+          const offer = offerOf(r.body, now());
+          const steps = checkedSteps(r.body, p, depositIntent(p, owner, amount.raw), offer);
+          return envelope(r.body, p, owner, steps, offer, "deposit");
         }),
       );
     }, { api: true }),
@@ -699,8 +701,9 @@ export function buildCommands(deps: EarnDeps = {}): Record<string, Command> {
                 : { body: { kind: "all" }, intent: { kind: "all" } };
           const r = await call((c, ownerToken) => c.withdraw({ body: { product: p.id, amount: form.body } }, { ownerToken }));
           if (!r.ok) throw failure(`The API did not start the withdrawal from ${vaultLabel(p)}`, r);
-          const steps = checkedSteps(r.body, p, withdrawIntent(p, owner, form.intent));
-          return envelope(r.body, p, owner, steps, "withdraw");
+          const offer = offerOf(r.body, now());
+          const steps = checkedSteps(r.body, p, withdrawIntent(p, owner, form.intent), offer);
+          return envelope(r.body, p, owner, steps, offer, "withdraw");
         }),
       );
     }, { api: true }),

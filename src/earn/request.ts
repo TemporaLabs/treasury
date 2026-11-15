@@ -36,8 +36,60 @@ export function intentOf(r: Request, p: VaultProduct, owner: Address): VaultInte
 }
 
 type Step = Request["steps"][number];
-type Sendable = { to: Address; data: Hex; value: string };
+type Sendable = { to: Address; data: Hex; value: string; generation?: number; expiresAt?: string };
 const payloadOf = (s: Step): Sendable | undefined => (s as { payload?: Sendable }).payload;
+
+/** The API's decision on what comes next for a request, when its answer carries one (`next`). */
+type Next = { kind?: unknown; stepId?: unknown; generation?: unknown; reason?: unknown; retryAfterMs?: unknown; sent?: unknown };
+
+/**
+ * The one step that may be sent now, or why none may. The API decides: a step is sent only when `next` says send that
+ * step, ready, at that generation. Any other decision sends nothing, and a kind this client does not know sends nothing
+ * either. An answer without `next` is held to the request's and the step's own expiry instead. `checkSteps` holds a
+ * step's shape to the intent; this holds the request's lifecycle.
+ */
+export type Offer = { send: Step; why?: undefined } | { send: null; why: string };
+export function offerOf(r: Request, now: number): Offer {
+  const rid = r.requestId;
+  const read = `read the request again with \`treasury earn request --request_id ${rid}\``;
+  const again = `start again with \`treasury earn prepare_${r.action === "withdraw" ? "withdraw" : "deposit"}\``;
+  if (FINAL_STATES.includes(r.state)) return { send: null, why: `Request ${rid} is ${r.state}: there is nothing more to send for it.` };
+  const next = (r as { next?: Next }).next;
+  const ready = (id: unknown) => r.steps.find((s) => s.stepId === id && s.state === "ready" && payloadOf(s) !== undefined);
+  if (next !== undefined) {
+    switch (next.kind) {
+      case "send": {
+        const s = ready(next.stepId);
+        if (!s || (next.generation !== undefined && payloadOf(s)!.generation !== next.generation)) {
+          return { send: null, why: `The API offers step ${String(next.stepId)}, which this answer does not hold ready to send: ${read}.` };
+        }
+        return { send: s };
+      }
+      case "wait":
+        return { send: null, why: `Nothing to send now: a step is still being recorded. Wait${typeof next.retryAfterMs === "number" ? ` ${Math.ceil(next.retryAfterMs / 1000)} s` : ""}, then ${read}.` };
+      case "hand_back":
+        return {
+          send: null,
+          why: `Do not send step ${String(next.stepId)} again: it may already have been sent. Hand back the hash of the transaction that carries it with \`treasury earn submit --request_id ${rid} --step_id ${String(next.stepId)} --tx_hash <its hash>\`.`,
+        };
+      case "done":
+        return { send: null, why: `Request ${rid} is done: there is nothing more to send for it.` };
+      case "failed":
+        return { send: null, why: `Request ${rid} failed${typeof next.reason === "string" ? `: ${next.reason}` : ""}. Nothing more is sent for it; ${read}.` };
+      case "cancelled":
+        return { send: null, why: `Request ${rid} was cancelled${next.sent === true ? " after a step was sent" : ""}: there is nothing more to send for it.` };
+      case "expired":
+        return { send: null, why: `Request ${rid} ran out before it was finished; nothing more is sent for it. To go on, ${again}.` };
+      default:
+        return { send: null, why: `The API answered with a next action this client does not know (${String(next.kind)}): nothing is sent; read the request again with \`treasury earn request --request_id ${rid}\`.` };
+    }
+  }
+  const s = r.steps.find((x) => x.state === "ready" && payloadOf(x) !== undefined);
+  if (!s) return { send: null, why: `Nothing to send now: ${read} until a step is \`ready\`.` };
+  const lapsed = (iso: string | undefined) => iso !== undefined && !(Date.parse(iso) > now);
+  if (lapsed(r.expiresAt) || lapsed(payloadOf(s)!.expiresAt)) return { send: null, why: `Request ${rid} ran out before step ${s.stepId} was sent; nothing more is sent for it. To go on, ${again}.` };
+  return { send: s };
+}
 
 /** A checked call in plain words, read from its own calldata, never from the API's words. */
 function describeCall(p: VaultProduct, to: string, data: Hex): string {
@@ -78,9 +130,9 @@ export function describeStep(p: VaultProduct, to: string, data: Hex): { call: st
   return { call: d.function.slice(0, d.function.indexOf("(")), description: describeCall(p, to, data), ...d };
 }
 
-/** One step as the operator reads it: its state, and what to send only when it was checked and has something to send. */
-function stepOut(s: Step, p: VaultProduct | undefined) {
-  const payload = p ? payloadOf(s) : undefined;
+/** One step as the operator reads it: its state, and what to send only when it was checked and is the one to send now. */
+function stepOut(s: Step, p: VaultProduct | undefined, sendable: boolean) {
+  const payload = p && sendable ? payloadOf(s) : undefined;
   const after = (s as { after?: string }).after;
   const purpose = (s as { purpose?: string }).purpose;
   const verification = (s as { verification?: unknown }).verification;
@@ -91,7 +143,7 @@ function stepOut(s: Step, p: VaultProduct | undefined) {
     ...(purpose !== undefined && { purpose }),
     ...(payload
       ? { to: payload.to, data: payload.data, value: payload.value, ...decoded(payload.data), description: describeCall(p!, payload.to, payload.data) }
-      : { description: after !== undefined ? `prepared by the API once step ${after} is submitted: read it with \`treasury earn request\`` : "nothing to send from this step yet" }),
+      : { description: after !== undefined ? `prepared by the API once step ${after} is submitted: read it with \`treasury earn request\`` : "nothing to send from this step now" }),
     ...(verification !== undefined && { verification }),
   };
 }
@@ -100,7 +152,7 @@ function stepOut(s: Step, p: VaultProduct | undefined) {
  * Every step of the request, checked against `intent` first. A refused check hands nothing out: the request is named
  * so it can be cancelled.
  */
-export function checkedSteps(r: Request, p: VaultProduct, intent: VaultIntent) {
+export function checkedSteps(r: Request, p: VaultProduct, intent: VaultIntent, offer: Offer) {
   const c = checkSteps(r.steps as never, intent);
   if (!c.ok) {
     throw new Error(
@@ -108,21 +160,20 @@ export function checkedSteps(r: Request, p: VaultProduct, intent: VaultIntent) {
         `cancel it with \`treasury earn request --request_id ${r.requestId} --cancel\``,
     );
   }
-  return r.steps.map((s) => stepOut(s, p));
+  return r.steps.map((s) => stepOut(s, p, s === offer.send));
 }
 
 /** The steps of a request this client cannot hold to an intent: states only, never anything to send. */
-export const uncheckedSteps = (r: Request) => r.steps.map((s) => stepOut(s, undefined));
+export const uncheckedSteps = (r: Request) => r.steps.map((s) => stepOut(s, undefined, false));
 
 /** What to do next with a checked request: send the one step that is ready, and submit its hash. */
-export function nextStep(r: Request, p: VaultProduct, owner: Address, prepared: boolean): string {
+export function nextStep(r: Request, p: VaultProduct, owner: Address, prepared: boolean, offer: Offer): string {
   const rid = r.requestId;
-  if (FINAL_STATES.includes(r.state)) return `Request ${rid} is ${r.state}: there is nothing more to send for it.`;
   const c = chainOf(p);
   const where = c.chainId !== null ? `${CHAIN_INFO[c.chainId as keyof typeof CHAIN_INFO].name} (chainId ${c.chainId})` : c.caip2;
-  const ready = r.steps.find((s) => s.state === "ready" && payloadOf(s) !== undefined);
   const untouched = prepared ? " Nothing has been submitted; no funds have moved." : "";
-  if (!ready) return `Nothing to send now: read the request again with \`treasury earn request --request_id ${rid}\` until a step is \`ready\`.${untouched}`;
+  if (offer.send === null) return `${offer.why}${untouched}`;
+  const ready = offer.send;
   const later = r.steps.filter((s) => s !== ready && s.state === "waiting");
   return (
     `Send step ${ready.stepId}, and only it, from the connected wallet (${owner}) on ${where}, following \`signer_rules\`. ` +
