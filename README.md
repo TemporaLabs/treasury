@@ -47,7 +47,10 @@ Earn currently supports **USDC in, USDC out** through Tempora Labs' ERC-4626 vau
 Arbitrum One, Ethereum and Monad, through a Kamino vault on Solana, and **USDG in, USDG out** on Robinhood Chain. Base is the default chain, and Test 2B its
 default vault; the agent asks which chain when you have not said, and the funds have to be on that
 chain already. See [Vaults](#vaults).
-See the [command reference](docs/tools.md), the nine `earn` commands and the six `connect` commands, for inputs, outputs, and limits.
+`treasury invest` deposits into and withdraws from Tempora Labs' Smart Growth portfolios (USDT on BNB Chain), through
+the same API; a portfolio is open only to the wallets the API admits, and `treasury invest products` shows each one's
+status.
+See the [command reference](docs/tools.md) for every command's inputs, outputs, and limits.
 
 ## Quick start
 
@@ -145,7 +148,7 @@ Chain logos are the marks of their respective owners, shown only to identify the
 When you have not said which chain, the agent shows these and asks before it prepares a deposit.
 
 On the EVM chains the vaults on offer are the ones the Tempora API lists: `treasury earn vaults` shows them now, each by
-the id the commands take as `--vault`. The list above is what it lists today.
+its contract address, which the commands take as `--vault`; its ticker works there too. The list above is what it lists today.
 
 All of them are experimental vaults using real funds (USDC, or USDG on Robinhood Chain), not bank savings accounts. None currently has a
 lock-up, but liquidity can limit withdrawals.
@@ -159,7 +162,7 @@ See [vault details](docs/vaults.md) for addresses, access rules, fees, and dated
 ## Security
 
 - **No keys or custody:** your wallet holds the position; Treasury never holds a key. With an email or social login, that wallet's keys are managed by Privy; see [risks](docs/risks.md).
-- **The vaults on the EVM chains through the Tempora API:** on Base, Arbitrum One, Robinhood Chain, Ethereum and Monad, `treasury earn` and `treasury connect` call the Tempora API and nothing else, with no telemetry. A deposit reaches the vault the API lists; OAT holds no contract address for these vaults. Every step the API prepares is checked against the API's own record of the vault before your wallet sees it: that catches a wrong step, never a wrong record. Your wallet signs in to the API with a message checked line by line first. See [the security model](docs/security-model.md#the-vaults-on-the-evm-chains-treasury-earn-and-treasury-connect).
+- **The vaults on the EVM chains through the Tempora API:** on Base, Arbitrum One, Robinhood Chain, Ethereum and Monad, `treasury earn` and `treasury connect` call the Tempora API and nothing else, with no telemetry. A deposit reaches the vault the API lists; OAT keeps only each chain's default vault address. Every step the API prepares is checked against the API's own record of the vault before your wallet sees it: that catches a wrong step, never a wrong record. Your wallet signs in to the API with a message checked line by line first. See [the security model](docs/security-model.md#the-vaults-on-the-evm-chains-treasury-earn-and-treasury-connect).
 - **Direct RPC access on Solana:** for the vault on Solana, the commands talk only to Solana's RPC (yours, or the public endpoint when none is set; see [configuration](docs/configuration.md)), with no Tempora Labs service in the request path and no telemetry. Keyed RPC URLs are redacted.
 - **Smart Growth through the Tempora API:** `treasury invest` calls the same API, which prepares each portfolio deposit and withdrawal; every step is checked before your wallet sees it. See [the security model](docs/security-model.md#smart-growth-portfolios-treasury-invest).
 - **Sign-in through Privy:** `treasury connect` signs you in through [Privy](https://privy.io), using Tempora Labs' Privy app unless you set `PRIVY_APP_ID`. Privy, and Tempora Labs as that app's owner, see your login and wallet address, and Privy's script on the page sends its own analytics. The page also loads Cloudflare's bot check (challenges.cloudflare.com) for Privy's sign-in.
