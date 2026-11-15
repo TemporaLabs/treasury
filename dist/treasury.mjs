@@ -51534,6 +51534,7 @@ function kindOf(schema) {
     const def = s2.def;
     if ((def.type === "optional" || def.type === "default" || def.type === "nullable") && def.innerType) s2 = def.innerType;
     else if (def.type === "pipe" && def.in) s2 = def.in;
+    else if (def.type === "literal" && def.values?.length && def.values.every((v) => typeof v === "boolean")) return "boolean";
     else return def.type === "number" ? "number" : def.type === "boolean" ? "boolean" : "string";
   }
 }
