@@ -175,6 +175,40 @@ See [vault details](docs/vaults.md) for addresses, access rules, fees, and dated
 - [Risks](docs/risks.md) · [Security model](docs/security-model.md)
 - [Signing and sending](docs/runbooks/sign_and_send.md) · [All docs](docs/README.md) · [Changelog](CHANGELOG.md)
 
+## Setup
+
+For working on this repository. To use OAT, see [Quick start](#quick-start).
+
+1. **Prerequisites.** Node.js 22 or later, with the npm it ships. On Windows, run the build from Git Bash or WSL (it
+   uses `bash`). The Solana fork tests also need [Surfpool](https://surfpool.run) on `PATH`.
+2. **Install.**
+   ```bash
+   npm ci                                   # never `npm install`: CI fails on a stale lockfile
+   (cd connect-page && npm ci)              # the connect page has its own dependencies
+   ```
+3. **Configure.** Nothing is required: the EVM chains go through the Tempora API, and the unit tests use a stand-in
+   for it. Optional: `TREASURY_RPC_SOLANA` (a keyed Solana RPC, for the live and fork tiers), `TREASURY_API_URL`
+   (another API deployment) and `PRIVY_APP_ID` (your own Privy app for the connect page). Every variable is in
+   [configuration](docs/configuration.md).
+4. **Run.**
+   ```bash
+   npm run cli -- earn --help               # the CLI from source
+   node dist/treasury.mjs earn vaults       # the built bundle, as the plugin runs it
+   ```
+5. **Test.**
+   ```bash
+   npm test -- --maxWorkers=1               # typecheck, then the unit tier; live and fork tiers skip without an RPC
+   npx vitest run tests/<one>.test.ts --maxWorkers=1
+   TREASURY_RPC_SOLANA=https://... npm run test:fork   # the Solana fork round trip
+   ```
+6. **Build.** The bundles are committed, and CI fails on a stale one.
+   ```bash
+   npm run build                            # dist/treasury.mjs, the notices, llms.txt and the plugin/ copies
+   (cd connect-page && npm run build) && npm run build   # after a change under connect-page/
+   ```
+
+See [CONTRIBUTING.md](CONTRIBUTING.md) for the rules a change has to meet.
+
 ## Contributing
 
 Feedback and pull requests are welcome. See [CONTRIBUTING.md](CONTRIBUTING.md) for development,
