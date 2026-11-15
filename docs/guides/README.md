@@ -26,12 +26,12 @@ its own documentation-only pull request.
 | [`architecture/`](architecture/README.md) | the layers, which file owns what, one deposit traced from `earn quote` to the landed steps | you are new here, or a change crosses two layers |
 | [`cli/`](cli/README.md) | `src/cli.ts`, how a command is declared, the response envelope, errors, `--help` and `llms.txt` | you add, rename or change a command or a flag |
 | [`earn-api/`](earn-api/README.md) | the vaults on the EVM chains through the Tempora API: products, terms, requests, `checkSteps`, submit and read again, the connect leg | you change an EVM earn or connect command, or what is checked before a wallet sees a step |
-| [`registry/`](registry/README.md) | `registry/vaults.json`, its schema, how a vault and a chain are resolved, defaults, reconciliation | you change the Solana row, a chain, or the library's vault selection |
-| [`evm/`](evm/README.md) | the library's ERC-4626 path, which the commands no longer use on the EVM chains: RPC clients, pre-flight, quotes, the unsigned builders, the position read | you change the library's EVM reads or builders |
+| [`registry/`](registry/README.md) | `registry/vaults.json`, its schema, how a vault and a chain are resolved, defaults, reconciliation | you change the Solana row, a chain, or how a ticker or a default picks a vault |
+| [`evm/`](evm/README.md) | the one read-only EVM client left (`connect wallet`'s sign-in check on Base, `registry:check`): RPC variables, retries, redaction, amounts | you change `src/client.ts` |
 | [`solana/`](solana/README.md) | the Kamino vault path: decoders, instruction builders, simulation, the Solana earn commands | you change anything on Solana |
 | [`connect/`](connect/README.md) | `treasury connect`: the local page, sign-in, the Solana gate, the acknowledgement and plans, Solana's landing checks | you change the wallet connection or its page |
 | [`invest/`](invest/README.md) | `src/invest/`: the portfolio-withdrawal gate, BNB Chain holdings and the sign-in challenge check | you change `src/invest/` |
-| [`testing/`](testing/README.md) | the unit, live and fork tiers, the boundary test, and the tests that pin decisions | you write or run tests |
+| [`testing/`](testing/README.md) | the unit tier, the Solana live and fork tiers, the boundary test, and the tests that pin decisions | you write or run tests |
 | [`release/`](release/README.md) | the build, the committed bundles, the plugin copies, generated files and the CI gates on them | you change the build, or anything CI rebuilds and compares |
 
 Agents start at [`AGENTS.md`](AGENTS.md), which maps where each kind of fact lives.

@@ -89,9 +89,9 @@ every call that relies on the default is refused.
 The Solana vault is a row in `registry/vaults.json`, and a row is a product decision too, not only a passing build.
 Treasury's official registry lists Tempora Labs vaults; proposing a new destination needs Tempora Labs' agreement, so
 say so in the pull request. A row is a set of measurements: `scripts/registry-check.ts` reconciles it against the chain
-it is on, and the pull request should say which block it was measured at. The EVM rows still in the registry are read
-by the library's builders and checks and by the test tiers; on the EVM chains the commands use them only to turn a
-ticker into its contract address and to show a vault's ticker.
+it is on, and the pull request should say which block it was measured at. The EVM rows still in the registry are
+read only to turn a ticker into its contract address and to show a vault's ticker: on the EVM chains the Tempora API
+lists the vaults, prepares every step and reads the chain. `scripts/registry-check.ts` still reconciles those rows.
 
 A new EVM chain needs:
 
@@ -100,8 +100,8 @@ A new EVM chain needs:
   others does not build;
 - its default vault address in `src/config/earn.ts` (`defaultVaultAddressByChain`), which the compiler also requires;
 - its RPC variables in [`docs/configuration.md`](docs/configuration.md) and in the allowlist and the exact-set
-  assertion of `tests/boundary.unit.test.ts`, for the library and the test tiers. That is the one edit to the boundary
-  test a new chain needs; the rule that it is not weakened to pass still holds;
+  assertion of `tests/boundary.unit.test.ts`, for `scripts/registry-check.ts` and the redactor. That is the one edit
+  to the boundary test a new chain needs; the rule that it is not weakened to pass still holds;
 - the tests that pin the supported chains (`tests/registry.test.ts`, `tests/client.unit.test.ts`),
   restated for the new set;
 - the places that name the chains in prose: the `earn` skill, [`docs/tools.md`](docs/tools.md) and the
@@ -109,24 +109,21 @@ A new EVM chain needs:
 
 ## Development
 
-Requires Node.js 22 or later. Fork tests also need [Foundry](https://getfoundry.sh) for `anvil`, and
-[Surfpool](https://surfpool.run) on `PATH` for Solana's.
+Requires Node.js 22 or later. The Solana fork tests also need [Surfpool](https://surfpool.run) on `PATH`.
 
 ```bash
 npm ci
 npm run build                     # compiles, bundles dist/treasury.mjs, regenerates the notices and plugin/
 npm run typecheck
 npm test                          # unit tests
-TREASURY_RPC_BASE=https://... npm test          # adds live read-only checks against Base
-TREASURY_RPC_BASE=https://... npm run test:fork # anvil fork round trips with impersonated accounts
-TREASURY_RPC_SOLANA=https://... npm run test:fork # adds a Surfpool fork round trip on Solana, signed by a key made for the run
+TREASURY_RPC_SOLANA=https://... npm test          # adds live read-only checks against Solana
+TREASURY_RPC_SOLANA=https://... npm run test:fork # a Surfpool fork round trip on Solana, signed by a key made for the run
 ```
 
-Each chain's live and fork tiers run when that chain's RPC variable is set. For Arbitrum One, add
-`TREASURY_RPC_ARBITRUM=https://...` to the same commands, `TREASURY_RPC_ROBINHOOD=https://...` for
-Robinhood Chain, `TREASURY_RPC_ETHEREUM=https://...` for Ethereum, `TREASURY_RPC_MONAD=https://...` for Monad and `TREASURY_RPC_SOLANA=https://...` for Solana
-(the fork tier covers every chain: anvil for the EVM chains, Surfpool for Solana); a chain with no variable set is skipped
-and shown as skipped.
+The live and fork tiers cover the vault on Solana, the one this client reads from its own chain, and run when
+`TREASURY_RPC_SOLANA` is set; without it they are skipped and shown as skipped. On the EVM chains the Tempora API
+reads and prepares everything, so there is no EVM tier here: the unit tier holds the commands to a stand-in API, and
+`checkSteps` (in `@temporalabs/client`) is tested where it is written.
 
 - **Use `npm ci`, not `npm install`.** It fails on a stale lockfile, which is what CI does.
 - **Rebuild the bundle when source changes.** `dist/treasury.mjs` is committed,
@@ -140,8 +137,7 @@ and shown as skipped.
   into `plugin/`. CI rebuilds the page and fails on a difference.
 - **Say which test tier ran.** Unit tests say nothing about the chain. State in the pull request
   whether you ran unit, live read-only or fork tests.
-- **Tests never need a real key.** A test that moves funds runs on a fork and impersonates the
-  account.
+- **Tests never need a real key.** A test that moves funds runs on a local fork, signed by a key made for that run.
 - **Measured, not assumed.** A registry row, a decimal count, a revert selector, an RPC window — each
   carries the block or date it was measured at. A claim in a comment is not a test; if it matters, pin it.
 - **Amounts are strings in the asset's own decimals.** Never a float; never round a share balance.

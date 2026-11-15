@@ -40,7 +40,6 @@ afterEach(async () => {
   await new Promise<void>((r) => (srv ? srv.close(() => r()) : r()));
   srv = undefined;
   delete process.env["TREASURY_RPC_BASE"];
-  delete process.env["TREASURY_LOGS_RPC_BASE"];
 });
 
 /** A real read through the configured Base endpoint, and its failure as a command would print it. */

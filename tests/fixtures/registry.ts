@@ -12,7 +12,7 @@
  * be mistaken for a live vault or reached on a chain. Tests that assert what the CLIENT SHIPS
  * (`tests/registry.test.ts`) read the real registry and must not use these.
  */
-import { registrySchema, type Registry, type VaultEntry } from "../../src/registry-schema.js";
+import { registrySchema, type Registry } from "../../src/registry-schema.js";
 import { loadRegistry, __setRegistryForTests } from "../../src/registry.js";
 
 const usdc = { address: "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913", symbol: "USDC", decimals: 6 } as const;
@@ -118,11 +118,4 @@ export function useFixtureRegistry(): Registry {
 /** Drops the fixtures again — the next `loadRegistry()` reads the shipped file. */
 export function useShippedRegistry(): void {
   __setRegistryForTests(undefined);
-}
-
-/** A fixture row, by ticker. Fails loudly rather than returning undefined into an assertion. */
-export function fixtureVault(symbol: string): VaultEntry {
-  const v = useFixtureRegistry().vaults.find((x) => x.symbol === symbol);
-  if (!v) throw new Error(`no fixture vault "${symbol}"`);
-  return v;
 }

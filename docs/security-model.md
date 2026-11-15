@@ -25,9 +25,7 @@ a command that did would be a design change the project refuses.
 
 The envelope is the point: an unsigned build is **structurally distinguishable** from anything that
 has happened. A consumer, a test, or a policy engine can assert on `requires_signature` and
-`status: "unsigned"` rather than parsing prose. (The library functions `buildDeposit` /
-`buildWithdraw` return bare arrays, and the commands no longer use them on the EVM chains; the envelope belongs to
-the command boundary. If you consume the library directly, you are the boundary.)
+`status: "unsigned"` rather than parsing prose.
 
 ## What enforces it
 
@@ -40,7 +38,7 @@ compiler and fails the build if any file:
 - reads an environment variable that is not on the allowlist
   ([`configuration.md`](configuration.md)), or reads one with a computed key;
 - starts a process, except the named files — the test tiers that spawn the reconciliation script, a
-  fork node and the committed bundle, and
+  Solana fork node and the committed bundle, and
   `src/connect/open.ts`, which may start only the platform's own "open this URL" command
   (`open`, `cmd /c start`, `xdg-open`);
 - reaches a private test seam from shipped code.
@@ -60,9 +58,8 @@ WalletConnect code, but not attested.
 ## Keys
 
 Nothing in the package reads, derives, logs or transmits a private key. There is no code path for it.
-The fork tier signs by impersonating accounts on a local Anvil fork, and on Solana with a key generated for
-the run and funded only on a local Surfpool fork; the live tier only reads. Who
-may deposit into a gated vault is discovered from the chain when a test needs it, and never written
+The Solana fork tier signs with a key generated for the run and funded only on a local Surfpool fork; the live
+tier only reads. Who may deposit into a gated vault is the Tempora API's to check per account, and is never written
 into the repository.
 
 ## Secrets in output
@@ -76,15 +73,13 @@ RPC, never its value. This is tested against real provider failure shapes with s
 The parts of a vault's interface that lie are not trusted:
 
 - `maxDeposit()` says "unlimited" behind a whitelist on one chassis and `0` on an open vault on
-  another — so access is a **simulated `deposit()`** from the account's address.
+  another — so access is a **simulated deposit** from the account's address.
 - `maxWithdraw()` reports an entitlement, not what the vault can pay — so exit is a **simulated
-  `withdraw()`** of the whole position.
-- an event scan that did not reach the deployment block is not a history — so basis and yield read
-  `unknown` unless `scan.wholeHistory` is true.
+  withdrawal**.
 
-These are the library's own readings, and on Solana the commands'. On the EVM chains the commands report the Tempora
-API's readings instead (its simulated deposit check, its simulated withdrawable floor), as the API's: a share balance
-it could not read is `unknown`, never 0, and basis and yield are reported as not available.
+On Solana these are the commands' own readings. On the EVM chains the commands report the Tempora API's readings
+(its simulated approve-then-deposit check, its simulated withdrawable floor), as the API's: a share balance it could
+not read is `unknown`, never 0, and basis and yield are reported as not available.
 
 ## What this model does not cover
 
@@ -115,15 +110,6 @@ open for nothing but the calls that text described.
   again after every step ([below](#the-vaults-on-the-evm-chains-treasury-earn-and-treasury-connect)). The page is
   handed only a checked step that is ready, reads it again from this process just before the wallet is asked, and
   sends exactly its destination, data and value.
-- **The local gate** (`src/connect/gate.ts`), which the commands no longer call on the EVM chains and the library
-  keeps. Calls are built by the same builders as the prepare commands, then re-checked from the calldata alone: an `approve` only on a listed vault's
-  asset, only to that vault, for exactly the deposit that follows, never unlimited; a `deposit`,
-  `withdraw` or `redeem` only on a listed vault, paying and burning only for the connected account;
-  no attached value. A batch is one operation on one vault and one chain — `approve` + `deposit`,
-  `withdraw`, or `redeem` — and each call's calldata must be exactly the canonical encoding of what it
-  decodes to (no trailing bytes, no stray bits in an address). The allowance the deposit waits for is
-  read from those checked calls, not from the call's own `precondition` field. Anything else is
-  refused before the operator is asked anything.
 - **On Solana, a gate on the transaction's bytes** (`src/connect/gate-solana.ts`). The page builds the
   transaction when the operator confirms, and the gate decodes it and admits it only if every
   instruction is a compute-unit limit, the connected account's own token-account creation for the
@@ -145,7 +131,7 @@ open for nothing but the calls that text described.
   and the wallet's own prompt remains the confirmation no agent can give.
 - **A plan** (`connect plan`) is one fixed text for up to 8 deposits and withdrawals, with its own code,
   valid for 60 minutes and spent leg by leg, in order. Each leg is bound to the same digest its own
-  acknowledgement would be, and is rebuilt, held to that digest and admitted by the gate when it runs; a
+  acknowledgement would be, and is worked out again, held to that digest and checked as its own run would be; a
   leg that does not complete ends the plan. `connect plan --run` serves one page for every leg, EVM and Solana: a Solana leg is gate-checked when it
   starts and its transaction built again at the operator's press, and only a signature for a transaction built for
   that leg, paid for by the connected Solana account, verifies. Its
@@ -160,11 +146,10 @@ open for nothing but the calls that text described.
   turn, and the wallet's prompt is that call's confirmation.
 - **What landed.** On the EVM chains each hash goes to the Tempora API, which reads the chain at it and says how the
   step landed; that reading is the `verified` reported, and the next step is offered only once the API has recorded
-  this one and the whole request passes the check again. Locally, in the library and on Solana, what landed is read
-  from the receipt. A smart-account wallet relays a call inside a batch, so the
-  transaction's own `from`/`to` name a relayer. The check is the vault's or token's own event for the
-  connected account and the exact amount; any other movement of the asset out of the account in the
-  same transaction is reported as `extra_transfer`, never folded into a match. On Solana the landed
+  this one and the whole request passes the check again. The API's check, like Solana's here, is the vault's or
+  token's own effect for the connected account and the exact amount, never the transaction's own `from`/`to` (a
+  smart-account wallet relays a call inside a batch, so those name a relayer); any other movement of the asset out
+  of the account in the same transaction is reported as `extra_transfer`, never folded into a match. On Solana the landed
   transaction must name a blockhash the page was handed (each transaction is built when the operator
   confirms, and its blockhash recorded) and be paid for by the connected account; anything else is
   `mismatch`, whatever its balances show. Its token-balance changes must then match: a deposit takes

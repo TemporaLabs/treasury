@@ -1,9 +1,8 @@
 # 02: The gates
 
-> **Scope.** On the EVM chains, `connect` no longer calls the EVM gate (`src/connect/gate.ts`): each step comes from
-> the Tempora API and is held by `checkSteps` from `@temporalabs/client` instead
-> ([`../earn-api/01-the-api-path.md`](../earn-api/01-the-api-path.md)). The EVM gate described here remains in the
-> library; the Solana gate is what `connect` uses on Solana.
+> **Scope.** On the EVM chains there is no local gate: each step comes from the Tempora API and is held by
+> `checkSteps` from `@temporalabs/client` before the wallet sees it
+> ([`../earn-api/01-the-api-path.md`](../earn-api/01-the-api-path.md)). This guide is the Solana gate.
 
 A **gate** decides what `treasury connect` may put in front of the operator's wallet at all. It runs
 before any acknowledgement is issued and again before any page opens, on exactly the calls (or the
@@ -11,34 +10,9 @@ transaction) the wallet will receive. It trusts nothing the builder says about i
 re-derives everything from the bytes and the registry, so a builder bug and a transaction from
 anywhere else meet the same refusal.
 
-There are two, one per chain family. What each admits, stated as guarantees, is in
+What it admits, stated as guarantees, is in
 [`../../security-model.md`](../../security-model.md#the-wallet-connection-treasury-connect). This guide is how the
 code reaches those answers, and what to keep when you change it.
-
-## EVM: `admit` in `src/connect/gate.ts`
-
-Input: the calls (`chainId`, `to`, `data`, `value`) and the connected account. Output: one `Admitted`
-per call (`kind`, the registry `vault`, the raw `amount`), or a thrown `refused (call i of n): …`.
-
-The checks, in order:
-
-1. **One chain per batch**, a supported one, and no native value on any call.
-2. **Decode the calldata** against the ERC-4626 ABI, then **re-encode** it and require byte equality.
-   Decoding forgives trailing bytes and stray high bits in an address word, but the wallet signs the
-   bytes as sent, so only canonical calldata passes.
-3. **Per function:**
-   - `approve`: `to` is the asset of a listed vault on this chain, the spender is that vault, the
-     amount is non-zero and below `UNLIMITED`;
-   - `deposit`: `to` is a listed vault; the receiver is the connected account;
-   - `withdraw` / `redeem`: `to` is a listed vault; receiver and owner are both the connected account.
-4. **Pairing:** an approval must be followed by a deposit of exactly that amount into the same vault.
-5. **Shape:** the whole batch must be one of `SHAPES`: approve then deposit, a lone withdraw, or a lone
-   redeem. With the pairing rule, that also means one vault per batch.
-
-Callers use the `Admitted` values, not the call's own fields. `prepareConfirm`
-(`src/connect/commands.ts`) reads the allowance to wait for from the admitted approval and deposit,
-never from the call's `precondition`, which the gate does not check; `verifyLanded` checks receipts
-against the admitted amount.
 
 ## Solana: `admitSolana` in `src/connect/gate-solana.ts`
 
@@ -67,5 +41,5 @@ kind, vault and amount are the intent's. A deposit is then simulated, and a with
 - Widening what a gate admits is a design change, not a fix (the root [`AGENTS.md`](../../../AGENTS.md)).
   A relay that accepts an arbitrary destination is refused by rule.
 - Every refusal names the call and the reason, so an operator or agent can act on it.
-- The tests are `tests/connect.unit.test.ts` (EVM gate and flows) and `tests/solana-gate.unit.test.ts`.
+- The tests are `tests/solana-gate.unit.test.ts` (the gate) and `tests/solana-connect.unit.test.ts` (the flows).
   Show that a new rule can fail: break it, watch the test go red, restore it.

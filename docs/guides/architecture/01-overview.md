@@ -12,13 +12,12 @@ interface, reads the chain and builds the transaction itself. Either way it prep
 | entry | file | what it is |
 |---|---|---|
 | the command line | `src/cli.ts` | `treasury <skill> <command> [--flag value]`, one JSON document per run, then exit |
-| the library | `src/index.ts` | the registry, read clients, pre-flight, quotes, position and the builders, for a program that holds its own signer; the commands no longer use the EVM parts of it |
+| the library | `src/index.ts` | the registry, a read-only EVM client, the amount helpers and the disclosures; no builder and no pre-flight (on the EVM chains the Tempora API prepares every step) |
 | the Claude Code plugin | `plugin/` | a copy of the bundled CLI plus the Earn skill (`plugin/skills/earn/SKILL.md`), which tells an agent how to use the CLI |
 
 The CLI is the product surface. The plugin runs the same bundle (`plugin/dist/treasury.mjs` is a byte
-copy of `dist/treasury.mjs`). The library exports the building blocks without the command boundary:
-`buildDeposit` returns a bare array of calls, and the `{ requires_signature, status: "unsigned" }`
-envelope is added only by the commands.
+copy of `dist/treasury.mjs`). The `{ requires_signature, status: "unsigned" }` envelope is the commands'; the
+library builds no calls.
 
 ## The layers
 
@@ -45,9 +44,8 @@ envelope is added only by the commands.
    +-- src/invest/               the invest commands: Smart Growth portfolios through the Tempora API;
                                  src/invest/api.ts is also the one sign-in earn and connect use
 
- the library, which the commands no longer call on the EVM chains:
-   src/client.ts (RPC), src/preflight.ts, src/quote.ts, src/position.ts, src/build.ts,
-   src/connect/gate.ts, src/connect/verify.ts
+ src/client.ts                  the chains, their RPC variables and a read-only client (connect wallet's
+                                 sign-in check on Base, scripts/registry-check.ts); Solana's RPC variables
 ```
 
 Shared underneath everything: `src/registry-schema.ts` (what a vault row is), `src/config/earn.ts`
@@ -78,7 +76,8 @@ account: the API's on the EVM chains, Treasury's own on Solana. A registry row i
 authority: the Solana `readVault` refuses a row the contract disagrees with.
 
 **Trust the API's record, check its steps.** On the EVM chains the vault's contract, asset and decimals are the
-Tempora API's word, and Treasury holds no address of its own. What it checks is every step against that record and
+Tempora API's word; Treasury keeps only a ticker-to-address table and each chain's default address, which pick the
+API's row. What it checks is every step against that record and
 against what the operator asked for, before a wallet sees the step: a wrong step is caught, a wrong record is not.
 
 **A refusal is not a failure, and a failed read is not a verdict.** An API that cannot be reached is a health
