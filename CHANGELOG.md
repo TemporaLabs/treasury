@@ -55,6 +55,9 @@ Pre-1.0, minor versions may change tool names, schemas and behaviour.
   whole position as it stands when the withdrawal runs.
 - The signer rules drop the receiver check and the gas-limit rule, and add: send only a `ready` step, and submit
   the hash you have rather than sending again.
+- **The connect page builds with Privy 3.51.4** (was 3.51.1). Its lockfile also moves `decode-uri-component` to
+  0.5.1 (the override), `follow-redirects` to 1.16.3, `hono` to 4.13.18 and one nested `zod` 4 copy to 4.6.7, past
+  their advisories. The page is rebuilt with it.
 
 ### Added
 - **`earn submit`** hands the hash of a step the connected wallet sent to the API, with the wallet's nonce and sender
