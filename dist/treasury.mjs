@@ -48973,6 +48973,47 @@ function intentOf(r, p, owner) {
   return void 0;
 }
 var payloadOf3 = (s2) => s2.payload;
+function offerOf(r, now) {
+  const rid = r.requestId;
+  const read = `read the request again with \`treasury earn request --request_id ${rid}\``;
+  const again = `start again with \`treasury earn prepare_${r.action === "withdraw" ? "withdraw" : "deposit"}\``;
+  if (FINAL_STATES.includes(r.state)) return { send: null, why: `Request ${rid} is ${r.state}: there is nothing more to send for it.` };
+  const next = r.next;
+  const ready = (id) => r.steps.find((s3) => s3.stepId === id && s3.state === "ready" && payloadOf3(s3) !== void 0);
+  if (next !== void 0) {
+    switch (next.kind) {
+      case "send": {
+        const s3 = ready(next.stepId);
+        if (!s3 || next.generation !== void 0 && payloadOf3(s3).generation !== next.generation) {
+          return { send: null, why: `The API offers step ${String(next.stepId)}, which this answer does not hold ready to send: ${read}.` };
+        }
+        return { send: s3 };
+      }
+      case "wait":
+        return { send: null, why: `Nothing to send now: a step is still being recorded. Wait${typeof next.retryAfterMs === "number" ? ` ${Math.ceil(next.retryAfterMs / 1e3)} s` : ""}, then ${read}.` };
+      case "hand_back":
+        return {
+          send: null,
+          why: `Do not send step ${String(next.stepId)} again: it may already have been sent. Hand back the hash of the transaction that carries it with \`treasury earn submit --request_id ${rid} --step_id ${String(next.stepId)} --tx_hash <its hash>\`.`
+        };
+      case "done":
+        return { send: null, why: `Request ${rid} is done: there is nothing more to send for it.` };
+      case "failed":
+        return { send: null, why: `Request ${rid} failed${typeof next.reason === "string" ? `: ${next.reason}` : ""}. Nothing more is sent for it; ${read}.` };
+      case "cancelled":
+        return { send: null, why: `Request ${rid} was cancelled${next.sent === true ? " after a step was sent" : ""}: there is nothing more to send for it.` };
+      case "expired":
+        return { send: null, why: `Request ${rid} ran out before it was finished; nothing more is sent for it. To go on, ${again}.` };
+      default:
+        return { send: null, why: `The API answered with a next action this client does not know (${String(next.kind)}): nothing is sent; read the request again with \`treasury earn request --request_id ${rid}\`.` };
+    }
+  }
+  const s2 = r.steps.find((x) => x.state === "ready" && payloadOf3(x) !== void 0);
+  if (!s2) return { send: null, why: `Nothing to send now: ${read} until a step is \`ready\`.` };
+  const lapsed = (iso) => iso !== void 0 && !(Date.parse(iso) > now);
+  if (lapsed(r.expiresAt) || lapsed(payloadOf3(s2).expiresAt)) return { send: null, why: `Request ${rid} ran out before step ${s2.stepId} was sent; nothing more is sent for it. To go on, ${again}.` };
+  return { send: s2 };
+}
 function describeCall(p, to, data) {
   const d = decodeFunctionData({ abi: erc4626Abi, data });
   const asset = (raw) => formatUnits(raw, p.vault.assetDecimals);
@@ -49003,8 +49044,8 @@ function describeStep(p, to, data) {
   const d = decoded(data);
   return { call: d.function.slice(0, d.function.indexOf("(")), description: describeCall(p, to, data), ...d };
 }
-function stepOut(s2, p) {
-  const payload = p ? payloadOf3(s2) : void 0;
+function stepOut(s2, p, sendable) {
+  const payload = p && sendable ? payloadOf3(s2) : void 0;
   const after = s2.after;
   const purpose = s2.purpose;
   const verification = s2.verification;
@@ -49013,28 +49054,27 @@ function stepOut(s2, p) {
     state: s2.state,
     ...after !== void 0 && { after },
     ...purpose !== void 0 && { purpose },
-    ...payload ? { to: payload.to, data: payload.data, value: payload.value, ...decoded(payload.data), description: describeCall(p, payload.to, payload.data) } : { description: after !== void 0 ? `prepared by the API once step ${after} is submitted: read it with \`treasury earn request\`` : "nothing to send from this step yet" },
+    ...payload ? { to: payload.to, data: payload.data, value: payload.value, ...decoded(payload.data), description: describeCall(p, payload.to, payload.data) } : { description: after !== void 0 ? `prepared by the API once step ${after} is submitted: read it with \`treasury earn request\`` : "nothing to send from this step now" },
     ...verification !== void 0 && { verification }
   };
 }
-function checkedSteps(r, p, intent) {
+function checkedSteps(r, p, intent, offer) {
   const c = checkSteps(r.steps, intent);
   if (!c.ok) {
     throw new Error(
       `refused${c.step !== null ? ` (step ${c.step + 1} of ${r.steps.length})` : ""}: ${c.reason}. Nothing from request ${r.requestId} is handed out to sign; cancel it with \`treasury earn request --request_id ${r.requestId} --cancel\``
     );
   }
-  return r.steps.map((s2) => stepOut(s2, p));
+  return r.steps.map((s2) => stepOut(s2, p, s2 === offer.send));
 }
-var uncheckedSteps = (r) => r.steps.map((s2) => stepOut(s2, void 0));
-function nextStep(r, p, owner, prepared) {
+var uncheckedSteps = (r) => r.steps.map((s2) => stepOut(s2, void 0, false));
+function nextStep(r, p, owner, prepared, offer) {
   const rid = r.requestId;
-  if (FINAL_STATES.includes(r.state)) return `Request ${rid} is ${r.state}: there is nothing more to send for it.`;
   const c = chainOf(p);
   const where = c.chainId !== null ? `${CHAIN_INFO[c.chainId].name} (chainId ${c.chainId})` : c.caip2;
-  const ready = r.steps.find((s2) => s2.state === "ready" && payloadOf3(s2) !== void 0);
   const untouched = prepared ? " Nothing has been submitted; no funds have moved." : "";
-  if (!ready) return `Nothing to send now: read the request again with \`treasury earn request --request_id ${rid}\` until a step is \`ready\`.${untouched}`;
+  if (offer.send === null) return `${offer.why}${untouched}`;
+  const ready = offer.send;
   const later = r.steps.filter((s2) => s2 !== ready && s2.state === "waiting");
   return `Send step ${ready.stepId}, and only it, from the connected wallet (${owner}) on ${where}, following \`signer_rules\`. Then run \`treasury earn submit --request_id ${rid} --step_id ${ready.stepId} --tx_hash <its transaction hash>\`.` + (later.length > 0 ? ` Step ${later.map((s2) => s2.stepId).join(", ")} is prepared after that: read the request with \`treasury earn request --request_id ${rid}\` until it is \`ready\`, then send it and submit its hash the same way.` : "") + untouched;
 }
@@ -49169,7 +49209,7 @@ function buildCommands(deps = {}) {
       throw e4;
     }
   };
-  const envelope2 = (r, p, owner, steps, kind) => {
+  const envelope2 = (r, p, owner, steps, offer, kind) => {
     const c = chainOf(p);
     return {
       requires_signature: true,
@@ -49183,7 +49223,7 @@ function buildCommands(deps = {}) {
       state: r.state,
       expiresAt: r.expiresAt,
       steps,
-      next_step: nextStep(r, p, owner, true),
+      next_step: nextStep(r, p, owner, true, offer),
       signer_rules: SIGNER_RULES
     };
   };
@@ -49201,8 +49241,9 @@ function buildCommands(deps = {}) {
       };
     }
     const c = chainOf(found);
-    const steps = checkedSteps(r, found, intent);
-    const ready = r.steps.some((s2) => s2.state === "ready" && s2.payload !== void 0);
+    const offer = offerOf(r, now());
+    const steps = checkedSteps(r, found, intent, offer);
+    const ready = offer.send !== null;
     return {
       ...base2,
       ...vaultNamed(found),
@@ -49211,7 +49252,7 @@ function buildCommands(deps = {}) {
       ...ready && r.action === "deposit" ? commitsMoney(found) : {},
       checked: true,
       steps,
-      next_step: nextStep(r, found, owner, false),
+      next_step: nextStep(r, found, owner, false, offer),
       ...ready ? { signer_rules: SIGNER_RULES } : {}
     };
   };
@@ -49446,8 +49487,9 @@ function buildCommands(deps = {}) {
           const amount = assetsAmount(p, amount_usdc);
           const r = await call3((c, ownerToken) => c.deposit({ body: { product: p.id, amount: amount.amount, vaultTerms: { version: terms.version, sha256: terms.sha256 } } }, { ownerToken }));
           if (!r.ok) throw failure2(`The API did not start the deposit into ${vaultLabel(p)}`, r);
-          const steps = checkedSteps(r.body, p, depositIntent(p, owner, amount.raw));
-          return envelope2(r.body, p, owner, steps, "deposit");
+          const offer = offerOf(r.body, now());
+          const steps = checkedSteps(r.body, p, depositIntent(p, owner, amount.raw), offer);
+          return envelope2(r.body, p, owner, steps, offer, "deposit");
         })
       );
     }, { api: true })
@@ -49496,8 +49538,9 @@ function buildCommands(deps = {}) {
           })() : { body: { kind: "all" }, intent: { kind: "all" } };
           const r = await call3((c, ownerToken) => c.withdraw({ body: { product: p.id, amount: form.body } }, { ownerToken }));
           if (!r.ok) throw failure2(`The API did not start the withdrawal from ${vaultLabel(p)}`, r);
-          const steps = checkedSteps(r.body, p, withdrawIntent(p, owner, form.intent));
-          return envelope2(r.body, p, owner, steps, "withdraw");
+          const offer = offerOf(r.body, now());
+          const steps = checkedSteps(r.body, p, withdrawIntent(p, owner, form.intent), offer);
+          return envelope2(r.body, p, owner, steps, offer, "withdraw");
         })
       );
     }, { api: true })
