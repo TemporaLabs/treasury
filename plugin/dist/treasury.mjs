@@ -48338,6 +48338,7 @@ async function openInvestPage(ownerInput, title, deps) {
   let index2 = 0;
   let current;
   let ending;
+  let closed;
   let handle;
   handle = await serveOnce({
     mode: "invest",
@@ -48387,8 +48388,9 @@ async function openInvestPage(ownerInput, title, deps) {
   });
   const opened = deps.open(handle.url);
   void handle.done.then((r) => {
+    closed = r.ok ? "the page closed" : r.reason;
     if (current) {
-      current.reject(new Error(r.ok ? "the page closed" : r.reason));
+      current.reject(new Error(closed));
       current = void 0;
     }
   });
@@ -48397,6 +48399,7 @@ async function openInvestPage(ownerInput, title, deps) {
     opened,
     done: handle.done,
     ask: (view2, ask) => new Promise((resolve2, reject) => {
+      if (closed !== void 0) return reject(new Error(closed));
       if (current) return reject(new Error("a step is already waiting on the page"));
       current = { index: index2++, view: view2, ask, resolve: resolve2, reject };
     }),

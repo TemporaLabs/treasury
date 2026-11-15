@@ -72,6 +72,8 @@ export async function openInvestPage(ownerInput: string, title: string, deps: In
   let index = 0;
   let current: { index: number; view: StepView; ask: WalletAsk; resolve: (v: Answer) => void; reject: (e: Error) => void } | undefined;
   let ending: { ok: boolean; text: string } | undefined;
+  /** Why the page is over, once it is: a step asked after that has no one to answer it. */
+  let closed: string | undefined;
   let handle!: Handle<"done">;
 
   handle = await serveOnce<"done">({
@@ -128,8 +130,9 @@ export async function openInvestPage(ownerInput: string, title: string, deps: In
 
   const opened = deps.open(handle.url);
   void handle.done.then((r) => {
+    closed = r.ok ? "the page closed" : r.reason;
     if (current) {
-      current.reject(new Error(r.ok ? "the page closed" : r.reason));
+      current.reject(new Error(closed));
       current = undefined;
     }
   });
@@ -140,6 +143,7 @@ export async function openInvestPage(ownerInput: string, title: string, deps: In
     done: handle.done,
     ask: (view, ask) =>
       new Promise<Answer>((resolve, reject) => {
+        if (closed !== undefined) return reject(new Error(closed));
         if (current) return reject(new Error("a step is already waiting on the page"));
         current = { index: index++, view, ask, resolve, reject };
       }),
