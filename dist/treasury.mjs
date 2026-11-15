@@ -47943,7 +47943,7 @@ function checkChallenge(text3, expect) {
   const issued = Date.parse(t[1]);
   const expires = Date.parse(t[2]);
   if (!(expires > issued)) refuse2("expires before it is issued");
-  if (expires - issued > CHALLENGE_MAX_LIFETIME_MS) refuse2("is valid for longer than 5 minutes");
+  if (expires - issued > CHALLENGE_MAX_LIFETIME_MS) refuse2(`is valid for longer than ${CHALLENGE_MAX_LIFETIME_MS / 6e4} minutes`);
   if (issued > expect.now + CLOCK_SKEW_MS) refuse2("is issued in the future");
   if (expires <= expect.now) refuse2("has expired");
   return { nonce: n[1], issuedAt: new Date(issued), expiresAt: new Date(expires) };
