@@ -85,9 +85,9 @@ export async function expectedGuide(): Promise<string> {
     "",
     "# Command reference",
     "",
-    "Every command and flag, as `treasury earn --help` and `treasury connect --help` print them.",
+    "Every command and flag, as `treasury earn --help`, `treasury connect --help` and `treasury invest --help` print them.",
   ];
-  for (const skill of ["earn", "connect"]) {
+  for (const skill of ["earn", "connect", "invest"]) {
     for (const c of await commands(skill)) {
       out.push("", `## treasury ${c.command}`, "", `**${c.title}.** ${c.description}`, "", ...(c.flags.length ? ["Flags:", ...c.flags.map(flagLine)] : ["No flags."]));
     }
