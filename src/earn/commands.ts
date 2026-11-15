@@ -82,8 +82,9 @@ const ownerArg = addressArg
  *
  * The schema is a plain string rather than an enum, for three reasons: the set of chains comes from
  * the registry, which can be swapped after this schema is built; `vault` and `chain` are settled
- * together in ONE place (`resolveVault`), so there is one refusal path to test; and that refusal
- * says what to do next — which chain the vault is on, and which vaults the named chain has.
+ * together in one place per family (`vaultProduct` in `src/earn/api.ts` on the EVM chains,
+ * `resolveAnyVault` on Solana), so each has one refusal path to test; and that refusal says what to
+ * do next, naming the vaults there are.
  *
  * 🔴 It must not throw. This runs while the commands are being BUILT, and it reads the registry: a
  * registry that does not parse would stop every command from running at all, `--help` included.
