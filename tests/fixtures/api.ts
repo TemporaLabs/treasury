@@ -38,7 +38,7 @@ export function registryProducts(): Product[] {
         // A whitelist-gated registry row is a vault the API gates by an allowlist.
         gates: v.depositOpen.open ? ["vault-live", "vault-terms"] : ["allowlist", "vault-live", "vault-terms"],
         warnings: [v.warning],
-        vault: { standard: "erc4626", chain: `eip155:${v.chainId}`, vaultAddress: v.address, assetAddress: v.asset.address, assetDecimals: v.asset.decimals, shareDecimals: v.shareDecimals },
+        vault: { standard: "erc4626", chain: `eip155:${v.chainId}`, vaultAddress: v.address, assetAddress: v.asset.address, assetDecimals: v.asset.decimals, shareDecimals: v.shareDecimals, shareSymbol: v.symbol },
         vaultTerms: TERMS,
         vaultLinks: { explorer: linksFor(v).explorer, venue: null },
       }) as unknown as Product,

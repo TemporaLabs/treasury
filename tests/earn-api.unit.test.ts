@@ -39,6 +39,8 @@ const BASE_VAULT = EARN.defaultVaultAddressByChain.base;
 const DEMO_VAULT = getVault("tlCashPlusUSDC2").address;
 const ARB_VAULT = EARN.defaultVaultAddressByChain.arbitrum;
 const OTHER_VAULT = "0xBEEF01735c132Ada46AA9aA4c54623cAA92A64CB";
+/** Each vault's share ticker, as the API names it (`vault.shareSymbol`); the registry has none for OTHER_VAULT. */
+const SHARE_SYMBOL: Record<string, string> = { [BASE_VAULT]: "tlCashPlusUSDC2B", [DEMO_VAULT]: "tlCashPlusUSDC2", [ARB_VAULT]: "tlCashPlusUSDC2C", [OTHER_VAULT]: "pubUSDC" };
 const VAULT = BASE_VAULT;
 const ASSET = `0x${"22".repeat(20)}`;
 /** Product ids as opaque as the API's own: sent back to it, never typed by a caller and never shown. */
@@ -77,7 +79,7 @@ function vault(id: string, chainId: number, vaultAddress: string, o: Partial<Pro
     sectorWeights: null,
     methodology: { version: null, month: null },
     stats: { netApy30d: null, tvlUsd: null, subscribers: null, inception: null },
-    vault: { standard: "erc4626", chain, vaultAddress, assetAddress: ASSET, assetDecimals: 6, shareDecimals: 18 },
+    vault: { standard: "erc4626", chain, vaultAddress, assetAddress: ASSET, assetDecimals: 6, shareDecimals: 18, shareSymbol: SHARE_SYMBOL[vaultAddress] ?? "SHARE" },
     vaultFees: { performance: "0.1", management: "0", asOf: null, block: null },
     vaultTerms: { text: TERMS, version: "2026-11-01", sha256: sha256(stringToBytes(TERMS)) },
     vaultLinks: { explorer: `https://explorer.example/address/${vaultAddress}`, venue: null },
@@ -200,7 +202,7 @@ describe("earn vaults", () => {
       [BASE_VAULT, "tlCashPlusUSDC2B"],
       [DEMO_VAULT, "tlCashPlusUSDC2"],
       [ARB_VAULT, "tlCashPlusUSDC2C"],
-      [OTHER_VAULT, null], // a vault the registry has no ticker for is named by its address alone
+      [OTHER_VAULT, "pubUSDC"], // the ticker is the API's, for a vault the registry has no row for too
     ]);
     expect(evm[0]).toMatchObject({
       vault: BASE_VAULT,
@@ -274,7 +276,7 @@ describe("which vault a call is about", () => {
     const log: Log = [];
     expect(await status(log, {})).toMatchObject({ vault: BASE_VAULT, ticker: "tlCashPlusUSDC2B", chain: "base" });
     expect(await status(log, { chain: "arbitrum" })).toMatchObject({ vault: ARB_VAULT, ticker: "tlCashPlusUSDC2C", chain: "arbitrum", chainId: 42161, status: "paused", depositsOpen: false });
-    expect(await status(log, { vault: OTHER_VAULT })).toMatchObject({ vault: OTHER_VAULT, ticker: null, chain: "ethereum", chainId: 1 });
+    expect(await status(log, { vault: OTHER_VAULT })).toMatchObject({ vault: OTHER_VAULT, ticker: "pubUSDC", chain: "ethereum", chainId: 1 });
   });
 
   it("an address is matched in any case", async () => {
@@ -315,7 +317,7 @@ describe("which vault a call is about", () => {
     const unknown = `0x${"ab".repeat(20)}`;
     const err = await refusal(log, { vault: unknown });
     expect(err).toMatch(new RegExp(`the Tempora API knows no vault "${unknown}"`));
-    expect(err).toContain(`tlCashPlusUSDC2B (base), tlCashPlusUSDC2 (base), tlCashPlusUSDC2C (arbitrum), ${OTHER_VAULT} (ethereum)`);
+    expect(err).toContain(`tlCashPlusUSDC2B (base), tlCashPlusUSDC2 (base), tlCashPlusUSDC2C (arbitrum), pubUSDC (ethereum)`);
     expect(await refusal(log, { vault: unknown, chain: "base" })).toMatch(/the vaults the Tempora API lists on base: tlCashPlusUSDC2B, tlCashPlusUSDC2$/);
     // A ticker for a vault the API does not list: refused the same way.
     expect(await refusal(log, { vault: "tlCashPlusUSDC2E" })).toMatch(/the Tempora API knows no vault "tlCashPlusUSDC2E"/);
@@ -347,7 +349,7 @@ describe("which vault a call is about", () => {
     // The same address on two chains: ambiguous until the chain is named, and then it is the one on that chain.
     const onTwoChains = listing([vault(BASE_ID, 8453, BASE_VAULT), vault(ARB_ID, 42161, BASE_VAULT)]);
     expect(await refusal(log, { vault: BASE_VAULT }, onTwoChains)).toMatch(/could not be read from the Tempora API: ambiguous_product/);
-    expect(await status(log, { vault: BASE_VAULT, chain: "arbitrum" }, onTwoChains)).toMatchObject({ vault: BASE_VAULT, chain: "arbitrum", ticker: null });
+    expect(await status(log, { vault: BASE_VAULT, chain: "arbitrum" }, onTwoChains)).toMatchObject({ vault: BASE_VAULT, chain: "arbitrum", ticker: "tlCashPlusUSDC2B" }); // the ticker the API gives it
   });
 
   it("an unknown chain, and a vault named with another chain, are refused", async () => {

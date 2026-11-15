@@ -90,7 +90,7 @@ The Solana vault is a row in `registry/vaults.json`, and a row is a product deci
 Treasury's official registry lists Tempora Labs vaults; proposing a new destination needs Tempora Labs' agreement, so
 say so in the pull request. A row is a set of measurements: `scripts/registry-check.ts` reconciles it against the chain
 it is on, and the pull request should say which block it was measured at. The EVM rows still in the registry are
-read only to show a vault's ticker beside its address and to hold each chain's default: on the EVM chains the Tempora API
+read only to hold each chain's default: on the EVM chains the Tempora API
 lists the vaults, prepares every step and reads the chain. `scripts/registry-check.ts` still reconciles those rows.
 
 A new EVM chain needs:

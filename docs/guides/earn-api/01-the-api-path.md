@@ -18,7 +18,7 @@ This guide is where the code is and why it is shaped the way it is.
 ## Trust the record, check the step
 
 Treasury holds no contract address for these vaults beyond each chain's default, which only names the default to the
-API, and the registry's EVM rows, which only label a response with a ticker. The vault's address, its asset, its decimals and its chain are
+API; a vault's ticker is the API's `shareSymbol`. The vault's address, its asset, its decimals and its chain are
 read from the API's product row on every call, and every step the API prepares is checked against that row and the
 operator's own numbers with `checkSteps` from `@temporalabs/client`: an approval only to the vault's asset, for exactly
 the deposit's amount, with the vault as spender; a deposit only into the vault, paying the shares to the owner; a

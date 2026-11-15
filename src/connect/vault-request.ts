@@ -20,7 +20,7 @@ import { formatUnits, getAddress, keccak256, stringToHex, type Address, type Hex
 import { CHAIN_INFO, chains, type SupportedChainId } from "../client.js";
 import { DISCLOSURES } from "../disclosures.js";
 import { EARN } from "../config/earn.js";
-import { assetsAmount, chainOf, shortAddress, tickerOf, vaultLabel, verifiedTerms, type VaultProduct } from "../earn/api.js";
+import { assetsAmount, chainOf, tickerOf, vaultLabel, verifiedTerms, type VaultProduct } from "../earn/api.js";
 import { describeStep, depositIntent, withdrawIntent, type WithdrawAmount } from "../earn/request.js";
 import { failure } from "../invest/api.js";
 import { FINAL_STATES } from "../invest/flow.js";
@@ -57,7 +57,7 @@ export interface VaultLeg {
 const assetSymbol = (p: VaultProduct) => p.tokens[0] ?? "the vault's asset";
 
 /** The vault as the pages name it: its ticker, or its contract address shortened when it has none. Never the API's product id. */
-const pageSymbol = (p: VaultProduct) => tickerOf(p.vault.vaultAddress, chainOf(p).chainId) ?? shortAddress(p.vault.vaultAddress);
+const pageSymbol = (p: VaultProduct) => tickerOf(p);
 
 /**
  * The leg for `ask` on `p`, for the connected `owner`: its body, the intent its steps are held to, and the digest the

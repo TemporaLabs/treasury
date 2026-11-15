@@ -37,8 +37,8 @@ vault's ticker, which the registry assigns. Each EVM chain's default is a contra
 `tlCashPlusUSDC2E` on Ethereum and `tlCashPlusUSDC2F` on Monad. A default the API does not list now is
 refused, never replaced by another vault.
 
-Every response names a vault on an EVM chain by `vault` (its contract address), `ticker` (the
-registry's ticker for that address, or `null`) and `name` (the API's).
+Every response names a vault on an EVM chain by `vault` (its contract address), `ticker` (its share
+ticker) and `name`, all as the Tempora API gives them.
 
 Every tool that takes an address takes it as `account` — whose shares these are. On an EVM chain the
 owner calls (`earn_status` with `account`, `earn_quote`, `earn_balance`, both prepare commands,
@@ -88,8 +88,8 @@ More fractional digits than the asset has (6 for both) are refused, never trunca
 No inputs. Every vault the Tempora API lists now, on every EVM chain, and the vault on Solana this
 client reads from its own chain. Each EVM row carries:
 
-- `vault` — the vault's contract address, the value every other tool takes as `vault`; `ticker` — the
-  registry's ticker for it, taken as `vault` too, or `null` when it has none; and `name`;
+- `vault` — the vault's contract address, the value every other tool takes as `vault`; `ticker` — its
+  share ticker, as the API gives it, taken as `vault` too; and `name`;
 - `status` — the API's: `live` takes deposits and withdrawals, `paused` takes withdrawals only, and
   anything else takes no deposit. `depositsOpen` is true only for `live`;
 - `isDefault` — whether it is its chain's default;
