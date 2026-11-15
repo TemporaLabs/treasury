@@ -66,7 +66,7 @@ export function offerOf(r: Request, now: number): Offer {
         return { send: s };
       }
       case "wait":
-        return { send: null, why: `Nothing to send now: a step is still being recorded. Wait${typeof next.retryAfterMs === "number" ? ` ${Math.ceil(next.retryAfterMs / 1000)} s` : ""}, then ${read}.` };
+        return { send: null, why: `Nothing to send now: ${typeof next.reason === "string" && next.reason !== "" ? next.reason : "a step is still being recorded"}. Wait${typeof next.retryAfterMs === "number" ? ` ${Math.ceil(next.retryAfterMs / 1000)} s` : ""}, then ${read}.` };
       case "hand_back":
         return {
           send: null,
