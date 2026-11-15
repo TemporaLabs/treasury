@@ -39,8 +39,8 @@ const cases = [
     args: ["earn", "status"],
     code: 0,
     since: "0.1.5",
-    // A verdict either way: the API answered, or the check says it could not be reached. Both exit 0.
-    proof: (o) => o.mode === "health" && (o.apiStatus === "ok" || o.apiStatus === "unreachable"),
+    // The API's own answer: "unreachable" also exits 0, but it is not an answer read over the network, so it fails here.
+    proof: (o) => o.mode === "health" && o.apiStatus === "ok",
   },
   {
     name: "Solana health",
