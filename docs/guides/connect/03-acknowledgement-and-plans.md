@@ -14,8 +14,8 @@ chain, vault name, ticker and explorer link, receiver, what the wallet will ask,
 disclosures, and on a deposit the terms version and sha256. `acknowledgementText` renders it; the same leg always
 produces the same words.
 
-- `operatorWarning` drops the registry warning's closing instruction to the agent, which makes no
-  sense to the operator reading it, and before a withdrawal also drops advice about how much to
+- `operatorWarning` drops the vault warning's closing instruction to the agent (the API's warnings on an EVM
+  chain, the registry row's on Solana), which makes no sense to the operator reading it, and before a withdrawal also drops advice about how much to
   deposit.
 - The disclosures come from `DISCLOSURES.plain` in `src/disclosures.ts`, the short form; the gated
   deposit line is added only for a vault the API gates by an allowlist (on Solana, one not measured open). The full

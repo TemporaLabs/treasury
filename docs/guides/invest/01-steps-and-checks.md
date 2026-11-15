@@ -8,19 +8,20 @@ the wallet is the owner's own.
 
 | file | what it does |
 |---|---|
-| `api.ts` | the API's address (pinned, or `TREASURY_API_URL`), a keyless client, and `asOwner`: one owner call with the kept token, signing in again once when the API refuses it |
-| `challenge.ts` | `checkChallenge`: the six-line sign-in message, every line checked, before the wallet signs it |
-| `page.ts` | the local signing page's server side: one step at a time, each signature checked to be the owner's before the command sees it |
-| `flow.ts` | `ownerWallet` (the page, opened on first use) and `drive`, which carries a request through its steps |
-| `deposit.ts` | the deposit's amount, its body, its check (`checkPortfolioDeposit`) and what the page shows for each step |
-| `withdraw.ts` | the withdrawal's check (`checkPortfolioWithdrawal`), the smart account and holdings from the API's positions, and the EIP-712 domain type |
-| `chain.ts` | BNB Chain's fixed facts: the USDT contract and its CAIP-19 id |
-| `commands.ts` | the five commands |
+| `src/invest/api.ts` | the API's address (pinned in `src/config/invest.ts`, or `TREASURY_API_URL`), a keyless client, and `asOwner` / `withOwner`: one owner call with the kept token (`src/connect/owner-tokens.ts`), signing in again once when the API refuses it. `treasury earn` and `treasury connect` sign in through the same `withOwner` |
+| `src/invest/challenge.ts` | `checkChallenge`: the six-line sign-in message, every line checked, before the wallet signs it |
+| `src/invest/page.ts` | the local signing page's server side: one step at a time, each signature checked to be the owner's before the command sees it |
+| `src/invest/flow.ts` | `ownerWallet` (the page, opened on first use) and `drive`, which carries a request through its steps |
+| `src/invest/deposit.ts` | the deposit's amount, its body, its check (`checkPortfolioDeposit`) and what the page shows for each step |
+| `src/invest/withdraw.ts` | the withdrawal's check (`checkPortfolioWithdrawal`), the smart account and holdings from the API's positions, and the EIP-712 domain type |
+| `src/invest/chain.ts` | BNB Chain's fixed facts: the USDT contract and its CAIP-19 id |
+| `src/invest/commands.ts` | the `invest` commands (`buildInvestCommands`; `treasury invest --help` lists them) |
 
 ## How a request is carried through (`drive`)
 
 1. Before any step reaches the wallet, the **whole request** is checked again. A request the API changed between two
-   steps is held to the same intent, and a refused check stops the command with nothing more signed or sent.
+   steps is held to the same intent, and a refused check stops the command with nothing more signed or sent. A
+   request asking for more than `INVEST.maxSteps` steps is refused, never followed.
 2. The step is prepared from the checked request: what the page shows is built from the step's own bytes and the
    owner's own numbers, never from the API's words.
 3. The wallet signs or sends it, and the result goes back to the API with `submit`. Withdrawal authorizations that
@@ -37,7 +38,7 @@ When the wallet errs after it was asked to send, with no hash, the page says "no
 
 One or two steps: the enrolment signature when the wallet has no account on the portfolio yet, then the transfer.
 `checkPortfolioDeposit` holds the transfer to `transfer(smartAccount, amount)` on the USDT contract pinned in
-`chain.ts`, exactly the amount asked, with no value; the enrolment to exactly 32 bytes. The enrolment is a hash
+`src/invest/chain.ts`, exactly the amount asked, with no value; the enrolment to exactly 32 bytes. The enrolment is a hash
 nobody can read on its own, so the page says so. The smart account comes from the API: the check cannot vouch for
 it, and the API verifies on chain that the transfer left the owner's wallet for it.
 

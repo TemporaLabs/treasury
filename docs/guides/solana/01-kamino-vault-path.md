@@ -27,15 +27,16 @@ from a scratch directory as the script's header describes, never by hand.
 
 The header of `src/earn/solana.ts` lists the contracts; the reasons, in short:
 
-- **One transaction, not a list of calls**, as base64 wire bytes. It names a recent blockhash, so it
+- **One transaction, not a request of steps**, as base64 wire bytes, built here rather than by the Tempora API. It names a recent blockhash, so it
   **expires** after a block height that the envelope states in structure
   (`transaction.expiresAfterBlockHeight`), not only in prose (`envelope`, `freshLifetime`).
 - **Simulated before it is returned.** A transaction the program would refuse comes back as the
   program's refusal, not as something to sign.
-- **No receiver.** The program mints shares to the signer and pays a withdrawal to the account whose
-  shares burn, so `--receiver` must equal `--account` (`sameAsAccount`).
-- **No approval and no history.** Basis and yield are reported as unknown, and the note points to the
-  account's own transactions.
+- **`--receiver` must be the account.** The program mints shares to the signer and pays a withdrawal to the account
+  whose shares burn, so `--receiver` must equal `--account` (`sameAsAccount`). On the EVM chains `earn` takes no
+  `--receiver` at all.
+- **No approval.** A deposit has no separate approval step. Basis and yield are reported as unknown, as they are on
+  the EVM chains, and the note points to the account's own transactions.
 - **The cluster check.** `onMainnet` asks which cluster the endpoint serves beside the reads, and
   reports a devnet or local endpoint instead of the "no account" errors it causes.
 
