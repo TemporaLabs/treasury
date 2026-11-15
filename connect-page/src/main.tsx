@@ -345,6 +345,9 @@ function Confirm({ info }: { info: Extract<Info, { mode: "confirm"; chain?: unde
       // Gas: the estimate × 1.5. A Morpho Vault V2 call can run out of gas on an unbuffered estimate.
       stage = "estimate";
       const est = BigInt((await provider.request({ method: "eth_estimateGas", params: [tx] })) as string);
+      // The wallet's network switch can sit open: read the time left again just before the send.
+      const left = (await fetch(`/info?s=${secret}`).then((r) => (r.ok ? r.json() : undefined), () => undefined)) as { msLeft?: number } | undefined;
+      if (!left || (left.msLeft ?? 0) < 60_000) throw new Error("less than a minute is left on this page; run the command again");
       stage = "send";
       hash = (await provider.request({ method: "eth_sendTransaction", params: [{ ...tx, chainId: `0x${info.chainId.toString(16)}`, gas: `0x${((est * 3n) / 2n).toString(16)}` }] })) as string;
       const sentHash = hash;

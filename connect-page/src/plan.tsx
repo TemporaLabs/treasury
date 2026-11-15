@@ -321,6 +321,12 @@ function PlanPage({ info: first, solana }: { info: PlanInfo; solana?: SolanaSide
         const tx = { from: wallet.address, to: call.to, data: call.data, value: call.value };
         stage = "estimate";
         const est = BigInt((await provider.request({ method: "eth_estimateGas", params: [tx] })) as string);
+        // The wallet's network switch can sit open: read the time left again just before the send.
+        const left = await readInfo();
+        if (left === "gone") throw new Error("the page lost its connection to your agent");
+        if (left.msLeft < 60_000) {
+          throw Object.assign(new Error("less than a minute is left before your agent's run pauses, too little to confirm in your wallet"), { late: true });
+        }
         stage = "send";
         hash = (await provider.request({ method: "eth_sendTransaction", params: [{ ...tx, chainId: `0x${leg.chainId.toString(16)}`, gas: `0x${((est * 3n) / 2n).toString(16)}` }] })) as string;
         setLocal({ leg: leg.leg, phase: "sent" });
