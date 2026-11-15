@@ -11,15 +11,15 @@ Pre-1.0, minor versions may change tool names, schemas and behaviour.
   Monad, `treasury earn` and `treasury connect` now call the Tempora API, and nothing else: its MCP endpoint for
   every read and request, its HTTP routes for the owner's sign-in. They read no RPC there, except `connect wallet`'s
   check of a smart-contract wallet's sign-in. The API lists the vaults, and a deposit reaches the vault it lists:
-  Treasury names a vault only by its contract address, and keeps only each chain's default vault address; everything
-  else about a vault is the API's. Every step the API
+  Treasury keeps only each chain's default vault address, and `--vault` (a contract address or a ticker) goes to the API
+  as given; everything else about a vault is the API's. Every step the API
   prepares is checked against the API's own record of the vault, and against what the operator asked for, by
   `@temporalabs/client`'s `checkSteps` before a wallet sees it: a wrong step is caught, a wrong record is not.
   Solana is unchanged and still reads its chain directly.
-- **`@temporalabs/client` is installed from npm**, pinned to `0.1.0`, instead of from a release download. The package
-  is the same build, byte for byte.
-- **TypeScript 6.0.3**, pinned, for the library and the connect page, the version `@temporalabs/client` is built
-  with. The built CLI and page are unchanged, byte for byte. The page overrides the optional TypeScript peer range of
+- **A new dependency, `@temporalabs/client` `0.1.0`**, pinned, from npm: the Tempora API's client, which makes every
+  call to the API and checks every step it prepares.
+- **TypeScript 6.0.3**, pinned (was `^5.9.0`; `^5.6.0` for the page), for the library and the connect page, the version
+  `@temporalabs/client` is built with. The page overrides the optional TypeScript peer range of
   the `@solana/kit` copy its wallet library brings in, which still names TypeScript 5.
 - **viem 2.57.17**, pinned, for the library and the connect page (was `^2.57.16`), with its own `ox` 0.14.63. The
   built CLI and page are rebuilt with it. `zod` (`4.6.7`, the version `@temporalabs/client` pins), `@types/node`
@@ -60,13 +60,29 @@ Pre-1.0, minor versions may change tool names, schemas and behaviour.
   their advisories. The page is rebuilt with it.
 
 ### Added
+- **`treasury invest`, for Tempora Labs' Smart Growth portfolios** (USDT on BNB Chain), through the Tempora API:
+  `invest products`, `invest balance`, `invest deposit`, `invest withdraw` (everything, paid to the connected wallet)
+  and `invest request`. A deposit and a withdrawal open the local page's invest view, where the operator's own wallet
+  signs in, signs the enrolment when the wallet has no account on the portfolio yet, sends the USDT transfer, and
+  signs a withdrawal's authorizations (typed data, which the rest of the page may not sign). Every step the API
+  prepares is checked first by `@temporalabs/client`'s own checks to what the operator asked for. A portfolio is open
+  only to the wallets the API admits. See the [security model](docs/security-model.md#smart-growth-portfolios-treasury-invest).
+- **`TREASURY_API_URL`** points `earn`, `connect` and `invest` at another Tempora API deployment (default
+  `https://api.temporalabs.com`). The wallet signs the API's sign-in message only when it names this URL's host.
+- **The API sign-in is kept between commands** in `owner-tokens.json` beside the session file (mode 0600;
+  `TREASURY_CONNECT_HOME` moves it). This file holds a credential: a token that can read the owner's account and start
+  or cancel requests, never move money. It expires on its own; `connect disconnect` deletes it and reports
+  `hadOwnerTokens`.
+- **The CLI's third-party notices carry each bundled package's NOTICE file** with its licence.
 - **`earn submit`** hands the hash of a step the connected wallet sent to the API, with the wallet's nonce and sender
   when known, and answers with the request and any next step, checked.
 - **`earn request`** reads a request again by id or by transaction hash, or cancels one still waiting.
 
 ### Removed
 - **`earn claim`.** No vault queues withdrawals, and a request's state is now read with `earn request`.
-- **The local EVM builders, pre-flight and readers.** The vaults on the EVM chains are reached through the Tempora
+- **The local EVM builders, pre-flight and readers.** A library user who imports any of the names below must pin
+  0.1.4 exactly (`npm install --save-exact @temporalabs/treasury@0.1.4`): a `^0.1.4` range resolves to this release.
+  The vaults on the EVM chains are reached through the Tempora
   API, which prepares and checks every step, so treasury's own code for them is gone. Removed from the library:
   `buildDeposit`, `buildWithdraw`, `UnsignedCall`, `preflightDeposit`, `classifyRevert`, `extractRevert`,
   `PreflightResult`, `PreflightStatus`, `RevertObservation`, `quoteDeposit`, `quoteWithdraw`, `DepositQuote`,

@@ -16,7 +16,7 @@
  * Exit status: 0 with the result on stdout; 1 with `{ "error": … }` on stderr when the command could not
  * run as asked (a vault on another chain, an unknown or repeated flag, a malformed address, an
  * unreachable RPC on a read that needs it) — never a result, so a caller cannot read it as an answer. A
- * VERDICT is a result: `earn status` reporting `WHITELIST_GATED` or `rpc: "wrong_chain"` exits 0, and
+ * VERDICT is a result: `earn status` reporting `not_admitted` or `apiStatus: "unreachable"` exits 0, and
  * its fields say what it found. A switch (`--all`) takes no value.
  */
 import { realpathSync } from "node:fs";
