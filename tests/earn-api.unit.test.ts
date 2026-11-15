@@ -854,6 +854,11 @@ describe("earn request", () => {
       }
     });
 
+    it("next: wait says the API's own reason when it gives one", async () => {
+      const { out } = await shown(status({ next: { kind: "wait", retryAfterMs: 5000, until: iso(NOW + 60_000), gate: "vault-live", reason: "The vault is not taking deposits right now" } }));
+      expect(out.next_step).toMatch(/^Nothing to send now: The vault is not taking deposits right now\. Wait 5 s/);
+    });
+
     it("a next kind this client does not know sends nothing, and says to read the request again", async () => {
       const { out, sends } = await shown(status({ next: { kind: "teleport", stepId: "s1" } }));
       expect(sends).toEqual([]);
