@@ -51,7 +51,10 @@ Pre-1.0, minor versions may change tool names, schemas and behaviour.
   just before the wallet is asked; each hash goes to the API, whose reading is the verdict reported. A step the API
   puts up again after it was sent is refused, a hash the page could not hand over is still submitted once, a wallet
   error after the send was asked for is "not confirmed sent", and the result names the request. A request nothing
-  was sent for is cancelled. On an EVM chain `--all` alone, and a plan's "withdraw <vault> all" leg, withdraw the
+  was sent for is cancelled. Each step reaches the wallet only when the API's next action (`next`) names it, at its
+  generation: the flow waits while the API says wait, and stops, saying what to do, when it says the request is
+  done, failed, cancelled or expired, asks for a hash back, or answers with a next action this client does not know.
+  On an EVM chain `--all` alone, and a plan's "withdraw <vault> all" leg, withdraw the
   whole position as it stands when the withdrawal runs.
 - The signer rules drop the receiver check and the gas-limit rule, and add: send only a `ready` step, and submit
   the hash you have rather than sending again.

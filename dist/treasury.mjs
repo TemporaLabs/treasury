@@ -46011,8 +46011,8 @@ function resolveVault(symbol2, chain) {
   if (chain) {
     if (chain === SOLANA_INFO.key) throw new Error(`chain "${chain}" has no ERC-4626 vault; this resolves the EVM vaults only, and the Solana vault is reached through the CLI (\`treasury earn \u2026 --chain solana\`)`);
     chainId = chainIdForKey(chain);
-    const offered2 = offeredChains();
-    if (chainId === void 0 || !offered2.some((c) => c.chainId === chainId)) {
+    const offered3 = offeredChains();
+    if (chainId === void 0 || !offered3.some((c) => c.chainId === chainId)) {
       throw new Error(`unknown chain "${chain}"; chains with a vault: ${offeredChainKeys().join(", ")}`);
     }
   }
@@ -49127,14 +49127,14 @@ var ownerArg = addressArg.optional().describe(
   "the account whose shares these are \u2014 the depositor, the owner, the holder. On an EVM chain it is the connected wallet (`treasury connect wallet`), and may be left out; another account is refused. Required on Solana"
 );
 var chainArg = () => {
-  let offered2;
+  let offered3;
   try {
-    offered2 = offeredChainKeys();
+    offered3 = offeredChainKeys();
   } catch {
-    offered2 = supportedChainIds.map((id) => CHAIN_INFO[id].key);
+    offered3 = supportedChainIds.map((id) => CHAIN_INFO[id].key);
   }
   return external_exports.string().optional().describe(
-    `which chain: ${offered2.map((k) => `"${k}"`).join(" or ")}. Omit for ${CHAIN_INFO[defaultChainId()].key} (the default), or when \`vault\` already names a vault. If the operator has not said which chain to deposit on, ASK them before preparing a deposit. A \`vault\` that is on a different chain than \`chain\` is refused.`
+    `which chain: ${offered3.map((k) => `"${k}"`).join(" or ")}. Omit for ${CHAIN_INFO[defaultChainId()].key} (the default), or when \`vault\` already names a vault. If the operator has not said which chain to deposit on, ASK them before preparing a deposit. A \`vault\` that is on a different chain than \`chain\` is refused.`
   );
 };
 function hintChain(args) {
@@ -50282,6 +50282,31 @@ function vaultLeg(p, owner, ask) {
 var intentOf2 = (leg, owner) => leg.form.kind === "deposit" ? depositIntent(leg.product, owner, leg.form.raw) : withdrawIntent(leg.product, owner, leg.form.amount);
 var payloadOf4 = (s2) => s2.payload;
 var HASH2 = /^0x[0-9a-fA-F]{64}$/;
+var nextOf = (r) => r.next;
+var offered2 = (r, s2) => {
+  const n = nextOf(r);
+  return n.kind === "send" && n.stepId === s2.stepId && s2.state === "ready" && payloadOf4(s2)?.generation === n.generation;
+};
+function nextStops(r, read, again) {
+  const n = nextOf(r);
+  switch (n.kind) {
+    case "send":
+    case "wait":
+      return null;
+    case "done":
+      return null;
+    case "hand_back":
+      return `the API asks for the hash of step ${String(n.stepId)}: it may already have been sent. Do not send it again; read the request with ${read}`;
+    case "failed":
+      return `request ${r.requestId} failed${typeof n.reason === "string" ? `: ${n.reason}` : ""}; read it with ${read}`;
+    case "cancelled":
+      return `request ${r.requestId} was cancelled${n.sent === true ? " after a step was sent" : ""}; read it with ${read}`;
+    case "expired":
+      return `request ${r.requestId} ran out before it was finished; nothing more is sent for it. To go on, ${again}`;
+    default:
+      return `the API answered request ${r.requestId} with a next action this client does not know (${String(n.kind)}); nothing more is sent. Read it with ${read}`;
+  }
+}
 var LANDED = ["landed", "completed"];
 var FAILED = { reverted: "reverted", failed: "reverted", mismatch: "mismatch", replaced: "mismatch" };
 async function startVaultCore(leg, session, deps, deadline) {
@@ -50302,6 +50327,33 @@ async function startVaultCore(leg, session, deps, deadline) {
     await cancel();
     throw new Error(`refused${first.step !== null ? ` (step ${first.step + 1} of ${request.steps.length})` : ""}: ${first.reason}. Nothing was sent, and request ${rid} was cancelled`);
   }
+  const again = `run the command again`;
+  for (; ; ) {
+    const stops = nextStops(request, read, again);
+    if (stops) {
+      await cancel();
+      throw new Error(`${stops}. Nothing was sent`);
+    }
+    const n = nextOf(request);
+    if (n.kind === "send" || n.kind === "done") break;
+    const waitMs = Math.max(pollMs, typeof n.retryAfterMs === "number" ? n.retryAfterMs : 0);
+    if (now() + waitMs >= deadline) {
+      await cancel();
+      throw new Error(`the API did not offer the first step of request ${rid} in time${typeof n.reason === "string" ? ` (${n.reason})` : ""}. Nothing was sent, and the request was cancelled`);
+    }
+    await sleep(waitMs);
+    const r = await deps.call((m, ownerToken) => m.status({ path: { requestId: rid } }, { ownerToken }));
+    if (!r.ok) {
+      await cancel();
+      throw failure2(`Request ${rid} could not be read before anything was sent`, r);
+    }
+    request = r.body;
+    const c = checkSteps(request.steps, intent);
+    if (!c.ok) {
+      await cancel();
+      throw new Error(`refused${c.step !== null ? ` (step ${c.step + 1} of ${request.steps.length})` : ""}: ${c.reason}. Nothing was sent, and request ${rid} was cancelled`);
+    }
+  }
   const done = [];
   const sent = /* @__PURE__ */ new Map();
   const pending = [];
@@ -50309,7 +50361,7 @@ async function startVaultCore(leg, session, deps, deadline) {
   const known = (h) => done.some((t) => t.hash.toLowerCase() === h.toLowerCase());
   const calls = () => request.steps.map((s2, i) => {
     const payload = payloadOf4(s2);
-    const sendable = payload !== void 0 && s2.state === "ready" && !sent.has(s2.stepId);
+    const sendable = payload !== void 0 && offered2(request, s2) && !sent.has(s2.stepId);
     const d = payload ? describeStep(p, payload.to, payload.data) : void 0;
     const purpose = s2.purpose;
     const after = s2.after;
@@ -50345,8 +50397,8 @@ async function startVaultCore(leg, session, deps, deadline) {
   const checked = () => {
     const c = checkSteps(request.steps, intent);
     if (!c.ok) return `refused${c.step !== null ? ` (step ${c.step + 1} of ${request.steps.length})` : ""}: ${c.reason}. Nothing more was sent; read the request with ${read}`;
-    const again = request.steps.find((s2) => sent.has(s2.stepId) && s2.state === "ready" && payloadOf4(s2) !== void 0);
-    if (again) return `refused: the API asks for step ${again.stepId} again after it was sent (transaction ${sent.get(again.stepId)}); not sent twice. Read the request with ${read}`;
+    const again2 = request.steps.find((s2) => sent.has(s2.stepId) && s2.state === "ready" && payloadOf4(s2) !== void 0);
+    if (again2) return `refused: the API asks for step ${again2.stepId} again after it was sent (transaction ${sent.get(again2.stepId)}); not sent twice. Read the request with ${read}`;
     return void 0;
   };
   const verdictOf = (s2) => {
@@ -50404,7 +50456,7 @@ async function startVaultCore(leg, session, deps, deadline) {
       if (typeof hash4 !== "string" || !HASH2.test(hash4)) return { ok: false, reason: "malformed transaction hash" };
       if (known(hash4)) return { ok: false, reason: "this transaction hash was already reported for an earlier step" };
       const s2 = request.steps[index2];
-      if (!s2 || s2.state !== "ready" || payloadOf4(s2) === void 0 || sent.has(s2.stepId)) return { ok: false, reason: `step ${index2 + 1} is not ready to send` };
+      if (!s2 || !offered2(request, s2) || sent.has(s2.stepId)) return { ok: false, reason: `step ${index2 + 1} is not the step the API offers to send now` };
       const description = calls()[index2].description;
       const entry = { step: index2 + 1, stepId: s2.stepId, description, hash: hash4, verified: "unverified", detail: "the flow ended while this transaction was being recorded" };
       done.push(entry);
@@ -50432,14 +50484,19 @@ async function startVaultCore(leg, session, deps, deadline) {
           Object.assign(entry, v);
           return { ok: true, kind: "finished", reply: { finished: true, verdict: v } };
         }
-        const nextReady = request.steps.find((x, j) => j > index2 && x.state === "ready" && payloadOf4(x) !== void 0 && !sent.has(x.stepId));
+        const stops = nextStops(request, read, `start a new ${leg.action}`);
+        if (stops) return stop(stops, v.verified === "unverified" ? void 0 : v);
+        const n = nextOf(request);
+        const nextReady = request.steps.find((x, j) => j > index2 && offered2(request, x) && !sent.has(x.stepId));
         if (v.verified !== "unverified" && nextReady) {
           delete entry.detail;
           Object.assign(entry, v);
           return { ok: true, kind: "next", reply: { next: index2 + 1, verdict: v } };
         }
-        if (now() + pollMs >= deadline) return stop(`step ${index2 + 1} was sent and recorded, but request ${rid} is still ${request.state}; read it with ${read}`);
-        await sleep(pollMs);
+        if (n.kind === "send" && !nextReady) return stop(`the API offers step ${String(n.stepId)}, which this flow does not hold ready to send; read the request with ${read}`, v.verified === "unverified" ? void 0 : v);
+        const waitMs = Math.max(pollMs, n.kind === "wait" && typeof n.retryAfterMs === "number" ? n.retryAfterMs : 0);
+        if (now() + waitMs >= deadline) return stop(`step ${index2 + 1} was sent and recorded, but request ${rid} is still ${request.state}; read it with ${read}`);
+        await sleep(waitMs);
         const unread = await refresh();
         if (unread) return stop(`${unread}; transaction ${hash4} was recorded. Do not send it again`);
       }
