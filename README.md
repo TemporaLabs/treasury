@@ -61,11 +61,11 @@ your own. For the vault on Solana, use a keyed RPC; the public fallback rate-lim
 
 ```bash
 export TREASURY_RPC_SOLANA=https://...    # only if you will use the vault on Solana
-claude plugin marketplace add TemporaLabs/treasury@v0.1.4
+claude plugin marketplace add TemporaLabs/treasury@v0.1.5
 claude plugin install treasury@treasury
 ```
 
-Start a new Claude Code session after installing so the Earn skill loads. Keep the `TemporaLabs/treasury@v0.1.4` ref
+Start a new Claude Code session after installing so the Earn skill loads. Keep the `TemporaLabs/treasury@v0.1.5` ref
 explicit so the install stays on a release rather than tracking the default branch. Upgrading an
 earlier install? Run `claude plugin marketplace remove treasury` first, then the two `claude plugin` lines above
 ([details](docs/install.md#upgrading-an-earlier-install)).
@@ -77,7 +77,7 @@ command at a time; nothing stays running.
 ### Any agent with a shell
 
 ```bash
-npm install --save-exact @temporalabs/treasury@0.1.4
+npm install --save-exact @temporalabs/treasury@0.1.5
 npx --no-install treasury earn --help     # every command and flag, as JSON
 ```
 
