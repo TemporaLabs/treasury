@@ -51,15 +51,15 @@
   "dependencies": {
     "@temporalabs/client": "0.1.0",
     "@solana/kit": "^8.6.0",
-    "viem": "^2.57.16",
-    "zod": "^4.1.0"
+    "viem": "2.57.17",
+    "zod": "4.6.7"
   },
   "devDependencies": {
-    "@types/node": "^22.15.0",
+    "@types/node": "22.20.5",
     "tsup": "^9.0.0",
     "tsx": "^4.20.0",
     "typescript": "6.0.3",
-    "vitest": "^5.1.0"
+    "vitest": "5.1.0"
   },
   "overrides": {
     "esbuild@^0.27.0": "0.27.2"

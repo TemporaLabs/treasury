@@ -21,6 +21,9 @@ Pre-1.0, minor versions may change tool names, schemas and behaviour.
 - **TypeScript 6.0.3**, pinned, for the library and the connect page, the version `@temporalabs/client` is built
   with. The built CLI and page are unchanged, byte for byte. The page overrides the optional TypeScript peer range of
   the `@solana/kit` copy its wallet library brings in, which still names TypeScript 5.
+- **viem 2.57.17**, pinned, for the library and the connect page (was `^2.57.16`), with its own `ox` 0.14.63. The
+  built CLI and page are rebuilt with it. `zod` (`4.6.7`, the version `@temporalabs/client` pins), `@types/node`
+  (`22.20.5`) and `vitest` (`5.1.0`) are pinned to the versions they already resolved to.
 - **`--vault` takes the vault's contract address or its ticker on the EVM chains** (for example `tlCashPlusUSDC2B`,
   or its address `0x91BcEbA5feCB9E92d80F1845B55cC56621E9352F`, Base's default). The address picks the vault the API
   lists; an address no listed vault has, or more than one has, is refused. Each chain's default is a contract address,

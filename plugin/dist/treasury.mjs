@@ -1034,7 +1034,7 @@ var version3;
 var init_version2 = __esm({
   "node_modules/viem/_esm/errors/version.js"() {
     "use strict";
-    version3 = "2.57.16";
+    version3 = "2.57.17";
   }
 });
 
@@ -2820,7 +2820,7 @@ function isArgOfType(arg, abiParameter) {
           return false;
         const bytes = abiParameterType.slice(5);
         if (!bytes)
-          return true;
+          return arg instanceof Uint8Array || isHex(arg);
         if (typeof arg === "string" && !isHex(arg))
           return false;
         return size(arg) === Number.parseInt(bytes, 10);
@@ -7406,8 +7406,11 @@ async function recoverPublicKey({ hash: hash4, signature }) {
   const signature_ = (() => {
     if (typeof signature === "object" && "r" in signature && "s" in signature) {
       const { r, s: s2, v, yParity } = signature;
-      const yParityOrV2 = Number(yParity ?? v);
-      const recoveryBit2 = toRecoveryBit(yParityOrV2);
+      const recoveryBit2 = (() => {
+        if (yParity === void 0 && v !== void 0 && v >= 35n)
+          return v % 2n === 0n ? 1 : 0;
+        return toRecoveryBit(Number(yParity ?? v));
+      })();
       return new secp256k12.Signature(hexToBigInt(r), hexToBigInt(s2)).addRecoveryBit(recoveryBit2);
     }
     const signatureHex = isHex(signature) ? signature : toHex(signature);
@@ -9045,7 +9048,7 @@ async function prepareTransactionRequest(client, args) {
     request = await prepareTransactionRequest2.fn({ ...request, chain }, {
       client,
       phase: "beforeFillTransaction"
-    });
+    }) ?? request;
     nonce ??= request.nonce;
     const sender = request.account ?? request.from;
     account = sender ? parseAccount(sender) : void 0;
@@ -9078,37 +9081,38 @@ async function prepareTransactionRequest(client, args) {
       return true;
     return false;
   })();
-  const fillResult = attemptFill ? await getAction(client, fillTransaction, "fillTransaction")({ ...request, nonce }).then((result) => {
+  const fill2 = (request2) => getAction(client, fillTransaction, "fillTransaction")({ ...request2, nonce }).then((result) => {
     const { chainId: chainId2, from: from16, gas: gas2, gasPrice, nonce: nonce2, maxFeePerBlobGas, maxFeePerGas, maxPriorityFeePerGas, type: type2, ...rest } = result.transaction;
     const feeToken = "feeToken" in rest ? rest.feeToken : void 0;
     const hasFilledFeePayerSignature = "feePayerSignature" in rest && rest.feePayerSignature !== null && typeof rest.feePayerSignature !== "undefined";
-    const shouldUseFilledFeeToken = typeof feeToken !== "undefined" && feeToken !== null && (!("feeToken" in request) || hasFilledFeePayerSignature);
+    const shouldUseFilledFeeToken = typeof feeToken !== "undefined" && feeToken !== null && (!("feeToken" in request2) || hasFilledFeePayerSignature);
     supportsFillTransaction.set(client.uid, true);
-    const { feeToken: _feeToken, ...unsponsored } = request;
+    const { feeToken: _feeToken, ...unsponsored } = request2;
     return {
-      ...hasFilledFeePayerSignature ? unsponsored : request,
+      ...hasFilledFeePayerSignature ? unsponsored : request2,
       ...from16 ? { from: from16 } : {},
-      ...type2 && !request.type ? { type: type2 } : {},
+      ...type2 && !request2.type ? { type: type2 } : {},
       ...typeof chainId2 !== "undefined" ? { chainId: chainId2 } : {},
       ...typeof gas2 !== "undefined" ? { gas: gas2 } : {},
       ...typeof gasPrice !== "undefined" ? { gasPrice } : {},
       ...typeof nonce2 !== "undefined" ? { nonce: nonce2 } : {},
-      ...typeof maxFeePerBlobGas !== "undefined" && request.type !== "legacy" && request.type !== "eip2930" ? { maxFeePerBlobGas } : {},
-      ...typeof maxFeePerGas !== "undefined" && request.type !== "legacy" && request.type !== "eip2930" ? { maxFeePerGas } : {},
-      ...typeof maxPriorityFeePerGas !== "undefined" && request.type !== "legacy" && request.type !== "eip2930" ? { maxPriorityFeePerGas } : {},
+      ...typeof maxFeePerBlobGas !== "undefined" && request2.type !== "legacy" && request2.type !== "eip2930" ? { maxFeePerBlobGas } : {},
+      ...typeof maxFeePerGas !== "undefined" && request2.type !== "legacy" && request2.type !== "eip2930" ? { maxFeePerGas } : {},
+      ...typeof maxPriorityFeePerGas !== "undefined" && request2.type !== "legacy" && request2.type !== "eip2930" ? { maxPriorityFeePerGas } : {},
       ..."nonceKey" in rest && typeof rest.nonceKey !== "undefined" ? { nonceKey: rest.nonceKey } : {},
       // Validity bounds are part of the fee-payer signing payload.
       ..."validBefore" in rest && rest.validBefore !== null && typeof rest.validBefore !== "undefined" ? { validBefore: rest.validBefore } : {},
       ..."validAfter" in rest && rest.validAfter !== null && typeof rest.validAfter !== "undefined" ? { validAfter: rest.validAfter } : {},
-      ..."keyAuthorization" in rest && typeof rest.keyAuthorization !== "undefined" && rest.keyAuthorization !== null && !("keyAuthorization" in request) ? { keyAuthorization: rest.keyAuthorization } : {},
+      ..."keyAuthorization" in rest && typeof rest.keyAuthorization !== "undefined" && rest.keyAuthorization !== null && !("keyAuthorization" in request2) ? { keyAuthorization: rest.keyAuthorization } : {},
       ..."feePayerSignature" in rest && typeof rest.feePayerSignature !== "undefined" && rest.feePayerSignature !== null ? { feePayerSignature: rest.feePayerSignature } : {},
       ...shouldUseFilledFeeToken ? { feeToken } : {},
       ...result.capabilities ? { _capabilities: result.capabilities } : {}
     };
-  }).catch((e4) => {
+  });
+  const recover = (e4, request2) => {
     const error62 = e4;
     if (error62.name !== "TransactionExecutionError")
-      return request;
+      return request2;
     const nonceMismatch = error62.walk?.((error63) => error63 instanceof FeePayerNonceMismatchError);
     if (nonceMismatch)
       throw e4;
@@ -9124,7 +9128,13 @@ async function prepareTransactionRequest(client, args) {
     });
     if (unsupported)
       supportsFillTransaction.set(client.uid, false);
-    return request;
+    return request2;
+  };
+  const fillResult = attemptFill ? await fill2(request).catch(async (error62) => {
+    const retry = prepareTransactionRequest2?.fn && prepareTransactionRequest2.runAt?.includes("afterFillTransactionError") ? await prepareTransactionRequest2.fn({ ...request, chain }, { client, error: error62, phase: "afterFillTransactionError" }) : void 0;
+    if (!retry)
+      return recover(error62, request);
+    return fill2(retry).catch((error63) => recover(error63, retry));
   }) : request;
   nonce ??= fillResult.nonce;
   request = {
@@ -9137,7 +9147,7 @@ async function prepareTransactionRequest(client, args) {
     request = await prepareTransactionRequest2.fn({ ...request, chain }, {
       client,
       phase: "beforeFillParameters"
-    });
+    }) ?? request;
   }
   let block;
   async function getBlock2() {
@@ -9227,7 +9237,7 @@ async function prepareTransactionRequest(client, args) {
     request = await prepareTransactionRequest2.fn({ ...request, chain }, {
       client,
       phase: "afterFillParameters"
-    });
+    }) ?? request;
   assertRequest(request);
   delete request.parameters;
   return request;
@@ -9666,6 +9676,8 @@ function includesArgs(parameters) {
       }
       if (typeof value === "string" && typeof arg === "string" && bytesRegex2.test(input2.type))
         return value.toLowerCase() === arg.toLowerCase();
+      if (integerRegex2.test(input2.type) && (typeof value === "number" || typeof value === "bigint") && (typeof arg === "number" || typeof arg === "bigint"))
+        return BigInt(value) === BigInt(arg);
       return value === arg;
     } catch {
       return false;
@@ -10333,7 +10345,7 @@ function assert3(value, options = {}) {
   if (typeof value !== "string")
     throw new InvalidHexTypeError(value);
   if (strict) {
-    if (!/^0x[0-9a-fA-F]*$/.test(value))
+    if (!hexRegex.test(value))
       throw new InvalidHexValueError(value);
   }
   if (!value.startsWith("0x"))
@@ -10451,7 +10463,7 @@ function validate3(value, options = {}) {
     return false;
   }
 }
-var encoder4, hexes3, IntegerOutOfRangeError2, InvalidHexTypeError, InvalidHexValueError, InvalidLengthError, SizeOverflowError3, SliceOffsetOutOfBoundsError3, SizeExceedsPaddingSizeError3;
+var encoder4, hexes3, hexRegex, IntegerOutOfRangeError2, InvalidHexTypeError, InvalidHexValueError, InvalidLengthError, SizeOverflowError3, SliceOffsetOutOfBoundsError3, SizeExceedsPaddingSizeError3;
 var init_Hex = __esm({
   "node_modules/ox/_esm/core/Hex.js"() {
     "use strict";
@@ -10460,6 +10472,7 @@ var init_Hex = __esm({
     init_Json();
     encoder4 = /* @__PURE__ */ new TextEncoder();
     hexes3 = /* @__PURE__ */ Array.from({ length: 256 }, (_v, i) => i.toString(16).padStart(2, "0"));
+    hexRegex = /^0x[0-9a-fA-F]*$/;
     IntegerOutOfRangeError2 = class extends BaseError3 {
       constructor({ max, min, signed, size: size5, value }) {
         super(`Number \`${value}\` is not in safe${size5 ? ` ${size5 * 8}-bit` : ""}${signed ? " signed" : " unsigned"} integer range ${max ? `(\`${min}\` to \`${max}\`)` : `(above \`${min}\`)`}`);
@@ -13635,6 +13648,15 @@ function getHttpRpcClient(url_, options = {}) {
             timeout > 0 ? timeoutSignal : null
           ]);
           try {
+            const headers_ = {};
+            for (const init2 of [
+              headers_url,
+              { "Content-Type": "application/json" },
+              headers
+            ])
+              new Headers(init2).forEach((value, key) => {
+                headers_[key] = value;
+              });
             const init = {
               ...fetchOptions,
               body: Array.isArray(body) ? stringify2(body.map((body2) => ({
@@ -13646,11 +13668,7 @@ function getHttpRpcClient(url_, options = {}) {
                 id: body.id ?? idCache.take(),
                 ...body
               }),
-              headers: {
-                ...headers_url,
-                "Content-Type": "application/json",
-                ...headers
-              },
+              headers: headers_,
               method: method || "POST",
               signal
             };
@@ -13842,7 +13860,7 @@ var init_typedData = __esm({
       constructor({ type }) {
         super(`Struct type "${type}" is invalid.`, {
           metaMessages: [
-            'Struct type must contain only letters, digits, "_" and "$", and must not be a Solidity type.'
+            'Struct type must contain only letters, digits, "_", "$" and ":", and must not be a Solidity type.'
           ],
           name: "InvalidStructTypeError"
         });
@@ -13933,7 +13951,7 @@ function isSolidityType2(type) {
   return type === "address" || type === "bool" || type === "string" || bytesRegex2.test(type) || integerRegex2.test(type);
 }
 function validateReference(type) {
-  if (!/^[A-Za-z0-9_$]+$/.test(type) || type === "address" || type === "bool" || type === "string" || /^(u?int|bytes)[0-9]*$/.test(type))
+  if (!/^[A-Za-z0-9_$:]+$/.test(type) || type === "address" || type === "bool" || type === "string" || /^(u?int|bytes)[0-9]*$/.test(type))
     throw new InvalidStructTypeError({ type });
 }
 var init_typedData2 = __esm({
@@ -14105,15 +14123,25 @@ var init_lru2 = __esm({
   }
 });
 
-// node_modules/ox/_esm/core/Caches.js
-var caches, checksum;
-var init_Caches = __esm({
-  "node_modules/ox/_esm/core/Caches.js"() {
+// node_modules/ox/_esm/core/internal/caches.js
+var caches;
+var init_caches = __esm({
+  "node_modules/ox/_esm/core/internal/caches.js"() {
     "use strict";
     init_lru2();
     caches = {
-      checksum: /* @__PURE__ */ new LruMap2(8192)
+      checksum: /* @__PURE__ */ new LruMap2(8192),
+      signatureHash: /* @__PURE__ */ new LruMap2(8192)
     };
+  }
+});
+
+// node_modules/ox/_esm/core/Caches.js
+var checksum;
+var init_Caches = __esm({
+  "node_modules/ox/_esm/core/Caches.js"() {
+    "use strict";
+    init_caches();
     checksum = caches.checksum;
   }
 });
@@ -14534,6 +14562,12 @@ function decodeParameter2(cursor, param, options) {
 function decodeAddress3(cursor, options = {}) {
   const { checksum: checksum3 = false } = options;
   const value = cursor.readBytes(32);
+  for (let i = 0; i < 12; i++)
+    if (value[i] !== 0)
+      throw new InvalidAddressError2({
+        address: fromBytes(value),
+        cause: new InvalidInputError()
+      });
   const wrap3 = (address3) => checksum3 ? checksum2(address3) : address3;
   return [wrap3(fromBytes(slice2(value, -20))), 32];
 }
@@ -14618,11 +14652,20 @@ function decodeBytes2(cursor, param, { staticPosition }) {
 function decodeNumber2(cursor, param) {
   const signed = param.type.startsWith("int");
   const size5 = Number.parseInt(param.type.split("int")[1] || "256", 10);
-  const value = cursor.readBytes(32);
-  return [
-    size5 > 48 ? toBigInt2(value, { signed }) : toNumber2(value, { signed }),
-    32
-  ];
+  const value = toBigInt2(cursor.readBytes(32), { signed });
+  if (size5 < 256) {
+    const max = (1n << BigInt(signed ? size5 - 1 : size5)) - 1n;
+    const min = signed ? -max - 1n : 0n;
+    if (value > max || value < min)
+      throw new IntegerOutOfRangeError2({
+        max: max.toString(),
+        min: min.toString(),
+        signed,
+        size: size5 / 8,
+        value: value.toString()
+      });
+  }
+  return [size5 > 48 ? value : Number(value), 32];
 }
 function decodeTuple2(cursor, param, options) {
   const { checksumAddress: checksumAddress2, staticPosition } = options;
@@ -16241,10 +16284,30 @@ function isArgOfType2(arg, abiParameter) {
         return Object.values(abiParameter.components).every((component, index2) => {
           return argType === "object" && isArgOfType2(getComponentValue2(arg, component, index2), component);
         });
-      if (/^u?int(8|16|24|32|40|48|56|64|72|80|88|96|104|112|120|128|136|144|152|160|168|176|184|192|200|208|216|224|232|240|248|256)?$/.test(abiParameterType))
-        return argType === "number" || argType === "bigint";
-      if (/^bytes([1-9]|1[0-9]|2[0-9]|3[0-2])?$/.test(abiParameterType))
-        return argType === "string" || arg instanceof Uint8Array;
+      const integerMatch = integerTypeRegex.exec(abiParameterType);
+      if (integerMatch) {
+        if (typeof arg !== "bigint" && typeof arg !== "number")
+          return false;
+        if (typeof arg === "number" && !Number.isInteger(arg))
+          return false;
+        const signed = abiParameterType.startsWith("int");
+        const bits = Number.parseInt(integerMatch[1] ?? "256", 10);
+        const max = 2n ** (BigInt(bits) - (signed ? 1n : 0n)) - 1n;
+        const min = signed ? -max - 1n : 0n;
+        return arg >= min && arg <= max;
+      }
+      if (fixedBytesTypeRegex.test(abiParameterType)) {
+        if (typeof arg !== "string" && !(arg instanceof Uint8Array))
+          return false;
+        const bytes = abiParameterType.slice(5);
+        if (!bytes)
+          return true;
+        if (arg instanceof Uint8Array)
+          return arg.length === Number.parseInt(bytes, 10);
+        if (!validate3(arg))
+          return false;
+        return size3(arg) === Number.parseInt(bytes, 10);
+      }
       const arrayComponents = getArrayComponents2(abiParameterType);
       if (arrayComponents) {
         const [length, type] = arrayComponents;
@@ -16286,16 +16349,16 @@ function getAmbiguousTypes2(sourceParameters, targetParameters, args) {
       ], [args[parameterIndex]?.[0]]);
       if (types2)
         return types2;
+      if (sourceArray[1] === targetArray[1] && sourceParameter.type !== targetParameter.type)
+        return [sourceParameter.type, targetParameter.type];
       continue;
     }
     const types = [sourceParameter.type, targetParameter.type];
     const value = args[parameterIndex];
     const ambiguous = (() => {
-      if (types.includes("address") && types.includes("bytes20"))
-        return true;
       if (types.includes("address") && (types.includes("string") || types.includes("bytes")))
         return value === void 0 || validate4(value, { strict: false });
-      return false;
+      return sourceParameter.type !== targetParameter.type;
     })();
     if (ambiguous)
       return types;
@@ -16307,12 +16370,16 @@ function getComponentValue2(arg, component, index2) {
     return arg[index2];
   return arg?.[component.name];
 }
+var integerTypeRegex, fixedBytesTypeRegex;
 var init_abiItem2 = __esm({
   "node_modules/ox/_esm/core/internal/abiItem.js"() {
     "use strict";
     init_Address();
     init_Errors();
+    init_Hex();
     init_abiParameters();
+    integerTypeRegex = /^u?int(8|16|24|32|40|48|56|64|72|80|88|96|104|112|120|128|136|144|152|160|168|176|184|192|200|208|216|224|232|240|248|256)?$/;
+    fixedBytesTypeRegex = /^bytes([1-9]|1[0-9]|2[0-9]|3[0-2])?$/;
   }
 });
 
@@ -16438,7 +16505,13 @@ function getSignatureHash(...parameters) {
   })();
   if (typeof abiItem !== "string" && "hash" in abiItem && abiItem.hash)
     return abiItem.hash;
-  return keccak2562(fromString2(getSignature(abiItem)));
+  const signature = getSignature(abiItem);
+  const cached3 = caches.signatureHash.get(signature);
+  if (cached3)
+    return cached3;
+  const hash4 = keccak2562(fromString2(signature));
+  caches.signatureHash.set(signature, hash4);
+  return hash4;
 }
 var AmbiguityError, NotFoundError;
 var init_AbiItem = __esm({
@@ -16449,6 +16522,7 @@ var init_AbiItem = __esm({
     init_Hash();
     init_Hex();
     init_abiItem2();
+    init_caches();
     AmbiguityError = class extends BaseError3 {
       constructor(x, y) {
         super("Found ambiguous types in overloaded ABI Items.", {
@@ -16660,12 +16734,14 @@ async function waitForTransactionReceipt(client, parameters) {
   let receipt;
   let replacementResponse;
   let retrying = false;
+  let latest;
   let _unobserve;
   let _unwatch;
   const { promise: promise2, resolve: resolve2, reject } = withResolvers();
   const timer = timeout ? setTimeout(() => {
     _unwatch?.();
     _unobserve?.();
+    latest = void 0;
     reject(new WaitForTransactionReceiptTimeoutError({ hash: hash4 }));
   }, timeout) : void 0;
   _unobserve = observe(observerId, { onReplaced, resolve: resolve2, reject }, async (emit) => {
@@ -16676,143 +16752,169 @@ async function waitForTransactionReceipt(client, parameters) {
       _unobserve?.();
       return;
     }
+    const handleBlock = async (blockNumber_) => {
+      const done = (fn) => {
+        latest = void 0;
+        clearTimeout(timer);
+        _unwatch?.();
+        fn();
+        _unobserve?.();
+      };
+      let blockNumber = blockNumber_;
+      try {
+        if (receipt) {
+          if (confirmations > 1 && (!receipt.blockNumber || blockNumber - receipt.blockNumber + 1n < confirmations))
+            return;
+          const receipt_ = await getAction(client, getTransactionReceipt, "getTransactionReceipt")({ hash: receipt.transactionHash }).catch((error62) => error62 instanceof TransactionReceiptNotFoundError ? null : void 0);
+          if (receipt_ === void 0)
+            return;
+          if (!receipt_) {
+            receipt = void 0;
+            if (!replacementResponse)
+              transaction = void 0;
+            replacementResponse = void 0;
+            return;
+          }
+          receipt = receipt_;
+          if (confirmations > 1 && (!receipt_.blockNumber || blockNumber - receipt_.blockNumber + 1n < confirmations))
+            return;
+          const replacement2 = replacementResponse;
+          if (replacement2) {
+            if (replacement2.transaction.blockHash !== receipt_.blockHash)
+              replacement2.transaction = await getAction(client, getTransaction, "getTransaction")({ hash: receipt_.transactionHash });
+            replacement2.transactionReceipt = receipt_;
+          }
+          done(() => {
+            if (replacement2)
+              emit.onReplaced?.(replacement2);
+            emit.resolve(receipt_);
+          });
+          return;
+        }
+        if (checkReplacement && !transaction) {
+          retrying = true;
+          await withRetry(async () => {
+            transaction = await getAction(client, getTransaction, "getTransaction")({ hash: hash4 });
+            if (transaction.blockNumber)
+              blockNumber = transaction.blockNumber;
+          }, {
+            delay: retryDelay,
+            retryCount,
+            // A dropped transaction does not reappear, so a known
+            // sender and nonce are looked up without the retries.
+            shouldRetry: ({ error: error62 }) => !(replacement && error62 instanceof TransactionNotFoundError)
+          });
+          retrying = false;
+        }
+        receipt = await getAction(client, getTransactionReceipt, "getTransactionReceipt")({ hash: hash4 });
+        if (confirmations > 1 && (!receipt.blockNumber || blockNumber - receipt.blockNumber + 1n < confirmations))
+          return;
+        done(() => emit.resolve(receipt));
+      } catch (err) {
+        if (err instanceof TransactionNotFoundError || err instanceof TransactionReceiptNotFoundError) {
+          retrying = false;
+          const replaced = transaction ?? (checkReplacement && replacement ? {
+            ...replacement,
+            hash: hash4.toLowerCase()
+          } : void 0);
+          if (!replaced)
+            return;
+          if (replaced.blockNumber)
+            return;
+          try {
+            if (!transaction) {
+              retrying = true;
+              const found = await getAction(client, getTransaction, "getTransaction")({
+                nonce: replaced.nonce,
+                sender: replaced.from
+              }).catch((error62) => {
+                if (error62 instanceof MethodNotFoundRpcError || error62 instanceof MethodNotSupportedRpcError)
+                  transaction = replaced;
+                return void 0;
+              });
+              retrying = false;
+              if (found?.hash.toLowerCase() === replaced.hash) {
+                transaction = found;
+                return;
+              }
+              if (found) {
+                const replacementReceipt = await getAction(client, getTransactionReceipt, "getTransactionReceipt")({ hash: found.hash }).catch((error62) => {
+                  if (error62 instanceof TransactionReceiptNotFoundError)
+                    return void 0;
+                  throw error62;
+                });
+                if (!replacementReceipt)
+                  return;
+                receipt = replacementReceipt;
+                replacementResponse = {
+                  reason: client.chain?.transactionReplacement?.getReason?.({
+                    replaced,
+                    replacement: found
+                  }) ?? getReplacementReason(replaced, found),
+                  replacedTransaction: replaced,
+                  transaction: found,
+                  transactionReceipt: receipt
+                };
+                if (confirmations > 1 && (!receipt.blockNumber || blockNumber - receipt.blockNumber + 1n < confirmations))
+                  return;
+                done(() => {
+                  emit.onReplaced?.(replacementResponse);
+                  emit.resolve(receipt);
+                });
+                return;
+              }
+            }
+            retrying = true;
+            const block = await withRetry(() => getAction(client, getBlock, "getBlock")({
+              blockNumber,
+              includeTransactions: true
+            }), {
+              delay: retryDelay,
+              retryCount,
+              shouldRetry: ({ error: error62 }) => error62 instanceof BlockNotFoundError
+            });
+            retrying = false;
+            const replacedKey = getReplacementKey(replaced);
+            const replacementTransaction = block.transactions.find((candidate) => isAddressEqual(candidate.from, replaced.from) && candidate.hash !== replaced.hash && getReplacementKey(candidate) === replacedKey);
+            if (!replacementTransaction)
+              return;
+            receipt = await getAction(client, getTransactionReceipt, "getTransactionReceipt")({
+              hash: replacementTransaction.hash
+            });
+            replacementResponse = {
+              reason: client.chain?.transactionReplacement?.getReason?.({
+                replaced,
+                replacement: replacementTransaction
+              }) ?? getReplacementReason(replaced, replacementTransaction),
+              replacedTransaction: replaced,
+              transaction: replacementTransaction,
+              transactionReceipt: receipt
+            };
+            if (confirmations > 1 && (!receipt.blockNumber || blockNumber - receipt.blockNumber + 1n < confirmations))
+              return;
+            done(() => {
+              emit.onReplaced?.(replacementResponse);
+              emit.resolve(receipt);
+            });
+          } catch (err_) {
+            done(() => emit.reject(err_));
+          }
+        } else {
+          done(() => emit.reject(err));
+        }
+      }
+    };
     _unwatch = getAction(client, watchBlockNumber, "watchBlockNumber")({
       emitMissed: true,
       emitOnBegin: true,
       poll: true,
       pollingInterval,
-      async onBlockNumber(blockNumber_) {
-        const done = (fn) => {
-          clearTimeout(timer);
-          _unwatch?.();
-          fn();
-          _unobserve?.();
-        };
-        let blockNumber = blockNumber_;
-        if (retrying)
-          return;
-        try {
-          if (receipt) {
-            if (confirmations > 1 && (!receipt.blockNumber || blockNumber - receipt.blockNumber + 1n < confirmations))
-              return;
-            done(() => {
-              if (replacementResponse)
-                emit.onReplaced?.(replacementResponse);
-              emit.resolve(receipt);
-            });
-            return;
-          }
-          if (checkReplacement && !transaction) {
-            retrying = true;
-            await withRetry(async () => {
-              transaction = await getAction(client, getTransaction, "getTransaction")({ hash: hash4 });
-              if (transaction.blockNumber)
-                blockNumber = transaction.blockNumber;
-            }, {
-              delay: retryDelay,
-              retryCount,
-              // A dropped transaction does not reappear, so a known
-              // sender and nonce are looked up without the retries.
-              shouldRetry: ({ error: error62 }) => !(replacement && error62 instanceof TransactionNotFoundError)
-            });
-            retrying = false;
-          }
-          receipt = await getAction(client, getTransactionReceipt, "getTransactionReceipt")({ hash: hash4 });
-          if (confirmations > 1 && (!receipt.blockNumber || blockNumber - receipt.blockNumber + 1n < confirmations))
-            return;
-          done(() => emit.resolve(receipt));
-        } catch (err) {
-          if (err instanceof TransactionNotFoundError || err instanceof TransactionReceiptNotFoundError) {
-            retrying = false;
-            const replaced = transaction ?? (checkReplacement && replacement ? {
-              ...replacement,
-              hash: hash4.toLowerCase()
-            } : void 0);
-            if (!replaced)
-              return;
-            if (replaced.blockNumber)
-              return;
-            try {
-              if (!transaction) {
-                retrying = true;
-                const found = await getAction(client, getTransaction, "getTransaction")({
-                  nonce: replaced.nonce,
-                  sender: replaced.from
-                }).catch((error62) => {
-                  if (error62 instanceof MethodNotFoundRpcError || error62 instanceof MethodNotSupportedRpcError)
-                    transaction = replaced;
-                  return void 0;
-                });
-                retrying = false;
-                if (found?.hash.toLowerCase() === replaced.hash) {
-                  transaction = found;
-                  return;
-                }
-                if (found) {
-                  const replacementReceipt = await getAction(client, getTransactionReceipt, "getTransactionReceipt")({ hash: found.hash }).catch((error62) => {
-                    if (error62 instanceof TransactionReceiptNotFoundError)
-                      return void 0;
-                    throw error62;
-                  });
-                  if (!replacementReceipt)
-                    return;
-                  receipt = replacementReceipt;
-                  replacementResponse = {
-                    reason: client.chain?.transactionReplacement?.getReason?.({
-                      replaced,
-                      replacement: found
-                    }) ?? getReplacementReason(replaced, found),
-                    replacedTransaction: replaced,
-                    transaction: found,
-                    transactionReceipt: receipt
-                  };
-                  if (confirmations > 1 && (!receipt.blockNumber || blockNumber - receipt.blockNumber + 1n < confirmations))
-                    return;
-                  done(() => {
-                    emit.onReplaced?.(replacementResponse);
-                    emit.resolve(receipt);
-                  });
-                  return;
-                }
-              }
-              retrying = true;
-              const block = await withRetry(() => getAction(client, getBlock, "getBlock")({
-                blockNumber,
-                includeTransactions: true
-              }), {
-                delay: retryDelay,
-                retryCount,
-                shouldRetry: ({ error: error62 }) => error62 instanceof BlockNotFoundError
-              });
-              retrying = false;
-              const replacedKey = getReplacementKey(replaced);
-              const replacementTransaction = block.transactions.find((candidate) => isAddressEqual(candidate.from, replaced.from) && candidate.hash !== replaced.hash && getReplacementKey(candidate) === replacedKey);
-              if (!replacementTransaction)
-                return;
-              receipt = await getAction(client, getTransactionReceipt, "getTransactionReceipt")({
-                hash: replacementTransaction.hash
-              });
-              replacementResponse = {
-                reason: client.chain?.transactionReplacement?.getReason?.({
-                  replaced,
-                  replacement: replacementTransaction
-                }) ?? getReplacementReason(replaced, replacementTransaction),
-                replacedTransaction: replaced,
-                transaction: replacementTransaction,
-                transactionReceipt: receipt
-              };
-              if (confirmations > 1 && (!receipt.blockNumber || blockNumber - receipt.blockNumber + 1n < confirmations))
-                return;
-              done(() => {
-                emit.onReplaced?.(replacementResponse);
-                emit.resolve(receipt);
-              });
-            } catch (err_) {
-              done(() => emit.reject(err_));
-            }
-          } else {
-            done(() => emit.reject(err));
-          }
+      async onBlockNumber(blockNumber) {
+        latest = blockNumber;
+        while (latest !== void 0 && !retrying) {
+          const next = latest;
+          latest = void 0;
+          await handleBlock(next);
         }
       }
     });
@@ -44758,6 +44860,7 @@ function getSignalId(signal) {
 }
 function http(url2, config2 = {}) {
   const { batch, fetchFn, fetchOptions, key = "http", maxResponseBodySize, methods, name = "HTTP JSON-RPC", onFetchRequest, onFetchResponse, retryDelay, raw } = config2;
+  const batchId = uid();
   return ({ chain, retryCount: retryCount_, timeout: timeout_ }) => {
     const { batchSize = 1e3, wait: wait2 = 0 } = typeof batch === "object" ? batch : {};
     const retryCount = config2.retryCount ?? retryCount_;
@@ -44781,7 +44884,7 @@ function http(url2, config2 = {}) {
         const body = { method, params };
         const fetchOptions2 = options?.signal ? { signal: options.signal } : void 0;
         const { schedule } = createBatchScheduler({
-          id: `${url_}.${getSignalId(options?.signal)}`,
+          id: `${batchId}.${url_}.${getSignalId(options?.signal)}`,
           wait: wait2,
           shouldSplitBatch(requests) {
             return requests.length > batchSize;
