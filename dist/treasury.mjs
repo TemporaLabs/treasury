@@ -48681,6 +48681,7 @@ function createMcpClient(opts) {
 // src/earn/api.ts
 var mcpUrl = () => new URL("/mcp", apiUrl()).toString();
 var mcpClient = () => createMcpClient({ url: mcpUrl(), timeoutMs: INVEST.apiTimeoutMs });
+var caip2Of = (chainId) => `eip155:${chainId}`;
 function chainOfCaip2(caip2) {
   const m = /^eip155:(\d+)$/.exec(caip2);
   if (!m) return void 0;
@@ -48714,52 +48715,70 @@ function vaultNamed(p) {
   return { vault: p.vault.vaultAddress, ticker: tickerOf(p.vault.vaultAddress, chainOf(p).chainId), name: p.name };
 }
 var vaultLabel = (p) => tickerOf(p.vault.vaultAddress, chainOf(p).chainId) ?? p.vault.vaultAddress;
-function resolveProduct(products, vault, chain, withSolana = false) {
-  const chainId = knownChain(chain, withSolana);
-  const listed = products.filter((p) => p.kind === "vault" && p.vault !== void 0);
-  const onChainId = (p) => chainOfCaip2(p.vault.chain);
-  const listing = (on) => {
-    const names = listed.filter((p) => on === void 0 || onChainId(p) === on).map((p) => on === void 0 ? `${vaultLabel(p)} (${chainOf(p).chain ?? p.vault.chain})` : vaultLabel(p));
-    return names.length > 0 ? names.join(", ") : "none";
-  };
-  const listedOn = (on) => `the vaults the Tempora API lists${on === void 0 ? "" : ` on ${CHAIN_INFO[on].key}`}: ${listing(on)}`;
-  const key = chain ?? EARN.defaultChain;
-  const want = chainId ?? (vault === void 0 ? chainIdForKey(key) : void 0);
-  let address3;
-  if (vault === void 0) address3 = EARN.defaultVaultAddressByChain[key];
-  else if (VAULT_ADDRESS.test(vault)) address3 = vault;
-  else {
-    const t = listVaults().find((v) => v.symbol === vault);
-    if (!t) throw new Error(`refused: \`--vault\` takes a vault's contract address (0x\u2026) or its ticker, and the value given is neither; ${listedOn(chainId)}`);
-    address3 = t.address;
-  }
-  const matches = listed.filter((p) => p.vault.vaultAddress.toLowerCase() === address3.toLowerCase());
-  const scoped = want === void 0 ? matches : matches.filter((p) => onChainId(p) === want);
-  if (scoped.length === 0) {
-    if (vault === void 0) {
-      throw new Error(`refused: the default vault on ${key} (${address3}) is not listed by the Tempora API now; run \`treasury earn vaults\` and name a listed vault with --vault`);
-    }
-    const elsewhere = matches[0];
-    if (elsewhere !== void 0 && chainId !== void 0) {
-      const its2 = chainOf(elsewhere);
-      const on = its2.chain ?? its2.caip2;
-      const others = listing(chainId);
-      throw new Error(
-        `vault "${vault}" is on ${on}, not ${chain}. Name one or the other: drop \`chain\` to use ${vaultLabel(elsewhere)} on ${on}` + (others !== "none" ? `, or pick a vault on ${chain} (${others}).` : ".")
-      );
-    }
-    throw new Error(`refused: no vault the Tempora API lists has the address ${address3}; ${listedOn(chainId)}`);
-  }
-  if (scoped.length > 1) {
-    const chains2 = new Set(scoped.map(onChainId));
+function listing(listed, on) {
+  const names = listed.filter((p) => on === void 0 || chainOfCaip2(p.vault.chain) === on).map((p) => on === void 0 ? `${vaultLabel(p)} (${chainOf(p).chain ?? p.vault.chain})` : vaultLabel(p));
+  return names.length > 0 ? names.join(", ") : "none";
+}
+var listedOn = (listed, on) => `the vaults the Tempora API lists${on === void 0 ? "" : ` on ${CHAIN_INFO[on].key}`}: ${listing(listed, on)}`;
+var vaultsOf = (products) => products.filter((p) => p.kind === "vault" && p.vault !== void 0);
+function onNamedChain(vp, vault, chain, chainId, others) {
+  const its = chainOf(vp);
+  if (chainId !== void 0 && its.chainId !== chainId) {
+    const on = its.chain ?? its.caip2;
+    const o2 = others();
     throw new Error(
-      `refused: the Tempora API lists more than one vault at ${address3}${want === void 0 ? "" : ` on ${CHAIN_INFO[want].key}`}, so it does not name one vault; nothing is read for it` + (want === void 0 && chains2.size > 1 ? ". Name its chain with `chain`" : "")
+      `vault "${vault}" is on ${on}, not ${chain}. Name one or the other: drop \`chain\` to use ${vaultLabel(vp)} on ${on}` + (o2 !== "none" ? `, or pick a vault on ${chain} (${o2}).` : ".")
     );
   }
-  const vp = scoped[0];
-  const its = chainOf(vp);
   if (its.chainId === null) throw new Error(`refused: ${vaultLabel(vp)} is on ${its.caip2}, a chain this client does not support`);
   return vp;
+}
+async function vaultProduct(mcp, vault, chain, withSolana = false) {
+  const chainId = knownChain(chain, withSolana);
+  const key = chain ?? EARN.defaultChain;
+  const defaultId = () => `${caip2Of(chainIdForKey(key))}:${EARN.defaultVaultAddressByChain[key]}`;
+  const id = vault === void 0 ? defaultId() : chainId !== void 0 && VAULT_ADDRESS.test(vault) ? `${caip2Of(chainId)}:${vault}` : vault;
+  const hint = async () => {
+    try {
+      return vaultsOf(await vaultProducts(mcp));
+    } catch {
+      return void 0;
+    }
+  };
+  let r = await mcp.product({ path: { id } });
+  if (!r.ok && r.status === 404 && vault !== void 0 && id !== vault) r = await mcp.product({ path: { id: vault } });
+  if (!r.ok) {
+    if (r.status !== 404) throw failure2(`The vault ${vault ?? `default on ${key}`} could not be read from the Tempora API`, r);
+    if (vault === void 0) {
+      throw new Error(`refused: the default vault on ${key} (${EARN.defaultVaultAddressByChain[key]}) is not listed by the Tempora API now; run \`treasury earn vaults\` and name a listed vault with --vault`);
+    }
+    const listed2 = await hint();
+    throw new Error(`refused: the Tempora API knows no vault "${vault}"; name a vault by its ticker or contract address${listed2 ? `; ${listedOn(listed2, chainId)}` : ""}`);
+  }
+  const p = r.body;
+  if (p.kind !== "vault" || p.vault === void 0) throw new Error(`refused: "${vault ?? id}" is not a vault on the Tempora API; name a vault by its ticker or contract address`);
+  const vp = p;
+  if (vault === void 0 && chainOf(vp).chainId !== chainIdForKey(key)) {
+    const its = chainOf(vp);
+    throw new Error(`refused: the Tempora API answers the default vault on ${key} (${EARN.defaultVaultAddressByChain[key]}) with a vault on ${its.chain ?? its.caip2}; nothing is read for it`);
+  }
+  const listed = chainId !== void 0 && chainOf(vp).chainId !== chainId ? await hint() : void 0;
+  return onNamedChain(vp, vault ?? id, chain, chainId, () => listed ? listing(listed, chainId) : "none");
+}
+function listedVault(products, address3, chain, withSolana = false) {
+  const chainId = knownChain(chain, withSolana);
+  const listed = vaultsOf(products);
+  if (!VAULT_ADDRESS.test(address3)) throw new Error(`refused: a plan leg names its vault by contract address, and "${address3}" is not one; make the plan again with \`connect plan --legs\``);
+  const matches = listed.filter((p) => p.vault.vaultAddress.toLowerCase() === address3.toLowerCase());
+  const scoped = chainId === void 0 ? matches : matches.filter((p) => chainOfCaip2(p.vault.chain) === chainId);
+  if (scoped.length === 0) {
+    if (matches[0] !== void 0) return onNamedChain(matches[0], address3, chain, chainId, () => listing(listed, chainId));
+    throw new Error(`refused: no vault the Tempora API lists has the address ${address3}; ${listedOn(listed, chainId)}`);
+  }
+  if (scoped.length > 1) {
+    throw new Error(`refused: the Tempora API lists more than one vault at ${address3}${chainId === void 0 ? "" : ` on ${CHAIN_INFO[chainId].key}`}, so it does not name one vault; nothing is read for it`);
+  }
+  return onNamedChain(scoped[0], address3, chain, chainId, () => listing(listed, chainId));
 }
 var assetIdOf = (p) => `${p.vault.chain}/erc20:${p.vault.assetAddress}`;
 function assetsAmount(p, human) {
@@ -49013,7 +49032,7 @@ function buildCommands(deps = {}) {
   const now = deps.now ?? Date.now;
   const mcp = () => deps.mcp ?? mcpClient();
   const products = (m) => vaultProducts(m);
-  const resolve2 = (all, vault, c) => resolveProduct(all, vault, c, listSolanaVaults().length > 0);
+  const resolve2 = (m, vault, c) => vaultProduct(m, vault, c, listSolanaVaults().length > 0);
   const connectedOwner = (account, chainArgument) => {
     knownChain(chainArgument, listSolanaVaults().length > 0);
     if (account !== void 0 && !isAddress2(account)) throw new Error(`account must be an EVM address (0x\u2026) for a vault on an EVM chain; got ${account}`);
@@ -49154,7 +49173,7 @@ function buildCommands(deps = {}) {
     guarded(async ({ vault, chain: chain2 }) => {
       if (solanaTarget(vault, chain2)) return text(DISCLOSURES, "solana");
       knownChain(chain2, listSolanaVaults().length > 0);
-      const p = resolve2(await products(mcp()), vault, chain2);
+      const p = await resolve2(mcp(), vault, chain2);
       const terms = verifiedTerms(p);
       return json2({
         ...onProduct(p),
@@ -49182,7 +49201,7 @@ function buildCommands(deps = {}) {
       if (account !== void 0) {
         const owner = connectedOwner(account, chain2);
         const out = await asOwner2(owner, async (m, call3) => {
-          const p2 = resolve2(await products(m), symbol2, chain2);
+          const p2 = await resolve2(m, symbol2, chain2);
           const amount = amount_usdc === void 0 ? void 0 : assetsAmount(p2, amount_usdc);
           const a = await call3((c, ownerToken) => c.account({ path: { product: p2.id } }, { ownerToken }));
           if (!a.ok) throw failure2(`The account on ${vaultLabel(p2)} could not be read`, a);
@@ -49214,7 +49233,7 @@ function buildCommands(deps = {}) {
       } catch (e4) {
         return json2({ ...base2, apiStatus: "unreachable", reason: redactEndpoints(e4 instanceof Error ? e4.message : String(e4)) });
       }
-      const p = resolve2(all, symbol2, chain2);
+      const p = await resolve2(mcp(), symbol2, chain2);
       return json2({ ...base2, apiStatus: "ok", vaultsListed: all.length, ...onProduct(p) });
     }, { api: true })
   );
@@ -49243,7 +49262,7 @@ function buildCommands(deps = {}) {
       const owner = connectedOwner(account, chain2);
       return json2(
         await asOwner2(owner, async (m, call3) => {
-          const p = resolve2(await products(m), symbol2, chain2);
+          const p = await resolve2(m, symbol2, chain2);
           const amount = amount_usdc === void 0 ? void 0 : assetsAmount(p, amount_usdc);
           if (direction === "deposit") {
             const q2 = await call3((c, ownerToken) => c.quote({ body: { product: p.id, action: "deposit", amount: amount.amount } }, { ownerToken }));
@@ -49308,7 +49327,7 @@ function buildCommands(deps = {}) {
       const owner = connectedOwner(account, chain2);
       return json2(
         await asOwner2(owner, async (m, call3) => {
-          const p = resolve2(await products(m), symbol2, chain2);
+          const p = await resolve2(m, symbol2, chain2);
           const terms = verifiedTerms(p);
           if (terms_sha256.toLowerCase() !== terms.sha256) {
             throw new Error(
@@ -49358,7 +49377,7 @@ function buildCommands(deps = {}) {
       const owner = connectedOwner(account, chain2);
       return json2(
         await asOwner2(owner, async (m, call3) => {
-          const p = resolve2(await products(m), symbol2, chain2);
+          const p = await resolve2(m, symbol2, chain2);
           const form = amount_usdc !== void 0 ? (() => {
             const a = assetsAmount(p, amount_usdc);
             return { body: a.amount, intent: { kind: "assets", raw: a.amount.raw } };
@@ -49457,7 +49476,7 @@ function buildCommands(deps = {}) {
       const owner = connectedOwner(account, chain2);
       return json2(
         await asOwner2(owner, async (m, call3) => {
-          const p = resolve2(await products(m), symbol2, chain2);
+          const p = await resolve2(m, symbol2, chain2);
           const r = await call3((c, ownerToken) => c.positions({}, { ownerToken }));
           if (!r.ok) throw failure2("The positions could not be read", r);
           const row = r.body.positions.find((x) => x.product === p.id && x.kind === "vault");
@@ -50576,7 +50595,7 @@ function buildConnectCommands(deps = {}) {
     return r;
   };
   const solanaNamed = (vault, chain) => chain === "solana" || vault !== void 0 && listSolanaVaults().some((v) => v.symbol === vault);
-  const apiProduct = async (m, vault, chain) => resolveProduct(await vaultProducts(m), vault, chain, listSolanaVaults().length > 0);
+  const apiProduct = (m, vault, chain) => vaultProduct(m, vault, chain, listSolanaVaults().length > 0);
   const ownerApi = (session) => {
     const owner = getAddress(session.account);
     const w = deps.wallet ? deps.wallet(owner, "Sign in to the Tempora API") : ownerWallet(owner, "Sign in to the Tempora API", deps.walletDeps);
@@ -50755,7 +50774,6 @@ function buildConnectCommands(deps = {}) {
   const describeLegs = async (text3) => {
     const parsed = parseLegs(text3);
     const out = [];
-    let listed;
     for (const [i, l] of parsed.entries()) {
       const onSolana2 = solanaNamed(l.vault, void 0);
       const session = onSolana2 ? readSolanaSession() : readSession();
@@ -50769,8 +50787,7 @@ function buildConnectCommands(deps = {}) {
         chain = "solana";
         asset = target.vault.asset;
       } else {
-        listed ??= await vaultProducts(deps.mcp ?? mcpClient());
-        const p = resolveProduct(listed, l.vault, void 0, listSolanaVaults().length > 0);
+        const p = await vaultProduct(deps.mcp ?? mcpClient(), l.vault, void 0, listSolanaVaults().length > 0);
         symbol2 = p.vault.vaultAddress;
         chain = chainOf(p).chain ?? p.vault.chain;
         asset = { symbol: p.tokens[0] ?? "the vault's asset", decimals: p.vault.assetDecimals };
@@ -50831,7 +50848,7 @@ function buildConnectCommands(deps = {}) {
     if (!a) throw new Error(`refused: leg ${leg.leg} was recorded without its arguments (a plan made by an older version); make the plan again with \`connect plan --legs\``);
     const owner = getAddress(session.account);
     if (!isAddress2(a.receiver) || getAddress(a.receiver) !== owner) throw new Error(`refused: leg ${leg.leg} pays ${a.receiver}, which is not the connected account ${owner}`);
-    const p = resolveProduct(listed, a.vault, leg.chain, listSolanaVaults().length > 0);
+    const p = listedVault(listed, a.vault, leg.chain, listSolanaVaults().length > 0);
     return vaultLeg(p, owner, { action: leg.action, amount_usdc: a.amount_usdc, all: a.all, shares_exact: a.shares_exact });
   };
   const legSolana = (leg, session) => {

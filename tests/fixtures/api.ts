@@ -45,6 +45,28 @@ export function registryProducts(): Product[] {
   );
 }
 
+/**
+ * The API's one-product read, as the stand-in answers it: by the product id, a ticker (the registry's, standing in for
+ * the API's share symbol), a contract address in any case, or a CAIP-10 id. No match is a 404; an address more than one
+ * listed vault has, a 409.
+ */
+export function productLookup(products: readonly Product[], id: string) {
+  const vaults = products.filter((p) => p.vault !== undefined);
+  const byId = products.find((p) => p.id === id);
+  const tick = listVaults().find((v) => v.symbol === id);
+  const caip = /^(eip155:\d+):(0x[0-9a-fA-F]{40})$/.exec(id);
+  const address = caip ? caip[2] : /^0x[0-9a-fA-F]{40}$/.test(id) ? id : tick?.address;
+  const onChain = caip ? caip[1] : tick ? `eip155:${tick.chainId}` : undefined;
+  const hits = byId
+    ? [byId]
+    : address === undefined
+      ? []
+      : vaults.filter((p) => p.vault!.vaultAddress.toLowerCase() === address.toLowerCase() && (onChain === undefined || p.vault!.chain === onChain));
+  if (hits.length === 1) return { ok: true as const, status: 200, body: hits[0] };
+  if (hits.length > 1) return { ok: false as const, status: 409, error: { code: "ambiguous_product", message: `more than one product is ${id}`, outcome: "refused" } };
+  return { ok: false as const, status: 404, error: { code: "unknown_product", message: `no product ${id}`, outcome: "refused" } };
+}
+
 /** Where an `extra` landing says the wallet also sent the asset. */
 export const EXTRA_TO = getAddress("0x1111111111111111111111111111111111111111");
 
@@ -137,6 +159,7 @@ export function standInApi(o: { owner: Address; products?: Product[]; shares?: (
     get: (_t, name: string) => async (input: any) => {
       s.log.push(`${name}${input?.path?.stepId ? `:${input.path.stepId}` : ""}`);
       if (name === "products") return ok({ products });
+      if (name === "product") return productLookup(products, input.path.id);
       if (name === "positions") return ok({ positions: [] });
       if (name === "deposit" || name === "withdraw") return start(name, input.body);
       const r = s.requests.get(input?.path?.requestId);

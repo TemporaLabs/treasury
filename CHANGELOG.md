@@ -19,9 +19,10 @@ Pre-1.0, minor versions may change tool names, schemas and behaviour.
 - **`@temporalabs/client` is installed from npm**, pinned to `0.1.0`, instead of from a release download. The package
   is the same build, byte for byte.
 - **`--vault` takes the vault's contract address or its ticker on the EVM chains** (for example `tlCashPlusUSDC2B`,
-  or its address `0x91BcEbA5feCB9E92d80F1845B55cC56621E9352F`, Base's default). The address picks the vault the API
-  lists; an address no listed vault has, or more than one has, is refused. Each chain's default is a contract address,
-  and a default the API does not list is refused, never replaced. Responses name a vault by `vault` (its contract
+  or its address `0x91BcEbA5feCB9E92d80F1845B55cC56621E9352F`, Base's default). The value goes to the Tempora API as
+  given, and the API decides which vault it names; a value it knows as no vault is refused, and so is a vault on another
+  chain than the `chain` named. Each chain's default is a contract address, and a default the API does not know is
+  refused, never replaced. Responses name a vault by `vault` (its contract
   address), `ticker` and `name`. On Solana `--vault` is still the vault's ticker.
 - **Owner reads and requests act for the connected wallet only.** `earn status` with an account, `earn quote`,
   `earn balance`, the prepare commands, `earn submit` and `earn request` act for the wallet `treasury connect wallet`

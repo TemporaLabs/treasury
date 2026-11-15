@@ -50,8 +50,8 @@ reaches a test seam.
 ## Resolving `vault` and `chain`
 
 Every vault-taking command accepts an optional `vault` and an optional `chain`. On the EVM chains the commands
-resolve them against the Tempora API's list (`resolveProduct` in `src/earn/api.ts`), using the registry only to turn
-a ticker into its address and each chain's default address from `src/config/earn.ts`. In the registry itself,
+pass them to the Tempora API, which decides which vault they name (`vaultProduct` in `src/earn/api.ts`), using only
+each chain's default address from `src/config/earn.ts`; the registry's EVM rows still give a response its `ticker`. In the registry itself,
 `resolveVault(symbol, chain)` settles them for the EVM rows, and is what the library exports:
 
 | caller names | result |
