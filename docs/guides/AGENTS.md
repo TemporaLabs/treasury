@@ -11,8 +11,7 @@ The map for a coding agent about to change how Treasury works. Read it before to
 3. The topic for your task (table below), then [`testing/01-test-tiers.md`](testing/01-test-tiers.md).
 
 The repository's own rules are in the root [`AGENTS.md`](../../AGENTS.md) and
-[`CONTRIBUTING.md`](../../CONTRIBUTING.md); they win over anything here. The stack, the techniques the repository
-uses and where each is, are inventoried in [`../DEVELOPMENT.md`](../DEVELOPMENT.md).
+[`CONTRIBUTING.md`](../../CONTRIBUTING.md); they win over anything here.
 
 ## Where authority lives
 

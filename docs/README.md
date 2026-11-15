@@ -37,8 +37,7 @@ subject per file, facts stated with the block or date they were measured at.
 [`guides/`](guides/README.md) walks a developer through the code: the architecture and one deposit
 traced end to end, the CLI, the Tempora API path on the EVM chains, the registry, the Solana path, the wallet
 portfolio checks, the test tiers, and the build. Coding agents start at
-[`guides/AGENTS.md`](guides/AGENTS.md). [`DEVELOPMENT.md`](DEVELOPMENT.md) inventories the technologies and
-practices the repository uses, with where to see each.
+[`guides/AGENTS.md`](guides/AGENTS.md).
 
 ## Contributing and project
 
