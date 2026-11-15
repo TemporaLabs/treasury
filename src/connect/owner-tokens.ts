@@ -1,5 +1,5 @@
 /**
- * The owner tokens `invest` signs in for, kept between commands in a small file readable only by its owner
+ * The Tempora API sign-in tokens `earn`, `connect` and `invest` sign in for, kept between commands in a small file readable only by its owner
  * (`~/.config/treasury/owner-tokens.json`, mode 0600, beside the session file; `TREASURY_CONNECT_HOME` moves both).
  *
  * This file, unlike the session file, holds a credential: a token the API issued after the owner signed its

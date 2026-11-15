@@ -34,7 +34,7 @@ with "returned no data", which looks like a broken vault, not like a misconfigur
 | `TREASURY_API_URL` | the Tempora API `treasury earn` and `treasury connect` call on the EVM chains, and `treasury invest` calls, in place of the one this release pins. It must be `https` (plain `http` only for this machine). **It also decides which host a sign-in is given for:** the wallet signs the API's sign-in message only when it names this URL's host, so point it only at a deployment you trust with your wallet's sign-in | `https://api.temporalabs.com` |
 | `PRIVY_APP_ID` | the Privy app the `treasury connect` sign-in page uses. A Privy app ID is public — it ships in the page — so a fork can point at its own app | Tempora Labs' own app |
 | `TREASURY_CONNECT_PORT` | one local port for the connect page, in place of the default list. Privy accepts sign-in only from origins its dashboard lists exactly, so set it only to a port listed there | the first free of `53682` to `53686` |
-| `TREASURY_CONNECT_HOME` | the directory holding the connect session file (an address, how it signed in, when; no credential), the pending acknowledgement and the open page's lock | `~/.config/treasury` |
+| `TREASURY_CONNECT_HOME` | the directory holding the connect session file (an address, how it signed in, when; no credential), `owner-tokens.json` (the Tempora API sign-in tokens, a credential, mode 0600), the pending acknowledgement and the open page's lock | `~/.config/treasury` |
 | `TREASURY_CONNECT_NO_OPEN` | set to anything to stop `treasury connect` opening a browser itself; it prints the page's URL instead | the browser opens |
 
 **Check the Tempora API with `earn_status`.** With no account it reports `apiStatus: "ok"` or `"unreachable"` (with

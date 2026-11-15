@@ -23,7 +23,7 @@ Earn takes the vault's own asset in and pays it out: USDC on Base, Arbitrum One,
 USDG on Robinhood Chain. It runs as a command line: nine `earn` commands, READ commands that
 return facts about a vault and a position, PREPARE commands that return unsigned steps, and SUBMIT and REQUEST
 commands that hand a sent step's hash back and read where a request stands; and six `connect` commands that hand
-steps to the operator's own wallet for approval. CI asserts both command lists on every build, so a signing command
+steps to the operator's own wallet for approval. CI asserts each command list on every build, so a signing command
 cannot slip in.
 
 ## The default vault
