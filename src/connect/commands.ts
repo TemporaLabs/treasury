@@ -337,7 +337,7 @@ export function buildConnectCommands(deps: ConnectDeps = {}): Record<string, Com
     "connect_disconnect",
     {
       title: "Forget the connected wallet",
-      description: "Deletes the local connection record, the EVM and the Solana one, and the API sign-in tokens `invest` kept. It moves nothing and revokes nothing in the wallet itself.",
+      description: "Deletes the local connection record, the EVM and the Solana one, and the Tempora API sign-in tokens kept for it. It moves nothing and revokes nothing in the wallet itself.",
       inputSchema: {},
     },
     async () => JSON.stringify({ status: "disconnected", hadConnection: clearSession(), hadSolanaConnection: clearSolanaSession(), hadOwnerTokens: clearOwnerTokens() }, null, 2),

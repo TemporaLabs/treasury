@@ -66,7 +66,7 @@ third party. Review every transaction your signer is asked to sign.
   withdrawn asset, to the connected account and no other. A receiver of your choosing is not offered there; on Solana
   the receiver must be the account itself.
 - **On the EVM chains, the Tempora API is part of the trust chain.** It lists the vaults, and a deposit reaches the
-  vault it lists: Treasury holds no contract address for these vaults. Treasury checks every step against the API's
+  vault it lists: Treasury keeps only each chain's default vault address. Treasury checks every step against the API's
   own record of the vault, which catches a wrong step but not a wrong record. Positions, quotes, gates and how a step
   landed are the API's reading. Earnings since your first deposit (basis and yield) are not available through it.
 - **On Solana, your RPC is part of the trust chain.** Treasury believes what the RPC returns. Use a provider you

@@ -69,8 +69,8 @@ Two rules decide most reviews. A change that breaks either is a design change, n
    Tempora API prepares for a Smart Growth portfolio, each checked first against what the operator asked for.
 2. **On the EVM chains the client knows only the Tempora API; on Solana, only the chain.** `treasury earn`,
    `treasury connect` and `treasury invest` reach the Tempora API on the EVM chains, and nothing else, only through
-   `@temporalabs/client`. Treasury names an EVM vault only by its contract address, and keeps only each chain's
-   default vault address: the address picks the vault the API lists, a deposit reaches that vault, and each step is checked against the API's own record of that vault,
+   `@temporalabs/client`. Treasury passes a vault's contract address or ticker to the API as given, and keeps only each
+   chain's default vault address: the address picks the vault the API lists, a deposit reaches that vault, and each step is checked against the API's own record of that vault,
    which catches a wrong step but cannot catch a wrong record. On Solana the client has the registry's vault row and
    an RPC endpoint. Code may not depend on any fund's internal source, deploy records, operators or private services.
    The Solana row in `registry/vaults.json` is a set of measurements that `scripts/registry-check.ts` reconciles
@@ -90,7 +90,7 @@ The Solana vault is a row in `registry/vaults.json`, and a row is a product deci
 Treasury's official registry lists Tempora Labs vaults; proposing a new destination needs Tempora Labs' agreement, so
 say so in the pull request. A row is a set of measurements: `scripts/registry-check.ts` reconciles it against the chain
 it is on, and the pull request should say which block it was measured at. The EVM rows still in the registry are
-read only to turn a ticker into its contract address and to show a vault's ticker: on the EVM chains the Tempora API
+read only to show a vault's ticker beside its address and to hold each chain's default: on the EVM chains the Tempora API
 lists the vaults, prepares every step and reads the chain. `scripts/registry-check.ts` still reconciles those rows.
 
 A new EVM chain needs:

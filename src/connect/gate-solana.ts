@@ -1,5 +1,6 @@
 /**
- * The Solana gate: what the confirm page may hand a connected Solana wallet. The counterpart of `gate.ts`.
+ * The Solana gate: what the confirm page may hand a connected Solana wallet. On the EVM chains
+ * `@temporalabs/client`'s `checkSteps` holds each step instead.
  *
  * It reads the transaction's own BYTES — the wire transaction the wallet will be given — and admits it only if
  * every instruction in it is one of these, each for the connected account and a registry vault:

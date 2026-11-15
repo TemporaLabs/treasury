@@ -45650,8 +45650,8 @@ var vaults_default = {
       notes: [
         "8-decimal shares against a 6-decimal asset \u2014 a share amount is never an asset amount here.",
         "getInstantWithdrawalFuses() returns three fuses (measured at block 51361109), so a withdrawal is served from the vault's liquid balance and then, in fuse order, by unwinding its positions in the same transaction. A withdrawal larger than what those positions can release in-block still reverts; `earn quote --direction withdraw` reports what can be withdrawn now from the Tempora API's simulation, rather than reading maxWithdraw.",
-        "Deposits need role 800 on the AccessManager. An account without it gets WHITELIST_GATED from earn_status and earn_quote. Neither earn prepare_deposit nor connect deposit checks the role: a deposit built for such an account reverts on-chain (AccessManagedUnauthorized), so run earn_status for the account first. Withdrawals are public.",
-        "Whitelist-gated (role 800 on its AccessManager): not in depositable. Listed so that an admitted account's position can be read and exited; a non-member gets WHITELIST_GATED from earn_status before anything is built."
+        "Deposits need role 800 on the AccessManager. The Tempora API checks admission per account: for an account without it, earn_status and earn_quote report the deposit check not_admitted, and no deposit is prepared. Withdrawals are public.",
+        "Whitelist-gated (role 800 on its AccessManager): not in depositable. Listed so that an admitted account's position can be read and exited; a non-member gets not_admitted from earn_status before anything is prepared."
       ]
     },
     {
@@ -50547,7 +50547,7 @@ function buildConnectCommands(deps = {}) {
     "connect_disconnect",
     {
       title: "Forget the connected wallet",
-      description: "Deletes the local connection record, the EVM and the Solana one, and the API sign-in tokens `invest` kept. It moves nothing and revokes nothing in the wallet itself.",
+      description: "Deletes the local connection record, the EVM and the Solana one, and the Tempora API sign-in tokens kept for it. It moves nothing and revokes nothing in the wallet itself.",
       inputSchema: {}
     },
     async () => JSON.stringify({ status: "disconnected", hadConnection: clearSession(), hadSolanaConnection: clearSolanaSession(), hadOwnerTokens: clearOwnerTokens() }, null, 2)
