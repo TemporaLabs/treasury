@@ -98,7 +98,7 @@ export function Invest({ info: first }: { info: InvestInfo }) {
       setPhase({ text: `Not done: ${text}`, tone: "bad", done: true });
       await reject(text);
     }
-  }, [wallet, step, info.chainId]);
+  }, [wallet, step, info.chainId, info.chainName]);
 
   const cancel = async () => {
     setPhase({ text: "Cancelled. Nothing more will be signed or sent.", tone: "bad", done: true });
