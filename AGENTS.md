@@ -35,7 +35,7 @@ one JSON document per run).
    `treasury connect` and `treasury invest` reach the Tempora API on the EVM chains, and nothing else: its MCP
    endpoint for earn's reads and requests, its HTTP routes for the owner's sign-in and for invest, and only through
    `@temporalabs/client` (`src/earn/api.ts`, `src/invest/api.ts`). Treasury names a vault on an EVM chain only by its
-   contract address (or its registry ticker), and keeps only each chain's default vault address (`src/config/earn.ts`):
+   contract address or its ticker, both passed to the API as given, and keeps only each chain's default vault address (`src/config/earn.ts`):
    the address picks the vault the API lists, and a deposit reaches that vault.
    Nothing the API says about a step is trusted; each is checked against the API's own record of the vault, which
    catches a wrong step but cannot catch a wrong record. On Solana the client has the registry's vault row and an RPC
