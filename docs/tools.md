@@ -29,9 +29,9 @@ the registry (see [On Solana](#on-solana)).
 
 Every tool that takes a vault takes it as `vault`, and uses the default when it is omitted. On an EVM
 chain `vault` is the vault's contract address (`0x…`, in any case), as `earn_vaults` lists it under
-`vault`, or its ticker (e.g. `tlCashPlusUSDC2B`), which the registry turns into that address. The
-address picks the vault the API lists at it: an address no listed vault has, or more than one has, is
-refused, and so is a value that is neither an address nor a known ticker. On Solana `vault` is the
+`vault`, or its ticker (e.g. `tlCashPlusUSDC2B`). It goes to the Tempora API as given, and the API
+decides which vault it is; with `chain`, an address is asked for on that chain only. A value the API
+knows as no vault is refused, and so is a vault on another chain than the `chain` named. On Solana `vault` is the
 vault's ticker, which the registry assigns. Each EVM chain's default is a contract address, that of
 `tlCashPlusUSDC2B` on Base, `tlCashPlusUSDC2C` on Arbitrum One, `tlCashPlusUSDG2D` on Robinhood Chain,
 `tlCashPlusUSDC2E` on Ethereum and `tlCashPlusUSDC2F` on Monad. A default the API does not list now is

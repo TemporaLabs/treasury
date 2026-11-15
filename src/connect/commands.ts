@@ -74,7 +74,7 @@ import {
 import type { Verdict } from "./verify.js";
 import type { Client, Product } from "@temporalabs/client";
 import type { McpClient } from "@temporalabs/client/mcp";
-import { chainOf, mcpClient, resolveProduct, shortAddress, tickerOf, vaultProducts, type VaultProduct } from "../earn/api.js";
+import { chainOf, listedVault, mcpClient, shortAddress, tickerOf, vaultProduct, vaultProducts, type VaultProduct } from "../earn/api.js";
 import { apiClient, failure as apiFailure, withOwner } from "../invest/api.js";
 import { ownerWallet, type OwnerWallet, type WalletDeps } from "../invest/flow.js";
 import { listSolanaVaults } from "../registry.js";
@@ -558,8 +558,8 @@ export function buildConnectCommands(deps: ConnectDeps = {}): Record<string, Com
    * before; or, on an EVM chain, a vault the Tempora API lists, picked by its contract address or its ticker.
    */
   const solanaNamed = (vault: string | undefined, chain: string | undefined) => chain === "solana" || (vault !== undefined && listSolanaVaults().some((v) => v.symbol === vault));
-  const apiProduct = async (m: McpClient, vault: string | undefined, chain: string | undefined): Promise<VaultProduct> =>
-    resolveProduct(await vaultProducts(m), vault, chain, listSolanaVaults().length > 0);
+  const apiProduct = (m: McpClient, vault: string | undefined, chain: string | undefined): Promise<VaultProduct> =>
+    vaultProduct(m, vault, chain, listSolanaVaults().length > 0);
 
   /**
    * The owner's calls to the API for one run: the sign-in page opens only if the API needs a sign-in, and only before
@@ -798,7 +798,6 @@ export function buildConnectCommands(deps: ConnectDeps = {}): Record<string, Com
   const describeLegs = async (text: string) => {
     const parsed = parseLegs(text);
     const out: { action: "deposit" | "withdraw"; symbol: string; chain: string; family: "evm" | "solana"; args: WithdrawArgs; d: Described; whole: boolean; asset: { symbol: string; decimals: number } }[] = [];
-    let listed: Awaited<ReturnType<typeof vaultProducts>> | undefined;
     for (const [i, l] of parsed.entries()) {
       const onSolana = solanaNamed(l.vault, undefined);
       const session = onSolana ? readSolanaSession() : readSession();
@@ -812,8 +811,7 @@ export function buildConnectCommands(deps: ConnectDeps = {}): Record<string, Com
         chain = "solana";
         asset = target.vault.asset;
       } else {
-        listed ??= await vaultProducts(deps.mcp ?? mcpClient());
-        const p = resolveProduct(listed, l.vault, undefined, listSolanaVaults().length > 0);
+        const p = await vaultProduct(deps.mcp ?? mcpClient(), l.vault, undefined, listSolanaVaults().length > 0);
         symbol = p.vault.vaultAddress;
         chain = chainOf(p).chain ?? p.vault.chain;
         asset = { symbol: p.tokens[0] ?? "the vault's asset", decimals: p.vault.assetDecimals };
@@ -894,7 +892,7 @@ export function buildConnectCommands(deps: ConnectDeps = {}): Record<string, Com
     if (!a) throw new Error(`refused: leg ${leg.leg} was recorded without its arguments (a plan made by an older version); make the plan again with \`connect plan --legs\``);
     const owner = getAddress(session.account);
     if (!isAddress(a.receiver) || getAddress(a.receiver) !== owner) throw new Error(`refused: leg ${leg.leg} pays ${a.receiver}, which is not the connected account ${owner}`);
-    const p = resolveProduct(listed, a.vault, leg.chain, listSolanaVaults().length > 0);
+    const p = listedVault(listed, a.vault, leg.chain, listSolanaVaults().length > 0);
     return vaultLeg(p, owner, { action: leg.action, amount_usdc: a.amount_usdc, all: a.all, shares_exact: a.shares_exact });
   };
 
