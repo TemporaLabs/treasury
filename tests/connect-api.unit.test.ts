@@ -210,15 +210,18 @@ describe("the check holds before every step, and nothing is ever sent twice", ()
   });
 
   it("a second hash posted for a step already sent is refused", async () => {
-    api.landing[H(1)] = "pending";
-    const run = acknowledged("connect_withdraw", { amount_usdc: "1" });
+    // Step 1 of 2 is sent and recorded, and the page is still open for step 2: a second hash for step 1 must be refused.
+    const run = acknowledged("connect_deposit", { amount_usdc: "1" });
     const p = await page();
-    const first = p.post({ index: 0, hash: H(1) });
+    expect((await p.post({ index: 0, hash: H(1) }))["next"]).toBe(1);
     const again = await p.post({ index: 0, hash: H(2) });
     expect(again["ok"]).toBe(false);
-    await first;
+    expect((await p.post({ index: 1, hash: H(3) }))["finished"]).toBe(true);
     await run;
-    expect(api.submits.map((x) => x.body)).toEqual([{ kind: "transaction", txHash: H(1), wallet: null }]);
+    expect(api.submits.map((x) => [x.stepId, x.body["txHash"]])).toEqual([
+      ["s1", H(1)],
+      ["s2", H(3)],
+    ]);
   });
 
   it("a hash the page could not hand over (sent_unrecorded) is still submitted by its hash, once, and reported", async () => {
