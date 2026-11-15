@@ -491,7 +491,7 @@ operator can open what actually landed instead of taking your word for it. Earli
 
 # Command reference
 
-Every command and flag, as `treasury earn --help` and `treasury connect --help` print them.
+Every command and flag, as `treasury earn --help`, `treasury connect --help` and `treasury invest --help` print them.
 
 ## treasury earn vaults
 
@@ -639,3 +639,40 @@ Flags:
 - `--ack` (string, optional; description: "the code from this command's `needs_acknowledgement` result, given ONLY after the operator replied yes to its `acknowledgement`. Without it the command opens nothing and returns that acknowledgement"; pattern: "^[0-9a-fA-F]{8}$")
 - `--status` (a switch, no value, optional; description: "report the current plan and each leg's status and transactions; reads a local file only")
 - `--run` (a switch, no value, optional; description: "open ONE signing page for every leg of the acknowledged plan (EVM and Solana legs), instead of one page per leg; returns `in_progress` when the shell's time limit is near: run it again and the operator's open page carries on")
+
+## treasury invest products
+
+**List Smart Growth portfolios.** The Smart Growth portfolios the Tempora API offers, read from the API now: each one's `id` (the value every other invest command takes as `product`), name, status, chain and deposit token, its minimums (`minimum.firstDepositUsd` for a first deposit, `minimum.topUpUsd` for a later one), the forms a deposit and a withdrawal may take (`amountForms`), and the steps the owner's wallet will be asked for (`steps`). A portfolio whose status is not `live` may refuse a deposit: say so to the operator. No sign-in is needed.
+
+No flags.
+
+## treasury invest balance
+
+**Smart Growth positions.** The connected wallet's Smart Growth positions, read from the API now: per portfolio its `stage` (`not_enrolled`, `enrolled`, `awaiting_first_rebalance`, `below_minimum`, `invested`), its `smartAccount`, its value in USD and how that value was read (`value.state`), what it holds (`balances`, raw units with their decimals), idle USDT, profit and loss, and drift. When no sign-in is kept, a local page opens for the operator's wallet to sign in to the API (no gas, nothing moves).
+
+No flags.
+
+## treasury invest deposit
+
+**Deposit USDT into a Smart Growth portfolio.** Deposits USDT on BNB Chain from the connected wallet into its own smart account for a Smart Growth portfolio. A local page opens; the operator's own wallet signs in to the API if needed, signs the enrolment when this wallet has no account on the portfolio yet (a 32-byte code from the portfolio provider, which the page says cannot be read on its own), then sends the transfer. Every step is checked before the wallet sees it: the transfer must be exactly the amount asked, on the USDT contract this command pins, to the smart account the request names, with no value attached. Ask the operator for the amount; never suggest one. The portfolio's minimums are in `invest products`. Answers with the request and its state: `completed` once the transfer has landed and been verified by the API. A request still settling is read again with `invest request`. Never repeat a deposit whose transfer was sent: read its request first.
+
+Flags:
+- `--product` (string, required; description: "the portfolio's `id`, as `invest products` lists them")
+- `--amount_usdt` (string, required; description: "the USDT amount the operator chose, as a plain decimal with at most 6 places, e.g. \"100\" or \"12.5\"")
+
+## treasury invest withdraw
+
+**Withdraw everything from a Smart Growth portfolio.** Withdraws everything in the connected wallet's smart account for a Smart Growth portfolio, paid to the connected wallet in USDT on BNB Chain: idle USDT is moved, the rest is sold. `all` must be true; a part withdrawal is not offered here. A local page opens; the operator's own wallet signs in to the API if needed, then signs each withdrawal authorization in turn. Every authorization is checked before the wallet sees it: it must debit the smart account the positions name, pay the connected wallet, settle in USDT, expire within the hour, and ask in total for no more of any asset than the account holds. Answers with the request and its state; a withdrawal still running is read again with `invest request`.
+
+Flags:
+- `--product` (string, required; description: "the portfolio's `id`, as `invest products` lists them")
+- `--all` (a switch, no value, required; description: "must be true: the whole position is withdrawn")
+
+## treasury invest request
+
+**Read or cancel an invest request.** Reads one of the connected wallet's requests again, by `request_id` (from `invest deposit` or `invest withdraw`) or by the `tx_hash` of a transfer the wallet sent for it: its state and each step's state, with the API's on-chain verification of a transfer. Give exactly one. With `cancel` true, cancels a request still waiting on the owner (nothing has moved for it); an earlier request that has not settled holds back a new one on the same portfolio. A page opens only when the wallet must sign in to the API.
+
+Flags:
+- `--request_id` (string, optional; description: "the request's id")
+- `--tx_hash` (string, optional; description: "the transaction hash of a transfer sent for the request"; pattern: "^0x[0-9a-fA-F]{64}$")
+- `--cancel` (a switch, no value, optional; description: "true to cancel the request; it must be given by `request_id`")
