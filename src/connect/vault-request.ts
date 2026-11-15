@@ -218,7 +218,7 @@ export async function startVaultCore(leg: VaultLeg, session: Session, deps: Vaul
       request = r.body;
       return undefined;
     }
-    return `the transaction was sent from your wallet (${hash}), but the API did not record it: ${r.error.code}: ${r.error.message}. Do not send it again: check it on ${CHAIN_INFO[leg.chainId].name}, and read the request with ${read}`;
+    return `the transaction was sent from your wallet (${hash}), but the API did not record it: ${r.error.code}: ${r.error.message}. Do not send it again: check it on ${CHAIN_INFO[leg.chainId].name}, then hand the hash to the API with \`treasury earn submit --request_id ${rid} --step_id ${stepId} --tx_hash ${hash}\` and read the request with ${read}`;
   };
 
   /** Reads the request again and holds it to the intent; a refusal says nothing more was sent. */

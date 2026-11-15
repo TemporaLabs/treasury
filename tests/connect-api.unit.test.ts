@@ -3,7 +3,7 @@
  * stand-in API (`fixtures/api.ts`), and the page played over its own HTTP protocol. Every step the page is handed must
  * have passed the client's `checkSteps`; every hash it posts goes to the API; nothing is sent twice.
  */
-import { mkdtempSync, rmSync } from "node:fs";
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { createServer } from "node:net";
@@ -138,6 +138,16 @@ describe("a deposit through the API: two steps, the second prepared only once th
     expect(bodies).toEqual([{ product: productIdOf(vault.symbol), amount: { kind: "assets", assetId: `eip155:${vault.chainId}/erc20:${vault.asset.address}`, raw: "2500000" }, vaultTerms: { version: TERMS.version, sha256: TERMS.sha256 } }]);
   });
 
+  it("a kept sign-in that would lapse before the page's time is up is renewed before the page opens, never mid-flow", async () => {
+    // Three minutes left on the kept token, a five-minute page: the API sign-in is asked for now, before any page.
+    writeOwnerToken(tokenKeyFor(ACCOUNT), { token: "tok", expiresAtIso: "2026-11-14T12:03:00Z" }, clock.getTime());
+    const d = deps({ ttlMs: 5 * 60_000 });
+    const first = await cmd("connect_deposit", { receiver: ACCOUNT, vault: vault.symbol, amount_usdc: "1" }, d);
+    await expect(cmd("connect_deposit", { receiver: ACCOUNT, vault: vault.symbol, amount_usdc: "1", ack: first["ack"] }, d)).rejects.toThrow(/sign_in_challenge/); // a fresh sign-in starts (this stand-in has no HTTP client for it)
+    expect(opened).toEqual([]);
+    expect(api.log).not.toContain("deposit");
+  });
+
   it("a request cancelled on the page before anything was sent is withdrawn at the API", async () => {
     const run = acknowledged("connect_deposit", { amount_usdc: "1" });
     const p = await page();
@@ -241,7 +251,7 @@ describe("the check holds before every step, and nothing is ever sent twice", ()
     const run = acknowledged("connect_deposit", { amount_usdc: "1" });
     const p = await page();
     const reply = await p.post({ index: 0, hash: H(1) });
-    expect(String(reply["reason"])).toMatch(/the transaction was sent from your wallet \(0x0+1\), but the API did not record it: transfer_mismatch: that transaction is not this step\. Do not send it again/);
+    expect(String(reply["reason"])).toMatch(/the transaction was sent from your wallet \(0x0+1\), but the API did not record it: transfer_mismatch: that transaction is not this step\. Do not send it again.*`treasury earn submit --request_id req_1 --step_id s1 --tx_hash 0x0+1`/);
     const out = await run;
     expect(out["status"]).toBe("stopped");
     expect(out["txs"]).toMatchObject([{ hash: H(1) }]);
@@ -266,6 +276,20 @@ describe("the check holds before every step, and nothing is ever sent twice", ()
 });
 
 describe("connect plan: each EVM leg is one API request, driven in order on one page", () => {
+  it("a recorded leg that pays an account other than the connected one is refused before any page opens", async () => {
+    const legs = `deposit ${vault.symbol} 1`;
+    const first = await cmd("connect_plan", { legs });
+    await cmd("connect_plan", { legs, ack: first["ack"] });
+    // The plan file is local state: a leg edited to pay someone else is held to the connected account at run time.
+    const file = join(home, "connect-plan.json");
+    const plan = JSON.parse(readFileSync(file, "utf8"));
+    plan.legs[0].args.receiver = STRANGER;
+    writeFileSync(file, JSON.stringify(plan));
+    await expect(cmd("connect_plan", { run: true })).rejects.toThrow(new RegExp(`leg 1 pays ${STRANGER}, which is not the connected account`));
+    expect(opened).toEqual([]);
+    expect(api.log).not.toContain("deposit");
+  });
+
   it("two EVM legs, each started at the API when the page starts it, each step checked and recorded: the plan completed", async () => {
     const legs = `deposit ${vault.symbol} 1; withdraw ${other.symbol} 2`;
     const first = await cmd("connect_plan", { legs });
