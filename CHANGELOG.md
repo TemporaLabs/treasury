@@ -18,6 +18,9 @@ Pre-1.0, minor versions may change tool names, schemas and behaviour.
   Solana is unchanged and still reads its chain directly.
 - **`@temporalabs/client` is installed from npm**, pinned to `0.1.0`, instead of from a release download. The package
   is the same build, byte for byte.
+- **TypeScript 6.0.3**, pinned, for the library and the connect page, the version `@temporalabs/client` is built
+  with. The built CLI and page are unchanged, byte for byte. The page overrides the optional TypeScript peer range of
+  the `@solana/kit` copy its wallet library brings in, which still names TypeScript 5.
 - **`--vault` takes the vault's contract address or its ticker on the EVM chains** (for example `tlCashPlusUSDC2B`,
   or its address `0x91BcEbA5feCB9E92d80F1845B55cC56621E9352F`, Base's default). The address picks the vault the API
   lists; an address no listed vault has, or more than one has, is refused. Each chain's default is a contract address,
