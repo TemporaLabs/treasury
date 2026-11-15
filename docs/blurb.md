@@ -1,7 +1,7 @@
 # Open Agent Treasury (OAT)
 
 **The open-source treasury management system for AI agents.** Built by Tempora Labs. Apache-2.0.
-Current release: **v0.1.4** (November 2026).
+Current release: **v0.1.5** (November 2026).
 
 Open Agent Treasury gives an AI agent a safe way to manage on-chain capital. The agent reads the
 vaults through the Tempora API (on Solana, from the chain itself), works out what it wants to do, and hands back
@@ -108,6 +108,13 @@ no money. Later:
 - **Verifiable builds:** CI checks the committed bundle, and each npm release carries provenance.
 - Vulnerabilities go through private reporting, not public issues.
 
+## New in v0.1.5
+
+On Base, Arbitrum One, Robinhood Chain, Ethereum and Monad, earn and connect go through the Tempora API: it lists the
+vaults and prepares every step, and each step is checked against what the operator asked for before the wallet sees
+it. `treasury invest` deposits into and withdraws from Tempora Labs' Smart Growth portfolios (USDT on BNB Chain)
+through the same API. Solana still reads its own chain.
+
 ## New in v0.1.4
 
 One acknowledgement for a plan of several deposits and withdrawals, across vaults and chains, and
@@ -136,6 +143,6 @@ More yield configurations across the risk/return spectrum.
 - Source: https://github.com/TemporaLabs/treasury
 - Plugin and the Earn skill: https://github.com/TemporaLabs/treasury/tree/main/plugin
 - npm: https://www.npmjs.com/package/@temporalabs/treasury
-- Release notes: https://github.com/TemporaLabs/treasury/releases/tag/v0.1.4
+- Release notes: https://github.com/TemporaLabs/treasury/releases/tag/v0.1.5
 - Docs: tools, configuration, risks, security model: https://github.com/TemporaLabs/treasury/tree/main/docs
 - Licence: Apache-2.0. Forks must not claim to be the official distribution.
