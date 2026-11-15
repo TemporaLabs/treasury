@@ -24,6 +24,7 @@ const ACCOUNT = getAddress("0x2222222222222222222222222222222222222222");
 const STRANGER = getAddress("0x9999999999999999999999999999999999999999");
 const STOCK = "eip155:56/erc20:0x3333333333333333333333333333333333333333";
 const NOW = Date.parse("2026-11-14T00:00:00.000Z");
+const STEP_EXPIRES = new Date(NOW + 600_000).toISOString();
 const HOST = "api.staging.example";
 const PRODUCT = "smart-growth-20";
 const RAW_100 = 100n * 10n ** 18n;
@@ -37,7 +38,7 @@ const product = { id: PRODUCT, kind: "portfolio", name: "Smart Growth 20", statu
 function request(o: Partial<Request> & { steps: Request["steps"] }): Request {
   return { requestId: "req_1", action: "deposit", state: "requires_action", chose: { product: PRODUCT }, expiresAt: new Date(NOW + 3_600_000).toISOString(), ...o } as Request;
 }
-const enrol = (state = "ready") => ({ stepId: "s1", chainId: "eip155:56", state, checks: [], kind: "sign_message", purpose: "enrol", payload: { generation: 1, expiresAt: "x", bytes: ENROL_BYTES } });
+const enrol = (state = "ready") => ({ stepId: "s1", chainId: "eip155:56", state, checks: [], kind: "sign_message", purpose: "enrol", payload: { generation: 1, expiresAt: STEP_EXPIRES, bytes: ENROL_BYTES } });
 const transfer = (o: { state?: string; to?: string; data?: string; value?: string; payload?: boolean } = {}) => ({
   stepId: "s2",
   chainId: "eip155:56",
@@ -45,7 +46,7 @@ const transfer = (o: { state?: string; to?: string; data?: string; value?: strin
   checks: [],
   kind: "send_transaction",
   purpose: "deposit",
-  ...(o.payload !== false && { payload: { generation: 1, expiresAt: "x", to: o.to ?? BNB_USDT.address, data: o.data ?? transferData(ACCOUNT, RAW_100), value: o.value ?? "0" } }),
+  ...(o.payload !== false && { payload: { generation: 1, expiresAt: STEP_EXPIRES, to: o.to ?? BNB_USDT.address, data: o.data ?? transferData(ACCOUNT, RAW_100), value: o.value ?? "0" } }),
 });
 
 type Log = string[];
@@ -127,6 +128,70 @@ describe("invest deposit", () => {
     expect(seen[0]!.view.warning).toMatch(/cannot be read on its own/);
     expect(seen[1]!.ask).toEqual({ kind: "send", to: BNB_USDT.address, data: transferData(ACCOUNT, RAW_100), value: "0" });
     expect(out).toMatchObject({ settled: true, request: { requestId: "req_1", state: "completed" }, acted: [{ stepId: "s1" }, { stepId: "s2", value: HASH }] });
+  });
+
+  describe("a request's lifecycle", () => {
+    const past = new Date(NOW - 1000).toISOString();
+    const asked = (log: Log) => log.filter((l) => l.startsWith("wallet:"));
+    const start = (log: Log, extra: Record<string, unknown>, steps: unknown[] = [enrol(), transfer({ state: "waiting", payload: false })]) =>
+      api(log, { deposit: () => request({ steps: steps as never, ...extra } as never) });
+
+    it("asks the wallet nothing for a request that has expired, though its step still reads ready", async () => {
+      const log: Log = [];
+      await expect(run(start(log, { expiresAt: past }), wallet(log, signs), "invest_deposit", { product: PRODUCT, amount_usdt: "100" })).rejects.toThrow(/ran out/);
+      expect(asked(log)).toEqual([]);
+    });
+
+    it("asks the wallet nothing for a step whose own authorization has lapsed", async () => {
+      const log: Log = [];
+      const lapsed = { ...enrol(), payload: { ...enrol().payload, expiresAt: past } };
+      await expect(run(start(log, {}, [lapsed, transfer({ state: "waiting", payload: false })]), wallet(log, signs), "invest_deposit", { product: PRODUCT, amount_usdt: "100" })).rejects.toThrow(/ran out/);
+      expect(asked(log)).toEqual([]);
+    });
+
+    it.each([
+      ["expired", { kind: "expired" }, /ran out/],
+      ["hand_back", { kind: "hand_back", stepId: "s2" }, /treasury invest request/],
+      ["a kind this client does not know", { kind: "teleport" }, /does not know/],
+    ])("asks the wallet nothing when the API's next action is %s", async (_n, next, why) => {
+      const log: Log = [];
+      await expect(run(start(log, { next }), wallet(log, signs), "invest_deposit", { product: PRODUCT, amount_usdt: "100" })).rejects.toThrow(why);
+      expect(asked(log)).toEqual([]);
+    });
+
+    it("asks the wallet nothing for a ready step the API's next action does not name", async () => {
+      const log: Log = [];
+      const next = { kind: "sign", stepIds: ["s9"] };
+      const client = api(log, {
+        deposit: () => request({ steps: [enrol(), transfer({ state: "waiting", payload: false })] as never, next } as never),
+        status: () => request({ steps: [enrol(), transfer({ state: "waiting", payload: false })] as never, next } as never),
+      });
+      const out = await run(client, wallet(log, signs), "invest_deposit", { product: PRODUCT, amount_usdt: "100" });
+      expect(asked(log)).toEqual([]);
+      expect(out.settled).toBe(false);
+    });
+
+    it("asks the wallet nothing for a step at another generation than the one the API's next action names", async () => {
+      const log: Log = [];
+      const next = { kind: "sign_again", stepId: "s1", generation: 2 };
+      const client = api(log, {
+        deposit: () => request({ steps: [enrol(), transfer({ state: "waiting", payload: false })] as never, next } as never),
+        status: () => request({ steps: [enrol(), transfer({ state: "waiting", payload: false })] as never, next } as never),
+      });
+      const out = await run(client, wallet(log, signs), "invest_deposit", { product: PRODUCT, amount_usdt: "100" });
+      expect(asked(log)).toEqual([]);
+      expect(out.settled).toBe(false);
+    });
+
+    it("asks the wallet for the step the API's next action names", async () => {
+      const log: Log = [];
+      const client = api(log, {
+        deposit: () => request({ steps: [enrol(), transfer({ state: "waiting", payload: false })] as never, next: { kind: "sign", stepIds: ["s1"] } } as never),
+        submit: () => request({ state: "completed", smartAccount: ACCOUNT, steps: [enrol("completed"), transfer({ state: "landed" })] as never }),
+      });
+      await run(client, wallet(log, signs), "invest_deposit", { product: PRODUCT, amount_usdt: "100" });
+      expect(asked(log)).toEqual(["wallet:sign_bytes"]);
+    });
   });
 
   it.each([
@@ -304,7 +369,7 @@ describe("invest withdraw", () => {
     kind: "sign_typed_data",
     manifest: { index: i, of: 2 },
     plan: { liquidate: t.message.liquidate === true, assets: t.message.assets },
-    payload: { generation: 1, expiresAt: "x", typedData: t },
+    payload: { generation: 1, expiresAt: STEP_EXPIRES, typedData: t },
   });
   const idle = [{ assetId: BNB_USDT_ASSET_ID, amountRaw: "5000000000000000000" }];
   const stock = [{ assetId: STOCK, amountRaw: "7" }];
