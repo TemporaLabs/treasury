@@ -45917,6 +45917,8 @@ var EARN = {
     ethereum: "0x2AA9B1F12bbFE1E01dcb4DD52E6836d68416e3B6",
     monad: "0x163295A4d4381745A205DC5E9A436a3f51791593"
   },
+  /** How often `connect` reads a vault request again while a step settles. */
+  requestPollMs: 3e3,
   /** Fixtures the unit tiers share. */
   fixtures: {
     /** An address that has never touched any vault — the negative control for access checks. */
@@ -46893,7 +46895,8 @@ var DISCLOSURES = {
    * `clientNotes` above stay the full text, which `earn_terms` returns. Keep the two in step: a
    * point added above needs its plain sentence here. The first item above (every vault is a test
    * vault; deposit only what you can lose) has none: the acknowledgement prints the vault's own
-   * `warning` from the registry, which says it, and `registry.test.ts` holds every row to that.
+   * warning (the registry's on Solana, `registry.test.ts` holding every row to it; the Tempora API's on the EVM
+   * chains), and that first item itself when the API gives none.
    */
   plain: {
     deposit: [
@@ -49524,7 +49527,6 @@ function buildCommands(deps = {}) {
       const wallet = nonce !== void 0 && from16 !== void 0 ? { nonce, from: getAddress(from16), blockNumber: block ?? null } : null;
       return json2(
         await asOwner2(owner, async (m, call3) => {
-          const all = await products(m);
           const r = await call3((c, ownerToken) => c.submit({ path: { requestId: request_id, stepId: step_id }, body: { kind: "transaction", txHash: tx_hash, wallet } }, { ownerToken }));
           if (!r.ok) {
             throw new Error(
@@ -49532,7 +49534,7 @@ function buildCommands(deps = {}) {
             );
           }
           try {
-            return view2(r.body, all, owner);
+            return view2(r.body, await products(m), owner);
           } catch (e4) {
             throw new Error(`The API recorded transaction ${tx_hash} for step ${step_id}. ${e4 instanceof Error ? e4.message : String(e4)}`);
           }
@@ -50034,7 +50036,7 @@ function acknowledgementText(s2) {
     `  ${s2.action === "deposit" ? "Deposit" : "Withdraw"}: ${s2.amount}`,
     s2.chainId === null ? `  Chain: ${s2.chain} (mainnet-beta)` : `  Chain: ${s2.chain} (chainId ${s2.chainId})`,
     `  Vault: ${s2.vault.name} (${s2.vault.symbol})`,
-    `         ${s2.vault.explorer}`,
+    ...s2.vault.explorer ? [`         ${s2.vault.explorer}`] : [],
     `  ${lands}: ${s2.receiver} (the connected wallet)`,
     ...s2.terms ? [`  Terms: version ${s2.terms.version}, sha256 ${s2.terms.sha256} (\`earn terms\` shows them in full)`] : [],
     `  ${prompts}`,
@@ -50123,7 +50125,7 @@ function planAcknowledgementText(legs, totals) {
       `  ${i + 1}. ${s2.action === "deposit" ? "Deposit" : "Withdraw"}: ${s2.amount}`,
       s2.chainId === null ? `     Chain: ${s2.chain} (mainnet-beta)` : `     Chain: ${s2.chain} (chainId ${s2.chainId})`,
       `     Vault: ${s2.vault.name} (${s2.vault.symbol})`,
-      `            ${s2.vault.explorer}`,
+      ...s2.vault.explorer ? [`            ${s2.vault.explorer}`] : [],
       `     ${lands}: ${s2.receiver} (the connected wallet)`,
       ...s2.terms ? [`     Terms: version ${s2.terms.version}, sha256 ${s2.terms.sha256}`] : [],
       `     ${prompts}`,
@@ -50195,7 +50197,8 @@ function vaultLeg(p, owner, ask) {
     chainId,
     vault: { symbol: pageSymbol(p), name: p.name, address: p.vault.vaultAddress, explorer: p.vaultLinks?.explorer ?? "" },
     receiver: owner,
-    warning: operatorWarning(p.warnings.join(" "), ask.action),
+    // The API's warnings; with none, the client's own first disclosure, so the operator is always told it is a test vault.
+    warning: operatorWarning(p.warnings.join(" ").trim() || DISCLOSURES.items[0], ask.action),
     // A vault the API gates by an allowlist takes deposits only from accounts admitted to it: said before a deposit.
     disclosures: ask.action === "deposit" ? [...DISCLOSURES.plain.deposit, ...p.gates?.includes("allowlist") ? [DISCLOSURES.plain.gatedDeposit] : [], ...DISCLOSURES.plain.always] : [...DISCLOSURES.plain.always],
     ...terms ? { terms } : {}
@@ -50213,7 +50216,7 @@ async function startVaultCore(leg, session, deps, deadline) {
   const p = leg.product;
   const now = deps.now ?? Date.now;
   const sleep = deps.sleep ?? ((ms) => new Promise((r) => setTimeout(r, ms)));
-  const pollMs = deps.pollMs ?? 3e3;
+  const pollMs = deps.pollMs ?? EARN.requestPollMs;
   const started = await deps.call((m, ownerToken) => leg.action === "deposit" ? m.deposit({ body: leg.body }, { ownerToken }) : m.withdraw({ body: leg.body }, { ownerToken }));
   if (!started.ok) throw failure2(`The API did not start the ${leg.action} on ${vaultLabel(p)}`, started);
   let request = started.body;

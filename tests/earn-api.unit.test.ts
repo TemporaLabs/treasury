@@ -763,7 +763,7 @@ describe("earn submit", () => {
     const calls: { path: unknown; body: unknown }[] = [];
     const out = await run(log, mcp(log, { submit: (i) => (calls.push(i), landed()) }), "earn_submit", { request_id: "req_1", step_id: "s1", tx_hash: TX });
     expect(calls).toEqual([{ path: { requestId: "req_1", stepId: "s1" }, body: { kind: "transaction", txHash: TX, wallet: null } }]);
-    expect(log).toEqual(["mcp:products", "mcp:submit@tok", "wallet:finish:true"]);
+    expect(log).toEqual(["mcp:submit@tok", "mcp:products", "wallet:finish:true"]);
     expect(out).toMatchObject({ requestId: "req_1", checked: true, chain: "base" });
     expect(out.steps[0]).toMatchObject({ stepId: "s1", state: "landed", verification: { hash: TX } });
     expect(out.steps[1]).toMatchObject({ stepId: "s2", state: "ready", to: VAULT, data: depositData(RAW_25, OWNER) });
@@ -787,6 +787,15 @@ describe("earn submit", () => {
     await expect(fails(log, mcp(log), "earn_submit", { request_id: "req_1", step_id: "s1", tx_hash: TX, nonce: "7" })).rejects.toThrow(/give --nonce and --from together/);
     await expect(fails(log, mcp(log), "earn_submit", { request_id: "req_1", step_id: "s1", tx_hash: TX, block: "1" })).rejects.toThrow(/--block goes with --nonce and --from/);
     expect(log).toEqual([]);
+  });
+
+  it("the hash goes to the API first: a vault list that cannot be read after it is recorded says it was recorded", async () => {
+    const log: Log = [];
+    const calls: unknown[] = [];
+    await expect(
+      fails(log, mcp(log, { submit: (i) => (calls.push(i), landed()), products: () => refused("upstream_unavailable", "try later") }), "earn_submit", { request_id: "req_1", step_id: "s1", tx_hash: TX }),
+    ).rejects.toThrow(/The API recorded transaction 0x[0-9a-f]{64} for step s1\..*vault list could not be read/s);
+    expect(calls).toHaveLength(1);
   });
 
   it("a refusal names its code and says not to send the transaction again", async () => {
