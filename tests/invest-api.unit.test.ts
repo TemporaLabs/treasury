@@ -9,6 +9,7 @@ import { getAddress } from "viem";
 import type { Client } from "@temporalabs/client";
 import { apiHost, apiUrl, asOwner, tokenKeyFor } from "../src/invest/api.js";
 import { buildInvestCommands } from "../src/invest/commands.js";
+import { run } from "../src/cli.js";
 import { readOwnerToken } from "../src/connect/owner-tokens.js";
 
 const OWNER = getAddress("0x52908400098527886e0f7030069857d2e4169ee7");
@@ -143,5 +144,19 @@ describe("invest products", () => {
   it("reports an API refusal as an error, never as an empty list", async () => {
     const client = { products: async () => ({ ok: false, status: 503, error: { code: "upstream_unavailable", message: "down", outcome: "failed" }, retryAfter: 5 }) } as unknown as Client;
     await expect(buildInvestCommands({ client })["invest_products"]!.handler({} as never)).rejects.toThrow(/upstream_unavailable.*Try again in 5 s/);
+  });
+});
+
+describe("invest withdraw on the command line", () => {
+  it("`--all` is a switch: given bare, it reaches the command as true", async () => {
+    const help = JSON.parse((await run(["invest", "--help"])).stdout!) as { commands: { tool: string; flags: { flag: string; type: string; takesValue?: boolean }[] }[] };
+    const all = help.commands.find((c) => c.tool === "invest_withdraw")!.flags.find((f) => f.flag === "--all");
+    expect(all).toMatchObject({ type: "boolean", takesValue: false });
+    // The connect home is empty: the call parses, reaches the command, and stops at the missing wallet, before any API call.
+    const r = await run(["invest", "withdraw", "--product", "smart-growth-20-beta", "--all"]);
+    expect(r.code).toBe(1);
+    expect((JSON.parse(r.stderr!) as { error: string }).error).toMatch(/^no wallet is connected/);
+    const valued = await run(["invest", "withdraw", "--product", "smart-growth-20-beta", "--all", "true"]);
+    expect((JSON.parse(valued.stderr!) as { error: string }).error).toMatch(/--all is a switch: give it for true, leave it out for false/);
   });
 });

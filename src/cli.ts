@@ -39,13 +39,17 @@ const SKILLS: Record<string, () => Record<string, Command>> = { earn: buildComma
 
 type Kind = "string" | "number" | "boolean";
 
-/** The JSON type a flag's schema finally checks, looking through `optional`, `default` and refine/transform pipes. */
+/**
+ * The JSON type a flag's schema finally checks, looking through `optional`, `default` and refine/transform pipes. A
+ * literal `true` (a flag that must be given, like `invest withdraw --all`) is a switch too.
+ */
 function kindOf(schema: z.ZodType): Kind {
   let s: z.ZodType = schema;
   for (;;) {
-    const def = (s as unknown as { def: { type: string; innerType?: z.ZodType; in?: z.ZodType } }).def;
+    const def = (s as unknown as { def: { type: string; innerType?: z.ZodType; in?: z.ZodType; values?: unknown[] } }).def;
     if ((def.type === "optional" || def.type === "default" || def.type === "nullable") && def.innerType) s = def.innerType;
     else if (def.type === "pipe" && def.in) s = def.in;
+    else if (def.type === "literal" && def.values?.length && def.values.every((v) => typeof v === "boolean")) return "boolean";
     else return def.type === "number" ? "number" : def.type === "boolean" ? "boolean" : "string";
   }
 }
