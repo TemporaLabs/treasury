@@ -47,7 +47,9 @@ Earn currently supports **USDC in, USDC out** through Tempora Labs' ERC-4626 vau
 Arbitrum One, Ethereum and Monad, through a Kamino vault on Solana, and **USDG in, USDG out** on Robinhood Chain. Base is the default chain, and Test 2B its
 default vault; the agent asks which chain when you have not said, and the funds have to be on that
 chain already. See [Vaults](#vaults).
-`treasury invest` does the same for Tempora Labs' Smart Growth portfolios, through the same API.
+`treasury invest` deposits into and withdraws from Tempora Labs' Smart Growth portfolios (USDT on BNB Chain), through
+the same API; a portfolio is open only to the wallets the API admits, and `treasury invest products` shows each one's
+status.
 See the [command reference](docs/tools.md) for every command's inputs, outputs, and limits.
 
 ## Quick start
