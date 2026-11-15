@@ -169,7 +169,7 @@ describe("a refusal that names a chain keeps the chain's name", () => {
     // Providers put the chain in the path or the host. The redactor registers long URL segments as
     // secrets; "arbitrum" is 8 characters, and the refusal read `is on base, not <redacted>`.
     process.env["TREASURY_RPC_ARBITRUM"] = "http://127.0.0.1:9/arbitrum/KEYabcdef123456";
-    const vault = (id: string, chainId: number, vaultAddress: string) => ({ id, kind: "vault", name: id, status: "live", warnings: [], vault: { standard: "erc4626", chain: `eip155:${chainId}`, vaultAddress, assetAddress: OWNER, assetDecimals: 6, shareDecimals: 18 } });
+    const vault = (id: string, chainId: number, vaultAddress: string) => ({ id, kind: "vault", name: id, status: "live", warnings: [], vault: { standard: "erc4626", chain: `eip155:${chainId}`, vaultAddress, assetAddress: OWNER, assetDecimals: 6, shareDecimals: 18, shareSymbol: id === "vault-base-1" ? "tlCashPlusUSDC2B" : "tlCashPlusUSDC2C" } });
     const products = [vault("vault-base-1", 8453, EARN.defaultVaultAddressByChain.base), vault("vault-arbitrum-1", 42161, EARN.defaultVaultAddressByChain.arbitrum)] as unknown as Product[];
     const listed = new Proxy({} as McpClient, {
       get: (_t, name: string) => async (input: any) => (name === "product" ? productLookup(products, input.path.id) : { ok: true, status: 200, body: { products } }),

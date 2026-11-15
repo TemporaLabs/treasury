@@ -934,7 +934,7 @@ export function buildConnectCommands(deps: ConnectDeps = {}): Record<string, Com
       chainId,
       chainName: chainId !== null ? CHAIN_INFO[chainId as SupportedChainId].name : leg.chain,
       vault: p
-        ? { symbol: tickerOf(p.vault.vaultAddress, chainId) ?? shortAddress(p.vault.vaultAddress), name: p.name, address: p.vault.vaultAddress, asset: p.tokens[0] ?? "", assetAddress: p.vault.assetAddress, links: { explorer: p.vaultLinks?.explorer ?? "" } }
+        ? { symbol: tickerOf(p), name: p.name, address: p.vault.vaultAddress, asset: p.tokens[0] ?? "", assetAddress: p.vault.assetAddress, links: { explorer: p.vaultLinks?.explorer ?? "" } }
         : { symbol: shortAddress(leg.vault), name: leg.vault, address: leg.vault, asset: "", assetAddress: "", links: { explorer: "" } },
       txBase: chainId !== null ? explorerTxUrl(chainId as SupportedChainId, "") : "",
     };

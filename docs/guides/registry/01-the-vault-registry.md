@@ -7,8 +7,8 @@ share decimals, whether a stranger can deposit, and (where known) the block it w
 Every field that can be read from the chain is a claim the chain can contradict, and the code treats
 it that way: the Solana `readVault` refuses a row whose mints or decimals disagree with the vault state
 (`src/solana/vault.ts`), and `npm run registry:check` reconciles every row, EVM and Solana, against its chain
-(below). On the EVM chains a row only gives a response the vault's `ticker` (`tickerOf` in `src/earn/api.ts`) and
-backs each chain's default address; a `--vault` goes to the Tempora API as typed, and everything else about the vault,
+(below). On the EVM chains a row only backs each chain's default address (the `ticker` a response shows is the API's
+`shareSymbol`, `tickerOf` in `src/earn/api.ts`); a `--vault` goes to the Tempora API as typed, and everything else about the vault,
 and every step, comes from the API.
 
 The **chassis** is the vault's contract family. `chassisSchema` in `src/registry-schema.ts` lists the
@@ -52,7 +52,7 @@ reaches a test seam.
 
 Every vault-taking command accepts an optional `vault` and an optional `chain`. On the EVM chains the commands
 pass them to the Tempora API, which decides which vault they name (`vaultProduct` in `src/earn/api.ts`), using only
-each chain's default address from `src/config/earn.ts`; the registry's EVM rows still give a response its `ticker`. In the registry itself,
+each chain's default address from `src/config/earn.ts`; a response's `ticker` is the API's `shareSymbol`. In the registry itself,
 `resolveVault(symbol, chain)` settles them for the EVM rows, and is what the library exports:
 
 | caller names | result |

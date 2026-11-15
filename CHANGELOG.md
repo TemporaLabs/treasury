@@ -16,8 +16,8 @@ Pre-1.0, minor versions may change tool names, schemas and behaviour.
   prepares is checked against the API's own record of the vault, and against what the operator asked for, by
   `@temporalabs/client`'s `checkSteps` before a wallet sees it: a wrong step is caught, a wrong record is not.
   Solana is unchanged and still reads its chain directly.
-- **A new dependency, `@temporalabs/client` `0.1.0`**, pinned, from npm: the Tempora API's client, which makes every
-  call to the API and checks every step it prepares.
+- **A new dependency, `@temporalabs/client` `0.1.1`**, pinned, from npm: the Tempora API's client, which makes every
+  call to the API and checks every step it prepares. It needs the Tempora API at 0.1.3 or later.
 - **TypeScript 6.0.3**, pinned (was `^5.9.0`; `^5.6.0` for the page), for the library and the connect page, the version
   `@temporalabs/client` is built with. The page overrides the optional TypeScript peer range of
   the `@solana/kit` copy its wallet library brings in, which still names TypeScript 5.
@@ -29,7 +29,7 @@ Pre-1.0, minor versions may change tool names, schemas and behaviour.
   given, and the API decides which vault it names; a value it knows as no vault is refused, and so is a vault on another
   chain than the `chain` named. Each chain's default is a contract address, and a default the API does not know is
   refused, never replaced. Responses name a vault by `vault` (its contract
-  address), `ticker` and `name`. On Solana `--vault` is still the vault's ticker.
+  address), `ticker` (its share ticker) and `name`, all the API's. On Solana `--vault` is still the vault's ticker.
 - **Owner reads and requests act for the connected wallet only.** `earn status` with an account, `earn quote`,
   `earn balance`, the prepare commands, `earn submit` and `earn request` act for the wallet `treasury connect wallet`
   connected; another `--account` is refused. A sign-in page opens only when the API needs a sign-in, and one sign-in
