@@ -30,6 +30,9 @@ const POLL_MS = 2_000;
 /** A send needs this long left on the page: the wallet's own prompt takes time, as on the confirm and plan views. */
 const MIN_MS_LEFT = 60_000;
 
+/** What the process holds now, or nothing when it cannot be read. */
+const readLive = () => fetch(`/info?s=${secret}`).then((r) => (r.ok ? (r.json() as Promise<InvestInfo>) : undefined), () => undefined);
+
 export function Invest({ info: first }: { info: InvestInfo }) {
   const { ready, authenticated, logout } = usePrivy();
   const { wallets } = useWallets();
@@ -78,7 +81,7 @@ export function Invest({ info: first }: { info: InvestInfo }) {
         // The step is read again from the process just before the wallet is asked, as the confirm view does: what is
         // sent is what the process holds now, checked, never a copy this tab polled earlier. The page may also have
         // sat open past the flow's time limit; leave a minute for the wallet's own prompt.
-        const live = (await fetch(`/info?s=${secret}`).then((r) => (r.ok ? r.json() : undefined), () => undefined)) as InvestInfo | undefined;
+        const live = await readLive();
         if (!live) throw new Error("this page has expired; run the command again");
         // Another tab may have handled this step already: only this tab is stale, so it stops without reporting a
         // rejection, which would end the whole flow.
@@ -89,6 +92,9 @@ export function Invest({ info: first }: { info: InvestInfo }) {
         await wallet.switchChain(info.chainId);
         const tx = { from: wallet.address, to: now.to, data: now.data, value: "0x0" };
         const est = BigInt((await provider.request({ method: "eth_estimateGas", params: [tx] })) as string);
+        // The wallet's network switch and gas estimate can sit open: read the time left again just before the send.
+        const left = await readLive();
+        if (!left || (left.msLeft ?? 0) < MIN_MS_LEFT) throw new Error("less than a minute is left on this page; run the command again");
         sending = true;
         hash = (await provider.request({ method: "eth_sendTransaction", params: [{ ...tx, chainId: `0x${info.chainId.toString(16)}`, gas: `0x${((est * 3n) / 2n).toString(16)}` }] })) as string;
         value = hash;

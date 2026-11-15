@@ -82,6 +82,10 @@ describe("the connect page's source", () => {
     expect(send.indexOf("live.msLeft")).toBeLessThan(send.indexOf("eth_estimateGas"));
     expect(send.indexOf("live.step?.index !== index")).toBeLessThan(send.indexOf("eth_estimateGas"));
     expect(send).toMatch(/\(live\.msLeft \?\? 0\) < MIN_MS_LEFT/);
+    // And again after the network switch and the gas estimate, which can sit open, right before the send.
+    expect(send.indexOf("const left = await readLive()")).toBeGreaterThan(send.indexOf("eth_estimateGas"));
+    expect(send.indexOf("const left = await readLive()")).toBeLessThan(send.indexOf("sending = true;"));
+    expect(send).toMatch(/\(left\.msLeft \?\? 0\) < MIN_MS_LEFT/);
     expect(invest).toMatch(/const MIN_MS_LEFT = 60_000;/);
     // The transaction is built from that fresh read alone: the step this tab rendered is not read for it.
     expect(send).toMatch(/const tx = \{ from: wallet\.address, to: now\.to, data: now\.data, value: "0x0" \};/);
