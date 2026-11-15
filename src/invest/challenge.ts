@@ -53,7 +53,7 @@ export function checkChallenge(text: unknown, expect: { host: string; owner: Add
   const issued = Date.parse(t![1]!);
   const expires = Date.parse(t![2]!);
   if (!(expires > issued)) refuse("expires before it is issued");
-  if (expires - issued > CHALLENGE_MAX_LIFETIME_MS) refuse("is valid for longer than 5 minutes");
+  if (expires - issued > CHALLENGE_MAX_LIFETIME_MS) refuse(`is valid for longer than ${CHALLENGE_MAX_LIFETIME_MS / 60_000} minutes`);
   if (issued > expect.now + CLOCK_SKEW_MS) refuse("is issued in the future");
   if (expires <= expect.now) refuse("has expired");
   return { nonce: n![1]!, issuedAt: new Date(issued), expiresAt: new Date(expires) };
