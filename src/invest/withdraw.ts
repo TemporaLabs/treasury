@@ -103,6 +103,8 @@ export function prepareWithdrawal(r: Request, s: Request["steps"][number], owner
   const typedData = step.payload?.typedData ?? {};
   const message = (typedData["message"] ?? {}) as { liquidate?: unknown; assets?: { assetId: string; amountRaw: string }[]; expiresAt?: unknown };
   const sale = message.liquidate === true;
+  const expiresAt = Number(message.expiresAt);
+  if (!Number.isFinite(expiresAt) || expiresAt <= 0) throw new Error("refused: the authorization carries no expiry to show; nothing was signed or sent");
   const n = r.steps.indexOf(s) + 1;
   return {
     view: {
@@ -114,7 +116,7 @@ export function prepareWithdrawal(r: Request, s: Request["steps"][number], owner
         ...(message.assets ?? []).map((a) => ({ label: sale ? "Sell" : "Move", value: amountText(a.assetId, a.amountRaw, h) })),
         { label: "From your smart account", value: h.smartAccount },
         { label: "Paid to your wallet", value: owner },
-        { label: "Valid until", value: new Date(Number(message.expiresAt) * 1000).toISOString() },
+        { label: "Valid until", value: new Date(expiresAt * 1000).toISOString() },
       ],
       // What the API says this withdrawal will not take out (holdings too small to sell): shown before anything is signed.
       ...(r.leftBehind && r.leftBehind.length > 0

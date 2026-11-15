@@ -53,13 +53,14 @@ export function checkDeposit(r: Request, raw: bigint) {
 export function prepareDeposit(r: Request, s: Request["steps"][number], raw: bigint, product: string): Prepared {
   const p = (s as { payload?: { bytes?: string; to?: string; data?: string } }).payload ?? {};
   if (s.kind === "sign_message") {
+    if (typeof p.bytes !== "string" || !p.bytes.startsWith("0x")) throw new Error("refused: the enrolment step carries no code to sign; nothing was signed or sent");
     return {
       view: {
         title: "Open your Smart Growth account",
         description: `Your wallet signs once to open your own account on ${product}. Nothing moves with this signature.`,
         facts: [
           { label: "Portfolio", value: product },
-          { label: "What you sign", value: p.bytes ?? "" },
+          { label: "What you sign", value: p.bytes },
         ],
         warning:
           "Your wallet will show a 32-byte code, not words: the portfolio provider's enrolment code for this account. It cannot be read on its own. Sign it only if you started this deposit just now.",
@@ -67,6 +68,7 @@ export function prepareDeposit(r: Request, s: Request["steps"][number], raw: big
       ask: { kind: "sign_bytes", bytes: p.bytes as Hex },
     };
   }
+  if (typeof p.data !== "string" || !p.data.startsWith("0x")) throw new Error("refused: the transfer step carries no calldata; nothing was signed or sent");
   return {
     view: {
       title: "Send USDT to your Smart Growth account",
