@@ -7,7 +7,7 @@
 | the commands (`connect status`, `wallet`, `deposit`, `withdraw`, `plan`, `disconnect`) | `src/connect/commands.ts` |
 | the one-shot loopback server | `src/connect/http.ts` |
 | the HTML shell and its Content-Security-Policy | `src/connect/page.ts` |
-| the browser page (React and Privy's SDK) | `connect-page/src/main.tsx`, `connect-page/src/plan.tsx`, `connect-page/src/shared.tsx`, built into `dist/connect-page.js` |
+| the browser page (React and Privy's SDK) | `connect-page/src/main.tsx`, `connect-page/src/plan.tsx`, `connect-page/src/invest.tsx` (the Tempora API sign-in and `invest` signing page), `connect-page/src/shared.tsx`, built into `dist/connect-page.js` |
 | opening the operator's browser | `src/connect/open.ts` |
 | ports, Privy app id, state directory | `src/connect/config.ts` |
 | the local state files and the page lock | `src/connect/session.ts` |
@@ -57,6 +57,10 @@ Base RPC when the offline check fails. Only then is the account written.
 On Solana, `runConnectSolana` and `solanaSignInMessage` (`src/connect/solana.ts`) do the same with an
 ed25519 signature checked offline (`verifySolanaSignIn`).
 
+This sign-in proves the account to Treasury. The Tempora API has a sign-in of its own, which `withOwner`
+(`src/invest/api.ts`) runs on a separate local page only when an owner call needs one and no kept token serves; see
+[`../earn-api/01-the-api-path.md`](../earn-api/01-the-api-path.md#the-sign-in).
+
 ## Local state
 
 All under `~/.config/treasury/` unless `TREASURY_CONNECT_HOME` moves it, written owner-readable only
@@ -69,12 +73,15 @@ All under `~/.config/treasury/` unless `TREASURY_CONNECT_HOME` moves it, written
 | connect-ack.json | the one pending acknowledgement (code, digest, expiry) | `writePendingAck` |
 | connect-plan.json | the pending or running plan, its legs, and its page's secret and port | `writePlan` |
 | connect-page.lock | which process holds the open page | `claimPageLock` |
+| owner-tokens.json | the Tempora API's sign-in tokens, each kept under the API host, client, owner and doors it was issued for | `writeOwnerToken` (`src/connect/owner-tokens.ts`) |
 
-None holds a credential. A connection grants nothing by itself: it fixes which account the confirm
-page will accept and pay. A new sign-in on either family, and `connect disconnect`, clear any
-pending acknowledgement and plan, since they were given for the previous account; `connect
-disconnect` also deletes both connection files. Issuing a new acknowledgement replaces the pending
-one.
+Only owner-tokens.json holds a credential: a token the API issued after the owner signed its sign-in message. It
+can read the owner's account and start or cancel requests; it cannot move money, because every step is still sent or
+signed by the owner's own wallet, and it expires on its own (the header of `src/connect/owner-tokens.ts`). A
+connection grants nothing by itself: it fixes which account the confirm page will accept and pay. A new sign-in on
+either family, and `connect disconnect`, clear any pending acknowledgement and plan, since they were given for the
+previous account; `connect disconnect` also deletes both connection files and the kept tokens, and an EVM sign-in with
+a different account clears the tokens. Issuing a new acknowledgement replaces the pending one.
 
 ## The page bundle
 

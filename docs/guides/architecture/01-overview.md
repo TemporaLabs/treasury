@@ -76,8 +76,9 @@ account: the API's on the EVM chains, Treasury's own on Solana. A registry row i
 authority: the Solana `readVault` refuses a row the contract disagrees with.
 
 **Trust the API's record, check its steps.** On the EVM chains the vault's contract, asset and decimals are the
-Tempora API's word; Treasury keeps only a ticker-to-address table and each chain's default address, which pick the
-API's row. What it checks is every step against that record and
+Tempora API's word. A `--vault` goes to the API as typed; Treasury keeps only each chain's default address, which
+names the default to the API, and the registry's EVM rows, which only label a response with a ticker. What it checks
+is every step against that record and
 against what the operator asked for, before a wallet sees the step: a wrong step is caught, a wrong record is not.
 
 **A refusal is not a failure, and a failed read is not a verdict.** An API that cannot be reached is a health

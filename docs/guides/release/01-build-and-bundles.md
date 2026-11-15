@@ -16,7 +16,7 @@ The `build` script in `package.json` runs, in order:
 |---|---|---|
 | `tsc -b` | compiles the library and its type declarations | `dist/index.js`, `dist/index.d.ts` and the rest of the library (not committed) |
 | `tsup` | bundles `src/cli.ts` with every dependency inlined into one ESM file with a `node` shebang (`tsup.config.ts`) | `dist/treasury.mjs` |
-| `scripts/third-party-notices.ts --write` | writes the licence of every package the bundle actually inlines, read from the bundle's own module comments, not from `package.json` | `THIRD_PARTY_NOTICES.md` |
+| `scripts/third-party-notices.ts --write` | writes the licence of every package the bundle actually inlines, followed by the package's NOTICE file when it ships one, read from the bundle's own module comments, not from `package.json` | `THIRD_PARTY_NOTICES.md` |
 | `scripts/llms-txt.ts --write` | writes the guide for agents running the CLI without the plugin: the Earn skill's body, then every command and flag exactly as `--help` prints them | `llms.txt` |
 | `scripts/sync-plugin.sh` | copies the plugin's files from the root and writes its version-only `plugin/package.json` | `plugin/` |
 
@@ -38,6 +38,15 @@ Two details in `tsup.config.ts` matter:
 `dist/connect-page.js`, stubs out every WalletConnect and Reown module and fails if one returns, and
 writes `THIRD_PARTY_NOTICES.connect-page.md` from what the bundle inlines. Then run `npm run build` at
 the root so `scripts/sync-plugin.sh` copies the page into `plugin/`. Commit all of it.
+
+## Pinned versions
+
+`package.json` pins exact versions of `@temporalabs/client` (installed from npm; its checks are what hold every
+step on the EVM chains), viem, zod, TypeScript, vitest and `@types/node`; the lockfile pins the rest.
+`connect-page/package.json` pins the page's own TypeScript and viem, and its `overrides` let the `@solana/kit` copy
+the wallet library brings in accept that TypeScript; the `//` note in that file says why each override exists. Read
+the versions from those files, not from prose. A bump changes the bundles: rebuild both, and commit the bundles,
+notices and lockfiles with it.
 
 ## The plugin folder
 

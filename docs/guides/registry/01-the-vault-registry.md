@@ -7,8 +7,9 @@ share decimals, whether a stranger can deposit, and (where known) the block it w
 Every field that can be read from the chain is a claim the chain can contradict, and the code treats
 it that way: the Solana `readVault` refuses a row whose mints or decimals disagree with the vault state
 (`src/solana/vault.ts`), and `npm run registry:check` reconciles every row, EVM and Solana, against its chain
-(below). On the EVM chains a row now only turns a ticker into an address and names a vault's ticker; everything
-else about the vault, and every step, comes from the Tempora API.
+(below). On the EVM chains a row only gives a response the vault's `ticker` (`tickerOf` in `src/earn/api.ts`) and
+backs each chain's default address; a `--vault` goes to the Tempora API as typed, and everything else about the vault,
+and every step, comes from the API.
 
 The **chassis** is the vault's contract family. `chassisSchema` in `src/registry-schema.ts` lists the
 values; `erc4626Chassis` is the subset with a standard ERC-4626 `deposit`/`redeem`, and the schema's open and
