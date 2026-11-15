@@ -73,6 +73,25 @@ describe("the connect page's source", () => {
     expect([...invest.matchAll(/await wallet\.switchChain\(info\.chainId\)/g)]).toHaveLength(2);
   });
 
+  it("the invest view sends the step the process holds now, with time left, and never the copy this tab polled", () => {
+    const act = invest.slice(invest.indexOf("const act = useCallback"), invest.indexOf("} catch (e) {", invest.indexOf("const act = useCallback")));
+    const send = act.slice(act.indexOf("// The step is read again from the process"));
+    // The fresh read and both guards come before the wallet is asked for anything to send.
+    expect(send.indexOf("const live =")).toBeGreaterThan(-1);
+    expect(send.indexOf("const live =")).toBeLessThan(send.indexOf("live.msLeft"));
+    expect(send.indexOf("live.msLeft")).toBeLessThan(send.indexOf("eth_estimateGas"));
+    expect(send.indexOf("live.step?.index !== index")).toBeLessThan(send.indexOf("eth_estimateGas"));
+    expect(send).toMatch(/\(live\.msLeft \?\? 0\) < MIN_MS_LEFT/);
+    // And again after the network switch and the gas estimate, which can sit open, right before the send.
+    expect(send.indexOf("const left = await readLive()")).toBeGreaterThan(send.indexOf("eth_estimateGas"));
+    expect(send.indexOf("const left = await readLive()")).toBeLessThan(send.indexOf("sending = true;"));
+    expect(send).toMatch(/\(left\.msLeft \?\? 0\) < MIN_MS_LEFT/);
+    expect(invest).toMatch(/const MIN_MS_LEFT = 60_000;/);
+    // The transaction is built from that fresh read alone: the step this tab rendered is not read for it.
+    expect(send).toMatch(/const tx = \{ from: wallet\.address, to: now\.to, data: now\.data, value: "0x0" \};/);
+    expect(send).not.toMatch(/\bask\.(to|data)\b/);
+  });
+
   it("the invest view never says a transfer was not sent once the wallet was asked to send it", () => {
     // `sending` is set on the line before the send, and an error after it, with no hash, is "not confirmed sent".
     expect(invest).toMatch(/sending = true;\n\s*hash = \(await provider\.request\(\{ method: "eth_sendTransaction"/);
