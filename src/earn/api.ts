@@ -75,11 +75,11 @@ export const shortAddress = (address: string): string => `${address.slice(0, 6)}
  * How every response names a vault on an EVM chain: `vault`, its contract address, `ticker`, its share ticker, and
  * `name`, all the API's. Never the API's product id.
  */
-export function vaultNamed(p: VaultProduct): { vault: string; ticker: string | null; name: string } {
+export function vaultNamed(p: VaultProduct): { vault: string; ticker: string; name: string } {
   return { vault: p.vault.vaultAddress, ticker: tickerOf(p), name: p.name };
 }
 
-/** A vault in a sentence: its ticker, or its contract address when the registry has no ticker for it. */
+/** A vault in a sentence: its share ticker, the API's (`shareSymbol`, which the client requires to be non-empty). */
 export const vaultLabel = (p: VaultProduct): string => tickerOf(p);
 
 /** The listed vaults, by ticker or address: those on `on`, or every one with its chain. Never by product id. */

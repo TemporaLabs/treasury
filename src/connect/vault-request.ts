@@ -56,7 +56,7 @@ export interface VaultLeg {
 /** The asset the vault takes, by the symbol the API lists for it. */
 const assetSymbol = (p: VaultProduct) => p.tokens[0] ?? "the vault's asset";
 
-/** The vault as the pages name it: its ticker, or its contract address shortened when it has none. Never the API's product id. */
+/** The vault as the pages name it: its share ticker, the API's (`shareSymbol`). Never the API's product id. */
 const pageSymbol = (p: VaultProduct) => tickerOf(p);
 
 /**
@@ -219,7 +219,11 @@ export async function startVaultCore(leg: VaultLeg, session: Session, deps: Vaul
       throw new Error(`${stops}. Nothing was sent`);
     }
     const n = nextOf(request);
-    if (n.kind === "send" || n.kind === "done") break;
+    if (n.kind === "send" && request.steps[0] !== undefined && offered(request, request.steps[0])) break;
+    if (n.kind === "send" || n.kind === "done") {
+      await cancel();
+      throw new Error(`the API offers no first step of request ${rid} to send (next: ${n.kind}${n.kind === "send" ? ` step ${String(n.stepId)}` : ""}); nothing was sent, and the request was cancelled`);
+    }
     const waitMs = Math.max(pollMs, typeof n.retryAfterMs === "number" ? n.retryAfterMs : 0);
     if (now() + waitMs >= deadline) {
       await cancel();

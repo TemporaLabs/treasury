@@ -373,16 +373,14 @@ describe("what the page may send", () => {
 
     for (const [what, next] of [
       ["names another step", { kind: "send", stepId: "s2", generation: 1 }],
-      ["names it at another generation", { kind: "send", stepId: "s1", generation: 2 }],
+      ["names the first at another generation", { kind: "send", stepId: "s1", generation: 2 }],
+      ["is done before anything was sent", { kind: "done", outcome: "completed" }],
     ] as const) {
-      it(`a ready step has nothing to send, and a hash for it is refused, when the API's next ${what}`, async () => {
+      it(`no page opens, the request is cancelled and nothing is sent, when the API's next ${what} at the start`, async () => {
         api.bend = (r, event) => (event === "start" ? Object.assign(r, { next }) : r);
-        const run = acknowledged("connect_deposit", { amount_usdc: "1" });
-        const p = await page();
-        expect((await p.info())["calls"][0]).toMatchObject({ state: "ready", to: "" });
-        expect(await p.post({ index: 0, hash: H(1) })).toMatchObject({ ok: false, reason: "step 1 is not the step the API offers to send now" });
-        await p.post({ rejected: true, reason: "cancelled by the operator on the confirm page" });
-        await run;
+        await expect(acknowledged("connect_deposit", { amount_usdc: "1" })).rejects.toThrow(/offers no first step of request req_1 to send.*nothing was sent, and the request was cancelled/);
+        expect(opened).toEqual([]);
+        expect(api.log).toContain("cancel");
         expect(api.submits).toEqual([]);
       });
     }
@@ -415,12 +413,9 @@ describe("what the page may send", () => {
       if (event === "start") Object.assign(r.steps[0] as any, { state: "waiting", payload: undefined });
       return r;
     };
-    const run = acknowledged("connect_deposit", { amount_usdc: "1" });
-    const p = await page();
-    expect((await p.info())["calls"][0]).toMatchObject({ state: "waiting", to: "" });
-    expect(await p.post({ index: 0, hash: H(1) })).toMatchObject({ ok: false, reason: "step 1 is not the step the API offers to send now" });
-    await p.post({ rejected: true, reason: "cancelled by the operator on the confirm page" });
-    await run;
+    // Its next still names step 1, which is not ready: nothing is offered, so no page opens and the request is cancelled.
+    await expect(acknowledged("connect_deposit", { amount_usdc: "1" })).rejects.toThrow(/offers no first step of request req_1 to send/);
+    expect(opened).toEqual([]);
     expect(api.submits).toEqual([]);
   });
 
