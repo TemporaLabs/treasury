@@ -285,7 +285,7 @@ the check hands nothing out, and the refusal names it so it can be cancelled wit
 
 Returns `{ requires_signature: true, status: "unsigned", chain, chainId, warnings, vault, account, requestId, state, expiresAt, steps: [approve, deposit], next_step, signer_rules }`. Each step is
 `{ stepId, state, after?, purpose?, to, data, value, function, args, description }`. Only a step whose
-`state` is `ready` has something to send. A `waiting` step (the deposit, until the approval is
+`state` is `ready` has something to send, and is offered to the wallet only when the request's next action names it (or, with no next action, while the request and the step are unexpired). A `waiting` step (the deposit, until the approval is
 submitted) has no `to` or `data` yet: its `after` names the step it waits for, and its
 `description` says to read it again with `earn_request`. Nothing has happened until the wallet's
 transactions confirm.

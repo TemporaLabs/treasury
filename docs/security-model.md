@@ -108,8 +108,8 @@ open for nothing but the calls that text described.
 - **On the EVM chains, every step is checked before the page may send it**: the Tempora API prepares it, and
   `@temporalabs/client`'s own `checkSteps` holds the whole request to what was acknowledged, before the page opens and
   again after every step ([below](#the-vaults-on-the-evm-chains-treasury-earn-and-treasury-connect)). The page is
-  handed only a checked step that is ready, reads it again from this process just before the wallet is asked, and
-  sends exactly its destination, data and value.
+  handed only a checked step that is ready and that the API's next action names, reads it again from this process just
+  before the wallet is asked, and sends exactly its destination, data and value.
 - **On Solana, a gate on the transaction's bytes** (`src/connect/gate-solana.ts`). The page builds the
   transaction when the operator confirms, and the gate decodes it and admits it only if every
   instruction is a compute-unit limit, the connected account's own token-account creation for the
