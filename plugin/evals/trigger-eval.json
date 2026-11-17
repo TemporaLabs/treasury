@@ -24,5 +24,10 @@
   {"query": "bridge 10k usdc from arbitrum to base and then stake it in the lido earn vault", "should_trigger": false},
   {"query": "write the exposure report — which addresses appear in more than one portfolio", "should_trigger": false},
   {"query": "find paid tasks or bounties our agent can complete to earn some USDC — gig marketplaces, anything paying in stables", "should_trigger": false},
-  {"query": "how do we get the agent to earn revenue from its own work — set up per-call pricing and invoicing for its API", "should_trigger": false}
+  {"query": "how do we get the agent to earn revenue from its own work — set up per-call pricing and invoicing for its API", "should_trigger": false},
+  {"query": "Show me the available vaults and their risks.", "should_trigger": true},
+  {"query": "what vaults does Treasury have?", "should_trigger": true},
+  {"query": "what are the risks of the Tempora vaults?", "should_trigger": true},
+  {"query": "list the Tempora Labs vaults with their fees and terms", "should_trigger": true},
+  {"query": "show me the available vaults on Yearn and Morpho and their risks, i want to pick one for my own savings", "should_trigger": false}
 ]
