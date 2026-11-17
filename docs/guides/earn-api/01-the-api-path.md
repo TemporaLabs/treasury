@@ -33,8 +33,11 @@ of addresses would only be a second way to be wrong.
    the API publishes now, before anything is asked.
 2. **Check.** The whole request is held to the intent. A request that fails is refused, and nothing in it is handed
    out (`connect` also cancels it).
-3. **Send.** Only a step that is `ready` and carries a payload is handed out, with exactly its `to`, `data` and
-   `value`. A deposit's second step is `waiting` until the first is recorded; it has nothing to send yet.
+3. **Send.** A step is handed out only when the request's next action (`next`) names it, at its generation, and it is
+   `ready` and carries a payload; then it goes out with exactly its `to`, `data` and `value`. A `wait` next action hands
+   out nothing, and `expired`, `failed`, `cancelled` or an action this client does not know stops the flow. A deposit's
+   second step is `waiting` until the first is recorded; it has nothing to send yet. An answer with no next action is
+   held to the request's and the step's own expiry instead.
 4. **Submit.** The hash goes to the API (`submit`), with the wallet's nonce and sender when known. The API reads the
    chain at that hash and records how the step landed.
 5. **Read again.** `status` returns the request; it is checked again before any further step is shown.
@@ -48,6 +51,8 @@ The guards are `treasury invest`'s (`drive` in `src/invest/flow.ts`), carried to
 the command:
 
 - a step the API puts up again after it was sent is refused (`checked` in `startVaultCore`);
+- a request or step past its expiry, or one the API's next action reports as `expired`, is not offered: the flow stops and
+  cancels it;
 - a hash the page could not hand over normally still goes to the API, by that hash, once (`onReject`);
 - a submit the API refuses after a send stops the flow with the hash, and says not to send it again;
 - a wallet error after the send was asked for is "not confirmed sent" on the page, and the result names the request;
