@@ -10,7 +10,8 @@ the wallet is the owner's own.
 |---|---|
 | `src/invest/api.ts` | the API's address (pinned in `src/config/invest.ts`, or `TREASURY_API_URL`), a keyless client, and `asOwner` / `withOwner`: one owner call with the kept token (`src/connect/owner-tokens.ts`), signing in again once when the API refuses it. `treasury earn` and `treasury connect` sign in through the same `withOwner` |
 | `src/invest/challenge.ts` | `checkChallenge`: the six-line sign-in message, every line checked, before the wallet signs it |
-| `src/invest/page.ts` | the local signing page's server side: one step at a time, each signature checked to be the owner's before the command sees it |
+| `src/invest/page.ts` | the local signing page's server side: one step at a time, each signature checked to be the owner's before the command sees it; once the page has ended, a step asked of it is refused at once |
+| `connect-page/src/invest.tsx` | the page's browser side: asks the wallet, and reads the page's time left before and after the gas estimate, refusing a step with under a minute left (`MIN_MS_LEFT`) |
 | `src/invest/flow.ts` | `ownerWallet` (the page, opened on first use) and `drive`, which carries a request through its steps |
 | `src/invest/deposit.ts` | the deposit's amount, its body, its check (`checkPortfolioDeposit`) and what the page shows for each step |
 | `src/invest/withdraw.ts` | the withdrawal's check (`checkPortfolioWithdrawal`), the smart account and holdings from the API's positions, and the EIP-712 domain type |
@@ -22,13 +23,20 @@ the wallet is the owner's own.
 1. Before any step reaches the wallet, the **whole request** is checked again. A request the API changed between two
    steps is held to the same intent, and a refused check stops the command with nothing more signed or sent. A
    request asking for more than `INVEST.maxSteps` steps is refused, never followed.
-2. The step is prepared from the checked request: what the page shows is built from the step's own bytes and the
+2. **A step reaches the wallet only when the API's next action (`next`) names it:** `send` and `sign_again` by
+   step, `sign` for the steps signed together, each at the generation `next` gives. `wait`, `done`, `failed` and
+   `cancelled` offer nothing. `expired` stops the command ("ran out"), and so does `hand_back`, which says the
+   transfer may already have been sent and not to send it again. A `next` of a kind this client does not know stops
+   it too. Without a `next`, a ready step is offered only while the request's `expiresAt` and the step's own are in
+   the future; a lapsed or unreadable date stops the command (`offered` in `src/invest/flow.ts`).
+3. The step is prepared from the checked request: what the page shows is built from the step's own bytes and the
    owner's own numbers, never from the API's words.
-3. The wallet signs or sends it, and the result goes back to the API with `submit`. Withdrawal authorizations that
+4. The wallet signs or sends it, and the result goes back to the API with `submit`. Withdrawal authorizations that
    are ready together are all signed first, then handed back one after another, so the account is never left half
    withdrawn while the owner reads the next one.
-4. With nothing left for the wallet, the request is read again every `INVEST.pollMs` until it ends, or until
-   `INVEST.watchMs` passes; then the command reports it as still running.
+5. With nothing left for the wallet, the request is read again every `INVEST.pollMs` until it ends, or until
+   `INVEST.watchMs` passes; then the command reports it as still running. The request's own state decides when it
+   ends, not any one step's: a transfer the wallet replaced stays running while the API waits for it.
 
 **A transfer is never sent twice.** When the page could not record a transfer's hash (`sent_unrecorded`), the hash
 still goes to the API. When the API does not take it, the command stops with the hash and says not to send again.
