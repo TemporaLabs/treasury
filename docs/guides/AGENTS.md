@@ -5,8 +5,8 @@ The map for a coding agent about to change how Treasury works. Read it before to
 
 ## Start here
 
-1. [`architecture/01-overview.md`](architecture/01-overview.md): the layers and which file owns what.
-2. [`architecture/02-a-deposit-traced.md`](architecture/02-a-deposit-traced.md): one deposit through
+1. [`architecture/01-overview.md`](../architecture/01-overview.md): the layers and which file owns what.
+2. [`architecture/02-a-deposit-traced.md`](../architecture/02-a-deposit-traced.md): one deposit through
    every layer.
 3. The topic for your task (table below), then [`testing/01-test-tiers.md`](testing/01-test-tiers.md).
 
@@ -61,7 +61,7 @@ Copy no number or list out of prose. Read it from the file that owns it.
 
 | directory | open it when |
 |---|---|
-| [`architecture/`](architecture/README.md) | you are new, or a change crosses layers |
+| [`architecture/`](../architecture/README.md) | you are new, or a change crosses layers |
 | [`cli/`](cli/README.md) | you add or change a command, a flag, a response field or an error |
 | [`earn-api/`](earn-api/README.md) | you change an EVM earn or connect command, or what is checked before a step reaches a wallet |
 | [`registry/`](registry/README.md) | you change the Solana row, a chain, a default vault, or how a response names a vault's ticker |

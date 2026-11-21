@@ -46,7 +46,7 @@ treasury connect deposit --amount_usdc 25 --chain base --receiver 0xA…
 ```
 
 `connect wallet` serves the sign-in page and records the proven address in the connection file
-(see [`../connect/01-local-page-and-sign-in.md`](../connect/01-local-page-and-sign-in.md)).
+(see [`../guides/connect/01-local-page-and-sign-in.md`](../guides/connect/01-local-page-and-sign-in.md)).
 
 `connect deposit` without `--ack` opens nothing. `depositLeg` (`src/connect/commands.ts`) refuses a
 `--receiver` that is not the connected account. `vaultLeg` (`src/connect/vault-request.ts`) describes the leg from
@@ -94,4 +94,4 @@ hash to the API; `earn request` reads the request until step 2 is `ready`, and r
 The same commands with `--chain solana` take the branch to `src/earn/solana.ts`, which reads the chain and the
 registry's row as before. There is one transaction instead of a list of steps, it is simulated before it is returned,
 and the confirm page builds it only when the operator presses Confirm, because it expires. See
-[`../solana/01-kamino-vault-path.md`](../solana/01-kamino-vault-path.md).
+[`../guides/solana/01-kamino-vault-path.md`](../guides/solana/01-kamino-vault-path.md).

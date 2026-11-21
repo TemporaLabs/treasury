@@ -3,8 +3,8 @@
 The whole picture first: what the layers are, which file owns which decision, and one deposit traced
 through all of them. Read this topic before any other.
 
-It does not cover the security argument (that is [`../../security-model.md`](../../security-model.md))
-or each command's inputs and outputs ([`../../tools.md`](../../tools.md)).
+It does not cover the security argument (that is [`../security-model.md`](../security-model.md))
+or each command's inputs and outputs ([`../tools.md`](../tools.md)).
 
 | guide | read it when |
 |---|---|

@@ -5,7 +5,7 @@ vaults, reads positions and prepares each step, and Treasury checks every step a
 vault before a wallet sees it. On Solana it knows the vault's registry row, an RPC endpoint and the vault's public
 interface, reads the chain and builds the transaction itself. Either way it prepares unsigned steps and (through
 `treasury connect`) hands steps that passed a check to the operator's own wallet. It never signs. Why that line is drawn where it is, and what enforces it, is
-[`../../security-model.md`](../../security-model.md); this guide is the map of the code.
+[`../security-model.md`](../security-model.md); this guide is the map of the code.
 
 ## Three ways in
 
@@ -57,16 +57,16 @@ pre-deposit text) and `src/version.ts` (the version, inlined at build time).
 
 | decision | owner | guide |
 |---|---|---|
-| which vaults exist on the EVM chains, with which contract, asset and decimals | the Tempora API (`products`), read in `src/earn/api.ts`; each chain's default vault address in `src/config/earn.ts` | [`../earn-api/01-the-api-path.md`](../earn-api/01-the-api-path.md) |
-| which vault exists on Solana | `registry/vaults.json` (data), `src/registry-schema.ts` (rules) | [`../registry/01-the-vault-registry.md`](../registry/01-the-vault-registry.md) |
+| which vaults exist on the EVM chains, with which contract, asset and decimals | the Tempora API (`products`), read in `src/earn/api.ts`; each chain's default vault address in `src/config/earn.ts` | [`../guides/earn-api/01-the-api-path.md`](../guides/earn-api/01-the-api-path.md) |
+| which vault exists on Solana | `registry/vaults.json` (data), `src/registry-schema.ts` (rules) | [`../guides/registry/01-the-vault-registry.md`](../guides/registry/01-the-vault-registry.md) |
 | which vault a call means when the caller names a chain, a vault, both or neither | `vaultProduct` in `src/earn/api.ts` (EVM), `resolveAnyVault` in `src/registry.ts` (Solana) | both of the above |
-| whether an account can deposit | the API's gates and its simulated deposit check (EVM), a simulated transaction in `src/solana/vault.ts` (Solana) | [`../earn-api/01-the-api-path.md`](../earn-api/01-the-api-path.md), [`../solana/01-kamino-vault-path.md`](../solana/01-kamino-vault-path.md) |
+| whether an account can deposit | the API's gates and its simulated deposit check (EVM), a simulated transaction in `src/solana/vault.ts` (Solana) | [`../guides/earn-api/01-the-api-path.md`](../guides/earn-api/01-the-api-path.md), [`../guides/solana/01-kamino-vault-path.md`](../guides/solana/01-kamino-vault-path.md) |
 | the bytes of a deposit or withdrawal | the Tempora API (EVM), `src/solana/kvault.ts` (Solana) | same |
-| what may be put in front of a wallet | `checkSteps` from `@temporalabs/client`, in `src/earn/request.ts` and `src/connect/vault-request.ts` (EVM); `src/connect/gate-solana.ts` (Solana) | [`../earn-api/01-the-api-path.md`](../earn-api/01-the-api-path.md), [`../connect/02-gates.md`](../connect/02-gates.md) |
-| what a position is worth and what can leave now | the Tempora API (`positions`, `quote`) on EVM; `solanaBalance` in `src/earn/solana.ts` on Solana | [`../earn-api/01-the-api-path.md`](../earn-api/01-the-api-path.md) |
-| whether a page may open at all | `src/connect/ack.ts` | [`../connect/03-acknowledgement-and-plans.md`](../connect/03-acknowledgement-and-plans.md) |
-| whether a transaction did what was confirmed | the Tempora API's reading of a submitted hash (EVM); `verifySolanaLanded` in `src/connect/solana.ts` (Solana) | [`../earn-api/01-the-api-path.md`](../earn-api/01-the-api-path.md), [`../connect/04-receipt-verification.md`](../connect/04-receipt-verification.md) |
-| which modules, processes and environment variables the package may touch | `tests/boundary.unit.test.ts` | [`../testing/01-test-tiers.md`](../testing/01-test-tiers.md) |
+| what may be put in front of a wallet | `checkSteps` from `@temporalabs/client`, in `src/earn/request.ts` and `src/connect/vault-request.ts` (EVM); `src/connect/gate-solana.ts` (Solana) | [`../guides/earn-api/01-the-api-path.md`](../guides/earn-api/01-the-api-path.md), [`../guides/connect/02-gates.md`](../guides/connect/02-gates.md) |
+| what a position is worth and what can leave now | the Tempora API (`positions`, `quote`) on EVM; `solanaBalance` in `src/earn/solana.ts` on Solana | [`../guides/earn-api/01-the-api-path.md`](../guides/earn-api/01-the-api-path.md) |
+| whether a page may open at all | `src/connect/ack.ts` | [`../guides/connect/03-acknowledgement-and-plans.md`](../guides/connect/03-acknowledgement-and-plans.md) |
+| whether a transaction did what was confirmed | the Tempora API's reading of a submitted hash (EVM); `verifySolanaLanded` in `src/connect/solana.ts` (Solana) | [`../guides/earn-api/01-the-api-path.md`](../guides/earn-api/01-the-api-path.md), [`../guides/connect/04-receipt-verification.md`](../guides/connect/04-receipt-verification.md) |
+| which modules, processes and environment variables the package may touch | `tests/boundary.unit.test.ts` | [`../guides/testing/01-test-tiers.md`](../guides/testing/01-test-tiers.md) |
 
 ## Three ideas that recur in every layer
 
