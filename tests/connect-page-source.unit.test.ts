@@ -1,7 +1,7 @@
 import { describe, it, expect } from "vitest";
 import { readdirSync, readFileSync } from "node:fs";
 import { join, relative } from "node:path";
-import ts from "typescript";
+import ts from "@typescript/typescript6";
 import { PAGE_CSP } from "../src/connect/page.js";
 import { CHAIN_INFO } from "../src/client.js";
 import { BNB_INFO } from "../src/invest/chain.js";

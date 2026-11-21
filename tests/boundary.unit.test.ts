@@ -48,7 +48,7 @@
  * a table above. Hardening against that is impossible here, not merely hard.
  *
  * So: Node's REFLECTION surface reaches a builtin with no import of any kind —
- * `process.getBuiltinModule("child_process")` (Node 22, the version CI runs),
+ * `process.getBuiltinModule("child_process")` (Node 22, the floor CI runs),
  * `process.binding(…)`, and whatever the next release adds. Both are treated as module reaches
  * below and therefore die on the allowlist — but that closes TWO KNOWN INSTANCES OF AN UNBOUNDED
  * CLASS, not the class. A future reflection API will not be caught, and no static rule in this file
@@ -75,7 +75,7 @@ import { describe, it, expect, beforeAll, afterAll } from "vitest";
 import { readFileSync, existsSync, readdirSync } from "node:fs";
 import { dirname, resolve, relative, sep } from "node:path";
 import { fileURLToPath } from "node:url";
-import ts from "typescript";
+import ts from "@typescript/typescript6";
 import { rpcUrlFromEnv, solanaRpcUrlFromEnv } from "../src/client.js";
 import { loadRegistry, getVault, depositableVaults } from "../src/registry.js";
 import { FIXTURE, useFixtureRegistry, useShippedRegistry } from "./fixtures/registry.js";
