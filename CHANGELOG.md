@@ -16,7 +16,7 @@ Pre-1.0, minor versions may change tool names, schemas and behaviour.
   prepares is checked against the API's own record of the vault, and against what the operator asked for, by
   `@temporalabs/client`'s `checkSteps` before a wallet sees it: a wrong step is caught, a wrong record is not.
   Solana is unchanged and still reads its chain directly.
-- **A new dependency, `@temporalabs/client` `0.1.3`**, pinned, from npm: the Tempora API's client, which makes every
+- **A new dependency, `@temporalabs/client` `0.1.4`**, pinned, from npm: the Tempora API's client, which makes every
   call to the API and checks every step it prepares. It needs the Tempora API at 0.1.3 or later.
 - **TypeScript 6.0.3**, pinned (was `^5.9.0`; `^5.6.0` for the page), for the library and the connect page, the version
   `@temporalabs/client` is built with. The page overrides the optional TypeScript peer range of
