@@ -58,39 +58,50 @@ change fits before you spend time on it.
 Two rules decide most reviews. A change that breaks either is a design change, not a pull request.
 
 1. **Nothing in this repository holds, reads, derives or is handed a private key. Nothing signs. A
-   call reaches the chain only from the operator's own wallet, after the operator approves it
-   there.** Treasury prepares unsigned calls. The wallet connection (`treasury connect`) may hand a
-   call to the operator's connected wallet for approval; it builds calls only through the same
-   builders, and it refuses any destination outside `registry/vaults.json` (a listed vault, or its
-   asset for the approval) and any receiver other than the connected account. A private-key
-   variable, a local signer, a tool that signs, or a relay that accepts an arbitrary destination
-   will not merge.
-2. **The client knows only the chain.** It has a vault address and an RPC endpoint. Code may not
-   depend on any fund's internal source, deploy records, operators or private services. A vault's row
-   in `registry/vaults.json` is a set of measurements that
-   `scripts/registry-check.ts` reconciles against the chain.
+   call reaches the chain only from the operator's own wallet, after the operator approves it there.** Treasury
+   prepares unsigned steps. The wallet connection (`treasury connect`) may hand a step to the operator's connected
+   wallet for approval. On the EVM chains every step comes from the Tempora API and is held first by
+   `@temporalabs/client`'s own checks to what the operator asked for: only the vault the API lists, or its asset for
+   the approval of exactly the deposit's amount, and only the connected account as receiver and owner. On Solana the
+   connection builds the transaction itself and refuses any destination but the registry's Solana vault, and any
+   receiver other than the connected account. A private-key variable, a local signer, a tool that signs, or a relay
+   that accepts an arbitrary destination will not merge. `treasury invest` hands the connected wallet the steps the
+   Tempora API prepares for a Smart Growth portfolio, each checked first against what the operator asked for.
+2. **On the EVM chains the client knows only the Tempora API; on Solana, only the chain.** `treasury earn`,
+   `treasury connect` and `treasury invest` reach the Tempora API on the EVM chains, and nothing else, only through
+   `@temporalabs/client`. Treasury passes a vault's contract address or ticker to the API as given, and keeps only each
+   chain's default vault address: the address picks the vault the API lists, a deposit reaches that vault, and each step is checked against the API's own record of that vault,
+   which catches a wrong step but cannot catch a wrong record. On Solana the client has the registry's vault row and
+   an RPC endpoint. Code may not depend on any fund's internal source, deploy records, operators or private services.
+   The Solana row in `registry/vaults.json` is a set of measurements that `scripts/registry-check.ts` reconciles
+   against the chain.
 
 Both rules are enforced by tests, not by review alone.
 
 ## Adding or changing a vault
 
-Every row in `registry/vaults.json` is a vault the client will list and build calls
-for, so a new row is a product decision, not only a passing build. Treasury's official registry lists
-Tempora Labs vaults. Proposing a new destination needs Tempora Labs' agreement; say so in the pull request.
+A vault on an EVM chain is listed by the Tempora API, not by this repository: `earn vaults` shows what the API lists,
+and a new EVM vault is added there. What this repository keeps for the EVM chains is each chain's default vault address
+(`defaultVaultAddressByChain` in `src/config/earn.ts`), the registry address of that chain's default ticker. Changing a
+default is a product decision: it needs Tempora Labs' agreement, and the API must list a vault at that address, or
+every call that relies on the default is refused.
 
-A row is a set of measurements. `scripts/registry-check.ts` reconciles each one against the chain it
-is on, and the pull request should say which block it was measured at.
+The Solana vault is a row in `registry/vaults.json`, and a row is a product decision too, not only a passing build.
+Treasury's official registry lists Tempora Labs vaults; proposing a new destination needs Tempora Labs' agreement, so
+say so in the pull request. A row is a set of measurements: `scripts/registry-check.ts` reconciles it against the chain
+it is on, and the pull request should say which block it was measured at. The EVM rows still in the registry are
+read only to hold each chain's default: on the EVM chains the Tempora API
+lists the vaults, prepares every step and reads the chain. `scripts/registry-check.ts` still reconciles those rows.
 
-A vault on a chain Treasury does not support yet needs that chain added first:
+A new EVM chain needs:
 
 - its entry in `chains` and `CHAIN_INFO` (`src/client.ts`), its literal in the registry schema, and
   its explorer in `src/links.ts`. The compiler holds these together: a chain in one and not the
   others does not build;
-- its default vault in `src/config/earn.ts` (`defaultVaultByChain`). Each chain has exactly one vault
-  marked `isDefault`;
-- its RPC variables in [`docs/configuration.md`](docs/configuration.md), in the skill's Setup section,
-  and in the allowlist and the exact-set assertion of `tests/boundary.unit.test.ts`. That is the one
-  edit to the boundary test a new chain needs; the rule that it is not weakened to pass still holds;
+- its default vault address in `src/config/earn.ts` (`defaultVaultAddressByChain`), which the compiler also requires;
+- its RPC variables in [`docs/configuration.md`](docs/configuration.md) and in the allowlist and the exact-set
+  assertion of `tests/boundary.unit.test.ts`, for `scripts/registry-check.ts` and the redactor. That is the one edit
+  to the boundary test a new chain needs; the rule that it is not weakened to pass still holds;
 - the tests that pin the supported chains (`tests/registry.test.ts`, `tests/client.unit.test.ts`),
   restated for the new set;
 - the places that name the chains in prose: the `earn` skill, [`docs/tools.md`](docs/tools.md) and the
@@ -98,24 +109,21 @@ A vault on a chain Treasury does not support yet needs that chain added first:
 
 ## Development
 
-Requires Node.js 22 or later. Fork tests also need [Foundry](https://getfoundry.sh) for `anvil`, and
-[Surfpool](https://surfpool.run) on `PATH` for Solana's.
+Requires Node.js 22 or later. The Solana fork tests also need [Surfpool](https://surfpool.run) on `PATH`.
 
 ```bash
 npm ci
 npm run build                     # compiles, bundles dist/treasury.mjs, regenerates the notices and plugin/
 npm run typecheck
 npm test                          # unit tests
-TREASURY_RPC_BASE=https://... npm test          # adds live read-only checks against Base
-TREASURY_RPC_BASE=https://... npm run test:fork # anvil fork round trips with impersonated accounts
-TREASURY_RPC_SOLANA=https://... npm run test:fork # adds a Surfpool fork round trip on Solana, signed by a key made for the run
+TREASURY_RPC_SOLANA=https://... npm test          # adds live read-only checks against Solana
+TREASURY_RPC_SOLANA=https://... npm run test:fork # a Surfpool fork round trip on Solana, signed by a key made for the run
 ```
 
-Each chain's live and fork tiers run when that chain's RPC variable is set. For Arbitrum One, add
-`TREASURY_RPC_ARBITRUM=https://...` to the same commands, `TREASURY_RPC_ROBINHOOD=https://...` for
-Robinhood Chain, `TREASURY_RPC_ETHEREUM=https://...` for Ethereum, `TREASURY_RPC_MONAD=https://...` for Monad and `TREASURY_RPC_SOLANA=https://...` for Solana
-(the fork tier covers every chain: anvil for the EVM chains, Surfpool for Solana); a chain with no variable set is skipped
-and shown as skipped.
+The live and fork tiers cover the vault on Solana, the one this client reads from its own chain, and run when
+`TREASURY_RPC_SOLANA` is set; without it they are skipped and shown as skipped. On the EVM chains the Tempora API
+reads and prepares everything, so there is no EVM tier here: the unit tier holds the commands to a stand-in API, and
+`checkSteps` (in `@temporalabs/client`) is tested where it is written.
 
 - **Use `npm ci`, not `npm install`.** It fails on a stale lockfile, which is what CI does.
 - **Rebuild the bundle when source changes.** `dist/treasury.mjs` is committed,
@@ -129,8 +137,7 @@ and shown as skipped.
   into `plugin/`. CI rebuilds the page and fails on a difference.
 - **Say which test tier ran.** Unit tests say nothing about the chain. State in the pull request
   whether you ran unit, live read-only or fork tests.
-- **Tests never need a real key.** A test that moves funds runs on a fork and impersonates the
-  account.
+- **Tests never need a real key.** A test that moves funds runs on a local fork, signed by a key made for that run.
 - **Measured, not assumed.** A registry row, a decimal count, a revert selector, an RPC window — each
   carries the block or date it was measured at. A claim in a comment is not a test; if it matters, pin it.
 - **Amounts are strings in the asset's own decimals.** Never a float; never round a share balance.

@@ -31,7 +31,8 @@ export const DISCLOSURES = {
    * `clientNotes` above stay the full text, which `earn_terms` returns. Keep the two in step: a
    * point added above needs its plain sentence here. The first item above (every vault is a test
    * vault; deposit only what you can lose) has none: the acknowledgement prints the vault's own
-   * `warning` from the registry, which says it, and `registry.test.ts` holds every row to that.
+   * warning (the registry's on Solana, `registry.test.ts` holding every row to it; the Tempora API's on the EVM
+   * chains), and that first item itself when the API gives none.
    */
   plain: {
     deposit: [

@@ -9,7 +9,8 @@
  * into a standalone bundle. The package set is read from esbuild's own per-module path comments in
  * the bundle, not from package.json, so a dependency that is declared but tree-shaken away is not
  * listed and a transitive one that is inlined is. Each entry is the full licence file of the exact
- * installed version.
+ * installed version, followed by the package's NOTICE file when it ships one: the Apache License (section 4(d))
+ * asks that a redistribution carry the work's NOTICE text along with the licence.
  *
  * Tempora Labs' Apache-2.0 licence covers Tempora Labs' code only. These components keep their own licences.
  */
@@ -26,6 +27,8 @@ export interface BundledPackage {
   version: string;
   license: string;
   licenceText: string;
+  /** The package's NOTICE file, when it ships one. */
+  noticeText?: string;
 }
 
 /** Package directories (relative to the package root, as esbuild wrote them) that the bundle inlines. */
@@ -40,7 +43,14 @@ export function readPackage(dir: string): BundledPackage {
   const pj = JSON.parse(readFileSync(resolve(abs, "package.json"), "utf8")) as { name: string; version: string; license?: string };
   const file = readdirSync(abs).find((f) => /^(licen[cs]e|copying)(\.(md|txt))?$/i.test(f));
   if (!file) throw new Error(`${pj.name}@${pj.version} is inlined in the bundle but ships no licence file`);
-  return { name: pj.name, version: pj.version, license: pj.license ?? "UNKNOWN", licenceText: readFileSync(resolve(abs, file), "utf8").trim() };
+  const notice = readdirSync(abs).find((f) => /^notice(\.(md|txt))?$/i.test(f));
+  return {
+    name: pj.name,
+    version: pj.version,
+    license: pj.license ?? "UNKNOWN",
+    licenceText: readFileSync(resolve(abs, file), "utf8").trim(),
+    ...(notice !== undefined && { noticeText: readFileSync(resolve(abs, notice), "utf8").trim() }),
+  };
 }
 
 export function renderNotices(pkgs: BundledPackage[]): string {
@@ -48,7 +58,8 @@ export function renderNotices(pkgs: BundledPackage[]): string {
   const head = `# Third-party notices
 
 \`dist/treasury.mjs\` is a single file that includes the third-party components below. Each
-component remains under its own licence, reproduced here in full for the exact version included.
+component remains under its own licence, reproduced here in full for the exact version included,
+followed by the component's NOTICE file when it ships one.
 Tempora Labs' Apache License 2.0 (\`LICENSE\`) applies to Tempora Labs' own code, not to these
 components.
 
@@ -59,7 +70,11 @@ by hand.
 |---|---|---|
 ${sorted.map((p) => `| \`${p.name}\` | ${p.version} | ${p.license} |`).join("\n")}
 `;
-  const bodies = sorted.map((p) => `\n## ${p.name} ${p.version} (${p.license})\n\n\`\`\`text\n${p.licenceText}\n\`\`\`\n`);
+  const bodies = sorted.map(
+    (p) =>
+      `\n## ${p.name} ${p.version} (${p.license})\n\n\`\`\`text\n${p.licenceText}\n\`\`\`\n` +
+      (p.noticeText !== undefined ? `\nIts NOTICE file:\n\n\`\`\`text\n${p.noticeText}\n\`\`\`\n` : ""),
+  );
   return head + bodies.join("");
 }
 
