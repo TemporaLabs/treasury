@@ -1,6 +1,6 @@
 /**
  * BNB Chain, for `invest` only. It is not a row of `CHAIN_INFO` (`src/client.ts`): those are the chains `earn` has
- * vaults on, and BNB Chain has none. Nothing here reads the chain: these are the fixed facts `invest` holds the API's
+ * vaults on, and BNB Chain has none. Nothing here reads the chain, except the one balance `invest withdraw` reads (`withdraw.ts`, `readIdleUsdt`): these are the fixed facts `invest` holds the API's
  * steps to (the USDT contract a deposit must be sent to, the asset a withdrawal must settle in) and the public RPC the
  * signing page's wallet uses for BNB Chain.
  */
