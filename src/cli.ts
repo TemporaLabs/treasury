@@ -1,5 +1,5 @@
 /**
- * Agent Treasury — the command line. `treasury <earn|connect> <command> [--flag value …]`; every command prints
+ * Agent Treasury — the command line. `treasury <earn|connect|invest> <command> [--flag value …]`; every command prints
  * one JSON document on stdout (`--version` prints the bare version).
  *
  * Headless on purpose: an agent with a shell runs this with `node` and reads the JSON, and nothing
@@ -16,7 +16,7 @@
  * Exit status: 0 with the result on stdout; 1 with `{ "error": … }` on stderr when the command could not
  * run as asked (a vault on another chain, an unknown or repeated flag, a malformed address, an
  * unreachable RPC on a read that needs it) — never a result, so a caller cannot read it as an answer. A
- * VERDICT is a result: `earn status` reporting `WHITELIST_GATED` or `rpc: "wrong_chain"` exits 0, and
+ * VERDICT is a result: `earn status` reporting `not_admitted` or `apiStatus: "unreachable"` exits 0, and
  * its fields say what it found. A switch (`--all`) takes no value.
  */
 import { realpathSync } from "node:fs";
@@ -25,6 +25,7 @@ import { parseArgs } from "node:util";
 import { z } from "zod";
 import { buildCommands, type Command } from "./earn/commands.js";
 import { buildConnectCommands } from "./connect/commands.js";
+import { buildInvestCommands } from "./invest/commands.js";
 import { resolvedRpcSecrets } from "./client.js";
 import { redactEndpoints, registerSecretSource } from "./redact.js";
 import { PACKAGE_VERSION } from "./version.js";
@@ -34,17 +35,21 @@ import { guidePointer } from "./guide.js";
  * The skills this CLI carries: a word on the command line, and the commands it opens. A command's name
  * starts with its skill's word (`earn_quote`), and only that skill's builder is ever consulted for it.
  */
-const SKILLS: Record<string, () => Record<string, Command>> = { earn: buildCommands, connect: () => buildConnectCommands() };
+const SKILLS: Record<string, () => Record<string, Command>> = { earn: buildCommands, connect: () => buildConnectCommands(), invest: () => buildInvestCommands() };
 
 type Kind = "string" | "number" | "boolean";
 
-/** The JSON type a flag's schema finally checks, looking through `optional`, `default` and refine/transform pipes. */
+/**
+ * The JSON type a flag's schema finally checks, looking through `optional`, `default` and refine/transform pipes. A
+ * literal `true` (a flag that must be given, like `invest withdraw --all`) is a switch too.
+ */
 function kindOf(schema: z.ZodType): Kind {
   let s: z.ZodType = schema;
   for (;;) {
-    const def = (s as unknown as { def: { type: string; innerType?: z.ZodType; in?: z.ZodType } }).def;
+    const def = (s as unknown as { def: { type: string; innerType?: z.ZodType; in?: z.ZodType; values?: unknown[] } }).def;
     if ((def.type === "optional" || def.type === "default" || def.type === "nullable") && def.innerType) s = def.innerType;
     else if (def.type === "pipe" && def.in) s = def.in;
+    else if (def.type === "literal" && def.values?.length && def.values.every((v) => typeof v === "boolean")) return "boolean";
     else return def.type === "number" ? "number" : def.type === "boolean" ? "boolean" : "string";
   }
 }

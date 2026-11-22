@@ -4,6 +4,7 @@ import { join, relative } from "node:path";
 import ts from "typescript";
 import { PAGE_CSP } from "../src/connect/page.js";
 import { CHAIN_INFO } from "../src/client.js";
+import { BNB_INFO } from "../src/invest/chain.js";
 
 /**
  * The confirm page runs in the operator's browser next to their wallet. These checks read its source
@@ -21,6 +22,14 @@ const dir = join(import.meta.dirname, "..", "connect-page", "src");
 const walk = (d: string): string[] => readdirSync(d, { withFileTypes: true }).flatMap((e) => (e.isDirectory() ? walk(join(d, e.name)) : [join(d, e.name)]));
 const files = walk(dir).filter((f) => /\.(m|c)?[jt]sx?$/.test(f));
 const source = files.map((f) => readFileSync(f, "utf8")).join("\n");
+/**
+ * The invest view (Smart Growth) is the one file allowed more: it also signs a portfolio withdrawal's typed data and
+ * an enrolment's 32 bytes, each checked by the command before it reaches the page. Every other file is held to the
+ * earn and connect rules below, unchanged.
+ */
+const INVEST_FILE = join(dir, "invest.tsx");
+const rest = files.filter((f) => f !== INVEST_FILE).map((f) => readFileSync(f, "utf8")).join("\n");
+const invest = readFileSync(INVEST_FILE, "utf8");
 const main = readFileSync(join(dir, "main.tsx"), "utf8");
 // The same files with every comment removed by the TypeScript parser itself, so a `//` inside a string is not taken
 // for one: what a comment names is not held to the checks that read this.
@@ -34,22 +43,117 @@ describe("the connect page's source", () => {
     expect(main).toContain("eth_sendTransaction");
   });
 
-  it("asks a wallet only for a sign-in signature, a gas estimate, a transaction and a chain switch", () => {
-    const requests = [...source.matchAll(/\.request\s*\(/g)].length;
-    const methods = [...source.matchAll(/\.request\s*\(\s*\{\s*method:\s*"([^"]+)"/g)].map((m) => m[1]);
+  const requestsIn = (text: string) => {
+    const requests = [...text.matchAll(/\.request\s*\(/g)].length;
+    const methods = [...text.matchAll(/\.request\s*\(\s*\{\s*method:\s*"([^"]+)"/g)].map((m) => m[1]);
     // Every request names its method as a literal, so this list is complete.
     expect(methods).toHaveLength(requests);
-    expect(new Set(methods)).toEqual(new Set(["personal_sign", "eth_estimateGas", "eth_sendTransaction"]));
+    return new Set(methods);
+  };
+
+  it("asks a wallet only for a sign-in signature, a gas estimate, a transaction and a chain switch", () => {
+    expect(requestsIn(rest)).toEqual(new Set(["personal_sign", "eth_estimateGas", "eth_sendTransaction"]));
     // No request reached by a computed name, which the count above could not see.
     expect(source).not.toMatch(/\[\s*["'`]request["'`]\s*\]/);
     const walletCalls = new Set([...source.matchAll(/\bwallet\.(\w+)\s*\(/g)].map((m) => m[1]));
     expect(walletCalls).toEqual(new Set(["switchChain", "getEthereumProvider"]));
   });
 
-  it("never signs typed data, signs or sends raw transactions, or reaches for key material", () => {
+  it("the invest view also signs typed data (a checked portfolio withdrawal), and nothing else beyond the rest", () => {
+    expect(requestsIn(invest)).toEqual(new Set(["personal_sign", "eth_signTypedData_v4", "eth_estimateGas", "eth_sendTransaction"]));
+    // The one form of typed-data signing it may use: the wallet's own eth_signTypedData_v4, never a hook or eth_sign.
+    expect([...invest.matchAll(/signTypedData/gi)].map((m) => m[0])).toEqual(["signTypedData"]);
+    expect(invest).toMatch(/method: "eth_signTypedData_v4"/);
+  });
+
+  it("the invest view acts only through the owner's own wallet, and switches to BNB Chain before typed data or a send", () => {
+    // The wallet is chosen by the owner's address, never by position: a send's hash alone cannot say who sent it.
+    expect(invest).toMatch(/wallets\.find\(\(w\) => w\.address\.toLowerCase\(\) === info\.owner\.toLowerCase\(\)\)/);
+    expect(invest).not.toMatch(/wallets\s*\[/);
+    expect([...invest.matchAll(/await wallet\.switchChain\(info\.chainId\)/g)]).toHaveLength(2);
+  });
+
+  it("the invest view sends the step the process holds now, with time left, and never the copy this tab polled", () => {
+    const act = invest.slice(invest.indexOf("const act = useCallback"), invest.indexOf("} catch (e) {", invest.indexOf("const act = useCallback")));
+    const send = act.slice(act.indexOf("// The step is read again from the process"));
+    // The fresh read and both guards come before the wallet is asked for anything to send.
+    expect(send.indexOf("const live =")).toBeGreaterThan(-1);
+    expect(send.indexOf("const live =")).toBeLessThan(send.indexOf("live.msLeft"));
+    expect(send.indexOf("live.msLeft")).toBeLessThan(send.indexOf("eth_estimateGas"));
+    expect(send.indexOf("live.step?.index !== index")).toBeLessThan(send.indexOf("eth_estimateGas"));
+    expect(send).toMatch(/\(live\.msLeft \?\? 0\) < MIN_MS_LEFT/);
+    // And again after the network switch and the gas estimate, which can sit open, right before the send.
+    expect(send.indexOf("const left = await readLive()")).toBeGreaterThan(send.indexOf("eth_estimateGas"));
+    expect(send.indexOf("const left = await readLive()")).toBeLessThan(send.indexOf("sending = true;"));
+    expect(send).toMatch(/\(left\.msLeft \?\? 0\) < MIN_MS_LEFT/);
+    expect(invest).toMatch(/const MIN_MS_LEFT = 60_000;/);
+    // The transaction is built from that fresh read alone: the step this tab rendered is not read for it.
+    expect(send).toMatch(/const tx = \{ from: wallet\.address, to: now\.to, data: now\.data, value: "0x0" \};/);
+    expect(send).not.toMatch(/\bask\.(to|data)\b/);
+  });
+
+  it("the invest view never says a transfer was not sent once the wallet was asked to send it", () => {
+    // `sending` is set on the line before the send, and an error after it, with no hash, is "not confirmed sent".
+    expect(invest).toMatch(/sending = true;\n\s*hash = \(await provider\.request\(\{ method: "eth_sendTransaction"/);
+    const caught = invest.slice(invest.indexOf("} catch (e) {"));
+    expect(caught.indexOf("if (sending)")).toBeGreaterThan(caught.indexOf("if (rejected(e))"));
+    expect(caught.indexOf("if (sending)")).toBeLessThan(caught.indexOf("Not done:"));
+    expect(caught).toMatch(/Not confirmed sent\. Check your wallet's activity/);
+  });
+
+  /**
+   * A vault on an EVM chain is a request of the Tempora API, whose next step only exists once the one before it is
+   * recorded, and which the process checks before every step. So the confirm and plan views send only the step as the
+   * process holds it now (read from /info just before the wallet is asked), never a copy the tab kept, and never a step
+   * with nothing to send. Their transaction is built from that fresh read alone.
+   */
+  const plan = readFileSync(join(dir, "plan.tsx"), "utf8");
+  const sendBody = (text: string, from: string) => text.slice(text.indexOf(from), text.indexOf("} catch (e) {", text.indexOf(from)));
+  it("the confirm view sends exactly the step the process holds now, and nothing for a step that is not ready", () => {
+    const send = sendBody(main, "const send = useCallback(async () => {");
+    expect(send).toMatch(/const now = live\.calls\?\.\[next\];/);
+    expect(send).toMatch(/if \(!now \|\| !now\.to \|\| !now\.data\) \{/);
+    expect(send).toMatch(/const tx = \{ from: wallet\.address, to: now\.to, data: now\.data, value: now\.value \};/);
+    // The fresh read and its guard come before the wallet is asked for anything.
+    expect(send.indexOf("const live =")).toBeLessThan(send.indexOf("if (!now"));
+    expect(send.indexOf("if (!now")).toBeLessThan(send.indexOf("eth_estimateGas"));
+    expect(send.indexOf("eth_estimateGas")).toBeLessThan(send.indexOf("eth_sendTransaction"));
+    // No other source for what is sent: the step this tab rendered is not read for its destination or data.
+    expect(send).not.toMatch(/\bcall\.(to|data|value)\b/);
+  });
+
+  it("the plan view sends exactly the step the process holds now, and nothing for a step that is not ready", () => {
+    const send = sendBody(plan, "async (leg: LegView, _call: PlanCall, index: number, chainId: number)");
+    expect(send).toMatch(/const call = live\.current\.chain === "solana" \? undefined : live\.current\.calls\[index\];/);
+    expect(send).toMatch(/if \(!call \|\| !call\.to \|\| !call\.data\) throw/);
+    expect(send).toMatch(/const tx = \{ from: wallet\.address, to: call\.to, data: call\.data, value: call\.value \};/);
+    expect(send.indexOf("const live = await readInfo()")).toBeLessThan(send.indexOf("const call ="));
+    expect(send.indexOf("const call =")).toBeLessThan(send.indexOf("eth_sendTransaction"));
+    expect(send).not.toMatch(/\b_call\.(to|data|value)\b/);
+  });
+
+  it("the confirm and plan views read the time left again after the wallet's network switch, just before the send", () => {
+    for (const [code, start] of [
+      [main, "const send = useCallback(async () => {"],
+      [plan, "async (leg: LegView, _call: PlanCall, index: number, chainId: number)"],
+    ] as const) {
+      const send = sendBody(code, start);
+      const afterSwitch = send.slice(send.indexOf("switchChain"), send.indexOf("eth_sendTransaction"));
+      expect(afterSwitch).toMatch(/msLeft \?\? 0\) < 60_000|msLeft < 60_000/);
+    }
+  });
+
+  it("the confirm and plan views never say a step was not sent once the wallet was asked: it is 'not confirmed sent'", () => {
+    for (const text of [main.slice(main.indexOf("function Confirm(")), plan]) {
+      expect(text).toMatch(/stage = "send";\n\s*hash = \(await provider\.request\(\{ method: "eth_sendTransaction"/);
+      expect(text).toMatch(/await reject\(`not confirmed sent: the wallet returned an error without a transaction hash/);
+    }
+  });
+
+  it("never signs typed data outside the invest view, signs or sends raw transactions, or reaches for key material", () => {
+    expect(rest).not.toMatch(/signTypedData/i);
     for (const banned of [
       /eth_sign"/,
-      /signTypedData/i,
       /eth_signTransaction|signTransaction/,
       /eth_sendRawTransaction/,
       /useSendTransaction|useSignTypedData|useSignTransaction/,
@@ -132,11 +236,15 @@ describe("the connect page's source", () => {
     expect(main).toMatch(/walletConnect:\s*\{\s*enabled:\s*false\s*\}/);
   });
 
-  it("gives the wallet only Robinhood Chain's own RPC, not viem's list", () => {
+  it("gives the wallet only Robinhood Chain's and BNB Chain's own RPCs, not viem's lists", () => {
     // viem's Robinhood definition lists a third-party RPC beside the chain's own. The page's policy keeps the page
     // itself off it, but a wallet asked to add the chain takes the RPC list it is handed.
     const chains = /supportedChains:\s*\[([^\]]*)\]/.exec(code)?.[1]?.split(",").map((s) => s.trim());
-    expect(chains).toEqual(["base", "arbitrum", "robinhoodChain", "mainnet", "monad"]);
+    expect(chains).toEqual(["base", "arbitrum", "robinhoodChain", "mainnet", "monad", "bnbChain"]);
+    // The same for BNB Chain (invest only): its own public RPC, the one src/invest/chain.ts names.
+    const bnb = /const bnbChain\b[^;]*;/.exec(code)?.[0] ?? "";
+    expect(bnb).toContain("...bsc");
+    expect([...bnb.matchAll(/"((?:https?|wss?):\/\/[^"]+)"/g)].map((m) => m[1])).toEqual([BNB_INFO.publicRpc]);
     const def = /const robinhoodChain\b[^;]*;/.exec(code)?.[0] ?? "";
     expect(def).toContain("...robinhood");
     const urls = [...def.matchAll(/"((?:https?|wss?):\/\/[^"]+)"/g)].map((m) => m[1]);

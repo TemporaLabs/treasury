@@ -67,7 +67,7 @@
  *   B. the ENVIRONMENT surface — the exact names any audited file READS, plus a live poisoning run
  *      so a RENAMED fund variable fails on the property rather than the prefix;
  *   C. the REGISTRY source — the shipped JSON, parsed with fund-shaped variables poisoned;
- *   D. ENZYME refused at build and at the command boundary;
+ *   D. ENZYME never in the depositable set;
  *   E. the AUDITED surface — every `.ts` under `src/`, `scripts/` and `tests/` (the rule's wording is
  *      "no code path, test, script, env var or doc"), including who may start a process and what.
  */
@@ -78,9 +78,7 @@ import { fileURLToPath } from "node:url";
 import ts from "typescript";
 import { rpcUrlFromEnv, solanaRpcUrlFromEnv } from "../src/client.js";
 import { loadRegistry, getVault, depositableVaults } from "../src/registry.js";
-import { buildDeposit, buildWithdraw } from "../src/build.js";
-import { buildCommands } from "../src/earn/commands.js";
-import { FIXTURE, fixtureVault, useFixtureRegistry, useShippedRegistry } from "./fixtures/registry.js";
+import { FIXTURE, useFixtureRegistry, useShippedRegistry } from "./fixtures/registry.js";
 
 const here = dirname(fileURLToPath(import.meta.url));
 const pkgRoot = resolve(here, "..");
@@ -95,9 +93,7 @@ const rootPkg = pkg as { devDependencies?: Record<string, string> };
 const ENTRY_POINTS = ["src/index.ts", "src/cli.ts"];
 
 /** Variable names any audited file may READ. A write (the poisoning runs below) is not a read. */
-// TREASURY_LOGS_FALLBACK: the event scan's fallback endpoint, or `off` to forbid the fallback
-// entirely — an operator who may not reach a third party they did not name.
-// One RPC pair and one logs variable PER CHAIN (`CHAIN_INFO` in src/client.ts). A chain reads only its
+// One RPC pair PER CHAIN (`CHAIN_INFO` in src/client.ts). A chain reads only its
 // own names — an Arbitrum, Robinhood Chain, Ethereum, Monad or Solana call never falls back to a Base endpoint.
 const ENV_READS_ALLOWED = [
   "ARBITRUM_RPC_URL",
@@ -106,6 +102,8 @@ const ENV_READS_ALLOWED = [
   "MONAD_RPC_URL",
   "ROBINHOOD_RPC_URL",
   "SOLANA_RPC_URL",
+  // `treasury invest` (src/invest/api.ts): the Tempora API it calls, when not the pinned one.
+  "TREASURY_API_URL",
   // `treasury connect` (src/connect/): its own optional settings, and the four a browser launcher
   // needs to tell whether there is a browser to open at all.
   "DISPLAY",
@@ -116,13 +114,8 @@ const ENV_READS_ALLOWED = [
   "TREASURY_CONNECT_NO_OPEN",
   "TREASURY_CONNECT_PORT",
   "WAYLAND_DISPLAY",
+  // The Solana fork tier's switch (tests/fork-solana.test.ts); never read by shipped code.
   "TREASURY_FORK",
-  "TREASURY_LOGS_FALLBACK",
-  "TREASURY_LOGS_RPC_ARBITRUM",
-  "TREASURY_LOGS_RPC_BASE",
-  "TREASURY_LOGS_RPC_ETHEREUM",
-  "TREASURY_LOGS_RPC_MONAD",
-  "TREASURY_LOGS_RPC_ROBINHOOD",
   "TREASURY_RPC_ARBITRUM",
   "TREASURY_RPC_BASE",
   "TREASURY_RPC_ETHEREUM",
@@ -139,8 +132,8 @@ const MAY_COMPUTE_ENV_KEY = ["src/client.ts", "tests/client.unit.test.ts"];
 
 /**
  * The only files that may reach `node:child_process`, and the only programs they may start.
- * Exact membership, like the dependency assertion. A flat ban would be wrong — `roundtrip.ts`
- * legitimately spawns the CLI, once per step — and a flat allow is the hole.
+ * Exact membership, like the dependency assertion. A flat ban would be wrong — the Solana fork tier
+ * legitimately spawns a fork node, and the entrypoint tests the committed bundle — and a flat allow is the hole.
  */
 /**
  * 🔴 BUILTINS ARE ALLOWLISTED, NOT DENIED. Normalised, so `x` and `node:x` are one entry. Anything
@@ -150,13 +143,21 @@ const MAY_COMPUTE_ENV_KEY = ["src/client.ts", "tests/client.unit.test.ts"];
  */
 const BUILTINS_ALLOWED = ["fs", "path", "url", "http", "util"];
 const BUILTINS_ALLOWED_PER_FILE: Record<string, string[]> = {
-  "scripts/roundtrip.ts": ["child_process"], //            spawns the CLI under test, once per step
   "src/connect/http.ts": ["crypto"], //                    the one-shot page server's random secret and constant-time compare
   "src/connect/open.ts": ["child_process"], //             opens the operator's browser at the local page
   "src/connect/session.ts": ["os"], //                     the session file lives under the home directory
+  "src/connect/owner-tokens.ts": ["crypto"], //            a random name for the file written aside before it is renamed into place
+  "src/earn/api.ts": ["crypto"], //                         the SHA-256 of a vault's terms text, checked against the one the API sent
   "tests/connect.unit.test.ts": ["os", "net"], //           a temporary session directory; a free local port per test
+  "tests/third-party-notices.unit.test.ts": ["os"], //      a temporary package directory per test
   "tests/connect-plan.unit.test.ts": ["os", "net"], //      the same, for `connect plan`
-  "tests/fork.test.ts": ["child_process"], //              spawns anvil; anvil holds the keys, this repo never does
+  "tests/connect-api.unit.test.ts": ["os", "net"], //       the same, for a vault request through the Tempora API
+  "tests/owner-tokens.unit.test.ts": ["os"], //             a temporary directory for the owner-token file
+  "tests/invest-api.unit.test.ts": ["os"], //               the same, for the invest sign-in
+  "tests/invest-page.unit.test.ts": ["os", "net"], //       a temporary session directory; a free local port per test
+  "tests/invest-flow.unit.test.ts": ["os"], //               a temporary session directory per test
+  "tests/earn-api.unit.test.ts": ["os"], //                  a temporary session directory per test
+  "tests/setup/offline.ts": ["os"], //                       an empty connect directory for every test
   "tests/fork-solana.test.ts": ["child_process", "os"], //  spawns surfpool in a temporary directory; the key is generated per run
   "tests/registry-check.chain.test.ts": ["child_process"], // runs scripts/registry-check.ts against a mock chain
   "tests/entrypoint.unit.test.ts": ["child_process", "os"], // runs the committed bundle by symlink and by import; tmpdir for the symlink
@@ -167,9 +168,7 @@ const BUILTINS_ALLOWED_PER_FILE: Record<string, string[]> = {
 };
 
 const MAY_SPAWN: Record<string, string[]> = {
-  "scripts/roundtrip.ts": ["node", "npx"],
   "src/connect/open.ts": ["open", "cmd", "xdg-open"], //    the platform's own "open this URL" command, nothing else
-  "tests/fork.test.ts": ["anvil"],
   "tests/fork-solana.test.ts": ["surfpool"],
   "tests/registry-check.chain.test.ts": ["npx"],
   "tests/entrypoint.unit.test.ts": ["node"],
@@ -417,7 +416,7 @@ describe("A. the runtime module graph cannot leave this package", () => {
     const registryTs = resolve(srcRoot, "registry.ts");
     expect(jsonReachProblem(registryTs, "../registry/vaults.json")).toBeNull();
     expect(jsonReachProblem(registryTs, "../package.json")).toMatch(/not allowed/); // another allowed file's JSON
-    expect(jsonReachProblem(resolve(srcRoot, "build.ts"), "../registry/vaults.json")).toMatch(/not allowed/); // the same JSON, wrong importer
+    expect(jsonReachProblem(resolve(srcRoot, "units.ts"), "../registry/vaults.json")).toMatch(/not allowed/); // the same JSON, wrong importer
     expect(jsonReachProblem(registryTs, "../../outside.json")).toMatch(/not allowed/); // outside the package
   });
 
@@ -436,9 +435,11 @@ describe("A. the runtime module graph cannot leave this package", () => {
     expect(undeclared).toEqual([]);
   });
 
-  it("the dependency set is EXACTLY these three — membership, so a swap holding the count fails too", () => {
+  it("the dependency set is EXACTLY these four — membership, so a swap holding the count fails too", () => {
+    // @temporalabs/client: the Tempora API's own client, the only way `invest` reaches the API (src/invest/api.ts).
     expect(Object.keys(pkg.dependencies ?? {}).sort()).toEqual([
       "@solana/kit",
+      "@temporalabs/client",
       "viem",
       "zod",
     ]);
@@ -466,15 +467,10 @@ describe("B. the environment surface, statically and at runtime", () => {
       "SOLANA_RPC_URL",
       "SSH_CONNECTION",
       "SSH_TTY",
+      "TREASURY_API_URL",
       "TREASURY_CONNECT_HOME",
       "TREASURY_CONNECT_NO_OPEN",
       "TREASURY_CONNECT_PORT",
-      "TREASURY_LOGS_FALLBACK",
-      "TREASURY_LOGS_RPC_ARBITRUM",
-      "TREASURY_LOGS_RPC_BASE",
-      "TREASURY_LOGS_RPC_ETHEREUM",
-      "TREASURY_LOGS_RPC_MONAD",
-      "TREASURY_LOGS_RPC_ROBINHOOD",
       "TREASURY_RPC_ARBITRUM",
       "TREASURY_RPC_BASE",
       "TREASURY_RPC_ETHEREUM",
@@ -488,7 +484,7 @@ describe("B. the environment surface, statically and at runtime", () => {
   it("a fund variable in the environment is not used, WHATEVER it is called — the property, not the prefix", () => {
     const saved = { ...process.env };
     try {
-      for (const k of ["TREASURY_RPC_BASE", "TREASURY_LOGS_RPC_BASE", "TREASURY_LOGS_FALLBACK", "BASE_RPC_URL", "TREASURY_RPC_ARBITRUM", "TREASURY_LOGS_RPC_ARBITRUM", "ARBITRUM_RPC_URL", "TREASURY_RPC_ROBINHOOD", "TREASURY_LOGS_RPC_ROBINHOOD", "ROBINHOOD_RPC_URL", "TREASURY_RPC_ETHEREUM", "TREASURY_LOGS_RPC_ETHEREUM", "ETHEREUM_RPC_URL", "TREASURY_RPC_MONAD", "TREASURY_LOGS_RPC_MONAD", "MONAD_RPC_URL"]) delete process.env[k];
+      for (const k of ["TREASURY_RPC_BASE", "BASE_RPC_URL", "TREASURY_RPC_ARBITRUM", "ARBITRUM_RPC_URL", "TREASURY_RPC_ROBINHOOD", "ROBINHOOD_RPC_URL", "TREASURY_RPC_ETHEREUM", "ETHEREUM_RPC_URL", "TREASURY_RPC_MONAD", "MONAD_RPC_URL"]) delete process.env[k];
       // Three DISTINCT naming conventions, because the title's claim is "whatever it is called". A
       // mechanical rename once collapsed two of these into one line — the test still passed, and
       // proved one convention fewer than it said (caught in review of the public release).
@@ -571,25 +567,14 @@ describe("C2. The test-only registry seam is unreachable from an installed packa
   });
 });
 
-describe("D. Enzyme stays refused at BUILD — the boundary, not a note in a doc", () => {
+describe("D. Enzyme is never depositable — the boundary, not a note in a doc", () => {
   // A chassis with no ERC-4626 path is a code path, not a product offering: the shipped registry
   // need not carry such a vault for the refusal to be worth pinning. `fixtures/registry.ts` says why.
   beforeAll(() => useFixtureRegistry());
   afterAll(() => useShippedRegistry());
-  const enzyme = () => fixtureVault(FIXTURE.enzyme);
-  const ADDR = "0x000000000000000000000000000000000000dEaD" as const;
 
-  it("buildDeposit and buildWithdraw both refuse it, naming the reason", () => {
-    expect(() => buildDeposit(enzyme(), { assetsHuman: "1", receiver: ADDR, account: ADDR })).toThrow(/no ERC-4626 deposit\/redeem path/);
-    expect(() => buildWithdraw(enzyme(), { assetsHuman: "1", receiver: ADDR, owner: ADDR })).toThrow(/no ERC-4626 deposit\/redeem path/);
-  });
-
-  it("the refusal survives the command boundary — no calls array reaches a caller", async () => {
-    const tools = buildCommands() as unknown as Record<string, { handler: (a: unknown, b: unknown) => Promise<unknown> }>;
-    await expect(
-      tools["earn_prepare_deposit"]!.handler({ vault: FIXTURE.enzyme, account: ADDR, receiver: ADDR, amount_usdc: "1" }, {}),
-    ).rejects.toThrow(/no ERC-4626 deposit\/redeem path/);
-  });
+  // No EVM call is built here any more: the Tempora API prepares it, and `checkSteps` admits only the four ERC-4626
+  // calls (approve, deposit, withdraw, redeem), so a chassis without that path has nothing a step could be.
 
   it("and it is not in the depositable set", () => {
     expect(depositableVaults().map((v) => v.symbol)).not.toContain(FIXTURE.enzyme);

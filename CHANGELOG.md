@@ -4,6 +4,100 @@ All notable changes to Agent Treasury are recorded here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versions follow [SemVer](https://semver.org/).
 Pre-1.0, minor versions may change tool names, schemas and behaviour.
 
+## [v0.1.5] - 2026-11-22
+
+### Changed
+- **The vaults on the EVM chains go through the Tempora API.** On Base, Arbitrum One, Robinhood Chain, Ethereum and
+  Monad, `treasury earn` and `treasury connect` now call the Tempora API, and nothing else: its MCP endpoint for
+  every read and request, its HTTP routes for the owner's sign-in. They read no RPC there, except `connect wallet`'s
+  check of a smart-contract wallet's sign-in. The API lists the vaults, and a deposit reaches the vault it lists:
+  Treasury keeps only each chain's default vault address, and `--vault` (a contract address or a ticker) goes to the API
+  as given; everything else about a vault is the API's. Every step the API
+  prepares is checked against the API's own record of the vault, and against what the operator asked for, by
+  `@temporalabs/client`'s `checkSteps` before a wallet sees it: a wrong step is caught, a wrong record is not.
+  Solana is unchanged and still reads its chain directly.
+- **A new dependency, `@temporalabs/client` `0.1.4`**, pinned, from npm: the Tempora API's client, which makes every
+  call to the API and checks every step it prepares. It needs the Tempora API at 0.1.3 or later.
+- **TypeScript 6.0.3**, pinned (was `^5.9.0`; `^5.6.0` for the page), for the library and the connect page, the version
+  `@temporalabs/client` is built with. The page overrides the optional TypeScript peer range of
+  the `@solana/kit` copy its wallet library brings in, which still names TypeScript 5.
+- **viem 2.57.17**, pinned, for the library and the connect page (was `^2.57.16`), with its own `ox` 0.14.63. The
+  built CLI and page are rebuilt with it. `zod` (`4.6.7`, the version `@temporalabs/client` pins), `@types/node`
+  (`22.20.5`) and `vitest` (`5.1.0`) are pinned to the versions they already resolved to.
+- **`--vault` takes the vault's contract address or its ticker on the EVM chains** (for example `tlCashPlusUSDC2B`,
+  or its address `0x91BcEbA5feCB9E92d80F1845B55cC56621E9352F`, Base's default). The value goes to the Tempora API as
+  given, and the API decides which vault it names; a value it knows as no vault is refused, and so is a vault on another
+  chain than the `chain` named. Each chain's default is a contract address, and a default the API does not know is
+  refused, never replaced. Responses name a vault by `vault` (its contract
+  address), `ticker` (its share ticker) and `name`, all the API's. On Solana `--vault` is still the vault's ticker.
+- **Owner reads and requests act for the connected wallet only.** `earn status` with an account, `earn quote`,
+  `earn balance`, the prepare commands, `earn submit` and `earn request` act for the wallet `treasury connect wallet`
+  connected; another `--account` is refused. A sign-in page opens only when the API needs a sign-in, and one sign-in
+  serves `invest` and `earn`.
+- **`earn terms` returns the vault's terms from the API** (text, version and sha256), refused unless the text hashes
+  to that sha256 here, beside the client's disclosures. It takes `--vault` and `--chain`.
+- **`earn prepare_deposit` needs `--terms_sha256`** on an EVM chain, the sha256 the operator accepted; terms that
+  changed since are refused. It returns the request's checked steps: the approval is `ready`, the deposit `waiting`
+  until the approval's hash is submitted. `--receiver` is taken only on Solana.
+- **`earn prepare_withdraw` takes exactly one of `--amount_usdc`, `--all` or `--shares_exact`** on an EVM chain; on
+  Solana `--all` still goes with `--shares_exact`.
+- **`earn status`, `earn quote` and `earn balance` report the API's reading.** Health is the API's reachability; with
+  an account, the standing, every gate with its reason, and the wallet's balance and allowance. A share balance the
+  API could not read is `unknown`, never 0; entry basis and yield are reported as not available.
+  `--lookback_blocks` and `--max_log_requests` are removed.
+- **`connect deposit`, `connect withdraw` and `connect plan` run each EVM leg as an API request.** The
+  acknowledgement names the terms version and sha256 the deposit sends, and binds them. The request is checked
+  before the page opens and after every step; the page sends exactly the checked step it reads from this process
+  just before the wallet is asked; each hash goes to the API, whose reading is the verdict reported. A step the API
+  puts up again after it was sent is refused, a hash the page could not hand over is still submitted once, a wallet
+  error after the send was asked for is "not confirmed sent", and the result names the request. A request nothing
+  was sent for is cancelled. Each step reaches the wallet only when the API's next action (`next`) names it, at its
+  generation: the flow waits while the API says wait, and stops, saying what to do, when it says the request is
+  done, failed, cancelled or expired, asks for a hash back, or answers with a next action this client does not know.
+  On an EVM chain `--all` alone, and a plan's "withdraw <vault> all" leg, withdraw the
+  whole position as it stands when the withdrawal runs.
+- The signer rules drop the receiver check and the gas-limit rule, and add: send only a `ready` step, and submit
+  the hash you have rather than sending again.
+- **The connect page builds with Privy 3.51.4** (was 3.51.1). Its lockfile also moves `decode-uri-component` to
+  0.5.1 (the override), `follow-redirects` to 1.16.3, `hono` to 4.13.18 and one nested `zod` 4 copy to 4.6.7, past
+  their advisories. The page is rebuilt with it.
+
+### Added
+- **`treasury invest`, for Tempora Labs' Smart Growth portfolios** (USDT on BNB Chain), through the Tempora API:
+  `invest products`, `invest balance`, `invest deposit`, `invest withdraw` (everything, paid to the connected wallet)
+  and `invest request`. A deposit and a withdrawal open the local page's invest view, where the operator's own wallet
+  signs in, signs the enrolment when the wallet has no account on the portfolio yet, sends the USDT transfer, and
+  signs a withdrawal's authorizations (typed data, which the rest of the page may not sign). Every step the API
+  prepares is checked first by `@temporalabs/client`'s own checks to what the operator asked for. A portfolio is open
+  only to the wallets the API admits. See the [security model](docs/security-model.md#smart-growth-portfolios-treasury-invest).
+- **`TREASURY_API_URL`** points `earn`, `connect` and `invest` at another Tempora API deployment (default
+  `https://api.temporalabs.com`). The wallet signs the API's sign-in message only when it names this URL's host.
+- **The API sign-in is kept between commands** in `owner-tokens.json` beside the session file (mode 0600;
+  `TREASURY_CONNECT_HOME` moves it). This file holds a credential: a token that can read the owner's account and start
+  or cancel requests, never move money. It expires on its own; `connect disconnect` deletes it and reports
+  `hadOwnerTokens`.
+- **The CLI's third-party notices carry each bundled package's NOTICE file** with its licence.
+- **`earn submit`** hands the hash of a step the connected wallet sent to the API, with the wallet's nonce and sender
+  when known, and answers with the request and any next step, checked.
+- **`earn request`** reads a request again by id or by transaction hash, or cancels one still waiting.
+
+### Removed
+- **`earn claim`.** No vault queues withdrawals, and a request's state is now read with `earn request`.
+- **The local EVM builders, pre-flight and readers.** A library user who imports any of the names below must pin
+  0.1.4 exactly (`npm install --save-exact @temporalabs/treasury@0.1.4`): a `^0.1.4` range resolves to this release.
+  The vaults on the EVM chains are reached through the Tempora
+  API, which prepares and checks every step, so treasury's own code for them is gone. Removed from the library:
+  `buildDeposit`, `buildWithdraw`, `UnsignedCall`, `preflightDeposit`, `classifyRevert`, `extractRevert`,
+  `PreflightResult`, `PreflightStatus`, `RevertObservation`, `quoteDeposit`, `quoteWithdraw`, `DepositQuote`,
+  `WithdrawQuote`, `getPosition`, `Position`, `UNKNOWN_AFTER_SCAN_FAILURE` and `logsRpcUrlFromEnv`. The library keeps
+  the registry, `makePublicClient`, `rpcUrlFromEnv`, `isSupportedChainId`, `chains`, `parseAmount`, `formatAmount`
+  and `DISCLOSURES`.
+- **The event-scan variables.** `TREASURY_LOGS_RPC_BASE`, `TREASURY_LOGS_RPC_ARBITRUM`, `TREASURY_LOGS_RPC_ROBINHOOD`,
+  `TREASURY_LOGS_RPC_ETHEREUM`, `TREASURY_LOGS_RPC_MONAD` and `TREASURY_LOGS_FALLBACK` are no longer read. The other
+  EVM RPC variables are now read only by `connect wallet` (Base, for a smart-contract wallet's sign-in) and by
+  `npm run registry:check`.
+- **The EVM fork and live test tiers.** `npm run test:fork` and the live tier cover the vault on Solana only.
+
 ## [v0.1.4] - 2026-11-08
 
 ### Added

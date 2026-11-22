@@ -28,8 +28,8 @@
  * the host FIVE, straight to the terminal, into CI logs, and into whatever a contributor pastes
  * into an issue. This script is one CONTRIBUTING tells people to run with their own endpoint.
  *
- * `depositOpen` is NOT reconciled here — it is a measurement with a block on it, re-taken live by
- * `preflightDeposit` on every call, so a stale value is a note, not a defect.
+ * `depositOpen` is NOT reconciled here — it is a measurement with a block on it, so a stale value is
+ * a note, not a defect. On the EVM chains the Tempora API reports each vault's status on every call.
  */
 import { createPublicClient, http, type PublicClient } from "viem";
 import { erc4626Abi } from "../src/abi/erc4626.js";

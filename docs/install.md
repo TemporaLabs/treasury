@@ -7,14 +7,14 @@ front of an agent.
 ## Claude Code — the plugin
 
 ```bash
-claude plugin marketplace add TemporaLabs/treasury@v0.1.4
+claude plugin marketplace add TemporaLabs/treasury@v0.1.5
 claude plugin install treasury@treasury
 ```
 
 `@<ref>` pins the marketplace to a tag or a branch, and is recorded with the marketplace entry, so
 `claude plugin marketplace update` refreshes *that* ref rather than moving the install onto another
 branch; `#<ref>` is equivalent. Prefer a tag — it is immutable. Before a release is tagged, pin its
-release branch instead (`TemporaLabs/treasury@release/v0.1.4`); dropping the suffix entirely tracks
+release branch instead (`TemporaLabs/treasury@release/v0.1.5`); dropping the suffix entirely tracks
 this repository's default branch.
 
 The plugin is the [`plugin/`](../plugin/) folder of this repository: its manifests, the `earn` skill,
@@ -46,7 +46,7 @@ marketplace also uninstalls the plugin, so upgrade in three steps:
 
 ```bash
 claude plugin marketplace remove treasury
-claude plugin marketplace add TemporaLabs/treasury@v0.1.4
+claude plugin marketplace add TemporaLabs/treasury@v0.1.5
 claude plugin install treasury@treasury
 ```
 
@@ -60,24 +60,17 @@ branch (measured 2026-10-04). To pick up new commits, run `claude plugin marketp
 then `claude plugin uninstall treasury@treasury` and `claude plugin install treasury@treasury`, then
 start a new session.
 
-Set an RPC before you rely on it:
+On Base, Arbitrum One, Robinhood Chain, Ethereum and Monad the commands reach the Tempora API and need no RPC of your
+own. For the vault on Solana, set an RPC before you rely on it:
 
 ```bash
-export TREASURY_RPC_BASE=https://...          # a keyed Base RPC (Alchemy, Infura, QuickNode, your own node)
-export TREASURY_LOGS_RPC_BASE=https://...     # optional: a wide-window provider for earn_balance's event scans
-export TREASURY_RPC_ARBITRUM=https://...      # a keyed Arbitrum One RPC, if you will use a vault on Arbitrum
-export TREASURY_LOGS_RPC_ARBITRUM=https://... # optional, the same for Arbitrum
-export TREASURY_RPC_ROBINHOOD=https://...     # a keyed Robinhood Chain RPC, if you will use a vault there
-export TREASURY_RPC_ETHEREUM=https://...      # a keyed Ethereum RPC, if you will use a vault there
-export TREASURY_RPC_MONAD=https://...         # a keyed Monad RPC, if you will use a vault there
-export TREASURY_LOGS_RPC_MONAD=https://...    # on Monad, needed for earn_balance's history: the public RPC serves 100 blocks per request
 export TREASURY_RPC_SOLANA=https://...        # a keyed Solana RPC, if you will use the vault on Solana
+export TREASURY_RPC_BASE=https://...          # optional: only `connect wallet` reads it, to check a smart-contract wallet's sign-in
 ```
 
-Each chain reads only its own variable. Unset, a chain falls back to its public RPC, which rate-limits
-after a handful of calls. A `… over rate limit` error from any command means "set a keyed RPC for that
-chain", not "the vault is down". The CLI reads the shell's environment, so export these before you
-start Claude Code. See [`configuration.md`](configuration.md).
+Unset, Solana falls back to its public RPC, which rate-limits after a handful of calls. A `… over rate limit` error
+from a Solana command means "set a keyed RPC", not "the vault is down". The CLI reads the shell's environment, so
+export these before you start Claude Code. See [`configuration.md`](configuration.md).
 
 The skill pre-approves its own command (`node …/dist/treasury.mjs …`, for both `earn` and `connect`) for the turn it is used in.
 If Claude Code still asks, allow that command for the project; it is the same program every time.
@@ -92,7 +85,7 @@ version — a published version is immutable, and `--save-exact` keeps a later `
 to another one:
 
 ```bash
-npm install --save-exact @temporalabs/treasury@0.1.4
+npm install --save-exact @temporalabs/treasury@0.1.5
 npx --no-install treasury earn --help     # every command and flag, as JSON
 npx --no-install treasury earn vaults     # or: node <project>/node_modules/@temporalabs/treasury/dist/treasury.mjs earn vaults
 ```
@@ -102,10 +95,11 @@ Claude Code plugin carries; [`runbooks/verify_the_bundle.md`](runbooks/verify_th
 to check it from the tarball. A checkout of the repository at the tag, or the plugin cache after a
 Claude Code install, holds the same file if you would rather not install from npm.
 
-The CLI carries exactly the eight `earn` commands and six `connect` commands in [`tools.md`](tools.md),
+The CLI carries exactly the nine `earn` commands, six `connect` commands and five `invest` commands in [`tools.md`](tools.md),
 each printing one JSON document; a refusal exits 1 with `{ "error": … }` on stderr. No command signs:
-the `connect` commands hand calls to your own wallet for approval, and your runtime's own signer
-takes the calls `earn prepare_deposit` and `earn prepare_withdraw` return. The `earn` skill ships with
+the `connect` commands hand steps to your own wallet for approval, and your runtime's own signer
+takes the steps `earn prepare_deposit` and `earn prepare_withdraw` return, then hands each hash back with
+`earn submit`. The `earn` skill ships with
 the plugin, at [`plugin/skills/earn/SKILL.md`](../plugin/skills/earn/SKILL.md) in this repository. It is
 plain Markdown and can be given to any agent as instructions; it tells the agent how to use these
 commands and what to refuse.
@@ -143,11 +137,13 @@ Privy wallet from an email or social login), for the vault on Solana; the two co
 
 ## As a library
 
-`@temporalabs/treasury` — the same package, `npm install @temporalabs/treasury@0.1.4` — also exports
-the builders, the pre-flight, the position scan and the registry as plain functions, for the EVM chains
-only: the Solana vault's reads and builders are not exported, so reach it through the CLI. ⚠️ The library returns bare `UnsignedCall[]` arrays; the
-`{ requires_signature: true, status: "unsigned", calls }` envelope is a property of the command
-boundary, not of the functions. If you consume the library directly, you are the boundary.
+`@temporalabs/treasury` — the same package, `npm install @temporalabs/treasury@0.1.5` — also exports
+the vault registry (`loadRegistry`, `listVaults`, `getVault`, `resolveVault`, `defaultVault`,
+`depositableVaults`), the amount helpers (`parseAmount`, `formatAmount`), the disclosures, and a read-only EVM
+client (`makePublicClient`, `rpcUrlFromEnv`). It builds no transaction and runs no pre-flight: on the EVM chains a
+deposit or withdrawal is prepared by the Tempora API, and `@temporalabs/client` is the library for that, its
+`checkSteps` holding every step to what you asked. The Solana vault's reads and builders are not exported, so reach
+it through the CLI.
 
 ## Verifying what you installed
 

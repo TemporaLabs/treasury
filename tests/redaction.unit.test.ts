@@ -8,12 +8,9 @@ import { describe, it, expect, beforeAll, afterAll } from "vitest";
 import { describeError, redactEndpoints, redactSecrets } from "../src/redact.js";
 import { createPublicClient, http } from "viem";
 import { base } from "viem/chains";
-import { preflightDeposit } from "../src/preflight.js";
-import { getPosition, UNKNOWN_AFTER_SCAN_FAILURE } from "../src/position.js";
 import { getVault } from "../src/registry.js";
 import { buildCommands } from "../src/earn/commands.js";
-import { EARN } from "../src/config/earn.js";
-import { FIXTURE, fixtureVault, useFixtureRegistry, useShippedRegistry } from "./fixtures/registry.js";
+import { useFixtureRegistry, useShippedRegistry } from "./fixtures/registry.js";
 
 // The unit tiers exercise code paths (18-decimal shares, an open vault) that the shipped
 // registry does not offer; `fixtures/registry.ts` explains why they are synthetic.
@@ -24,14 +21,6 @@ const FAKE = "FAKEKEY_abc123XYZ";
 // A refused local port: viem wraps it as HttpRequestError whose message carries `URL: …` — the
 // exact shape reproduced in review against Alchemy (a 1 ms abort does NOT: it yields UnknownRpcError, no URL).
 const FAKE_URL = `http://127.0.0.1:9/v2/${FAKE}`;
-const STRANGER = EARN.fixtures.stranger;
-
-// A transport that fails the way a bad key does — the URL is in the error, the key is in the URL.
-const failing = () =>
-  createPublicClient({
-    chain: base,
-    transport: http(FAKE_URL, { retryCount: 0, timeout: 2_000 }),
-  });
 
 describe("describeError / redactEndpoints", () => {
   it("strips a viem-shaped message down to something with no endpoint in it", () => {
@@ -132,64 +121,26 @@ describe("describeError carries the provider's own sentence, not only viem's gen
 });
 
 describe("no tool output carries the RPC key when the RPC fails", () => {
-  it("preflightDeposit → UNRESOLVED, findings free of the key", async () => {
-    const r = await preflightDeposit({ vault: fixtureVault(FIXTURE.morphoOpen), depositor: STRANGER, client: failing() as never });
-    expect(r.status).toBe("UNRESOLVED");
-    expect(JSON.stringify(r)).not.toContain(FAKE);
-  });
-
   it("an unwrapped throw crossing a tool handler is redacted by guarded()", async () => {
+    // On an EVM chain the earn reads go through the Tempora API's client, so the throw here is that client's: one whose
+    // message carries the keyed endpoint, which nothing in the handler itself redacts.
     process.env["TREASURY_RPC_BASE"] = FAKE_URL;
-    process.env["TREASURY_LOGS_RPC_BASE"] = FAKE_URL;
     try {
+      const throwing = new Proxy({}, { get: () => async () => { throw new Error(`HTTP request failed.\n\nURL: ${FAKE_URL}\nDetails: fetch failed`); } });
       // Reach the registered handler directly, the way `src/cli.ts` does after parsing flags.
-      const tools = buildCommands() as unknown as Record<string, { handler: (a: unknown, extra: unknown) => Promise<unknown> }>;
-      expect(Object.keys(tools)).toContain("earn_balance");
+      const tools = buildCommands({ mcp: throwing as never }) as unknown as Record<string, { handler: (a: unknown, extra: unknown) => Promise<unknown> }>;
       let thrown: unknown;
       try {
-        await tools["earn_balance"]!.handler({ account: STRANGER, vault: FIXTURE.morphoOpen, max_log_requests: 1 }, {});
+        await tools["earn_vaults"]!.handler({}, {});
       } catch (e) {
         thrown = e;
       }
       expect(thrown).toBeInstanceOf(Error);
+      expect((thrown as Error).message).toMatch(/HTTP request failed/); // premise: it is that throw
       expect((thrown as Error).message).not.toContain(FAKE);
       expect((thrown as Error).message).not.toMatch(/https?:\/\//);
     } finally {
       delete process.env["TREASURY_RPC_BASE"];
-      delete process.env["TREASURY_LOGS_RPC_BASE"];
     }
-  });
-});
-
-describe("getPosition degrades when the provider's eth_getLogs error is not one it can size a window from", () => {
-  it("returns a position with scan.capped=true and a FAILED note instead of throwing", async () => {
-    const vault = fixtureVault(FIXTURE.morphoOpen);
-    // Reads succeed; only getLogs fails, with wording rangeLimitFromError does not recognise.
-    const client = {
-      getBlockNumber: async () => 51_000_000n,
-      // 5 shares worth 5.1 USDC (share price 1.02): a real position, so a wrong "yield" would be visible.
-      readContract: async ({ functionName, args }: { functionName: string; args?: readonly unknown[] }) => {
-        if (functionName === "balanceOf") return 5n * 10n ** 18n;
-        if (functionName === "convertToAssets") return args?.[0] === 10n ** 18n ? 1_020_000n : 5_100_000n;
-        return 0n;
-      },
-      getLogs: async () => {
-        throw new Error("query returned more than 10000 results");
-      },
-    };
-    const p = await getPosition({ vault, principal: STRANGER, client: client as never, maxLogRequests: 3 });
-    expect(p.scan.capped).toBe(true);
-    expect(p.scan.complete).toBe(false);
-    expect(p.scan.deposits).toBe(0);
-    expect(p.scan.note).toMatch(/event scan FAILED/);
-    expect(p.scan.note).toContain("more than 10000 results");
-    expect(p.sharesExact).toBe("5");
-    // The PROPERTY, not the mechanism: with nothing read, basis and yield must be
-    // unknown — not "0 USDC" and "<whole value> USDC", which the note would then contradict.
-    expect(p.entryBasisUsdc).toBe(UNKNOWN_AFTER_SCAN_FAILURE);
-    expect(p.accruedYieldUsdc).toBe(UNKNOWN_AFTER_SCAN_FAILURE);
-    expect(p.entryBasisUsdc).not.toMatch(/^\d/);
-    expect(p.accruedYieldUsdc).not.toMatch(/USDC$/);
-    expect(p.usdcValue).toBe("5.1 USDC"); // the on-chain value is still real and still reported
   });
 });
