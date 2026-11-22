@@ -4,7 +4,7 @@ All notable changes to Agent Treasury are recorded here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versions follow [SemVer](https://semver.org/).
 Pre-1.0, minor versions may change tool names, schemas and behaviour.
 
-## [v0.1.5] - Unreleased
+## [v0.1.5] - 2026-11-22
 
 ### Changed
 - **The vaults on the EVM chains go through the Tempora API.** On Base, Arbitrum One, Robinhood Chain, Ethereum and
