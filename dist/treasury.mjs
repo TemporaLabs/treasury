@@ -44928,6 +44928,7 @@ function http(url2, config2 = {}) {
 }
 
 // node_modules/viem/_esm/index.js
+init_abis();
 init_decodeFunctionData();
 init_getAddress();
 init_isAddress();
@@ -45144,6 +45145,35 @@ var basePreconf = /* @__PURE__ */ defineChain({
   rpcUrls: {
     default: {
       http: ["https://mainnet-preconf.base.org"]
+    }
+  }
+});
+
+// node_modules/viem/_esm/chains/definitions/bsc.js
+init_defineChain();
+var bsc = /* @__PURE__ */ defineChain({
+  id: 56,
+  name: "BNB Smart Chain",
+  blockTime: 750,
+  nativeCurrency: {
+    decimals: 18,
+    name: "BNB",
+    symbol: "BNB"
+  },
+  rpcUrls: {
+    default: { http: ["https://56.rpc.thirdweb.com"] }
+  },
+  blockExplorers: {
+    default: {
+      name: "BscScan",
+      url: "https://bscscan.com",
+      apiUrl: "https://api.bscscan.com/api"
+    }
+  },
+  contracts: {
+    multicall3: {
+      address: "0xca11bde05977b3631167028862be2a173976ca11",
+      blockCreated: 15921452
     }
   }
 });
@@ -49048,7 +49078,7 @@ function verifiedTerms(p) {
 }
 
 // src/abi/erc4626.ts
-var erc4626Abi = [
+var erc4626Abi2 = [
   { type: "function", name: "name", stateMutability: "view", inputs: [], outputs: [{ type: "string" }] },
   { type: "function", name: "symbol", stateMutability: "view", inputs: [], outputs: [{ type: "string" }] },
   { type: "function", name: "decimals", stateMutability: "view", inputs: [], outputs: [{ type: "uint8" }] },
@@ -49155,7 +49185,7 @@ function offerOf(r, now) {
   return { send: s2 };
 }
 function describeCall(p, to, data) {
-  const d = decodeFunctionData({ abi: erc4626Abi, data });
+  const d = decodeFunctionData({ abi: erc4626Abi2, data });
   const asset = (raw) => formatUnits(raw, p.vault.assetDecimals);
   const args = d.args ?? [];
   switch (d.functionName) {
@@ -49172,8 +49202,8 @@ function describeCall(p, to, data) {
   }
 }
 function decoded(data) {
-  const d = decodeFunctionData({ abi: erc4626Abi, data });
-  const item = erc4626Abi.find((x) => x.type === "function" && x.name === d.functionName);
+  const d = decodeFunctionData({ abi: erc4626Abi2, data });
+  const item = erc4626Abi2.find((x) => x.type === "function" && x.name === d.functionName);
   const values = d.args ?? [];
   return {
     function: `${d.functionName}(${item.inputs.map((i) => `${i.type} ${i.name}`).join(", ")})`,
@@ -51646,6 +51676,21 @@ function holdingOf(positions, product) {
   }
   return { smartAccount: getAddress(p.smartAccount), holdings, decimals };
 }
+async function readIdleUsdt(account) {
+  const client = createPublicClient({ chain: bsc, ccipRead: false, transport: http(BNB_INFO.publicRpc, { retryCount: 1, timeout: 15e3 }) });
+  return client.readContract({ address: BNB_USDT.address, abi: erc20Abi, functionName: "balanceOf", args: [account] });
+}
+var IDLE_TOLERANCE_USD = 0.01;
+function withIdleUsdt(h, idleUsd, onChain) {
+  const key = Object.keys(h.holdings).find((k) => k.toLowerCase() === BNB_USDT_ASSET_ID.toLowerCase());
+  if (key !== void 0) return h;
+  if (typeof idleUsd !== "number" || !(idleUsd > 0) || onChain === 0n) return h;
+  const chainUsd = Number(formatUnits(onChain, BNB_USDT.decimals));
+  if (Math.abs(chainUsd - idleUsd) > Math.max(IDLE_TOLERANCE_USD, idleUsd * 0.01)) {
+    throw new Error(`refused: the API shows ${idleUsd} idle USDT in the smart account but the chain holds ${chainUsd}; nothing was signed or sent`);
+  }
+  return { ...h, holdings: { ...h.holdings, [BNB_USDT_ASSET_ID]: onChain.toString() }, decimals: { ...h.decimals, [BNB_USDT_ASSET_ID.toLowerCase()]: BNB_USDT.decimals } };
+}
 function portfolioIdOf(r) {
   for (const s2 of r.steps) {
     const m = s2.payload?.typedData?.message;
@@ -51842,7 +51887,11 @@ function buildInvestCommands(deps = {}) {
           await portfolio(c, product);
           const pos = await call3(o2, w, c, (cl, token) => cl.positions({}, { ownerToken: token }));
           if (!pos.ok) throw failure2("The positions could not be read", pos);
-          const h = holdingOf(pos.body.positions, product);
+          let h = holdingOf(pos.body.positions, product);
+          if (!Object.keys(h.holdings).some((k) => k.toLowerCase() === BNB_USDT_ASSET_ID.toLowerCase())) {
+            const idleUsd = pos.body.positions.find((x) => x.product === product && x.kind === "portfolio")?.idleUsd;
+            if (typeof idleUsd === "number" && idleUsd > 0) h = withIdleUsdt(h, idleUsd, await (deps.readUsdt ?? readIdleUsdt)(h.smartAccount));
+          }
           const r = await call3(o2, w, c, (cl, token) => cl.withdraw({ body: { product, amount: { kind: "all" } } }, { ownerToken: token }));
           if (!r.ok) throw failure2("The API did not start the withdrawal", r);
           return drive(r.body, o2, { check: (q) => checkWithdrawal(q, o2, h, now()), prepare: (q, s2) => prepareWithdrawal(q, s2, o2, h, product) }, driveDeps(w, c));
