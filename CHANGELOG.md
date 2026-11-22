@@ -4,6 +4,23 @@ All notable changes to Agent Treasury are recorded here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versions follow [SemVer](https://semver.org/).
 Pre-1.0, minor versions may change tool names, schemas and behaviour.
 
+## [v0.2.0] - Unreleased
+
+### Fixed
+- **`invest withdraw` works for an account that was funded but has not yet rebalanced.** The API lists such an
+  account's idle USDT only as a rounded `idleUsd` figure and no holding, so the withdrawal was refused. The command
+  now reads the account's exact USDT balance from BNB Chain's public RPC (one read-only call) and bounds the
+  withdrawal by it. The balance must agree with `idleUsd`, within a small tolerance, or nothing is signed or sent.
+  See the [security model](docs/security-model.md#smart-growth-portfolios-treasury-invest).
+
+### Changed
+- **TypeScript 7.0.2** builds the library, the scripts and the connect page; **viem 2.58.4**. The two source-audit
+  tests parse with a TypeScript 6 compiler package (`@typescript/typescript6`), a dev-only dependency that is not
+  shipped and not used to build, because TypeScript 7 has no JavaScript compiler API yet.
+- **Supported runtimes are Node 22 through 26** (`engines` is `>=22`). The published type declarations compile under
+  TypeScript 6 and 7; CI checks both.
+- The architecture documents moved to `docs/architecture/`, apart from `docs/guides/`.
+
 ## [v0.1.5] - 2026-11-22
 
 ### Changed
@@ -69,10 +86,7 @@ Pre-1.0, minor versions may change tool names, schemas and behaviour.
   signs in, signs the enrolment when the wallet has no account on the portfolio yet, sends the USDT transfer, and
   signs a withdrawal's authorizations (typed data, which the rest of the page may not sign). Every step the API
   prepares is checked first by `@temporalabs/client`'s own checks to what the operator asked for. A portfolio is open
-  only to the wallets the API admits. A withdrawal from an account that has been funded but has not yet rebalanced
-  reads that account's exact USDT balance from BNB Chain's public RPC (one read-only call), because the API lists such
-  idle USDT only as a rounded `idleUsd` figure; the balance must agree with `idleUsd` or nothing is signed. See the
-  [security model](docs/security-model.md#smart-growth-portfolios-treasury-invest).
+  only to the wallets the API admits. See the [security model](docs/security-model.md#smart-growth-portfolios-treasury-invest).
 - **`TREASURY_API_URL`** points `earn`, `connect` and `invest` at another Tempora API deployment (default
   `https://api.temporalabs.com`). The wallet signs the API's sign-in message only when it names this URL's host.
 - **The API sign-in is kept between commands** in `owner-tokens.json` beside the session file (mode 0600;
