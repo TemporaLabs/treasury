@@ -1,7 +1,8 @@
 # 01: Test tiers, and the tests that are rules
 
 Everything runs under vitest (`vitest.config.mts`, which includes `tests/**/*.test.ts`). `npm test`
-first compiles the package and the scripts (`tsc -b`, `tsc -p tsconfig.scripts.json`), so a type error
+first compiles the package and the scripts with TypeScript 7 (`tsc -b`, `tsc -p tsconfig.scripts.json`, run by path,
+see [the build guide](../release/01-build-and-bundles.md#npm-run-build-step-by-step)), so a type error
 fails the run before any test.
 
 ## The three tiers
@@ -19,6 +20,13 @@ the Tempora API reads and prepares everything, so the unit tier holds the comman
 
 **No tier needs a real key.** The Solana fork signs with a key generated for the run and funded only on the local
 fork. It uses its own port, records the PID it started, and kills only that PID.
+
+## TypeScript 6 in two tests
+
+`tests/boundary.unit.test.ts` and `tests/connect-page-source.unit.test.ts` read source files with the TypeScript
+compiler as a library. TypeScript 7 has no JavaScript compiler API yet, so they import `@typescript/typescript6`, a
+dev-dependency that is never shipped and never used to build. Nothing else uses it. When TypeScript 7 gains that API,
+the two tests can move to it and the package can be removed.
 
 ## Shared fixtures
 

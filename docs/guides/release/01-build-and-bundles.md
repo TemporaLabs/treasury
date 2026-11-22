@@ -14,11 +14,16 @@ The `build` script in `package.json` runs, in order:
 
 | step | what it does | output |
 |---|---|---|
-| `tsc -b` | compiles the library and its type declarations | `dist/index.js`, `dist/index.d.ts` and the rest of the library (not committed) |
+| `node node_modules/typescript/bin/tsc -b` | compiles the library and its type declarations, with TypeScript 7 | `dist/index.js`, `dist/index.d.ts` and the rest of the library (not committed) |
 | `tsup` | bundles `src/cli.ts` with every dependency inlined into one ESM file with a `node` shebang (`tsup.config.ts`) | `dist/treasury.mjs` |
 | `scripts/third-party-notices.ts --write` | writes the licence of every package the bundle actually inlines, followed by the package's NOTICE file when it ships one, read from the bundle's own module comments, not from `package.json` | `THIRD_PARTY_NOTICES.md` |
 | `scripts/llms-txt.ts --write` | writes the guide for agents running the CLI without the plugin: the Earn skill's body, then every command and flag exactly as `--help` prints them | `llms.txt` |
 | `scripts/sync-plugin.sh` | copies the plugin's files from the root and writes its version-only `plugin/package.json` | `plugin/` |
+
+Run the compiler through the npm scripts. The dev-only `@typescript/typescript6` package, which two tests use to parse
+source (see [the test tiers](../testing/01-test-tiers.md#typescript-6-in-two-tests)), installs a TypeScript 6 compiler whose `tsc`
+command takes the `node_modules/.bin/tsc` slot, so a bare `tsc` or `npx tsc` is TypeScript 6. The scripts call TypeScript 7's binary by path
+for that reason.
 
 Two details in `tsup.config.ts` matter:
 
@@ -74,7 +79,9 @@ compares the CLI bundle and its plugin copies, the connect page and its notices,
 packs the npm artifact and checks it ships the licence and notice files; runs the bundle and asserts
 its exact command and flag set with no sign or send command; and compares the skill's command table
 with the CLI's. The `cli-exit` job installs the package on several operating systems and Node versions
-and checks the bundle's exit codes. The `attest` job mints and verifies a provenance attestation for
+(22, 24 and 26) and checks the bundle's exit codes. The `types` job packs the package, installs it into an empty
+project and compiles an import of it under TypeScript 6 and TypeScript 7 with `skipLibCheck` off, so the
+published declarations are checked as a user's project checks them. The `attest` job mints and verifies a provenance attestation for
 `dist/treasury.mjs` on the public repository.
 
 `prepack` in `package.json` runs the build and refuses to pack if it changed `dist/treasury.mjs`,
