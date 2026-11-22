@@ -69,7 +69,10 @@ Pre-1.0, minor versions may change tool names, schemas and behaviour.
   signs in, signs the enrolment when the wallet has no account on the portfolio yet, sends the USDT transfer, and
   signs a withdrawal's authorizations (typed data, which the rest of the page may not sign). Every step the API
   prepares is checked first by `@temporalabs/client`'s own checks to what the operator asked for. A portfolio is open
-  only to the wallets the API admits. See the [security model](docs/security-model.md#smart-growth-portfolios-treasury-invest).
+  only to the wallets the API admits. A withdrawal from an account that has been funded but has not yet rebalanced
+  reads that account's exact USDT balance from BNB Chain's public RPC (one read-only call), because the API lists such
+  idle USDT only as a rounded `idleUsd` figure; the balance must agree with `idleUsd` or nothing is signed. See the
+  [security model](docs/security-model.md#smart-growth-portfolios-treasury-invest).
 - **`TREASURY_API_URL`** points `earn`, `connect` and `invest` at another Tempora API deployment (default
   `https://api.temporalabs.com`). The wallet signs the API's sign-in message only when it names this URL's host.
 - **The API sign-in is kept between commands** in `owner-tokens.json` beside the session file (mode 0600;
