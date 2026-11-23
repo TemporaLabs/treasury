@@ -54,18 +54,18 @@ See the [command reference](docs/tools.md) for every command's inputs, outputs, 
 
 ## Quick start
 
-**Requires Node.js 22+ on your `PATH`.** On the EVM chains the commands reach the Tempora API and need no RPC of
+**Requires Node.js 22.12+ on your `PATH`.** On the EVM chains the commands reach the Tempora API and need no RPC of
 your own. For the vault on Solana, use a keyed RPC; the public fallback rate-limits quickly.
 
 ### Claude Code
 
 ```bash
 export TREASURY_RPC_SOLANA=https://...    # only if you will use the vault on Solana
-claude plugin marketplace add TemporaLabs/treasury@v0.1.5
+claude plugin marketplace add TemporaLabs/treasury@v0.2.0
 claude plugin install treasury@treasury
 ```
 
-Start a new Claude Code session after installing so the Earn skill loads. Keep the `TemporaLabs/treasury@v0.1.5` ref
+Start a new Claude Code session after installing so the Earn skill loads. Keep the `TemporaLabs/treasury@v0.2.0` ref
 explicit so the install stays on a release rather than tracking the default branch. Upgrading an
 earlier install? Run `claude plugin marketplace remove treasury` first, then the two `claude plugin` lines above
 ([details](docs/install.md#upgrading-an-earlier-install)).
@@ -77,7 +77,7 @@ command at a time; nothing stays running.
 ### Any agent with a shell
 
 ```bash
-npm install --save-exact @temporalabs/treasury@0.1.5
+npm install --save-exact @temporalabs/treasury@0.2.0
 npx --no-install treasury earn --help     # every command and flag, as JSON
 ```
 
@@ -93,7 +93,7 @@ Ask your agent:
 
 > Show me the available vaults and their risks. Then prepare a 25 USDC deposit into the default vault.
 
-To try the demo vault or another chain, name it: *“…into the demo vault”*, or *“…on Arbitrum”*.
+To try the demo vault or another chain, name it: *“…into the demo vault”*, or *“…on Arbitrum”*. A vault that is paused takes no deposit, so ask which vaults are open first (see [Vaults](#vaults)).
 
 With a browser on the machine, you sign in once with `treasury connect`. For each deposit the agent first
 shows you a fixed confirmation text, and only on your yes opens a page where you confirm each call in your
@@ -105,6 +105,10 @@ Later, ask: **“What is my position worth, and how much can I withdraw now?”*
 A command that names no vault or chain uses **Cash Plus USDC (Test 2B)** on Base; the agent still asks
 which chain first when you have not said. These are Tempora Labs' curated test vaults, on six chains: Base,
 Arbitrum One, Robinhood Chain, Ethereum, Monad and Solana. There are other options, and a demo.
+
+The table lists the vaults this client offers: the ones the Tempora API lists, and the Solana vault it reads from its own chain. A vault takes deposits only while its status is `live`; a
+`paused` vault still takes withdrawals but no new deposits. `treasury earn vaults` shows what is open now: the
+`depositable` list names the vaults that take a deposit, and it can be empty for a chain.
 
 | | vault | chain | choose it by |
 |---|---|---|---|
@@ -179,7 +183,7 @@ See [vault details](docs/vaults.md) for addresses, access rules, fees, and dated
 
 For working on this repository. To use OAT, see [Quick start](#quick-start).
 
-1. **Prerequisites.** Node.js 22 or later, with the npm it ships. On Windows, run the build from Git Bash or WSL (it
+1. **Prerequisites.** Node.js 22.12 or later, with the npm it ships. On Windows, run the build from Git Bash or WSL (it
    uses `bash`). The Solana fork tests also need [Surfpool](https://surfpool.run) on `PATH`.
 2. **Install.**
    ```bash

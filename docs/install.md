@@ -7,14 +7,14 @@ front of an agent.
 ## Claude Code — the plugin
 
 ```bash
-claude plugin marketplace add TemporaLabs/treasury@v0.1.5
+claude plugin marketplace add TemporaLabs/treasury@v0.2.0
 claude plugin install treasury@treasury
 ```
 
 `@<ref>` pins the marketplace to a tag or a branch, and is recorded with the marketplace entry, so
 `claude plugin marketplace update` refreshes *that* ref rather than moving the install onto another
 branch; `#<ref>` is equivalent. Prefer a tag — it is immutable. Before a release is tagged, pin its
-release branch instead (`TemporaLabs/treasury@release/v0.1.5`); dropping the suffix entirely tracks
+release branch instead (`TemporaLabs/treasury@release/v0.2.0`); dropping the suffix entirely tracks
 this repository's default branch.
 
 The plugin is the [`plugin/`](../plugin/) folder of this repository: its manifests, the `earn` skill,
@@ -23,7 +23,7 @@ and a copy of this repository's own `dist/treasury.mjs`, `dist/connect-page.js` 
 `npm run build` in the same commit. The plugin gives Claude Code the `earn` skill, which runs its copy
 of the bundled CLI with a bare `node` — `node "${CLAUDE_PLUGIN_ROOT}/dist/treasury.mjs" earn …` (or `connect …`) — once
 per command. `plugin/` carries a version-only `package.json` and no lockfile, so a marketplace install
-copies files and runs no dependency install. **Node 22 or later is required and must be on `PATH`** —
+copies files and runs no dependency install. **Node 22.12 or later is required and must be on `PATH`** —
 without it every command fails with the shell's own `node: command not found`.
 
 **Windows with Node 24, before v0.1.3:** the health check (`earn status`) prints its answer and then
@@ -46,7 +46,7 @@ marketplace also uninstalls the plugin, so upgrade in three steps:
 
 ```bash
 claude plugin marketplace remove treasury
-claude plugin marketplace add TemporaLabs/treasury@v0.1.5
+claude plugin marketplace add TemporaLabs/treasury@v0.2.0
 claude plugin install treasury@treasury
 ```
 
@@ -85,7 +85,7 @@ version — a published version is immutable, and `--save-exact` keeps a later `
 to another one:
 
 ```bash
-npm install --save-exact @temporalabs/treasury@0.1.5
+npm install --save-exact @temporalabs/treasury@0.2.0
 npx --no-install treasury earn --help     # every command and flag, as JSON
 npx --no-install treasury earn vaults     # or: node <project>/node_modules/@temporalabs/treasury/dist/treasury.mjs earn vaults
 ```
@@ -137,7 +137,7 @@ Privy wallet from an email or social login), for the vault on Solana; the two co
 
 ## As a library
 
-`@temporalabs/treasury` — the same package, `npm install @temporalabs/treasury@0.1.5` — also exports
+`@temporalabs/treasury` — the same package, `npm install @temporalabs/treasury@0.2.0` — also exports
 the vault registry (`loadRegistry`, `listVaults`, `getVault`, `resolveVault`, `defaultVault`,
 `depositableVaults`), the amount helpers (`parseAmount`, `formatAmount`), the disclosures, and a read-only EVM
 client (`makePublicClient`, `rpcUrlFromEnv`). It builds no transaction and runs no pre-flight: on the EVM chains a

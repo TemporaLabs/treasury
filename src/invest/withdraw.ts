@@ -11,7 +11,8 @@
  * request: a request naming another smart account than the positions do is refused before anything is signed.
  */
 import { checkPortfolioWithdrawal, type Position, type Request } from "@temporalabs/client";
-import { formatUnits, getAddress, type Address } from "viem";
+import { createPublicClient, erc20Abi, formatUnits, getAddress, http, type Address } from "viem";
+import { bsc } from "viem/chains";
 import { INVEST } from "../config/invest.js";
 import { BNB_INFO, BNB_USDT, BNB_USDT_ASSET_ID } from "./chain.js";
 import { INVEST_CHAIN_ID } from "./deposit.js";
@@ -59,6 +60,37 @@ export function holdingOf(positions: readonly Position[], product: string): Hold
     decimals[b.assetId.toLowerCase()] = b.decimals;
   }
   return { smartAccount: getAddress(p.smartAccount), holdings, decimals };
+}
+
+/**
+ * The idle USDT in a smart account, read from BNB Chain: the exact raw amount the withdrawal check bounds a transfer by.
+ * `ccipRead` is off, so the only host this ever calls is BNB Chain's public RPC (`BNB_INFO.publicRpc`); it adds no environment variable.
+ */
+export async function readIdleUsdt(account: Address): Promise<bigint> {
+  const client = createPublicClient({ chain: bsc, ccipRead: false, transport: http(BNB_INFO.publicRpc, { retryCount: 1, timeout: 15_000 }) });
+  return client.readContract({ address: BNB_USDT.address, abi: erc20Abi, functionName: "balanceOf", args: [account] });
+}
+
+/** The smallest difference, in USD, between the chain's USDT balance and the API's `idleUsd` (a rounded figure) that counts as a disagreement. */
+const IDLE_TOLERANCE_USD = 0.01;
+/** The same difference as a fraction of `idleUsd`. The larger of the two bounds applies. */
+const IDLE_TOLERANCE_FRACTION = 0.01;
+
+/**
+ * An account that was funded but has not rebalanced holds only idle USDT, and the API lists that in `idleUsd` alone
+ * (`balances` is empty until the first rebalance; the API documents it so). `idleUsd` is a rounded USD figure, not the
+ * exact raw amount the withdrawal check needs, so the amount is read from the chain, and the two must agree: when they do
+ * not, nothing is signed. A holding the API already lists is left as it is.
+ */
+export function withIdleUsdt(h: Holding, idleUsd: number | null | undefined, onChain: bigint): Holding {
+  const key = Object.keys(h.holdings).find((k) => k.toLowerCase() === BNB_USDT_ASSET_ID.toLowerCase());
+  if (key !== undefined) return h;
+  if (typeof idleUsd !== "number" || !(idleUsd > 0) || onChain === 0n) return h;
+  const chainUsd = Number(formatUnits(onChain, BNB_USDT.decimals));
+  if (Math.abs(chainUsd - idleUsd) > Math.max(IDLE_TOLERANCE_USD, idleUsd * IDLE_TOLERANCE_FRACTION)) {
+    throw new Error(`refused: the API shows ${idleUsd} idle USDT in the smart account but the chain holds ${chainUsd}; nothing was signed or sent`);
+  }
+  return { ...h, holdings: { ...h.holdings, [BNB_USDT_ASSET_ID]: onChain.toString() }, decimals: { ...h.decimals, [BNB_USDT_ASSET_ID.toLowerCase()]: BNB_USDT.decimals } };
 }
 
 /**

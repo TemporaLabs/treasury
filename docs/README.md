@@ -32,10 +32,12 @@ subject per file, facts stated with the block or date they were measured at.
 | [`release-process.md`](release-process.md) | how a release ships, why the npm publish happens on every one, and why the plugin needs no registry |
 | [`design-embed-registry-and-version.md`](design-embed-registry-and-version.md) | embed the registry and the version at build time so a re-bundled library does not read the consumer's files (implemented in v0.1.3) |
 
-## Developer guides
+## Architecture and developer guides
 
-[`guides/`](guides/README.md) walks a developer through the code: the architecture and one deposit
-traced end to end, the CLI, the Tempora API path on the EVM chains, the registry, the Solana path, the wallet
+[`architecture/`](architecture/README.md) is the map of the code: the layers, which file owns what, and one deposit
+traced end to end.
+
+[`guides/`](guides/README.md) walks a developer through the code: the CLI, the Tempora API path on the EVM chains, the registry, the Solana path, the wallet
 portfolio checks, the test tiers, and the build. Coding agents start at
 [`guides/AGENTS.md`](guides/AGENTS.md).
 
