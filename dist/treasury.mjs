@@ -67515,12 +67515,13 @@ async function readIdleUsdt(account) {
   return client.readContract({ address: BNB_USDT.address, abi: erc20Abi, functionName: "balanceOf", args: [account] });
 }
 var IDLE_TOLERANCE_USD = 0.01;
+var IDLE_TOLERANCE_FRACTION = 0.01;
 function withIdleUsdt(h, idleUsd, onChain) {
   const key = Object.keys(h.holdings).find((k) => k.toLowerCase() === BNB_USDT_ASSET_ID.toLowerCase());
   if (key !== void 0) return h;
   if (typeof idleUsd !== "number" || !(idleUsd > 0) || onChain === 0n) return h;
   const chainUsd = Number(formatUnits(onChain, BNB_USDT.decimals));
-  if (Math.abs(chainUsd - idleUsd) > Math.max(IDLE_TOLERANCE_USD, idleUsd * 0.01)) {
+  if (Math.abs(chainUsd - idleUsd) > Math.max(IDLE_TOLERANCE_USD, idleUsd * IDLE_TOLERANCE_FRACTION)) {
     throw new Error(`refused: the API shows ${idleUsd} idle USDT in the smart account but the chain holds ${chainUsd}; nothing was signed or sent`);
   }
   return { ...h, holdings: { ...h.holdings, [BNB_USDT_ASSET_ID]: onChain.toString() }, decimals: { ...h.decimals, [BNB_USDT_ASSET_ID.toLowerCase()]: BNB_USDT.decimals } };
