@@ -4,7 +4,7 @@ All notable changes to Agent Treasury are recorded here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versions follow [SemVer](https://semver.org/).
 Pre-1.0, minor versions may change tool names, schemas and behaviour.
 
-## [v0.2.0] - Unreleased
+## [v0.2.0] - 2026-11-23
 
 ### Fixed
 - **`invest withdraw` works for an account that was funded but has not yet rebalanced.** The API lists such an
