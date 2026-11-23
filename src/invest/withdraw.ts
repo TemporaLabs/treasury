@@ -71,6 +71,9 @@ export async function readIdleUsdt(account: Address): Promise<bigint> {
   return client.readContract({ address: BNB_USDT.address, abi: erc20Abi, functionName: "balanceOf", args: [account] });
 }
 
+/** Whether the API already lists a USDT holding for the account. The key's case is the API's, so it is compared without case. */
+export const listsUsdt = (h: Holding): boolean => Object.keys(h.holdings).some((k) => k.toLowerCase() === BNB_USDT_ASSET_ID.toLowerCase());
+
 /** The smallest difference, in USD, between the chain's USDT balance and the API's `idleUsd` (a rounded figure) that counts as a disagreement. */
 const IDLE_TOLERANCE_USD = 0.01;
 /** The same difference as a fraction of `idleUsd`. The larger of the two bounds applies. */
@@ -83,8 +86,7 @@ const IDLE_TOLERANCE_FRACTION = 0.01;
  * not, nothing is signed. A holding the API already lists is left as it is.
  */
 export function withIdleUsdt(h: Holding, idleUsd: number | null | undefined, onChain: bigint): Holding {
-  const key = Object.keys(h.holdings).find((k) => k.toLowerCase() === BNB_USDT_ASSET_ID.toLowerCase());
-  if (key !== undefined) return h;
+  if (listsUsdt(h)) return h;
   if (typeof idleUsd !== "number" || !Number.isFinite(idleUsd) || !(idleUsd > 0) || onChain === 0n) return h;
   const chainUsd = Number(formatUnits(onChain, BNB_USDT.decimals));
   if (Math.abs(chainUsd - idleUsd) > Math.max(IDLE_TOLERANCE_USD, idleUsd * IDLE_TOLERANCE_FRACTION)) {

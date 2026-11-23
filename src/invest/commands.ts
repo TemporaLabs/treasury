@@ -20,10 +20,10 @@ import type { Command } from "../earn/commands.js";
 import { readSession } from "../connect/session.js";
 import { redactEndpoints } from "../redact.js";
 import { apiClient, apiUrl, asOwner, failure, notConnected } from "./api.js";
-import { BNB_USDT, BNB_USDT_ASSET_ID } from "./chain.js";
+import { BNB_USDT } from "./chain.js";
 import { checkDeposit, depositBody, INVEST_CHAIN_ID, parseUsdt, prepareDeposit } from "./deposit.js";
 import { drive, ownerWallet, summary, type DriveDeps, type OwnerWallet, type WalletDeps } from "./flow.js";
-import { checkWithdrawal, holdingOf, prepareWithdrawal, readIdleUsdt, withIdleUsdt } from "./withdraw.js";
+import { checkWithdrawal, holdingOf, listsUsdt, prepareWithdrawal, readIdleUsdt, withIdleUsdt } from "./withdraw.js";
 
 /** One JSON document, the way every treasury command answers. */
 const text = (v: unknown) => JSON.stringify(v, null, 2);
@@ -211,7 +211,7 @@ export function buildInvestCommands(deps: InvestDeps = {}): Record<string, Comma
           if (!pos.ok) throw failure("The positions could not be read", pos);
           let h = holdingOf(pos.body.positions, product);
           // Funded but not yet rebalanced: the API lists the idle USDT in `idleUsd` only, so read the exact amount from the chain.
-          if (!Object.keys(h.holdings).some((k) => k.toLowerCase() === BNB_USDT_ASSET_ID.toLowerCase())) {
+          if (!listsUsdt(h)) {
             const idleUsd = pos.body.positions.find((x) => x.product === product && x.kind === "portfolio")?.idleUsd;
             if (typeof idleUsd === "number" && Number.isFinite(idleUsd) && idleUsd > 0) h = withIdleUsdt(h, idleUsd, await (deps.readUsdt ?? readIdleUsdt)(h.smartAccount));
           }
