@@ -17,8 +17,10 @@ Pre-1.0, minor versions may change tool names, schemas and behaviour.
 - **TypeScript 7.0.2** builds the library, the scripts and the connect page; **viem 2.58.4**. The two source-audit
   tests parse with a TypeScript 6 compiler package (`@typescript/typescript6`), a dev-only dependency that is not
   shipped and not used to build, because TypeScript 7 has no JavaScript compiler API yet.
-- **Supported runtimes are Node 22 through 26** (`engines` is `>=22`). The published type declarations compile under
+- **Supported runtimes are Node 22.12 through 26.** The published type declarations compile under
   TypeScript 6 and 7; CI checks both.
+- **`@temporalabs/client` 0.2.1**, pinned exactly (was 0.1.4). Its calls are unchanged. It needs Node 22.12 or later, so
+  that is now treasury's floor (`engines` is `>=22.12`).
 - The architecture documents moved to `docs/architecture/`, apart from `docs/guides/`.
 
 ## [v0.1.5] - 2026-11-22

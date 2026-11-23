@@ -245,7 +245,9 @@ trusted. What protects this path:
   idle USDT, which the API lists as a rounded `idleUsd` figure with no raw balance. For such an account, and only
   for `invest withdraw`, Treasury reads the account's exact USDT balance from BNB Chain's public RPC (one `balanceOf`
   call, `src/invest/withdraw.ts`) and bounds the withdrawal by it. If the chain's balance differs from `idleUsd` by more
-  than a cent or one percent, nothing is signed. A holding the API already lists is used as it is, with no chain read.
+  than a cent or one percent (whichever is larger), nothing is signed. The RPC is a public one, so its answer is not
+  trusted on its own: the balance has to agree with the API's figure, and a transfer larger than the account really
+  holds fails on chain. A holding the API already lists is used as it is, with no chain read.
 - **A sent transfer is never sent again.** When the page could not record a transfer's hash, the hash still goes to
   the API, which reads the chain itself. When the API does not take it, the command stops with the hash and says not
   to send again. A wallet error after the wallet was asked to send, with no hash, is shown as "not confirmed sent".

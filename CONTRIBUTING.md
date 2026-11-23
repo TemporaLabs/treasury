@@ -109,7 +109,7 @@ A new EVM chain needs:
 
 ## Development
 
-Requires Node.js 22 or later. The Solana fork tests also need [Surfpool](https://surfpool.run) on `PATH`.
+Requires Node.js 22.12 or later. The Solana fork tests also need [Surfpool](https://surfpool.run) on `PATH`.
 
 ```bash
 npm ci

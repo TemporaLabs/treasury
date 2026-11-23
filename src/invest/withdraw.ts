@@ -71,8 +71,10 @@ export async function readIdleUsdt(account: Address): Promise<bigint> {
   return client.readContract({ address: BNB_USDT.address, abi: erc20Abi, functionName: "balanceOf", args: [account] });
 }
 
-/** How far the chain's USDT balance may differ from the API's `idleUsd` (a rounded figure) before the two are said to disagree. */
+/** The smallest difference, in USD, between the chain's USDT balance and the API's `idleUsd` (a rounded figure) that counts as a disagreement. */
 const IDLE_TOLERANCE_USD = 0.01;
+/** The same difference as a fraction of `idleUsd`. The larger of the two bounds applies. */
+const IDLE_TOLERANCE_FRACTION = 0.01;
 
 /**
  * An account that was funded but has not rebalanced holds only idle USDT, and the API lists that in `idleUsd` alone
@@ -85,7 +87,7 @@ export function withIdleUsdt(h: Holding, idleUsd: number | null | undefined, onC
   if (key !== undefined) return h;
   if (typeof idleUsd !== "number" || !(idleUsd > 0) || onChain === 0n) return h;
   const chainUsd = Number(formatUnits(onChain, BNB_USDT.decimals));
-  if (Math.abs(chainUsd - idleUsd) > Math.max(IDLE_TOLERANCE_USD, idleUsd * 0.01)) {
+  if (Math.abs(chainUsd - idleUsd) > Math.max(IDLE_TOLERANCE_USD, idleUsd * IDLE_TOLERANCE_FRACTION)) {
     throw new Error(`refused: the API shows ${idleUsd} idle USDT in the smart account but the chain holds ${chainUsd}; nothing was signed or sent`);
   }
   return { ...h, holdings: { ...h.holdings, [BNB_USDT_ASSET_ID]: onChain.toString() }, decimals: { ...h.decimals, [BNB_USDT_ASSET_ID.toLowerCase()]: BNB_USDT.decimals } };

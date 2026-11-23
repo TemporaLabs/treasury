@@ -381,7 +381,8 @@ jobs:
       - name: compile the packed package under TypeScript ${{ matrix.typescript }}
         run: |
           set -euo pipefail
-          npm pack --ignore-scripts --pack-destination "$RUNNER_TEMP"
+          # No --ignore-scripts: prepack builds dist/, which holds the declarations and is not committed.
+          npm pack --pack-destination "$RUNNER_TEMP"
           mkdir "$RUNNER_TEMP/consumer"
           cd "$RUNNER_TEMP/consumer"
           npm init -y >/dev/null
@@ -395,7 +396,7 @@ jobs:
   # The BUILT CLI, run as a caller runs it, on each OS the CLI ships to: the exit code, the time the
   # call takes, and proof the answer came from the chain (.github/scripts/cli-exit.mjs). Issue #122:
   # on Windows with Node 24 a correct answer came with a non-zero exit. The supported range is Node 22
-  # through 26: 22 is the floor, 24.0.0 the earliest Node 24, and 26 the newest.
+  # through 26: 22.12.0 is the floor, 22 the newest 22.x, 24.0.0 the earliest Node 24, and 26 the newest.
   cli-exit:
     strategy:
       fail-fast: false
@@ -409,6 +410,7 @@ jobs:
           - { os: macos-latest, node: 22 }
           - { os: ubuntu-latest, node: 26 }
           - { os: ubuntu-latest, node: 24 }
+          - { os: ubuntu-latest, node: 22.12.0 }
           - { os: ubuntu-latest, node: 22 }
     runs-on: ${{ matrix.os }}
     timeout-minutes: 10

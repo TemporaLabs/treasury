@@ -64,7 +64,7 @@ post anything, search it for the above. If you are not sure whether something is
 
 ## Commands
 
-Set up as in [`README.md`'s Setup](README.md#setup). Node.js 22 or later. The fork tier (Solana) also needs [Surfpool](https://surfpool.run) on `PATH`.
+Set up as in [`README.md`'s Setup](README.md#setup). Node.js 22.12 or later. The fork tier (Solana) also needs [Surfpool](https://surfpool.run) on `PATH`.
 
 ```bash
 npm ci                     # never `npm install` — CI fails on a stale lockfile
