@@ -106,7 +106,7 @@ A command that names no vault or chain uses **Cash Plus USDC (Test 2B)** on Base
 which chain first when you have not said. These are Tempora Labs' curated test vaults, on six chains: Base,
 Arbitrum One, Robinhood Chain, Ethereum, Monad and Solana. There are other options, and a demo.
 
-The table lists the vaults the Tempora API offers. A vault takes deposits only while its status is `live`; a
+The table lists the vaults this client offers: the ones the Tempora API lists, and the Solana vault it reads from its own chain. A vault takes deposits only while its status is `live`; a
 `paused` vault still takes withdrawals but no new deposits. `treasury earn vaults` shows what is open now: the
 `depositable` list names the vaults that take a deposit, and it can be empty for a chain.
 
