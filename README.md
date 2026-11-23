@@ -93,7 +93,7 @@ Ask your agent:
 
 > Show me the available vaults and their risks. Then prepare a 25 USDC deposit into the default vault.
 
-To try the demo vault or another chain, name it: *“…into the demo vault”*, or *“…on Arbitrum”*.
+To try the demo vault or another chain, name it: *“…into the demo vault”*, or *“…on Arbitrum”*. A vault that is paused takes no deposit, so ask which vaults are open first (see [Vaults](#vaults)).
 
 With a browser on the machine, you sign in once with `treasury connect`. For each deposit the agent first
 shows you a fixed confirmation text, and only on your yes opens a page where you confirm each call in your
@@ -105,6 +105,10 @@ Later, ask: **“What is my position worth, and how much can I withdraw now?”*
 A command that names no vault or chain uses **Cash Plus USDC (Test 2B)** on Base; the agent still asks
 which chain first when you have not said. These are Tempora Labs' curated test vaults, on six chains: Base,
 Arbitrum One, Robinhood Chain, Ethereum, Monad and Solana. There are other options, and a demo.
+
+The table lists the vaults this client offers: the ones the Tempora API lists, and the Solana vault it reads from its own chain. A vault takes deposits only while its status is `live`; a
+`paused` vault still takes withdrawals but no new deposits. `treasury earn vaults` shows what is open now: the
+`depositable` list names the vaults that take a deposit, and it can be empty for a chain.
 
 | | vault | chain | choose it by |
 |---|---|---|---|

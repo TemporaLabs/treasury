@@ -15,6 +15,11 @@ Eight vaults on six chains. **A call that names no vault and no chain uses the d
 Naming `--chain arbitrum` uses Test 2C, `--chain robinhood` Test 2D, `--chain ethereum` Test 2E, `--chain monad` Test 2F and `--chain solana` Test 2G. Test 2 is the demo vault: chosen by naming it. A vault's ticker
 names exactly one vault on exactly one chain.
 
+**Offered is not open.** The API lists every EVM vault below (the Solana vault is read from its own chain), and a vault takes deposits only while its status is `live`.
+A `paused` vault still takes withdrawals but no new deposits. `treasury earn vaults` reports the status of each
+vault and a `depositable` list per chain, which is empty when none on that chain is open. A `live` vault is the precondition;
+the API's per-account gates still apply, and `treasury earn status` shows them.
+
 | vault | ticker | chain | role | how to choose it | where to look |
 |---|---|---|---|---|---|
 | Cash Plus USDC (Test 2B) | `tlCashPlusUSDC2B` | Base | **the default** | name nothing, or `--chain base` | [BaseScan](https://basescan.org/address/0x91BcEbA5feCB9E92d80F1845B55cC56621E9352F). Morpho's app has no page for it |
