@@ -381,7 +381,8 @@ jobs:
       - name: compile the packed package under TypeScript ${{ matrix.typescript }}
         run: |
           set -euo pipefail
-          npm pack --ignore-scripts --pack-destination "$RUNNER_TEMP"
+          # No --ignore-scripts: prepack builds dist/, which holds the declarations and is not committed.
+          npm pack --pack-destination "$RUNNER_TEMP"
           mkdir "$RUNNER_TEMP/consumer"
           cd "$RUNNER_TEMP/consumer"
           npm init -y >/dev/null
