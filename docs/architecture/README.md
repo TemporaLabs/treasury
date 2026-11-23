@@ -11,4 +11,4 @@ or each command's inputs and outputs ([`../tools.md`](../tools.md)).
 | [`01-overview.md`](01-overview.md) | you need the layer map and the module ownership table |
 | [`02-a-deposit-traced.md`](02-a-deposit-traced.md) | you want to see how the layers hand off to each other on one real flow |
 
-New in v0.1.5: this guide set.
+New in v0.1.5: this guide set. It moved from `docs/guides/architecture/` to `docs/architecture/` in v0.2.0.
