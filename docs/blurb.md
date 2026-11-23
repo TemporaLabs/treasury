@@ -47,7 +47,7 @@ page for its current total.
 
 ## Install the skill
 
-**Requires Node.js 22 or later.** The EVM chains need no RPC of your own: the commands reach the Tempora API. For
+**Requires Node.js 22.12 or later.** The EVM chains need no RPC of your own: the commands reach the Tempora API. For
 the vault on Solana, set a keyed `TREASURY_RPC_SOLANA`; the public endpoint rate-limits quickly.
 
 ### Claude Code

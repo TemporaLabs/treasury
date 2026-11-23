@@ -23,7 +23,7 @@ and a copy of this repository's own `dist/treasury.mjs`, `dist/connect-page.js` 
 `npm run build` in the same commit. The plugin gives Claude Code the `earn` skill, which runs its copy
 of the bundled CLI with a bare `node` — `node "${CLAUDE_PLUGIN_ROOT}/dist/treasury.mjs" earn …` (or `connect …`) — once
 per command. `plugin/` carries a version-only `package.json` and no lockfile, so a marketplace install
-copies files and runs no dependency install. **Node 22 or later is required and must be on `PATH`** —
+copies files and runs no dependency install. **Node 22.12 or later is required and must be on `PATH`** —
 without it every command fails with the shell's own `node: command not found`.
 
 **Windows with Node 24, before v0.1.3:** the health check (`earn status`) prints its answer and then

@@ -54,7 +54,7 @@ See the [command reference](docs/tools.md) for every command's inputs, outputs, 
 
 ## Quick start
 
-**Requires Node.js 22+ on your `PATH`.** On the EVM chains the commands reach the Tempora API and need no RPC of
+**Requires Node.js 22.12+ on your `PATH`.** On the EVM chains the commands reach the Tempora API and need no RPC of
 your own. For the vault on Solana, use a keyed RPC; the public fallback rate-limits quickly.
 
 ### Claude Code
@@ -179,7 +179,7 @@ See [vault details](docs/vaults.md) for addresses, access rules, fees, and dated
 
 For working on this repository. To use OAT, see [Quick start](#quick-start).
 
-1. **Prerequisites.** Node.js 22 or later, with the npm it ships. On Windows, run the build from Git Bash or WSL (it
+1. **Prerequisites.** Node.js 22.12 or later, with the npm it ships. On Windows, run the build from Git Bash or WSL (it
    uses `bash`). The Solana fork tests also need [Surfpool](https://surfpool.run) on `PATH`.
 2. **Install.**
    ```bash
