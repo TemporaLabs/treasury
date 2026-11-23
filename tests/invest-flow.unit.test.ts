@@ -100,11 +100,12 @@ afterEach(() => {
 });
 
 /** A clock that moves only when the command waits, so a watch that runs out does so after one read. */
-const commands = (client: Client, w: OwnerWallet) => {
+const commands = (client: Client, w: OwnerWallet, readUsdt?: (a: Address) => Promise<bigint>) => {
   let t = NOW;
-  return buildInvestCommands({ client, wallet: () => w, now: () => t, sleep: async (ms) => void (t += ms + 1), watchMs: 1, pollMs: 0 });
+  return buildInvestCommands({ client, wallet: () => w, readUsdt: readUsdt ?? (async () => { throw new Error("unexpected chain read in a unit test"); }), now: () => t, sleep: async (ms) => void (t += ms + 1), watchMs: 1, pollMs: 0 });
 };
-const run = async (client: Client, w: OwnerWallet, name: string, args: Record<string, unknown>) => JSON.parse(await commands(client, w)[name]!.handler(args as never));
+const run = async (client: Client, w: OwnerWallet, name: string, args: Record<string, unknown>, readUsdt?: (a: Address) => Promise<bigint>) =>
+  JSON.parse(await commands(client, w, readUsdt)[name]!.handler(args as never));
 
 describe("invest deposit", () => {
   it("enrols, then sends exactly the asked transfer to the smart account, and hands each result to the API", async () => {
@@ -397,7 +398,7 @@ describe("invest withdraw", () => {
     const log: Log = [];
     // One more authorization than the limit allows, each a valid one for one unit of a holding the account has plenty of.
     const many = Array.from({ length: INVEST.maxSteps + 1 }, (_, i) => batch(i, typed({ sale: true, assets: [{ assetId: STOCK, amountRaw: "1" }] })));
-    const rich = { positions: [{ ...positions().positions[0]!, balances: [{ assetId: STOCK, raw: "100", decimals: 0 }] }] };
+    const rich = { positions: [{ ...positions().positions[0]!, balances: [{ assetId: STOCK, raw: "100", decimals: 0 }], idleUsd: null }] };
     const client = api(log, { positions: () => rich, withdraw: () => withdrawal(many) });
     await expect(run(client, wallet(log, signs), "invest_withdraw", { product: PRODUCT, all: true })).rejects.toThrow(new RegExp(`more than ${INVEST.maxSteps} steps`));
     expect(log.filter((l) => l.startsWith("wallet:"))).toEqual([]);
@@ -448,6 +449,44 @@ describe("invest withdraw", () => {
     const client = api(log, { positions: () => positions(), withdraw: () => withdrawal(batches) });
     await expect(run(client, wallet(log, signs), "invest_withdraw", { product: PRODUCT, all: true })).rejects.toThrow(why);
     expect(log.filter((l) => l.startsWith("wallet:"))).toEqual([]);
+  });
+
+  // Funded, not yet rebalanced: the API lists the idle USDT in `idleUsd` only, and `balances` is empty (treasury #275).
+  const unrebalanced = () => ({ positions: [{ ...positions().positions[0]!, stage: "awaiting_first_rebalance", balances: [], idleUsd: 5 }] });
+
+  it("withdraws from an account that has not rebalanced, bounding the transfer by the USDT the chain holds", async () => {
+    const log: Log = [];
+    const t1 = typed({ sale: false, assets: idle });
+    const client = api(log, {
+      positions: () => unrebalanced(),
+      withdraw: () => withdrawal([batch(0, t1)]),
+      submit: () => ({ ...withdrawal([{ ...batch(0, t1), state: "completed" }]), state: "completed" }),
+    });
+    const asked: string[] = [];
+    const out = await run(client, wallet(log, signs), "invest_withdraw", { product: PRODUCT, all: true }, async (a) => (asked.push(a), 5_000_000_000_000_000_000n));
+    expect(asked).toEqual([ACCOUNT]);
+    expect(out).toMatchObject({ settled: true, request: { state: "completed" } });
+  });
+
+  it("still refuses an account that has not rebalanced when the transfer asks for more than the chain holds", async () => {
+    const log: Log = [];
+    const client = api(log, { positions: () => unrebalanced(), withdraw: () => withdrawal([batch(0, typed({ sale: false, assets: [{ assetId: BNB_USDT_ASSET_ID, amountRaw: "5100000000000000000" }] }))]) });
+    await expect(run(client, wallet(log, signs), "invest_withdraw", { product: PRODUCT, all: true }, async () => 5_000_000_000_000_000_000n)).rejects.toThrow(/more than the account holds/);
+    expect(log.filter((l) => l.startsWith("wallet:"))).toEqual([]);
+  });
+
+  it("refuses, before asking the API for a withdrawal, when the chain and the API disagree about the idle USDT", async () => {
+    const log: Log = [];
+    const client = api(log, { positions: () => unrebalanced(), withdraw: () => withdrawal([batch(0, typed({ sale: false, assets: idle }))]) });
+    await expect(run(client, wallet(log, signs), "invest_withdraw", { product: PRODUCT, all: true }, async () => 9_000_000_000_000_000_000n)).rejects.toThrow(/the chain holds 9/);
+    expect(log).not.toContain("api:withdraw");
+  });
+
+  it("does not read the chain when the API already lists the idle USDT", async () => {
+    const log: Log = [];
+    const t1 = typed({ sale: false, assets: idle });
+    const client = api(log, { positions: () => positions(), withdraw: () => withdrawal([batch(0, t1)]), submit: () => ({ ...withdrawal([{ ...batch(0, t1), state: "completed" }]), state: "completed" }) });
+    await run(client, wallet(log, signs), "invest_withdraw", { product: PRODUCT, all: true }, async () => { throw new Error("must not read"); });
   });
 
   it("refuses a withdrawal whose second authorization names another portfolio, before anything is signed", async () => {

@@ -19,8 +19,8 @@
     "esbuild": "^0.28.2",
     "react": "^19.3.1",
     "react-dom": "^19.3.1",
-    "typescript": "6.0.3",
-    "viem": "2.57.17"
+    "typescript": "7.0.2",
+    "viem": "2.58.4"
   },
   "overrides": {
     "ws@^8.0.0": "8.22.0",

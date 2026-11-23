@@ -15,7 +15,7 @@ its own documentation-only pull request.
 
 ## Reading order
 
-1. [`architecture/`](architecture/README.md): the whole picture, then one deposit traced end to end.
+1. [`architecture/`](../architecture/README.md): the whole picture, then one deposit traced end to end.
 2. The topic your change touches, from the table below.
 3. [`testing/`](testing/README.md) before you open a pull request.
 
@@ -23,7 +23,7 @@ its own documentation-only pull request.
 
 | directory | covers | read it when |
 |---|---|---|
-| [`architecture/`](architecture/README.md) | the layers, which file owns what, one deposit traced from `earn quote` to the landed steps | you are new here, or a change crosses two layers |
+| [`architecture/`](../architecture/README.md) | the layers, which file owns what, one deposit traced from `earn quote` to the landed steps | you are new here, or a change crosses two layers |
 | [`cli/`](cli/README.md) | `src/cli.ts`, how a command is declared, the response envelope, errors, `--help` and `llms.txt` | you add, rename or change a command or a flag |
 | [`earn-api/`](earn-api/README.md) | the vaults on the EVM chains through the Tempora API: products, terms, requests, `checkSteps`, submit and read again, the connect leg | you change an EVM earn or connect command, or what is checked before a wallet sees a step |
 | [`registry/`](registry/README.md) | `registry/vaults.json`, its schema, how a vault and a chain are resolved, defaults, reconciliation | you change the Solana row, a chain, a default vault, or how a response names a vault's ticker |

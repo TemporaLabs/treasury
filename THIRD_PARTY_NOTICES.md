@@ -35,10 +35,10 @@ by hand.
 | `@solana/subscribable` | 8.6.0 | MIT |
 | `@solana/transaction-messages` | 8.6.0 | MIT |
 | `@solana/transactions` | 8.6.0 | MIT |
-| `@temporalabs/client` | 0.1.4 | Apache-2.0 |
+| `@temporalabs/client` | 0.2.1 | Apache-2.0 |
 | `abitype` | 1.2.3 | MIT |
-| `ox` | 0.14.63 | MIT |
-| `viem` | 2.57.17 | MIT |
+| `ox` | 0.14.67 | MIT |
+| `viem` | 2.58.4 | MIT |
 | `zod` | 4.6.7 | MIT |
 
 ## @noble/curves 1.9.1 (MIT)
@@ -644,7 +644,7 @@ OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION
 WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 ```
 
-## @temporalabs/client 0.1.4 (Apache-2.0)
+## @temporalabs/client 0.2.1 (Apache-2.0)
 
 ```text
 Apache License
@@ -888,7 +888,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 ```
 
-## ox 0.14.63 (MIT)
+## ox 0.14.67 (MIT)
 
 ```text
 MIT License
@@ -914,7 +914,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 ```
 
-## viem 2.57.17 (MIT)
+## viem 2.58.4 (MIT)
 
 ```text
 MIT License

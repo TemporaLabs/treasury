@@ -66,7 +66,8 @@ No telemetry or analytics from Treasury itself. On the EVM chains, the `earn`, `
 the Tempora API (`TREASURY_API_URL`, above) and no other host, only through `@temporalabs/client`: its MCP endpoint
 for earn's reads and requests, its HTTP routes for the owner's sign-in and for invest; see
 [security-model.md](security-model.md#the-vaults-on-the-evm-chains-treasury-earn-and-treasury-connect). The one RPC
-read left there is `connect wallet`'s check of a smart-contract wallet's sign-in, through `TREASURY_RPC_BASE`. On
+read left there is `connect wallet`'s check of a smart-contract wallet's sign-in, through `TREASURY_RPC_BASE`, and
+`invest withdraw`'s one balance read from BNB Chain's public RPC for an account that has not yet rebalanced. On
 Solana the commands call no host but Solana's RPC endpoints above. There is no yield API, no vendor endpoint, and no
 code path that could add one without a code change. The other exception is the
 `treasury connect` page in your browser, which loads Privy's sign-in

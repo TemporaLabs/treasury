@@ -361,20 +361,56 @@ jobs:
           console.log("LICENSE is the canonical Apache-2.0 text; NOTICE and the third-party notices say what they must");
           JS
 
+  # The published TYPE DECLARATIONS, compiled the way a user's project compiles them: this tree's
+  # package is packed, installed into an empty project, and imported under each TypeScript line the
+  # package supports (6 and 7), with skipLibCheck off so the declarations themselves are checked.
+  types:
+    strategy:
+      fail-fast: false
+      matrix:
+        typescript: [6.0.3, 7.0.2]
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - name: compile the packed package under TypeScript ${{ matrix.typescript }}
+        run: |
+          set -euo pipefail
+          # No --ignore-scripts: prepack builds dist/, which holds the declarations and is not committed.
+          npm pack --pack-destination "$RUNNER_TEMP"
+          mkdir "$RUNNER_TEMP/consumer"
+          cd "$RUNNER_TEMP/consumer"
+          npm init -y >/dev/null
+          npm install --no-audit --no-fund --ignore-scripts "$RUNNER_TEMP"/temporalabs-treasury-*.tgz
+          npm install --no-audit --no-fund --ignore-scripts -D typescript@${{ matrix.typescript }} @types/node@22.20.5
+          printf 'import * as t from "@temporalabs/treasury";\nexport const names = Object.keys(t);\n' > consumer.ts
+          printf '{"compilerOptions":{"strict":true,"module":"nodenext","moduleResolution":"nodenext","target":"es2022","noEmit":true,"skipLibCheck":false,"types":["node"]},"files":["consumer.ts"]}\n' > tsconfig.json
+          npx tsc -v
+          npx tsc -p .
+
   # The BUILT CLI, run as a caller runs it, on each OS the CLI ships to: the exit code, the time the
   # call takes, and proof the answer came from the chain (.github/scripts/cli-exit.mjs). Issue #122:
-  # on Windows with Node 24 a correct answer came with a non-zero exit. Node 22 is the control, and
-  # 24.0.0 the earliest Node 24.
+  # on Windows with Node 24 a correct answer came with a non-zero exit. The supported range is Node 22
+  # through 26: 22.12.0 is the floor, 22 the newest 22.x, 24.0.0 the earliest Node 24, and 26 the newest.
   cli-exit:
     strategy:
       fail-fast: false
       matrix:
         include:
+          - { os: windows-latest, node: 26 }
           - { os: windows-latest, node: 24 }
           - { os: windows-latest, node: 24.0.0 }
           - { os: windows-latest, node: 22 }
-          - { os: macos-latest, node: 24 }
+          - { os: macos-latest, node: 26 }
+          - { os: macos-latest, node: 22 }
+          - { os: ubuntu-latest, node: 26 }
           - { os: ubuntu-latest, node: 24 }
+          - { os: ubuntu-latest, node: 22.12.0 }
           - { os: ubuntu-latest, node: 22 }
     runs-on: ${{ matrix.os }}
     timeout-minutes: 10
