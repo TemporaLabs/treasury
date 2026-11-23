@@ -213,7 +213,7 @@ export function buildInvestCommands(deps: InvestDeps = {}): Record<string, Comma
           // Funded but not yet rebalanced: the API lists the idle USDT in `idleUsd` only, so read the exact amount from the chain.
           if (!Object.keys(h.holdings).some((k) => k.toLowerCase() === BNB_USDT_ASSET_ID.toLowerCase())) {
             const idleUsd = pos.body.positions.find((x) => x.product === product && x.kind === "portfolio")?.idleUsd;
-            if (typeof idleUsd === "number" && idleUsd > 0) h = withIdleUsdt(h, idleUsd, await (deps.readUsdt ?? readIdleUsdt)(h.smartAccount));
+            if (typeof idleUsd === "number" && Number.isFinite(idleUsd) && idleUsd > 0) h = withIdleUsdt(h, idleUsd, await (deps.readUsdt ?? readIdleUsdt)(h.smartAccount));
           }
           const r = await call(o, w, c, (cl, token) => cl.withdraw({ body: { product, amount: { kind: "all" } } }, { ownerToken: token }));
           if (!r.ok) throw failure("The API did not start the withdrawal", r);

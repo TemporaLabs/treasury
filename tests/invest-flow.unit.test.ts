@@ -482,6 +482,18 @@ describe("invest withdraw", () => {
     expect(log).not.toContain("api:withdraw");
   });
 
+  it("does not trust an idle figure that is not a finite number, so the chain is not read and the transfer is refused", async () => {
+    const log: Log = [];
+    const client = api(log, {
+      positions: () => ({ positions: [{ ...unrebalanced().positions[0]!, idleUsd: Number.POSITIVE_INFINITY }] }),
+      withdraw: () => withdrawal([batch(0, typed({ sale: false, assets: idle }))]),
+    });
+    const asked: string[] = [];
+    await expect(run(client, wallet(log, signs), "invest_withdraw", { product: PRODUCT, all: true }, async (a) => (asked.push(a), 5_000_000_000_000_000_000n))).rejects.toThrow(/the smart account does not hold/);
+    expect(asked).toEqual([]);
+    expect(log.filter((l) => l.startsWith("wallet:"))).toEqual([]);
+  });
+
   it("does not read the chain when the API already lists the idle USDT", async () => {
     const log: Log = [];
     const t1 = typed({ sale: false, assets: idle });

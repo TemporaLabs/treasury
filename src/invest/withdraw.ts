@@ -85,7 +85,7 @@ const IDLE_TOLERANCE_FRACTION = 0.01;
 export function withIdleUsdt(h: Holding, idleUsd: number | null | undefined, onChain: bigint): Holding {
   const key = Object.keys(h.holdings).find((k) => k.toLowerCase() === BNB_USDT_ASSET_ID.toLowerCase());
   if (key !== undefined) return h;
-  if (typeof idleUsd !== "number" || !(idleUsd > 0) || onChain === 0n) return h;
+  if (typeof idleUsd !== "number" || !Number.isFinite(idleUsd) || !(idleUsd > 0) || onChain === 0n) return h;
   const chainUsd = Number(formatUnits(onChain, BNB_USDT.decimals));
   if (Math.abs(chainUsd - idleUsd) > Math.max(IDLE_TOLERANCE_USD, idleUsd * IDLE_TOLERANCE_FRACTION)) {
     throw new Error(`refused: the API shows ${idleUsd} idle USDT in the smart account but the chain holds ${chainUsd}; nothing was signed or sent`);
