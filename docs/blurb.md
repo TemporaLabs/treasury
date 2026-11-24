@@ -1,7 +1,7 @@
 # Open Agent Treasury (OAT)
 
 **The open-source treasury management system for AI agents.** Built by Tempora Labs. Apache-2.0.
-Current release: **v0.2.0** (November 2026).
+Current release: **v0.2.1** (November 2026).
 
 Open Agent Treasury gives an AI agent a safe way to manage on-chain capital. The agent reads the
 vaults through the Tempora API (on Solana, from the chain itself), works out what it wants to do, and hands back
@@ -53,7 +53,7 @@ the vault on Solana, set a keyed `TREASURY_RPC_SOLANA`; the public endpoint rate
 ### Claude Code
 
 ```bash
-claude plugin marketplace add TemporaLabs/treasury@v0.2.0
+claude plugin marketplace add TemporaLabs/treasury@v0.2.1
 claude plugin install treasury@treasury
 ```
 
@@ -64,7 +64,7 @@ repository as of v0.1.1. If you installed from the earlier `treasury-plugin` rep
 ### Any agent with a shell
 
 ```bash
-npm install --save-exact @temporalabs/treasury@0.2.0
+npm install --save-exact @temporalabs/treasury@0.2.1
 npx --no-install treasury earn --help
 ```
 
@@ -143,6 +143,6 @@ More yield configurations across the risk/return spectrum.
 - Source: https://github.com/TemporaLabs/treasury
 - Plugin and the Earn skill: https://github.com/TemporaLabs/treasury/tree/main/plugin
 - npm: https://www.npmjs.com/package/@temporalabs/treasury
-- Release notes: https://github.com/TemporaLabs/treasury/releases/tag/v0.2.0
+- Release notes: https://github.com/TemporaLabs/treasury/releases/tag/v0.2.1
 - Docs: tools, configuration, risks, security model: https://github.com/TemporaLabs/treasury/tree/main/docs
 - Licence: Apache-2.0. Forks must not claim to be the official distribution.
