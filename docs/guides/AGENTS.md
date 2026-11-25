@@ -22,7 +22,9 @@ Copy no number or list out of prose. Read it from the file that owns it.
 | vaults on the EVM chains: contract, asset, decimals, status, terms, warnings | the Tempora API's products, read by `src/earn/api.ts`; nothing about them is stored here |
 | the Solana vault (and the EVM rows, which give a response its `ticker` and back each chain's default address): addresses, assets, decimals, chassis, measured access, deployment block | `registry/vaults.json`, validated by `src/registry-schema.ts` |
 | default chain, default vault address per EVM chain, the registry's default ticker per chain, test fixtures | `src/config/earn.ts` (`EARN`) |
-| supported EVM chains, their RPC variables and public endpoints | `chains` and `CHAIN_INFO` in `src/client.ts` |
+| the EVM chains `earn` has vaults on, their RPC variables and public endpoints | `chains` and `CHAIN_INFO` in `src/client.ts` |
+| BNB Chain's USDT contract and public RPC, for `invest` only | `BNB_INFO` and `BNB_USDT` in `src/invest/chain.ts` |
+| how far the chain's idle USDT may differ from the API's figure | `IDLE_TOLERANCE_USD` and `IDLE_TOLERANCE_FRACTION` in `src/invest/withdraw.ts` |
 | Solana's RPC variables and public endpoint | `SOLANA_INFO` in `src/client.ts` |
 | block explorers | `EXPLORER` in `src/links.ts` |
 | Solana program ids, PDA seeds, account sizes, transaction limits | `src/solana/constants.ts` |
@@ -45,7 +47,7 @@ Copy no number or list out of prose. Read it from the file that owns it.
 | rule | enforced by |
 |---|---|
 | Nothing signs, holds or derives a key; the earn commands only return unsigned calls | no signer code exists; the CI step that runs the bundle and asserts the exact command and flag set (`.github/workflows/ci.yml`) |
-| The client reaches only the chain: no import, process or environment variable outside the allowlist | `tests/boundary.unit.test.ts` (an AST analysis, with fixtures that must fail it). Never loosen it to make a change pass |
+| No import, process or environment variable outside the allowlist | `tests/boundary.unit.test.ts` (an AST analysis, with fixtures that must fail it). Never loosen it to make a change pass |
 | `treasury connect` and `earn prepare_*` put in front of a wallet only checked steps, for the connected account | on the EVM chains `checkSteps` in `src/earn/request.ts` and `src/connect/vault-request.ts`, see [`earn-api/01-the-api-path.md`](earn-api/01-the-api-path.md); on Solana `src/connect/gate-solana.ts`, see [`connect/02-gates.md`](connect/02-gates.md) |
 | A page opens only for what the operator was shown in the acknowledgement text | `checkAckDigest` and `checkPlanLeg` in `src/connect/ack.ts` |
 | A deposit response carries the vault's warning, from one place only | `commitsMoney` in `src/earn/commands.ts`, asserted by `tests/commands.unit.test.ts` |

@@ -27,7 +27,7 @@ its own documentation-only pull request.
 | [`cli/`](cli/README.md) | `src/cli.ts`, how a command is declared, the response envelope, errors, `--help` and `llms.txt` | you add, rename or change a command or a flag |
 | [`earn-api/`](earn-api/README.md) | the vaults on the EVM chains through the Tempora API: products, terms, requests, `checkSteps`, submit and read again, the connect leg | you change an EVM earn or connect command, or what is checked before a wallet sees a step |
 | [`registry/`](registry/README.md) | `registry/vaults.json`, its schema, how a vault and a chain are resolved, defaults, reconciliation | you change the Solana row, a chain, a default vault, or how a response names a vault's ticker |
-| [`evm/`](evm/README.md) | the one read-only EVM client left (`connect wallet`'s sign-in check on Base, `registry:check`): RPC variables, retries, redaction, amounts | you change `src/client.ts` |
+| [`evm/`](evm/README.md) | the read-only EVM client in `src/client.ts` (`connect wallet`'s sign-in check on Base, `registry:check`): RPC variables, retries, redaction, amounts | you change `src/client.ts` |
 | [`solana/`](solana/README.md) | the Kamino vault path: decoders, instruction builders, simulation, the Solana earn commands | you change anything on Solana |
 | [`connect/`](connect/README.md) | `treasury connect`: the local page, sign-in, the Solana gate, the acknowledgement and plans, Solana's landing checks | you change the wallet connection or its page |
 | [`invest/`](invest/README.md) | `src/invest/`: Smart Growth portfolios through the Tempora API, how a request is carried step by step, the deposit and withdrawal checks, the signing page, and the sign-in earn and connect share | you change `src/invest/` or the Tempora API sign-in |

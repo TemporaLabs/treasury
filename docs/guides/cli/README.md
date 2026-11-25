@@ -8,4 +8,4 @@ are in [`../../tools.md`](../../tools.md); this topic is how they are built.
 |---|---|
 | [`01-cli-and-commands.md`](01-cli-and-commands.md) | you add or change a command, a flag, a response field or an error message |
 
-Start with [`../architecture/01-overview.md`](../../architecture/01-overview.md) if you have not.
+Start with [`architecture/01-overview.md`](../../architecture/01-overview.md) if you have not.
