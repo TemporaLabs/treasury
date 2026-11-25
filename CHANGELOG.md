@@ -4,6 +4,19 @@ All notable changes to Agent Treasury are recorded here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versions follow [SemVer](https://semver.org/).
 Pre-1.0, minor versions may change tool names, schemas and behaviour.
 
+## [v0.2.1] - Unreleased
+
+### Fixed
+- **`invest withdraw` ignores an idle figure that is not a finite number.** An `idleUsd` of `Infinity` or `NaN` from the
+  API is no longer used to read the chain balance or to add a USDT holding, so the withdrawal is refused as if the
+  account held nothing, and nothing is signed or sent.
+
+### Changed
+- The holdings lookup that `invest withdraw` uses is shared between the command and the balance check; behaviour is
+  unchanged.
+- CI: the types job no longer persists checkout credentials.
+- Documentation: the architecture guides' history line notes the move to `docs/architecture/` in v0.2.0.
+
 ## [v0.2.0] - 2026-11-23
 
 ### Fixed

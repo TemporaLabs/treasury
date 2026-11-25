@@ -1,9 +1,14 @@
 # 01: RPC endpoints and read clients
 
-`src/client.ts` is the only place a chain is described, and it constructs exactly one kind of thing:
-a read-only (public) viem client. There is no wallet client anywhere in the package. On the EVM chains it is used
+`src/client.ts` describes the chains `earn` has vaults on, and the only kind of viem client it constructs is
+a read-only (public) one. There is no wallet client anywhere in the package. On those chains it is used
 for `connect wallet`'s check of a smart-contract wallet's sign-in (ERC-1271 / ERC-6492, on Base) and by
 `scripts/registry-check.ts`; the earn and connect commands read those chains through the Tempora API instead.
+
+BNB Chain is not one of them. Its facts are in `src/invest/chain.ts`, and `readIdleUsdt` (`src/invest/withdraw.ts`)
+builds its own read-only client for the one balance `invest withdraw` reads, on the public endpoint in `BNB_INFO`
+only: it reads no RPC variable. See
+[the invest guide](../invest/01-steps-and-checks.md#idle-usdt-before-the-first-rebalance).
 
 ## One table per chain
 
@@ -46,8 +51,9 @@ report quickly, not a limit to wait for. The Solana client (`src/solana/rpc.ts`)
 A keyed RPC URL is a secret. `resolvedRpcSecrets` lists every value this process could be holding
 (each URL and its credential-bearing parts), and `registerSecretSource` hands that list to
 `src/redact.ts`. `describeError` then builds a one-line message from viem's `shortMessage` and
-`details`, and `redactEndpoints` masks those literal values and any URL shape. Every read failure in
-this package goes through `describeError`; a new one must too. Every chain's variables are registered, whether
+`details`, and `redactEndpoints` masks those literal values and any URL shape. A new read failure must go through
+one of the two before it reaches output; a failure of `invest`'s balance read passes through `redactEndpoints`
+(`guarded` in `src/invest/commands.ts`). Every `CHAIN_INFO` chain's variables are registered, whether
 or not a command reads that chain. The guarantee itself is stated in
 [`../../security-model.md`](../../security-model.md#secrets-in-output).
 

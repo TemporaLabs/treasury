@@ -46127,7 +46127,7 @@ function formatAmount(raw, decimals) {
 }
 
 // package.json
-var package_default = { version: "0.2.0" };
+var package_default = { version: "0.2.1" };
 
 // src/version.ts
 var PACKAGE_VERSION = package_default.version;
@@ -67514,12 +67514,12 @@ async function readIdleUsdt(account) {
   const client = createPublicClient({ chain: bsc, ccipRead: false, transport: http(BNB_INFO.publicRpc, { retryCount: 1, timeout: 15e3 }) });
   return client.readContract({ address: BNB_USDT.address, abi: erc20Abi, functionName: "balanceOf", args: [account] });
 }
+var listsUsdt = (h) => Object.keys(h.holdings).some((k) => k.toLowerCase() === BNB_USDT_ASSET_ID.toLowerCase());
 var IDLE_TOLERANCE_USD = 0.01;
 var IDLE_TOLERANCE_FRACTION = 0.01;
 function withIdleUsdt(h, idleUsd, onChain) {
-  const key = Object.keys(h.holdings).find((k) => k.toLowerCase() === BNB_USDT_ASSET_ID.toLowerCase());
-  if (key !== void 0) return h;
-  if (typeof idleUsd !== "number" || !(idleUsd > 0) || onChain === 0n) return h;
+  if (listsUsdt(h)) return h;
+  if (typeof idleUsd !== "number" || !Number.isFinite(idleUsd) || !(idleUsd > 0) || onChain === 0n) return h;
   const chainUsd = Number(formatUnits(onChain, BNB_USDT.decimals));
   if (Math.abs(chainUsd - idleUsd) > Math.max(IDLE_TOLERANCE_USD, idleUsd * IDLE_TOLERANCE_FRACTION)) {
     throw new Error(`refused: the API shows ${idleUsd} idle USDT in the smart account but the chain holds ${chainUsd}; nothing was signed or sent`);
@@ -67723,9 +67723,9 @@ function buildInvestCommands(deps = {}) {
           const pos = await call3(o2, w, c, (cl, token) => cl.positions({}, { ownerToken: token }));
           if (!pos.ok) throw failure2("The positions could not be read", pos);
           let h = holdingOf(pos.body.positions, product);
-          if (!Object.keys(h.holdings).some((k) => k.toLowerCase() === BNB_USDT_ASSET_ID.toLowerCase())) {
+          if (!listsUsdt(h)) {
             const idleUsd = pos.body.positions.find((x) => x.product === product && x.kind === "portfolio")?.idleUsd;
-            if (typeof idleUsd === "number" && idleUsd > 0) h = withIdleUsdt(h, idleUsd, await (deps.readUsdt ?? readIdleUsdt)(h.smartAccount));
+            if (typeof idleUsd === "number" && Number.isFinite(idleUsd) && idleUsd > 0) h = withIdleUsdt(h, idleUsd, await (deps.readUsdt ?? readIdleUsdt)(h.smartAccount));
           }
           const r = await call3(o2, w, c, (cl, token) => cl.withdraw({ body: { product, amount: { kind: "all" } } }, { ownerToken: token }));
           if (!r.ok) throw failure2("The API did not start the withdrawal", r);
