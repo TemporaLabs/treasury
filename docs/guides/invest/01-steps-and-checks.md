@@ -14,8 +14,8 @@ the wallet is the owner's own.
 | `connect-page/src/invest.tsx` | the page's browser side: asks the wallet, and reads the page's time left before and after the gas estimate, refusing a step with under a minute left (`MIN_MS_LEFT`) |
 | `src/invest/flow.ts` | `ownerWallet` (the page, opened on first use) and `drive`, which carries a request through its steps |
 | `src/invest/deposit.ts` | the deposit's amount, its body, its check (`checkPortfolioDeposit`) and what the page shows for each step |
-| `src/invest/withdraw.ts` | the withdrawal's check (`checkPortfolioWithdrawal`), the smart account and holdings from the API's positions, and the EIP-712 domain type |
-| `src/invest/chain.ts` | BNB Chain's fixed facts: the USDT contract and its CAIP-19 id |
+| `src/invest/withdraw.ts` | the withdrawal's check (`checkPortfolioWithdrawal`), the smart account and holdings from the API's positions, the one chain read for idle USDT (`readIdleUsdt`, `withIdleUsdt`), and the EIP-712 domain type |
+| `src/invest/chain.ts` | BNB Chain's fixed facts: the USDT contract, its CAIP-19 id and the public RPC |
 | `src/invest/commands.ts` | the `invest` commands (`buildInvestCommands`; `treasury invest --help` lists them) |
 
 ## How a request is carried through (`drive`)
@@ -53,10 +53,24 @@ it, and the API verifies on chain that the transfer left the owner's wallet for 
 ## The withdrawal
 
 Everything in the smart account, paid to the owner in USDT. The smart account and its holdings come from the API's
-positions; a request naming another smart account is refused. `checkPortfolioWithdrawal` holds every authorization
+positions (with one exception, [idle USDT](#idle-usdt-before-the-first-rebalance)); a request naming another smart
+account is refused. `checkPortfolioWithdrawal` holds every authorization
 to the provider's form, on BNB Chain, debiting that account, paying the owner, settling in USDT, expiring within
 `INVEST.maxAuthorizationLifetimeSeconds`, matching its attached plan, and asking in total for no more of any asset
 than the account holds.
+
+### Idle USDT before the first rebalance
+
+An account that is funded but has not rebalanced holds only USDT, which the API lists as a rounded `idleUsd` figure
+with no raw balance. When the positions list no USDT holding and `idleUsd` is a finite number above zero, the
+command reads the account's USDT balance from BNB Chain's public RPC (`readIdleUsdt`), and `withIdleUsdt` adds it to
+the holdings the check bounds the withdrawal by.
+
+- The two figures must agree within `IDLE_TOLERANCE_USD` or `IDLE_TOLERANCE_FRACTION` of `idleUsd`, whichever is
+  larger. Otherwise the command stops and nothing is signed.
+- A missing, zero or non-finite `idleUsd`, or an empty balance on chain, adds no holding. A step that moves an
+  asset the account is not shown to hold is then refused by the check.
+- A USDT holding the API already lists is used as it is, with no chain read.
 
 **The domain type is added before signing** (`withDomainType`). The API's authorizations carry no
 `EIP712Domain` type, and a wallet signing through `eth_signTypedData_v4` signs a missing domain type as an empty one,
