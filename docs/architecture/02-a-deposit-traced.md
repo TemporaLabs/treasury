@@ -63,20 +63,23 @@ described again from the API's listing now; `checkAckDigest` refuses a missing, 
 an amount or terms that changed since), and the pending acknowledgement is deleted, so it opens one page only.
 
 `runVault` starts the request: `startVaultCore` calls the API's `deposit` with the amount and the terms version and
-sha256, then holds the whole request to the intent with `checkSteps` from `@temporalabs/client`. A request that fails
-the check is cancelled and nothing opens. Otherwise `serveOnce` (`src/connect/http.ts`) serves the confirm page on a
-loopback port. The page (`connect-page/src/main.tsx`) shows step 1, the `approve`, as described from its own
-calldata, with the decoded call; step 2, the deposit, is `waiting` and has nothing to send yet.
+sha256, then holds the whole request to the intent with `checkSteps` from `@temporalabs/client`. A request that
+fails the check is cancelled and nothing opens. The API's `next` then decides when the first step may be sent: while
+it says `wait`, the request is read and checked again; a stop, or no offer in time, cancels it. Once the first step
+is offered, `serveOnce` (`src/connect/http.ts`) serves the confirm page on a loopback port. The page
+(`connect-page/src/main.tsx`) shows step 1, the `approve`, as described from its own calldata, with the decoded
+call; step 2, the deposit, is `waiting` and has nothing to send yet.
 
 ## 5. Each step, sent and recorded
 
 When the operator confirms, the page reads the step again from `/info` and asks the wallet to send exactly its
 destination, data and value. It posts the hash to `/result`. `accept` in `startVaultCore` takes one step at a time:
 the hash goes on record first, then to the API (`submit`), which reads the chain at that hash. The request is read
-again (`status`) and checked again with `checkSteps` until step 1 has landed and step 2 is `ready`: the deposit, into
-the vault, paying the shares to the connected account, for exactly the amount. Only then is it offered on the page.
-A step the API puts up again after it was sent is refused, never sent twice; a hash the page could not hand over is
-still submitted by that hash.
+again (`status`) and checked again with `checkSteps` until step 1 has landed and the API's `next` says to send step
+2, which is `ready`: the deposit, into the vault, paying the shares to the connected account, for exactly the
+amount. Only then is it offered on the page. A `next` that is a stop, or one this client does not know, ends the
+flow. A step the API puts up again after it was sent is refused, never sent twice; a hash the page could not hand
+over is still submitted by that hash.
 
 `outcome` turns the API's reading of each step into the command's result: `completed` when every step landed as
 confirmed, `stopped` with a reason otherwise, `not_reported` when nothing came back. The result names the request, so
@@ -86,8 +89,9 @@ confirmed, `stopped` with a reason otherwise, `not_reported` when nothing came b
 
 `treasury earn prepare_deposit --amount_usdc 25 --terms_sha256 0x…` starts the same request and returns its checked
 steps in an envelope (`requires_signature: true`, `status: "unsigned"`, the chain, the vault's warnings, the
-`requestId`, the steps, `next_step` and `SIGNER_RULES`). Whatever holds the key sends step 1; `earn submit` hands its
-hash to the API; `earn request` reads the request until step 2 is `ready`, and returns it checked.
+`requestId`, the steps, `next_step` and `SIGNER_RULES`). Only the step that may be sent now (`offerOf`) carries its
+destination and calldata; when there is none, `next_step` says why. Whatever holds the key sends that step; `earn
+submit` hands its hash to the API; `earn request` reads the request until step 2 is offered, and returns it checked.
 
 ## On Solana
 
