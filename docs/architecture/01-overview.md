@@ -1,11 +1,13 @@
 # 01: The layers and who owns what
 
-Treasury is a **depositor client**. On the EVM chains it knows the Tempora API and nothing else: the API lists the
-vaults, reads positions and prepares each step, and Treasury checks every step against the API's own record of the
-vault before a wallet sees it. On Solana it knows the vault's registry row, an RPC endpoint and the vault's public
-interface, reads the chain and builds the transaction itself. Either way it prepares unsigned steps and (through
-`treasury connect`) hands steps that passed a check to the operator's own wallet. It never signs. Why that line is drawn where it is, and what enforces it, is
-[`../security-model.md`](../security-model.md); this guide is the map of the code.
+Treasury is a **depositor client**. For an EVM vault it works from the Tempora API: the API lists the vaults, reads
+positions and prepares each step, and Treasury checks every step against the API's own record of the vault before a
+wallet sees it. On Solana it knows the vault's registry row, an RPC endpoint and the vault's public interface, reads
+the chain and builds the transaction itself. Either way it prepares unsigned steps and (through `treasury connect`)
+hands steps that passed a check to the operator's own wallet. It never signs. `invest` goes through the API too,
+with one chain read of its own: when a withdrawal finds idle USDT that the API reports only as a dollar figure, it
+reads the exact balance from BNB Chain (`readIdleUsdt` in `src/invest/withdraw.ts`). Why that line is drawn where it
+is, and what enforces it, is [`../security-model.md`](../security-model.md); this guide is the map of the code.
 
 ## Three ways in
 
@@ -30,7 +32,8 @@ library builds no calls.
    |     |    API's MCP endpoint, vault address,   src/earn/solana.ts
    |     |    terms check)                         src/solana/rpc.ts, vault.ts,
    |     |  src/earn/request.ts (checkSteps,       kvault.ts, layout.ts, constants.ts
-   |     |    what a step says, signer rules)
+   |     |    which step to send now, what a
+   |     |    step says, signer rules)
    |
    +-- src/connect/commands.ts   the connect commands: sign in, acknowledge, confirm in the wallet
    |     src/connect/ack.ts            acknowledgement text, codes, plans
@@ -39,6 +42,7 @@ library builds no calls.
    |     src/connect/http.ts           one-shot loopback server
    |     src/connect/page.ts           HTML shell + CSP; serves dist/connect-page.js (built from connect-page/)
    |     src/connect/session.ts        the connection, pending acknowledgement, plan and page lock files
+   |     src/connect/owner-tokens.ts   the kept Tempora API sign-in tokens (a file only its owner can read)
    |     src/connect/solana.ts         the same flows on Solana
    |
    +-- src/invest/               the invest commands: Smart Growth portfolios through the Tempora API;
@@ -63,6 +67,7 @@ pre-deposit text) and `src/version.ts` (the version, inlined at build time).
 | whether an account can deposit | the API's gates and its simulated deposit check (EVM), a simulated transaction in `src/solana/vault.ts` (Solana) | [`../guides/earn-api/01-the-api-path.md`](../guides/earn-api/01-the-api-path.md), [`../guides/solana/01-kamino-vault-path.md`](../guides/solana/01-kamino-vault-path.md) |
 | the bytes of a deposit or withdrawal | the Tempora API (EVM), `src/solana/kvault.ts` (Solana) | same |
 | what may be put in front of a wallet | `checkSteps` from `@temporalabs/client`, in `src/earn/request.ts` and `src/connect/vault-request.ts` (EVM); `src/connect/gate-solana.ts` (Solana) | [`../guides/earn-api/01-the-api-path.md`](../guides/earn-api/01-the-api-path.md), [`../guides/connect/02-gates.md`](../guides/connect/02-gates.md) |
+| whether a step may be sent now (EVM vaults) | the Tempora API's `next` on the request. `offerOf` in `src/earn/request.ts` (an answer without `next` is held to the request's and the step's expiry); `offered` and `nextStops` in `src/connect/vault-request.ts`, where an action this client does not know stops the flow | [`../guides/earn-api/01-the-api-path.md`](../guides/earn-api/01-the-api-path.md) |
 | what a position is worth and what can leave now | the Tempora API (`positions`, `quote`) on EVM; `solanaBalance` in `src/earn/solana.ts` on Solana | [`../guides/earn-api/01-the-api-path.md`](../guides/earn-api/01-the-api-path.md) |
 | whether a page may open at all | `src/connect/ack.ts` | [`../guides/connect/03-acknowledgement-and-plans.md`](../guides/connect/03-acknowledgement-and-plans.md) |
 | whether a transaction did what was confirmed | the Tempora API's reading of a submitted hash (EVM); `verifySolanaLanded` in `src/connect/solana.ts` (Solana) | [`../guides/earn-api/01-the-api-path.md`](../guides/earn-api/01-the-api-path.md), [`../guides/connect/04-receipt-verification.md`](../guides/connect/04-receipt-verification.md) |
