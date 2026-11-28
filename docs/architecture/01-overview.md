@@ -42,7 +42,7 @@ library builds no calls.
    |     src/connect/http.ts           one-shot loopback server
    |     src/connect/page.ts           HTML shell + CSP; serves dist/connect-page.js (built from connect-page/)
    |     src/connect/session.ts        the connection, pending acknowledgement, plan and page lock files
-     src/connect/owner-tokens.ts   the kept Tempora API sign-in tokens (a file only its owner can read)
+   |     src/connect/owner-tokens.ts   the kept Tempora API sign-in tokens (a file only its owner can read)
    |     src/connect/solana.ts         the same flows on Solana
    |
    +-- src/invest/               the invest commands: Smart Growth portfolios through the Tempora API;
